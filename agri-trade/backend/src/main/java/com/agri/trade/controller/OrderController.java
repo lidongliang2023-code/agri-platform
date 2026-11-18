@@ -125,7 +125,13 @@ public class OrderController {
 
         // 买家 = 当前登录用户绑定的经营主体（不是平台用户 id —— 交易各表里的买方号是主体号，
         // 拿用户 id 塞进去就成了"下完单自己查不到"）。一人多主体时必须点名，不自动猜。
-        PlatformIdentityService.MerchantSelection mine = identityService.selectMerchant(null);
+        Long buyerId;
+        try {
+            buyerId = params.get("buyerId") == null ? null : Long.valueOf(params.get("buyerId").toString());
+        } catch (NumberFormatException e) {
+            return ApiResponse.error("采购主体编号无效");
+        }
+        PlatformIdentityService.MerchantSelection mine = identityService.selectMerchant(buyerId);
         if (!mine.ok()) {
             return ApiResponse.error(mine.error());
         }
@@ -247,7 +253,11 @@ public class OrderController {
         } else {
             wrapper.and(w -> w.in(TradeOrder::getBuyerId, mine).or().in(TradeOrder::getSellerId, mine));
         }
-        if (orderStatus != null) wrapper.eq(TradeOrder::getOrderStatus, orderStatus);
+        if ("awaiting_payment".equals(orderStatus)) {
+            wrapper.in(TradeOrder::getOrderStatus, List.of("pending", "pending_confirm"));
+        } else if (orderStatus != null && !orderStatus.isBlank()) {
+            wrapper.eq(TradeOrder::getOrderStatus, orderStatus);
+        }
         if (paymentStatus != null) wrapper.eq(TradeOrder::getPaymentStatus, paymentStatus);
         if (orderNo != null && !orderNo.isEmpty()) wrapper.like(TradeOrder::getOrderNo, orderNo);
         wrapper.orderByDesc(TradeOrder::getCreateTime);
@@ -276,25 +286,24 @@ public class OrderController {
         return ApiResponse.success(itemMapper.selectList(wrapper));
     }
 
-    /** 当前采购主体发起的退款/售后记录，供买家中心“收货与售后”统一展示。 */
+    /** 当前主体的退款/售后记录，按采购或销售方向限制关联订单。 */
     @GetMapping("/refund/mine")
-    public ApiResponse<List<RefundRecord>> myRefunds() {
+    public ApiResponse<List<RefundRecord>> myRefunds(@RequestParam(defaultValue = "buyer") String side) {
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) return ApiResponse.error(scope.error());
         if (!scope.hasBinding()) return ApiResponse.success(List.of());
-        List<Long> buyerOrderIds = orderMapper.selectList(new LambdaQueryWrapper<TradeOrder>()
-                        .eq(TradeOrder::getDelFlag, 0)
-                        .in(TradeOrder::getBuyerId, scope.merchantIds()))
+        if (!List.of("buyer", "seller").contains(side)) return ApiResponse.error("交易方向无效");
+        LambdaQueryWrapper<TradeOrder> orderQuery = new LambdaQueryWrapper<TradeOrder>()
+                .eq(TradeOrder::getDelFlag, 0);
+        if ("seller".equals(side)) orderQuery.in(TradeOrder::getSellerId, scope.merchantIds());
+        else orderQuery.in(TradeOrder::getBuyerId, scope.merchantIds());
+        List<Long> relatedOrderIds = orderMapper.selectList(orderQuery)
                 .stream().map(TradeOrder::getId).toList();
         LambdaQueryWrapper<RefundRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(RefundRecord::getDelFlag, 0);
-        // 买卖双方都可能发起退款：采购方既要看到自己申请的，也要看到供应商针对自己订单发起的。
-        if (buyerOrderIds.isEmpty()) {
-            wrapper.in(RefundRecord::getApplicantId, scope.merchantIds());
-        } else {
-            wrapper.and(w -> w.in(RefundRecord::getApplicantId, scope.merchantIds())
-                    .or().in(RefundRecord::getOrderId, buyerOrderIds));
-        }
+        // 按订单参与方判定，申请人可能是交易另一方。
+        if (relatedOrderIds.isEmpty()) return ApiResponse.success(List.of());
+        wrapper.in(RefundRecord::getOrderId, relatedOrderIds);
         wrapper.orderByDesc(RefundRecord::getCreateTime);
         return ApiResponse.success(refundMapper.selectList(wrapper));
     }

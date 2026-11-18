@@ -102,6 +102,111 @@
       "style": {
         "navigationBarTitleText": "确认采购"
       }
+    },
+    {
+      "path": "pages/buyer/overview",
+      "style": {
+        "navigationBarTitleText": "买家概览",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/buyer/demand",
+      "style": {
+        "navigationBarTitleText": "采购需求管理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/buyer/inquiry",
+      "style": {
+        "navigationBarTitleText": "询价与报价",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/buyer/after",
+      "style": {
+        "navigationBarTitleText": "买家售后",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/buyer/fund",
+      "style": {
+        "navigationBarTitleText": "买家资金与发票",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/seller/overview",
+      "style": {
+        "navigationBarTitleText": "卖家概览",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/seller/goods",
+      "style": {
+        "navigationBarTitleText": "商品管理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/seller/quote",
+      "style": {
+        "navigationBarTitleText": "卖家报价与撮合",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/seller/p2t",
+      "style": {
+        "navigationBarTitleText": "产销对接承接",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/seller/customer",
+      "style": {
+        "navigationBarTitleText": "客户管理",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/seller/fund",
+      "style": {
+        "navigationBarTitleText": "卖家资金结算",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/collaboration/chat",
+      "style": {
+        "navigationBarTitleText": "洽谈消息",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/collaboration/agent",
+      "style": {
+        "navigationBarTitleText": "交易 Agent",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/collaboration/price",
+      "style": {
+        "navigationBarTitleText": "行情与定价",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/identity/index",
+      "style": {
+        "navigationBarTitleText": "经营主体与资质",
+        "enablePullDownRefresh": true
+      }
     }
   ],
   "globalStyle": {

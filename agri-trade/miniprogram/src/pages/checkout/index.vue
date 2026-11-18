@@ -6,6 +6,9 @@ import { requireTradeLogin, requireTradeRole } from '../../auth'
 
 const product = ref<TradeProduct | null>(null), skuIndex = ref(0), quantity = ref(''), busy = ref(false), error = ref('')
 const loading = ref(true), loadError = ref('')
+const merchants = ref<{ merchantId: string | number; merchantName: string }[]>([])
+const buyerId = ref<string | number>('')
+const buyerName = computed(() => merchants.value.find(m => String(m.merchantId) === String(buyerId.value))?.merchantName || '请选择采购主体')
 const form = ref({ deliveryProvince: '', deliveryCity: '', deliveryAddress: '', deliveryContact: '', deliveryPhone: '' })
 const fields = [
   { key: 'deliveryContact' as const, label: '收货人', type: 'text' },
@@ -29,17 +32,24 @@ async function load() {
   loading.value = true; loadError.value = ''
   try {
     if (!Number.isFinite(id) || id <= 0) throw new Error('商品链接无效')
-    product.value = await tradeApi.product(id)
+    const [goods, bindings] = await Promise.all([tradeApi.product(id), tradeApi.merchants()])
+    product.value = goods
+    merchants.value = bindings || []
+    if (!merchants.value.some(m => String(m.merchantId) === String(buyerId.value))) {
+      buyerId.value = merchants.value.length === 1 ? merchants.value[0].merchantId : ''
+    }
     if (!product.value) throw new Error('商品不存在或已下架')
     if (!quantity.value) quantity.value = String(min.value)
   } catch (e) { loadError.value = e instanceof Error ? e.message : '商品加载失败' } finally { loading.value = false }
 }
+function pickBuyer(e: any) { buyerId.value = merchants.value[Number(e.detail.value)]?.merchantId || '' }
 function pickSku(e: any) { skuIndex.value = Number(e.detail.value); quantity.value = String(min.value) }
 function step(delta: number) { const q = (Number(quantity.value) || 0) + delta; quantity.value = String(Math.max(min.value, Math.min(stock.value || q, q))) }
 async function submit() {
   if (!requireTradeRole('buyer')) return
   if (busy.value || loading.value || loadError.value || !product.value) return
   error.value = ''
+  if (!buyerId.value || !merchants.value.some(m => String(m.merchantId) === String(buyerId.value))) { error.value = '请选择已绑定的采购主体'; return }
   const q = Number(quantity.value)
   if (!Number.isFinite(q) || q < min.value || q > stock.value) { error.value = '采购数量须在起订量与库存之间'; return }
   if (fields.some(f => !form.value[f.key].trim())) { error.value = '请完整填写收货信息'; return }
@@ -48,7 +58,7 @@ async function submit() {
   if (!ok) return
   busy.value = true
   try {
-    const order = await tradeApi.createOrderFromProduct({ productId: id, skuId: selected.value?.id, quantity: q, ...form.value })
+    const order = await tradeApi.createOrderFromProduct({ productId: id, buyerId: buyerId.value, skuId: selected.value?.id, quantity: q, ...form.value })
     uni.redirectTo({ url: '/pages/order-detail/index?id=' + order.id })
   } catch (e) { error.value = e instanceof Error ? e.message : '下单失败' } finally { busy.value = false }
 }
@@ -70,6 +80,10 @@ async function submit() {
 
       <view class="card">
         <text class="card-title">采购规格与数量</text>
+        <picker v-if="merchants.length" :range="merchants" range-key="merchantName" @change="pickBuyer">
+          <view class="kv tap"><text class="kv-label">采购主体</text><text class="kv-value">{{ buyerName }} ›</text></view>
+        </picker>
+        <view v-else class="notice error">当前账号未绑定经营主体，暂不能下单</view>
         <picker v-if="skus.length" :range="skus" range-key="skuName" @change="pickSku">
           <view class="kv tap"><text class="kv-label">规格</text><text class="kv-value">{{ selected?.skuName }} ›</text></view>
         </picker>

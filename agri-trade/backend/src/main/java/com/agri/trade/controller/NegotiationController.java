@@ -197,11 +197,10 @@ public class NegotiationController {
     /**
      * 新增独立报价（不挂询价单）。
      *
-     * <p>卖家的主体号**由服务端从令牌推导**，不读请求体里的 sellerId ——
-     * 否则任何人都能冒用别人的名义挂报价。</p>
+     * <p>请求可选择 sellerId，但必须通过令牌所属主体校验，不能冒用其他主体。</p>
      */
     private ApiResponse<Quote> createStandaloneQuote(Map<String, Object> params) {
-        PlatformIdentityService.MerchantSelection seller = identityService.selectMerchant(null);
+        PlatformIdentityService.MerchantSelection seller = identityService.selectMerchant(asLong(params.get("sellerId")));
         if (!seller.ok()) {
             return ApiResponse.error(seller.error());
         }

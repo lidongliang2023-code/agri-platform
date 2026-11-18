@@ -77,8 +77,7 @@ export interface TradeOrderItem {
 }
 
 export interface MatchResult {
-  id: number
-  matchNo?: string
+  matchId: number
   demandId: number
   productId: number
   productName: string
@@ -86,7 +85,9 @@ export interface MatchResult {
   sellerName: string
   matchScore: number
   matchReason: string
-  matchStatus: string
+  matchLevel?: string
+  inquiryStatus?: string
+  orderStatus?: string
 }
 
 export interface TradeContract {
@@ -204,9 +205,15 @@ function rawRequest<T>(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' =
 
 /** 这些共享接口尚不支持 side 参数：取完整可访问集合，按当前中心过滤后再分页。 */
 const directionalPages = new Set(['/contract/page', '/logistics/page', '/negotiation/quote/page', '/dispute/page', '/match/list'])
-const directionalLists = new Set(['/order/refund/mine', '/invoice/mine', '/compensation/mine'])
+const directionalLists = new Set(['/compensation/mine'])
+const serverDirectionalLists = new Set(['/order/refund/mine', '/invoice/mine'])
 export async function request<T>(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, unknown>): Promise<T> {
   const [endpoint, search = ''] = path.split('?')
+  if (method === 'GET' && serverDirectionalLists.has(endpoint)) {
+    const params: Record<string, string> = {}
+    search.split('&').filter(Boolean).forEach(pair => { const [key, ...value] = pair.split('='); params[decodeURIComponent(key)] = decodeURIComponent(value.join('=')) })
+    return rawRequest<T>(endpoint + query({ ...params, side: getTradeRole() }))
+  }
   if(method !== 'GET' || (!directionalPages.has(endpoint) && !directionalLists.has(endpoint))) return rawRequest<T>(path, method, data)
   const role = getTradeRole()
   const params: Record<string, string> = {}

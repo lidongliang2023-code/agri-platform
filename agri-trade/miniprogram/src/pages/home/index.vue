@@ -21,12 +21,12 @@ const role = ref(getTradeRole())
 const entries = computed(() => [
   { label: '交易大厅', icon: '货', tone: '', tab: '/pages/products/index' },
   { label: '采购需求', icon: '求', tone: 'amber', tab: '/pages/demands/index' },
-  { label: '智能撮合', icon: '配', tone: 'violet', url: role.value === 'buyer' ? '/pages/match/index' : '/pages/business/index?key=match&role=seller' },
+  { label: '智能撮合', icon: '配', tone: 'violet', url: role.value === 'buyer' ? '/pages/match/index' : '/pages/seller/quote' },
   { label: '我的订单', icon: '单', tone: 'blue', tab: '/pages/orders/index' },
   { label: '电子合同', icon: '约', tone: 'blue', url: '/pages/contracts/index' },
   { label: '物流跟踪', icon: '运', tone: '', url: '/pages/logistics/index' },
   { label: role.value === 'buyer' ? '买家中心' : '卖家中心', icon: role.value === 'buyer' ? '买' : '卖', tone: 'amber', url: '/pages/workspace/index?role=' + role.value },
-  { label: role.value === 'buyer' ? '采购需求管理' : '商品管理', icon: role.value === 'buyer' ? '求' : '货', tone: 'red', url: '/pages/business/index?key=' + (role.value === 'buyer' ? 'demand-list' : 'goods') + '&role=' + role.value },
+  { label: role.value === 'buyer' ? '采购需求管理' : '商品管理', icon: role.value === 'buyer' ? '求' : '货', tone: 'red', url: role.value === 'buyer' ? '/pages/buyer/demand' : '/pages/seller/goods' },
 ])
 
 onShow(() => { role.value = getTradeRole(); account.value = getTradeUser(); void load() })

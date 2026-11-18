@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,9 +41,9 @@ public class InvoiceController {
     private final TradeOrderMapper orderMapper;
     private final PlatformIdentityService identityService;
 
-    /** 我的开票申请（购买方范围由服务端推导）。 */
+    /** 我的发票记录，买卖方范围均由服务端推导。 */
     @GetMapping("/mine")
-    public ApiResponse<List<Invoice>> mine() {
+    public ApiResponse<List<Invoice>> mine(@RequestParam(defaultValue = "buyer") String side) {
         PlatformIdentityService.MerchantScope scope = identityService.currentScope();
         if (!scope.resolved()) {
             return ApiResponse.error(scope.error());
@@ -50,10 +51,11 @@ public class InvoiceController {
         if (!scope.hasBinding()) {
             return ApiResponse.success(List.of());
         }
-        return ApiResponse.success(invoiceMapper.selectList(new LambdaQueryWrapper<Invoice>()
-                .eq(Invoice::getDelFlag, 0)
-                .in(Invoice::getBuyerId, scope.merchantIds())
-                .orderByDesc(Invoice::getApplyTime)));
+        if (!List.of("buyer", "seller").contains(side)) return ApiResponse.error("交易方向无效");
+        LambdaQueryWrapper<Invoice> wrapper = new LambdaQueryWrapper<Invoice>().eq(Invoice::getDelFlag, 0);
+        if ("seller".equals(side)) wrapper.in(Invoice::getSellerId, scope.merchantIds());
+        else wrapper.in(Invoice::getBuyerId, scope.merchantIds());
+        return ApiResponse.success(invoiceMapper.selectList(wrapper.orderByDesc(Invoice::getApplyTime)));
     }
 
     /** 申请开票。 */

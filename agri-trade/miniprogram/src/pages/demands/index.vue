@@ -34,7 +34,7 @@ async function load() {
 
 function publish() { uni.navigateTo({ url: '/pages/publish-demand/index' }) }
 function clearKeyword() { keyword.value = '' }
-function quote() { uni.navigateTo({ url: '/pages/business/index?key=trade&role=seller' }) }
+function quote() { uni.navigateTo({ url: '/pages/seller/quote' }) }
 function budget(item: TradeDemand) {
   if (item.priceMin == null && item.priceMax == null) return '面议'
   if (item.priceMin != null && item.priceMax != null) return `${money(item.priceMin)}–${money(item.priceMax)}`

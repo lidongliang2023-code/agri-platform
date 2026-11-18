@@ -28,12 +28,13 @@ function switchRole(value: TradeRole) {
   role.value = value
   uni.showToast({ title: `已切换到${centerName.value}`, icon: 'none' })
 }
-function open(key: string) {
-  // 先进入目标页，由目标页保存登录返回位置，确保登录后仍在选定中心。
-  uni.navigateTo({ url: `/pages/business/index?key=${key}&role=${role.value}` })
+function routeFor(key: string) {
+  const routes: Record<string, string> = { overview: role.value === 'buyer' ? '/pages/buyer/overview' : '/pages/seller/overview', 'demand-list': '/pages/buyer/demand', inquiry: '/pages/buyer/inquiry', after: '/pages/buyer/after', fund: role.value === 'buyer' ? '/pages/buyer/fund' : '/pages/seller/fund', goods: '/pages/seller/goods', trade: '/pages/seller/quote', p2t: '/pages/seller/p2t', customer: '/pages/seller/customer', chat: '/pages/collaboration/chat', agent: '/pages/collaboration/agent', price: '/pages/collaboration/price', identity: '/pages/identity/index' }
+  return routes[key] || `/pages/business/index?key=${key}&role=${role.value}`
 }
+function open(key: string) { uni.navigateTo({ url: routeFor(key) }) }
 function enterCenter() {
-  uni.navigateTo({ url: `/pages/workspace/index?role=${role.value}` })
+  uni.navigateTo({ url: role.value === 'buyer' ? '/pages/buyer/overview' : '/pages/seller/overview' })
 }
 function logout() {
   uni.showModal({

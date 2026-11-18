@@ -58,7 +58,11 @@ function setRole(value: 'buyer' | 'seller') {
   uni.setNavigationBarTitle({ title: value === 'buyer' ? '买家中心' : '卖家中心' })
 }
 function changeCenter() { uni.switchTab({ url: '/pages/profile/index' }) }
-function open(key: string) { uni.navigateTo({ url: '/pages/business/index?key=' + key + '&role=' + role.value }) }
+function routeFor(key: string) {
+  const routes: Record<string, string> = { overview: role.value === 'buyer' ? '/pages/buyer/overview' : '/pages/seller/overview', 'demand-list': '/pages/buyer/demand', inquiry: '/pages/buyer/inquiry', after: '/pages/buyer/after', fund: role.value === 'buyer' ? '/pages/buyer/fund' : '/pages/seller/fund', goods: '/pages/seller/goods', trade: '/pages/seller/quote', p2t: '/pages/seller/p2t', customer: '/pages/seller/customer', chat: '/pages/collaboration/chat', agent: '/pages/collaboration/agent', price: '/pages/collaboration/price', identity: '/pages/identity/index' }
+  return routes[key] || '/pages/business/index?key=' + key + '&role=' + role.value
+}
+function open(key: string) { uni.navigateTo({ url: routeFor(key) }) }
 </script>
 
 <template>

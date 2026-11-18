@@ -38,7 +38,7 @@ async function load() {
 }
 
 function preview(index: number) { uni.previewImage({ urls: images.value, current: index }) }
-function inquire() { if (requireTradeRole('buyer') && requireTradeLogin()) uni.navigateTo({ url: '/pages/business/index?key=inquiry&role=buyer&productId=' + product.value?.id }) }
+function inquire() { if (requireTradeRole('buyer') && requireTradeLogin()) uni.navigateTo({ url: '/pages/buyer/inquiry?productId=' + product.value?.id }) }
 function checkout() { if (requireTradeRole('buyer') && requireTradeLogin()) uni.navigateTo({ url: '/pages/checkout/index?id=' + product.value?.id }) }
 async function interact(type: 'favorite' | 'follow' | 'chat') {
   if (!requireTradeRole('buyer') || acting.value || !requireTradeLogin() || !product.value) return
@@ -46,7 +46,7 @@ async function interact(type: 'favorite' | 'follow' | 'chat') {
   try {
     if (type === 'chat') {
       await request('/shop-interactions/negotiations/open', 'POST', { sellerId: product.value.sellerId, productId: product.value.id })
-      uni.navigateTo({ url: '/pages/business/index?key=chat&role=buyer' })
+      uni.navigateTo({ url: '/pages/collaboration/chat' })
     } else {
       await request(type === 'favorite' ? '/shop-interactions/favorites/products/' + product.value.id : '/shop-interactions/follow/' + product.value.sellerId, 'POST')
       uni.showToast({ title: type === 'favorite' ? '已收藏' : '已关注', icon: 'success' })

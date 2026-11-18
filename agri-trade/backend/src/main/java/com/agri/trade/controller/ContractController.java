@@ -79,7 +79,8 @@ public class ContractController {
             @RequestParam(defaultValue = "10") Integer pageSize,
             @RequestParam(required = false) String contractStatus,
             // 列表页的搜索框一直在，但后端从来没收过 contractNo —— 输了字点搜索没有任何变化。
-            @RequestParam(required = false) String contractNo) {
+            @RequestParam(required = false) String contractNo,
+            @RequestParam(required = false) Long orderId) {
         // 数据范围：只返回"我参与的合同"（我是买方或卖方）。
         // 这个接口原先**不给范围就返回全平台合同** —— 与订单/纠纷是同一个越权面，
         // 只是当时没一起收口。合同里有金额、签署状态与双方名称，更不该全量外露。
@@ -95,6 +96,7 @@ public class ContractController {
         LambdaQueryWrapper<Contract> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Contract::getDelFlag, 0);
         wrapper.and(w -> w.in(Contract::getBuyerId, mine).or().in(Contract::getSellerId, mine));
+        if (orderId != null) wrapper.eq(Contract::getOrderId, orderId);
         if (contractStatus != null) wrapper.eq(Contract::getContractStatus, contractStatus);
         if (contractNo != null && !contractNo.isEmpty()) wrapper.like(Contract::getContractNo, contractNo);
         wrapper.orderByDesc(Contract::getCreateTime);

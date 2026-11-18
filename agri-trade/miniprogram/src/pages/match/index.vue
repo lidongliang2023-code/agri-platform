@@ -12,7 +12,7 @@ const matching = ref(false)
 
 onShow(() => void load())
 async function load() {
-  if(getTradeRole()==='seller'){uni.redirectTo({url:'/pages/business/index?key=match&role=seller'});return}
+  if(getTradeRole()==='seller'){uni.redirectTo({url:'/pages/seller/quote'});return}
   if (!requireTradeLogin()) return
   loading.value = true
   try {
@@ -26,11 +26,16 @@ async function runMatch() {
   if (!selectedId.value) { uni.showToast({ title: '请先选择采购需求', icon: 'none' }); return }
   matching.value = true
   try {
-    results.value = await tradeApi.matchDemand(selectedId.value)
+    const demandId = selectedId.value
+    results.value = []
+    const matched = await tradeApi.matchDemand(demandId)
+    if (selectedId.value !== demandId) return
+    results.value = matched
     uni.showToast({ title: `已找到 ${results.value.length} 个匹配货源`, icon: 'none' })
   } catch (error) { uni.showToast({ title: error instanceof Error ? error.message : '撮合失败', icon: 'none' }) }
   finally { matching.value = false }
 }
+function selectDemand(id: number) { if (matching.value) return; if (selectedId.value !== id) { selectedId.value = id; results.value = [] } }
 function product(id: number) { uni.navigateTo({ url: `/pages/product/detail?id=${id}` }) }
 function publish() { uni.navigateTo({ url: '/pages/publish-demand/index' }) }
 </script>
@@ -43,14 +48,14 @@ function publish() { uni.navigateTo({ url: '/pages/publish-demand/index' }) }
       <view v-if="loading" class="loading">正在加载需求…</view>
       <view v-else-if="!demands.length" class="empty">还没有采购需求，先发布一条需求吧</view>
       <view v-else class="demand-select">
-        <view v-for="item in demands" :key="item.id" class="select-row" :class="{ selected: selectedId === item.id }" @tap="selectedId = item.id">
+        <view v-for="item in demands" :key="item.id" class="select-row" :class="{ selected: selectedId === item.id }" @tap="selectDemand(item.id)">
           <view><text class="demand-name">{{ item.demandName }}</text><text class="muted">{{ item.quantity }} {{ item.unit || '' }} · {{ item.deliveryAddress || '交付地待确认' }}</text></view><text class="radio" :class="{ on: selectedId === item.id }">{{ selectedId === item.id ? '✓' : '' }}</text>
         </view>
       </view>
       <button class="btn btn-primary btn-block" :loading="matching" :disabled="matching || loading" @tap="runMatch">{{ matching ? '正在分析货源…' : '开始智能撮合' }}</button>
     </view>
     <view class="section-head"><text class="title-small">推荐货源</text><text class="tiny">{{ results.length ? `已生成 ${results.length} 条结果` : '等待启动撮合' }}</text></view>
-    <view class="card result" v-for="item in results" :key="item.id" @tap="product(item.productId)">
+    <view class="card result" v-for="item in results" :key="item.matchId || item.productId" @tap="product(item.productId)">
       <view class="score">{{ Number(item.matchScore).toFixed(0) }}<text>匹配度</text></view><view class="result-copy"><text class="result-name">{{ item.productName }}</text><text class="muted">{{ item.sellerName }}</text><text class="muted">{{ item.matchReason }}</text></view><text class="arrow">›</text>
     </view>
     <view v-if="!results.length" class="empty">选择需求并启动撮合，结果会展示在这里</view>

@@ -10,7 +10,7 @@ const loadError = ref('')
 const side = ref(getTradeRole())
 const status = ref('')
 const statuses = [
-  { value: '', label: '全部' }, { value: 'pending', label: '待付款' }, { value: 'paid', label: '待发货' },
+  { value: '', label: '全部' }, { value: 'awaiting_payment', label: '待付款' }, { value: 'paid', label: '待发货' },
   { value: 'shipped', label: '运输中' }, { value: 'received', label: '待完成' }, { value: 'completed', label: '已完成' },
   { value: 'refunding', label: '退款中' }, { value: 'cancelled', label: '已取消' },
 ]

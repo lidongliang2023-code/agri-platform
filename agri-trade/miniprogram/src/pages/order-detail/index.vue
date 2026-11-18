@@ -30,7 +30,7 @@ const links = computed(() => [
 
 onLoad((options?: Record<string, string>) => { orderId = Number(options?.id) })
 onShow(() => {role.value=getTradeRole();order.value=null;items.value=[];void load()})
-function business(key: string) { uni.navigateTo({ url: '/pages/business/index?key=' + key + '&role=' + (amBuyer.value ? 'buyer' : 'seller') + '&orderId=' + orderId }) }
+function business(key: string) { const routes: Record<string,string> = { contract:'/pages/contracts/index', ship:'/pages/logistics/index', after:amBuyer.value?'/pages/buyer/after':'/pages/business/index?key=after&role=seller', refund:'/pages/buyer/fund', invoice:'/pages/buyer/fund', rate:'/pages/business/index?key=rate&role=' + (amBuyer.value?'buyer':'seller') }; const url=routes[key] || '/pages/business/index?key=' + key + '&role=' + (amBuyer.value?'buyer':'seller'); uni.navigateTo({ url: url + (url.includes('?')?'&':'?') + 'orderId=' + orderId }) }
 async function load() {
   if (!requireTradeLogin()) return
   loading.value = true
