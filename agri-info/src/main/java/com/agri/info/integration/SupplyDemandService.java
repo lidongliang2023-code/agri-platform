@@ -278,24 +278,19 @@ public class SupplyDemandService {
         return item;
     }
 
-    /**
-     * 「我的发布」里的采购需求。
-     *
-     * <p>公开列表用的 {@link #fromDemand} 把状态写死成 online —— 那是合理的，因为大厅只列在架需求；
-     * 但同一个映射拿来做「我的发布」就错了：待审核、已完成、已关闭的需求全都显示成"在线"，
-     * 用户在买家中心看到状态是 pending，回到信息资讯却显示在线，两边对不上。</p>
-     */
+    /** 我的发布与大厅、详情共用采购状态映射，避免同一条需求显示不同状态。 */
     private Map<String, Object> fromMineDemand(Map<String, Object> d) {
-        Map<String, Object> item = fromDemand(d);
-        String demandStatus = str(d.get("demandStatus"));
-        item.put("status", switch (demandStatus) {
+        return fromDemand(d);
+    }
+
+    private String demandDisplayStatus(Map<String, Object> demand) {
+        return switch (str(demand.get("demandStatus"))) {
             case "pending" -> "pending";
+            case "matching", "quoted" -> "online";
             case "completed", "closed", "cancelled", "expired" -> "offline";
-            // matching / quoted 都还在撮合中，对用户而言仍是"在线可被匹配"
-            default -> "online";
-        });
-        item.put("auditNote", str(d.get("auditRemark")));
-        return item;
+            // 未知状态不推断为在架；采购 pending 表示待匹配，不是供应审核。
+            default -> "unknown";
+        };
     }
 
     // ==================== 发布 ====================
@@ -325,6 +320,7 @@ public class SupplyDemandService {
 
         long tradeId;
         String tradeType;
+        String publishedStatus = "online";
         if (supply) {
             Long categoryId = resolveCategoryId(category);
             if (categoryId == null) {
@@ -365,6 +361,7 @@ public class SupplyDemandService {
             Map<String, Object> created = trade.postMap("/demand", authorization, request, "info");
             tradeId = longValue(created.get("id"), 0);
             tradeType = "demand";
+            publishedStatus = demandDisplayStatus(created);
         }
 
         saveContact(tradeType, tradeId, contactName, contactPhone, orgName, orgType, owner);
@@ -387,7 +384,7 @@ public class SupplyDemandService {
         result.put("id", tradeId);
         result.put("tradeType", tradeType);
         result.put("sdNo", (supply ? "GY" : "XQ") + tradeId);
-        result.put("status", "online");
+        result.put("status", publishedStatus);
         result.put("matchScore", matchScore);
         result.put("message", supply
                 ? "供应信息已发布，并同步到交易撮合 · 卖家中心"
@@ -734,8 +731,9 @@ public class SupplyDemandService {
         item.put("viewCount", 0);
         item.put("chatCount", (int) longValue(d.get("responseCount"), 0));
         item.put("isTop", false);
-        item.put("status", "online");
-        item.put("auditNote", "");
+        item.put("status", demandDisplayStatus(d));
+        item.put("tradeStatus", str(d.get("demandStatus")));
+        item.put("auditNote", str(d.get("auditRemark")));
         item.put("owner", str(d.get("buyerName")));
         item.put("createdAt", str(d.get("createTime")));
         item.put("tradeType", "demand");

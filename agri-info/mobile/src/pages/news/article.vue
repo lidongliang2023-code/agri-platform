@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
-  infoApi,
+  infoApi, attestationStatusMeta,
   pushView,
   splitParagraphs,
   timeAgo,
@@ -168,7 +168,7 @@ function goBack() {
         <view v-if="detail.attestation" class="attest" @click="openAttest(detail.attestation.id)">
           <text class="attest-icon">🔗</text>
           <view class="attest-copy">
-            <text class="strong">内容已上链存证</text>
+            <text class="strong">存证记录 · {{ attestationStatusMeta(detail.attestation.status).label }}</text>
             <text class="tiny">{{ detail.attestation.attestNo }} · 区块 {{ detail.attestation.blockHeight }}</text>
           </view>
           <text class="item-arrow">›</text>

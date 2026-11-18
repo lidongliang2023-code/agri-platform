@@ -229,7 +229,6 @@ function goBack() {
       </view>
 
       <view class="page-pad">
-        <view v-if="progressError" class="native-note"><text>学习进度保存失败：{{progressError}}</text><button class="btn" @tap="report(positionSec)">重试保存进度</button></view>
         <view class="card">
           <view
             v-for="item in detail?.lessons || []"

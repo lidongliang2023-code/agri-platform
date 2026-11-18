@@ -872,12 +872,18 @@ public class InfoRepository extends InfoSupport {
             throw new IllegalArgumentException("存证记录不存在");
         }
         Map<String, Object> result = new LinkedHashMap<>(rows.get(0));
+        boolean confirmed = "confirmed".equals(result.get("status"));
         result.put("steps", List.of(
-                step("内容提交", "平台内容审核通过后自动触发存证", true),
-                step("哈希计算", "SHA-256 摘要生成，原文不出平台", true),
-                step("链上写入", "农业联盟链多节点共识确认", true),
-                step("验证可用", "任何人可凭存证编号在线验证", true)));
+                step("记录创建", "平台已保存存证记录", true),
+                step("摘要记录", "仅表示已保存内容摘要，不代表重新计算或比对", hasAttestationField(result, "contentHash")),
+                step("交易记录", "仅表示已保存交易标识，不代表独立节点确认", hasAttestationField(result, "txId")),
+                step("平台确认", "以平台记录状态为准，不代表独立链上核验", confirmed)));
         return result;
+    }
+
+    private boolean hasAttestationField(Map<String, Object> record, String key) {
+        Object value = record.get(key);
+        return value != null && !String.valueOf(value).isBlank();
     }
 
     public Map<String, Object> verifyAttestation(Map<String, Object> body, String user) {
@@ -892,8 +898,11 @@ public class InfoRepository extends InfoSupport {
         }
         Map<String, Object> record = rows.get(0);
         jdbc.update("UPDATE info_attestation SET verify_count=verify_count+1 WHERE attest_no=?", attestNo.trim());
-        result.put("valid", true);
-        result.put("message", "存证有效：内容哈希与链上记录一致");
+        boolean confirmed = "confirmed".equals(record.get("status"));
+        result.put("valid", confirmed);
+        result.put("message", confirmed
+                ? "平台存证记录状态为已确认；本次未进行独立链上核验或内容哈希比对"
+                : "平台存证记录尚未确认或已失效，不能判定为有效");
         result.put("record", record);
         return result;
     }

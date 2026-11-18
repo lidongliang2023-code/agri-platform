@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { openTrade } from '../../trade'
 import { onLoad } from '@dcloudio/uni-app'
-import { infoApi, statusLabel, money, pushView, timeAgo, toast, type SupplyDemandDetail } from '../../api'
+import { infoApi, statusLabel, statusMeta, supplyDemandStatusMeta, money, pushView, timeAgo, toast, type SupplyDemandDetail } from '../../api'
 
 const id = ref(0)
 const sdType = ref('supply')
@@ -119,8 +119,8 @@ function goBack() {
             <text class="head-title">{{ detail.title }}</text>
             <text class="tiny">{{ detail.sdNo }} · {{ detail.orgName }}</text>
           </view>
-          <text :class="['tag', detail.status === 'online' ? 'green' : 'orange']">
-            {{ statusLabel(detail.status) }}
+          <text :class="['tag', supplyDemandStatusMeta(detail).tone]">
+            {{ supplyDemandStatusMeta(detail).label }}
           </text>
         </view>
 

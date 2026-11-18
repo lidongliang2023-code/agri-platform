@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { infoApi, toast, type AlertMessage } from '../../api'
+import { infoApi, toast, alertLevelMeta, type AlertMessage } from '../../api'
 
 const items = ref<AlertMessage[]>([])
 const unread = ref(0)
 const tab = ref<'all' | 'unread' | 'risk'>('all')
 const loading = ref(true)
+const marking = ref(false)
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -16,7 +17,7 @@ const tabs = [
 
 const filtered = computed(() => {
   if (tab.value === 'unread') return items.value.filter((item) => !item.read)
-  if (tab.value === 'risk') return items.value.filter((item) => item.level !== 'normal')
+  if (tab.value === 'risk') return items.value.filter((item) => alertLevelMeta(item.level).risk)
   return items.value
 })
 
@@ -40,6 +41,8 @@ async function load() {
 }
 
 async function readAll() {
+  if (marking.value || loading.value || !unread.value) return
+  marking.value = true
   try {
     const result = await infoApi.readAllAlerts()
     unread.value = 0
@@ -47,13 +50,12 @@ async function readAll() {
     toast(result.updated ? `已标记 ${result.updated} 条为已读` : '没有未读消息', 'success')
   } catch (error) {
     toast(error instanceof Error ? error.message : '操作失败')
-  }
+  } finally { marking.value = false }
 }
 
 function levelTag(level: string) {
-  if (level === 'high' || level === 'critical') return { text: '重要预警', tone: 'red' }
-  if (level === 'medium') return { text: '价格预警', tone: 'orange' }
-  return { text: '一般提醒', tone: 'gray' }
+  const meta = alertLevelMeta(level)
+  return { text: meta.label, tone: meta.tone }
 }
 
 function openMarket() {

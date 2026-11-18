@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { infoApi, money, timeAgo, toast, type SupplyDemand } from '../../api'
+import { infoApi, statusLabel, statusMeta, supplyDemandStatusMeta, money, timeAgo, toast, type SupplyDemand } from '../../api'
 
 const items = ref<SupplyDemand[]>([])
 const onlineCount = ref(0)
@@ -73,23 +73,6 @@ function repost(item: SupplyDemand) {
   uni.navigateTo({ url: `/pages/sd/publish?type=${item.sdType}` })
 }
 
-function statusTone(value: string) {
-  if (value === 'online') return 'green'
-  if (value === 'pending') return 'orange'
-  if (value === 'rejected') return 'red'
-  return 'gray'
-}
-
-function statusLabel(value: string) {
-  const map: Record<string, string> = {
-    online: '展示中',
-    pending: '审核中',
-    expired: '已过期',
-    offline: '已下架',
-    rejected: '已驳回',
-  }
-  return map[value] || value
-}
 </script>
 
 <template>
@@ -142,7 +125,7 @@ function statusLabel(value: string) {
               <text class="post-title">{{ item.title }}</text>
               <text class="tiny">{{ item.origin }} · {{ item.quantity }} · {{ money(item.price) }} {{ item.priceUnit }}</text>
             </view>
-            <text :class="['tag', statusTone(item.status)]">{{ statusLabel(item.status) }}</text>
+            <text :class="['tag', supplyDemandStatusMeta(item).tone]">{{ supplyDemandStatusMeta(item).label }}</text>
           </view>
 
           <view class="post-meta">

@@ -196,6 +196,7 @@ export interface SupplyDemand {
   id: number
   sdNo: string
   sdType: 'supply' | 'demand'
+  tradeStatus?: string
   title: string
   category: string
   variety: string
@@ -682,6 +683,49 @@ export function statusLabel(status: string): string { return statusMeta(status).
 
 export function statusMeta(status: string): { label: string; tone: string } {
   return STATUS[status] ?? { label: status || '—', tone: 'gray' }
+}
+
+type DisplayStatus = { label: string; tone: string }
+
+const EXPERT_STATUS: Record<string, DisplayStatus> = {
+  pending: { label: '审核中', tone: 'orange' },
+  approved: { label: '认证通过', tone: 'green' },
+  rejected: { label: '认证未通过', tone: 'red' },
+}
+const ATTESTATION_STATUS: Record<string, DisplayStatus> = {
+  pending: { label: '待确认', tone: 'orange' },
+  processing: { label: '处理中', tone: 'orange' },
+  confirmed: { label: '已确认', tone: 'green' },
+  failed: { label: '存证失败', tone: 'red' },
+  revoked: { label: '已撤销', tone: 'gray' },
+}
+export function expertStatusMeta(status: string): DisplayStatus {
+  return EXPERT_STATUS[status] ?? { label: '未知认证状态', tone: 'gray' }
+}
+export function attestationStatusMeta(status: string): DisplayStatus {
+  return ATTESTATION_STATUS[status] ?? { label: '未知存证状态', tone: 'gray' }
+}
+export function supplyDemandStatusMeta(item: Pick<SupplyDemand, 'sdType' | 'status' | 'tradeStatus'>): DisplayStatus {
+  if (item.sdType !== 'demand') return statusMeta(item.status)
+  const states: Record<string, DisplayStatus> = {
+    pending: { label: '待匹配', tone: 'orange' },
+    matching: { label: '匹配中', tone: 'green' },
+    quoted: { label: '已报价', tone: 'green' },
+    completed: { label: '已完成', tone: 'gray' },
+    closed: { label: '已关闭', tone: 'gray' },
+    cancelled: { label: '已取消', tone: 'gray' },
+    expired: { label: '已过期', tone: 'gray' },
+  }
+  return states[item.tradeStatus || ''] ?? { label: '采购状态待同步', tone: 'gray' }
+}
+export function alertLevelMeta(level: string): DisplayStatus & { risk: boolean } {
+  if (['danger', 'high', 'critical'].includes(level)) return { label: '重要预警', tone: 'red', risk: true }
+  if (['warning', 'medium'].includes(level)) return { label: '价格预警', tone: 'orange', risk: true }
+  if (['info', 'normal', 'low'].includes(level)) return { label: '一般提醒', tone: 'gray', risk: false }
+  return { label: '未知预警级别', tone: 'gray', risk: false }
+}
+export function isMonitoredQuote(level?: string): boolean {
+  return !!level && !['none', 'normal'].includes(level)
 }
 
 export function toast(title: string, icon: 'none' | 'success' | 'error' = 'none'): void {

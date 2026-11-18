@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { infoApi, money, signed, type MarketData } from '../../api'
+import { infoApi, isMonitoredQuote, money, signed, type MarketData } from '../../api'
 import { isLoggedIn } from '../../auth'
 
 const data = ref<MarketData | null>(null)
@@ -173,7 +173,7 @@ function toSearch() {
             <view class="quote-name-row">
               <text class="quote-name">{{ quote.name }}</text>
               <text v-if="Math.abs(quote.changePct) >= 5" class="tag red">异动</text>
-              <text v-else-if="quote.monitorLevel && quote.monitorLevel !== 'none'" class="tag orange">重点监测</text>
+              <text v-else-if="isMonitoredQuote(quote.monitorLevel)" class="tag orange">重点监测</text>
             </view>
             <text class="quote-sub">{{ quote.origin }} · {{ quote.spec }}</text>
             <text class="tiny">{{ quote.updatedAt }} 更新 · {{ quote.source }}</text>
