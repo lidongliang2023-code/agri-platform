@@ -9,7 +9,8 @@ export function logoutMobile(url: string, token: string, clear: () => void): Pro
       url, method: 'POST', data: {}, timeout: 10000,
       header: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       success(response: any) {
-        if (response.statusCode >= 200 && response.statusCode < 300 && response.data?.code === 0) {
+        const code = response.data?.code
+        if (response.statusCode >= 200 && response.statusCode < 300 && (code === 0 || code === 200)) {
           clear()
           resolve(true)
         } else {
