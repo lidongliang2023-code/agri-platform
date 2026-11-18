@@ -1,18 +1,26 @@
 <script setup lang="ts">
 import { computed,ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { api,statusMeta,type Device } from '../../api/iot'
+import { api,canWrite,statusMeta,type Device } from '../../api/iot'
 import SegTabs from '../../components/SegTabs.vue'
 const items=ref<Device[]>([]),tab=ref('all'),keyword=ref(''),loading=ref(false),plotId=ref<number|undefined>(),groupId=ref<number|undefined>(),groups=ref<any[]>([]),error=ref('')
+const writable=ref(false)
 const visible=computed(()=>items.value.filter(i=>(!keyword.value||i.deviceName.includes(keyword.value)||i.deviceCode.includes(keyword.value))&&(tab.value==='all'||i.onlineStatus===tab.value)))
 const count=(status:string)=>items.value.filter(i=>i.onlineStatus===status).length
 const tabs=computed<Array<[string,string]>>(()=>[['all',`全部 ${items.value.length}`],['online',`在线 ${count('online')}`],['offline',`离线 ${count('offline')}`],['alert',`告警 ${count('alert')}`]])
 const groupOptions=computed(()=>[{id:undefined,name:'全部分组'},...groups.value])
-onShow(()=>{const saved=uni.getStorageSync('iot_status')||'all';tab.value=saved;uni.removeStorageSync('iot_status');const selected=uni.getStorageSync('iot_plot');if(selected){plotId.value=Number(selected);uni.removeStorageSync('iot_plot')}const group=uni.getStorageSync('iot_group');if(group){groupId.value=Number(group);plotId.value=undefined;keyword.value='';uni.removeStorageSync('iot_group')}load()})
+onShow(()=>{
+ const saved=uni.getStorageSync('iot_status'),selected=uni.getStorageSync('iot_plot'),group=uni.getStorageSync('iot_group')
+ if(selected){plotId.value=Number(selected);groupId.value=undefined;keyword.value='';tab.value='all'}
+ else if(group){groupId.value=Number(group);plotId.value=undefined;keyword.value='';tab.value='all'}
+ else if(saved){tab.value=saved;plotId.value=undefined;groupId.value=undefined;keyword.value=''}
+ ;['iot_status','iot_plot','iot_group'].forEach(k=>uni.removeStorageSync(k))
+ load()
+})
 let revision=0
-async function load(){const op=++revision;loading.value=true;try{const [devices,options]=await Promise.all([api.devices({plotId:plotId.value,groupId:groupId.value}),api.groups()]);if(op!==revision)return;items.value=devices;groups.value=options;error.value=''}catch(e){if(op===revision){items.value=[];error.value=e instanceof Error?e.message:'加载失败'}}finally{if(op===revision)loading.value=false}}
+async function load(){const op=++revision;loading.value=true;try{const [devices,options]=await Promise.all([api.devices({plotId:plotId.value,groupId:groupId.value}),api.groups()]);if(op!==revision)return;items.value=devices;groups.value=options;writable.value=canWrite();error.value=''}catch(e){if(op===revision){items.value=[];error.value=e instanceof Error?e.message:'加载失败'}}finally{if(op===revision)loading.value=false}}
 function open(id:number){uni.navigateTo({url:`/pages/device/detail?id=${id}`})}
-function register(){uni.navigateTo({url:'/pages/device/edit'})}
+function register(){if(!writable.value)return;uni.navigateTo({url:'/pages/device/edit'})}
 function clearPlot(){plotId.value=undefined;load()}
 function selectGroup(event:any){const index=Number(event?.detail?.value||0);groupId.value=index?groups.value[index-1]?.id:undefined;load()}
 function deviceMark(typeName=''){return typeName.includes('温湿度')?'温':typeName.includes('土壤')?'土':typeName.includes('阀')?'阀':typeName.includes('摄像')?'像':typeName.includes('气象')?'气':'设'}
@@ -21,7 +29,7 @@ function deviceMark(typeName=''){return typeName.includes('温湿度')?'温':typ
   <view class="page pad">
     <view class="toolbar">
       <view class="toolbar-main"><text class="toolbar-title">共 {{items.length}} 台设备</text><text class="toolbar-sub">在线 {{count('online')}} · 离线 {{count('offline')}} · 告警 {{count('alert')}}</text></view>
-      <view class="toolbar-actions"><button class="btn btn-sm btn-primary" @tap="register">注册设备</button></view>
+      <view v-if="writable" class="toolbar-actions"><button class="btn btn-sm btn-primary" @tap="register">注册设备</button></view>
     </view>
     <view class="sticky-head">
       <view class="search-bar"><text>⌕</text><input v-model="keyword" placeholder="搜索设备名称 / 编码" confirm-type="search"/></view>

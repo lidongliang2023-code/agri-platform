@@ -147,7 +147,9 @@ export async function accountSummary(){
 export async function activateSubject(id:string){
  const result=await raw<Row>(AUTH_BASE,`/api/v1/sso/account/businesses/${encodeURIComponent(id)}/activate`,'POST',{})
  if(String(result.activeMerchantId)!==id)throw new Error('主体切换结果不一致，请重新加载')
- generation++;ready=null;['iot_subject','iot_status','iot_plot','iot_group'].forEach(k=>uni.removeStorageSync(k))
+ generation++;ready=null;identityReady=null;sessionProbe=null;permissions=[]
+ ;['iot_subject','iot_status','iot_plot','iot_group'].forEach(k=>uni.removeStorageSync(k))
+ uni.$emit('iot:session-reset')
  uni.reLaunch({url:'/pages/index/index'})
 }
 export async function logoutIotSession(){await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`,String(uni.getStorageSync('token')||''),()=>{clearIotSession();uni.reLaunch({url:'/pages/login/index'})})}

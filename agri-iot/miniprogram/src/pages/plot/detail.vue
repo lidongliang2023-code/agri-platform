@@ -8,7 +8,7 @@ const located=computed(()=>data.value?.plot?.latitude!=null&&data.value?.plot?.l
 const markers=computed(()=>located.value?[{id:id.value,latitude:Number(data.value!.plot.latitude),longitude:Number(data.value!.plot.longitude),title:data.value!.plot.plotName}]:[])
 onLoad(o=>{id.value=Number(o?.id);void load()})
 async function load(){try{data.value=await api.plotMonitoring(id.value);error.value=''}catch(e){error.value=e instanceof Error?e.message:'地块读取失败'}}
-function devices(){uni.setStorageSync('iot_plot',id.value);uni.switchTab({url:'/pages/device/list'})}
+function devices(){uni.removeStorageSync('iot_group');uni.removeStorageSync('iot_status');uni.setStorageSync('iot_plot',id.value);uni.switchTab({url:'/pages/device/list'})}
 </script>
 <template>
   <view class="page pad">

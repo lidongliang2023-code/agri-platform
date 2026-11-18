@@ -8,7 +8,7 @@ const id=ref(0),item=ref<Row|null>(null),error=ref(''),busy=ref(false),reason=re
 onLoad(o=>{id.value=Number(o?.id)})
 onShow(load)
 async function load(){if(loading.value)return;loading.value=true;try{if(!Number.isSafeInteger(id.value)||id.value<1)throw new Error('固件编号无效');item.value=await opsApi.firmware(id.value);error.value=''}catch(e){item.value=null;error.value=e instanceof Error?e.message:'固件加载失败'}finally{loading.value=false}}
-const fields=[['versionName','版本号'],['firmwareType','类型'],['targetModel','适用型号'],['fileSizeBytes','大小（字节）'],['sha256Text','SHA-256'],['packageUrl','下载地址'],['releaseNotes','发布说明'],['changelogText','变更记录'],['publishedAt','发布时间'],['deprecateReason','废弃原因']]
+const fields=[['versionName','版本号'],['firmwareType','类型'],['targetModel','适用型号'],['fileSize','文件大小'],['sha256Text','SHA-256'],['packageUrl','下载地址'],['releaseNotes','发布说明'],['changelogText','变更记录'],['releaseAt','发布时间'],['deprecateReason','废弃原因']]
 async function change(publish:boolean){if(busy.value||!item.value)return;busy.value=true;try{
  if(publish&&item.value.status!=='draft')throw new Error('仅草稿固件可以发布');if(!publish&&reason.value.trim().length<4)throw new Error('请填写至少4字的废弃原因')
  if(!await confirmAction(publish?'发布固件':'废弃固件',publish?`发布 ${item.value.firmwareName} ${item.value.versionName} 后可被升级任务选用。`:`废弃后不能重新发布。原因：${reason.value.trim()}`))return

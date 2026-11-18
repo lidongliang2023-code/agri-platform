@@ -29,7 +29,7 @@ function open(entry:{path:string;tab?:boolean}){if(entry.tab)uni.switchTab({url:
 function account(){uni.switchTab({url:'/pages/account/index'})}
 function device(id:number){uni.navigateTo({url:`/pages/device/detail?id=${id}`})}
 function alert(){uni.switchTab({url:'/pages/alert/list'})}
-function devices(status=''){uni.setStorageSync('iot_status',status);uni.switchTab({url:'/pages/device/list'})}
+function devices(status='all'){uni.removeStorageSync('iot_plot');uni.removeStorageSync('iot_group');uni.setStorageSync('iot_status',status);uni.switchTab({url:'/pages/device/list'})}
 function messages(){uni.navigateTo({url:'/pages/messages/index'})}
 function deviceMark(typeName=''){return typeName.includes('温湿度')?'温':typeName.includes('土壤')?'土':typeName.includes('阀')?'阀':typeName.includes('摄像')?'像':typeName.includes('气象')?'气':'设'}
 async function sync(){syncing.value=true;try{const r=await api.sync();uni.showToast({title:`待办工单 ${r.pendingWorkOrders} · 告警 ${r.pendingAlerts}`,icon:'none'});await load()}catch(e){uni.showToast({title:e instanceof Error?e.message:'同步失败',icon:'none'})}finally{syncing.value=false}}
