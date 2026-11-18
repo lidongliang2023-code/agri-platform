@@ -64,6 +64,9 @@ public class OperatorGuardInterceptor implements HandlerInterceptor {
 
         Set<String> permissions = permissionResolver.currentPermissions();
         if (permissions == null) {
+            if (Boolean.TRUE.equals(request.getAttribute(PlatformPermissionResolver.class.getName() + ".unauthorized"))) {
+                return reject(response, HttpServletResponse.SC_UNAUTHORIZED, "登录已失效，请重新使用统一账号登录");
+            }
             return reject(response, "无法解析你的平台权限（认证中心不可达或令牌已失效），为安全起见已拒绝该操作，请稍后重试");
         }
         if (PlatformPermissionResolver.granted(permissions, required)) {

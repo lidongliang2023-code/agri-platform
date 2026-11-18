@@ -76,6 +76,10 @@ public class PlatformPermissionResolver implements PermissionResolver {
             }
             request.setAttribute(REQUEST_ATTR, permissions);
             return permissions;
+        } catch (org.springframework.web.client.HttpClientErrorException.Unauthorized e) {
+            request.setAttribute(PlatformPermissionResolver.class.getName() + ".unauthorized", Boolean.TRUE);
+            log.warn("解析平台权限失败：平台访问令牌已失效");
+            return null;
         } catch (Exception e) {
             log.warn("解析平台权限失败：{}", e.getMessage());
             return null;

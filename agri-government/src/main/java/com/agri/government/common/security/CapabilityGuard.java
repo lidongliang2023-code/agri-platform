@@ -43,6 +43,9 @@ public class CapabilityGuard {
                     .POST(HttpRequest.BodyPublishers.ofString("{\"code\":\"" + capabilityCode + "\"}"))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 401) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "登录已失效，请重新使用统一账号登录");
+            }
             if (response.statusCode() != 200) {
                 throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                         "能力校验服务返回异常（" + response.statusCode() + "），请稍后重试");
