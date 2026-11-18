@@ -1585,11 +1585,16 @@ public class IotAppRepository {
     }
 
     private long requiredLong(Map<String, Object> body, String key, String message) {
-        Long value = longObject(body.get(key));
-        if (value == null || value <= 0) {
-            throw new IllegalArgumentException(message);
+        Object raw = body.get(key);
+        String value = raw == null ? "" : String.valueOf(raw).trim();
+        if (!value.matches("[0-9]+")) throw new IllegalArgumentException(message + "（编号须为正整数）");
+        try {
+            long parsed = Long.parseLong(value);
+            if (parsed <= 0) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(message + "（编号须为有效正整数）");
         }
-        return value;
     }
 
     private BigDecimal decimalObject(Object value) {
