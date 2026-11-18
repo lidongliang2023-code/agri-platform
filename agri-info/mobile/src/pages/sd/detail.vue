@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { openTrade } from '../../trade'
 import { onLoad } from '@dcloudio/uni-app'
-import { infoApi, money, pushView, timeAgo, toast, type SupplyDemandDetail } from '../../api'
+import { infoApi, statusLabel, money, pushView, timeAgo, toast, type SupplyDemandDetail } from '../../api'
 
 const id = ref(0)
 const sdType = ref('supply')
@@ -86,7 +86,7 @@ function openAttest() {
 function share() {
   uni.setClipboardData({
     data: `丰链云供需：${detail.value?.title || ''}（编号 ${detail.value?.sdNo || ''}）`,
-    success: () => toast('链接已复制'),
+    success: () => toast('标题与编号已复制'),
   })
 }
 
@@ -120,7 +120,7 @@ function goBack() {
             <text class="tiny">{{ detail.sdNo }} · {{ detail.orgName }}</text>
           </view>
           <text :class="['tag', detail.status === 'online' ? 'green' : 'orange']">
-            {{ detail.status === 'online' ? '展示中' : '审核中' }}
+            {{ statusLabel(detail.status) }}
           </text>
         </view>
 
@@ -151,8 +151,8 @@ function goBack() {
         <view class="attest" @click="openAttest">
           <text class="attest-icon">🔗</text>
           <view class="attest-copy">
-            <text class="strong">内容已上链存证</text>
-            <text class="tiny">哈希一致 · 可在「内容验证」中随时复核</text>
+            <text class="strong">查看内容存证</text>
+            <text class="tiny">通过存证编号查询，结果以实际记录为准</text>
           </view>
           <text class="item-arrow">›</text>
         </view>
@@ -187,7 +187,7 @@ function goBack() {
           </view>
           <view class="field">
             <text class="field-label">结算方式</text>
-            <text class="field-value">现款现货，支持平台担保交易</text>
+            <text class="field-value">以交易撮合中的报价和订单约定为准</text>
           </view>
         </view>
 

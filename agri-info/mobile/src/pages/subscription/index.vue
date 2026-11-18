@@ -65,6 +65,8 @@ async function create() {
     toast('请选择订阅对象')
     return
   }
+  const existing = subs.value.find(item => (item.targetType === addType.value || item.targetType === (addType.value === '品种' ? 'quote' : 'channel')) && item.targetName === targetName)
+  if (existing) { if (!existing.enabled) await toggle(existing); else toast('已订阅该对象'); addOpen.value = false; return }
   saving.value = true
   try {
     const result = await infoApi.createSubscription({

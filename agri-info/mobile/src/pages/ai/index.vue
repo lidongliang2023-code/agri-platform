@@ -53,7 +53,7 @@ onShow(() => {
     messages.value.push({
       id: ++seq,
       role: 'ai',
-      text: `您好，${currentOwner() || '农户'}！我是平台农技 AI 助手，基于农技知识库与病虫害图谱回答。置信度低于 80% 时我会建议转接在线专家。`,
+      text: `您好，${currentOwner() || '农户'}！我是平台农技 AI 助手，基于农技知识库与病虫害图谱回答。您也可以查看农技专家。`,
       time: now(),
     })
   }
@@ -101,11 +101,11 @@ function openHistory() {
 }
 
 function transferExpert() {
-  uni.navigateTo({ url: '/pages/expert/detail?id=1' })
+  uni.navigateTo({ url: '/pages/expert/index' })
 }
 
 function markUseful() {
-  toast('感谢反馈，已记录', 'success')
+  uni.navigateTo({ url: '/pages/ai/history' })
 }
 
 function openPest() {
@@ -133,11 +133,7 @@ async function runPest() {
 }
 
 function choosePhoto() {
-  uni.chooseImage({
-    count: 1,
-    success: () => toast('图片已就绪，请补充作物与症状后识别'),
-    fail: () => toast('已取消选择'),
-  })
+  toast('当前支持文字症状分析，请描述作物与症状')
 }
 
 function askPestToChat() {
@@ -160,7 +156,7 @@ function askPestToChat() {
       </view>
       <view class="ai-note">
         <text class="tag purple">✦ AI</text>
-        <text class="note-text">基于平台农技知识库与病虫害图谱回答，置信度低于 80% 将提示转接专家</text>
+        <text class="note-text">基于平台农技知识库与病虫害图谱回答，置信度低于 80% 将提示查看专家</text>
       </view>
     </view>
 
@@ -194,8 +190,8 @@ function askPestToChat() {
                   </text>
                 </view>
                 <view class="ai-actions">
-                  <text class="act" @click="transferExpert">转接专家</text>
-                  <text class="act" @click="markUseful">👍 有用</text>
+                  <text class="act" @click="transferExpert">查看专家</text>
+                  <text class="act" @click="markUseful">历史记录</text>
                 </view>
               </template>
             </view>
@@ -217,7 +213,7 @@ function askPestToChat() {
     </scroll-view>
 
     <view class="input-bar">
-      <text class="icon" @click="openPest">📷</text>
+      <text class="icon" @click="openPest">🌿</text>
       <input
         v-model="question"
         class="chat-input"
@@ -232,7 +228,7 @@ function askPestToChat() {
     <view v-if="pestOpen" class="mask" @click="pestOpen = false">
       <view class="sheet" @click.stop>
         <view class="sheet-head">
-          <text class="card-title">病虫害拍照识别</text>
+          <text class="card-title">病虫害症状分析</text>
           <text class="card-sub" @click="pestOpen = false">关闭</text>
         </view>
 
@@ -251,17 +247,14 @@ function askPestToChat() {
           <textarea v-model="pestSymptom" class="textarea" placeholder="例如：叶片出现褐色斑点，边缘发黄" auto-height />
         </view>
 
-        <view class="photo-row" @click="choosePhoto">
-          <text class="photo-icon">📷</text>
-          <text class="tiny">拍照或从相册选择病叶照片（可选）</text>
-        </view>
+        <view class="native-note">请描述叶片、根部或果实症状。当前不处理图片。</view>
 
         <button class="btn btn-primary btn-block" :disabled="pestBusy" @click="runPest">
-          {{ pestBusy ? '识别中…' : '开始识别' }}
+          {{ pestBusy ? '分析中…' : '分析症状' }}
         </button>
 
         <view v-if="pestResult" class="result">
-          <text class="tag green">识别结果</text>
+          <text class="tag green">症状分析结果</text>
           <view v-for="item in pestResult.candidates" :key="item.name" class="cand">
             <view class="between">
               <text class="strong">{{ item.name }}</text>

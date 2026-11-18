@@ -27,6 +27,10 @@ const unread = computed(() => overview.value?.stats?.unreadAlerts || 0)
 const owner = computed(() => currentOwner() || overview.value?.greeting?.owner || '平台用户')
 
 const entries = [
+  { icon: '📚', label: '农技知识', url: '/pages/knowledge/index' },
+  { icon: '👨‍🌾', label: '农技专家', url: '/pages/expert/index' },
+  { icon: '📑', label: '产业报告', url: '/pages/report/mine' },
+  { icon: '📊', label: '行情对比', url: '/pages/market/compare' },
   { icon: '🤝', label: '供需大厅', url: '/pages/sd/index' },
   { icon: '🎓', label: '培训课堂', url: '/pages/course/index' },
   { icon: '🔔', label: '价格预警', url: '/pages/alert/setup' },

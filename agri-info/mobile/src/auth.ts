@@ -208,6 +208,9 @@ export async function completeInfoMfaLogin(
 }
 
 export function clearUnifiedInfoSession() {
+  uni.removeStorageSync(accountStorageKey('info_sd_draft:supply'))
+  uni.removeStorageSync(accountStorageKey('info_sd_draft:demand'))
+  uni.removeStorageSync('info_sd_draft')
   // 清除跨页面临时草稿；浏览/搜索等持久缓存使用账号专属键。
   for (const key of ['info_ai_question', 'info_alert_quote', 'info_market_keyword', 'info_sd_repost', 'info_compare_ids']) uni.removeStorageSync(key)
   uni.removeStorageSync(TOKEN_KEY)
@@ -222,7 +225,10 @@ export async function logoutUnifiedInfo() {
   })
 }
 
+let redirecting = false
 export function handleInfoUnauthorized() {
+  if (redirecting) return
+  redirecting = true
   clearUnifiedInfoSession()
-  uni.reLaunch({ url: '/pages/login/index' })
+  uni.reLaunch({ url: '/pages/login/index', complete: () => { redirecting = false } })
 }

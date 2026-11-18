@@ -730,4 +730,32 @@ page { line-height: 1.55; }
 .custom-nav .title { min-width: 0; }
 .action-bar { padding-bottom: calc(16rpx + env(safe-area-inset-bottom)); }
 .chip, .seg-item { min-height: 80rpx; }
+
+/* uni-app 原生业务页共用移动布局 */
+.native-page { max-width: 900rpx; margin: 0 auto; padding: 28rpx 28rpx calc(40rpx + env(safe-area-inset-bottom)); }
+.native-heading { padding: 20rpx 4rpx 30rpx; }
+.native-title { display: block; color: #123f2d; font-size: 42rpx; font-weight: 700; line-height: 1.4; }
+.native-muted,.native-meta { display: block; margin-top: 12rpx; color: #6b7e73; font-size: 25rpx; line-height: 1.65; }
+.native-card { margin: 20rpx 0; padding: 28rpx; border: 1rpx solid #dde7e0; border-radius: 20rpx; background: #fff; }
+.native-card-title { display: block; font-size: 30rpx; font-weight: 650; line-height: 1.6; }
+.native-body { display: block; margin-top: 16rpx; font-size: 28rpx; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+.native-price { display: block; margin: 18rpx 0; color: #12764a; font-size: 42rpx; font-weight: 700; }
+.native-search { display: flex; gap: 16rpx; align-items: center; padding: 12rpx 20rpx; background: #fff; border: 1rpx solid #ccdcd2; border-radius: 16rpx; }
+.native-search input { flex: 1; min-width: 0; height: 72rpx; font-size: 28rpx; }
+.native-search button { min-width: 88rpx; min-height: 72rpx; line-height: 72rpx; color: #12764a; }
+.native-actions { display: flex; flex-wrap: wrap; gap: 16rpx; margin: 24rpx 0; }
+.native-actions button { flex: 1; min-width: 200rpx; }
+.native-page .btn { min-height: 88rpx; height: auto; line-height: 1.5; padding: 22rpx; white-space: normal; }
+.native-filter { margin: 18rpx 0; padding: 24rpx; border-radius: 16rpx; background: #e8f1eb; }
+.native-note { margin: 24rpx 0; padding: 24rpx; color: #5d705f; border-left: 6rpx solid #98bca7; background: #edf5ef; font-size: 26rpx; line-height: 1.7; }
+.native-state { display: flex; flex-direction: column; align-items: center; gap: 24rpx; padding: 50rpx 24rpx; color: #718277; text-align: center; line-height: 1.7; }
+.native-options { max-height: 420rpx; margin: 20rpx 0; }
+.native-option { display: flex; justify-content: space-between; gap: 20rpx; padding: 22rpx; border-bottom: 1rpx solid #e1e9e3; background: #fff; }
+.native-option.selected { color: #12764a; background: #deefe3; }
+.native-field { margin-bottom: 28rpx; }
+.native-field>text { display:block; margin-bottom: 14rpx; font-size: 26rpx; color:#52665a; }
+.native-field input,.native-field textarea { width:100%; padding:20rpx; border:1rpx solid #dce6df; border-radius:12rpx; background:#f8fbf9; font-size:28rpx; }
+.native-field input { height:88rpx; }
+.native-field textarea { height:240rpx; }
+
 </style>

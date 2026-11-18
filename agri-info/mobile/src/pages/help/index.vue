@@ -47,21 +47,15 @@ function askAi() {
 }
 
 function contact() {
-  uni.showModal({
-    title: '联系人工客服',
-    content: '客服热线 400-000-0000（工作日 09:00-18:00）\n也可在「帮助与反馈」提交问题，平台将在 1 个工作日内回复。',
-    showCancel: false,
-  })
+  uni.showModal({ title: '联系平台管理员', content: '请通过账号开通时提供的管理员联系方式反馈问题。当前未配置统一客服热线。', showCancel: false })
 }
 
 function feedback() {
   uni.showModal({
-    title: '提交反馈',
-    editable: true,
-    placeholderText: '请描述你遇到的问题或建议',
+    title: '整理问题描述', editable: true, placeholderText: '请描述你遇到的问题或建议',
     success: (result: { confirm: boolean; content?: string }) => {
-      if (!result.confirm) return
-      uni.showToast({ title: '反馈已提交，感谢支持', icon: 'none' })
+      if (!result.confirm || !result.content?.trim()) return
+      uni.setClipboardData({ data: result.content.trim(), success: () => uni.showToast({ title: '已复制，请发送给平台管理员', icon: 'none' }) })
     },
   })
 }
@@ -93,13 +87,13 @@ function feedback() {
       <view class="card help-card">
         <view class="help-head">
           <text class="help-title">✦ 还没解决？</text>
-          <text class="tiny">可转接在线农技专家，或提交反馈给客服团队</text>
+          <text class="tiny">可以查询农技知识，或将问题描述发送给平台管理员</text>
         </view>
         <view class="help-actions">
           <button class="btn btn-primary grow" @click="askAi">问 AI 助手</button>
           <button class="btn btn-ghost grow" @click="contact">联系人工客服</button>
         </view>
-        <button class="btn btn-block" style="margin-top: 14rpx" @click="feedback">提交问题反馈</button>
+        <button class="btn btn-block" style="margin-top: 14rpx" @click="feedback">整理反馈内容</button>
       </view>
     </view>
   </view>

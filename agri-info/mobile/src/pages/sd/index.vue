@@ -23,18 +23,21 @@ onShow(() => {
   load()
 })
 
+let loadGeneration = 0
 async function load() {
+  const stamp = ++loadGeneration
   loading.value = true
   try {
-    data.value = await infoApi.supplyDemands({
+    const result = await infoApi.supplyDemands({
       type: type.value,
       category: category.value || undefined,
       keyword: keyword.value || undefined,
     })
+    if (stamp === loadGeneration) data.value = result
   } catch (error) {
     toast(error instanceof Error ? error.message : '加载失败')
   } finally {
-    loading.value = false
+    if (stamp === loadGeneration) loading.value = false
   }
 }
 

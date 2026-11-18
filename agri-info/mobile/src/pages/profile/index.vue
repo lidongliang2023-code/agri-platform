@@ -20,13 +20,15 @@ const owner = computed(() => currentOwner() || '平台用户')
 const isExpert = ref(false)
 
 const menus = [
+  { icon: '📚', title: '农技知识库', desc: '作物与生产知识', url: '/pages/knowledge/index', badge: () => 0 },
+  { icon: '👨‍🌾', title: '农技专家', desc: '已审核专家与公开回答', url: '/pages/expert/index', badge: () => 0 },
   { icon: '🔔', title: '价格预警', desc: '突破阈值即时提醒', url: '/pages/alert/setup', badge: () => alerts.value },
   { icon: '⭐', title: '订阅管理', desc: '品种、频道与推送时间', url: '/pages/subscription/index', badge: () => subs.value },
   { icon: '🤖', title: '我的 AI 提问', desc: '历史对话与专家回答', url: '/pages/ai/history', badge: () => 0 },
       { icon: '📦', title: '我的发布', desc: '供需信息与询价', url: '/pages/sd/mine', badge: () => myPosts.value },
-  { icon: '📑', title: '我的报告', desc: '已购报告与下载记录', url: '/pages/report/mine', badge: () => reports.value },
+  { icon: '📑', title: '我的报告', desc: '报告库与我的收藏', url: '/pages/report/mine', badge: () => reports.value },
   { icon: '🔗', title: '我的存证', desc: '内容上链与校验结果', url: '/pages/attest/index', badge: () => attestations.value },
-  { icon: '🎖', title: '我的认证', desc: '专家认证与有效期', url: '/pages/expert/cert', badge: () => expertCount.value },
+  { icon: '🎖', title: '我的认证', desc: '申请记录与审核结果', url: '/pages/expert/cert', badge: () => expertCount.value },
     { icon: '❓', title: '帮助与反馈', desc: '常见问题与客服', url: '/pages/help/index', badge: () => 0 },
   { icon: '⚙️', title: '设置', desc: '通知、缓存与账号', url: '/pages/settings/index', badge: () => 0 },
 ]
@@ -65,7 +67,7 @@ async function load() {
     alerts.value = alertList.filter((item) => item.enabled).length
     myPosts.value = mine.items?.length || 0
     expertCount.value = expertList.length
-    reports.value = reportList.length
+    reports.value = favList.filter(item => item.targetType === 'report').length
     attestations.value = attestList.length
   } catch (error) {
     toast(error instanceof Error ? error.message : '加载失败')

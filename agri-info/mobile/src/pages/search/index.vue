@@ -20,9 +20,9 @@ try {
 }
 
 const hotList = [
-  { tag: '热', title: '大蒜价格走势', desc: '行情 · 搜索指数 ↑72%', keyword: '大蒜' },
-  { tag: '热', title: '2026 种粮补贴怎么领', desc: '政策法规 · 3.2 万人搜过', keyword: '补贴' },
-  { tag: '新', title: '番茄黄叶怎么治（问 AI）', desc: '农技问答 · AI 秒答', keyword: '番茄叶片发黄' },
+  { tag: '热', title: '大蒜价格走势', desc: '行情 · 品种行情', keyword: '大蒜' },
+  { tag: '热', title: '2026 种粮补贴怎么领', desc: '政策法规 · 政策查询', keyword: '补贴' },
+  { tag: '新', title: '番茄黄叶怎么治（问 AI）', desc: '农技问答 · 知识库问答', keyword: '番茄叶片发黄' },
 ]
 
 const tabs = [
@@ -43,35 +43,44 @@ const totals = computed(() => {
 })
 
 onLoad((options) => {
-  const preset = decodeURIComponent(String(options?.keyword || ''))
+  if (options?.scope === 'market') tab.value = 'quote'
+  const preset = String(options?.keyword || '')
   if (preset) {
     keyword.value = preset
     doSearch(preset)
   }
 })
 
+let searchGeneration = 0
 async function doSearch(text?: string) {
   const value = (text ?? keyword.value).trim()
   if (!value) return
   keyword.value = value
   submitted.value = value
   loading.value = true
-  tab.value = 'all'
+  const stamp = ++searchGeneration
+  result.value = null
   try {
-    result.value = await infoApi.search(value)
+    const data = await infoApi.search(value)
+    if (stamp !== searchGeneration) return
+    result.value = data
     const list = [value, ...history.value.filter((item) => item !== value)].slice(0, 10)
     history.value = list
     uni.setStorageSync(accountStorageKey(HISTORY_KEY), list)
   } catch (error) {
     toast(error instanceof Error ? error.message : '搜索失败')
   } finally {
-    loading.value = false
+    if (stamp === searchGeneration) loading.value = false
   }
 }
 
 function clearHistory() {
   history.value = []
   uni.removeStorageSync(accountStorageKey(HISTORY_KEY))
+}
+
+function openKnowledge(id: number) {
+  uni.navigateTo({ url: `/pages/knowledge/detail?id=${id}` })
 }
 
 function openArticle(id: number) {
@@ -131,7 +140,7 @@ function goBack() {
 
       <view class="block">
         <view class="block-head">
-          <text class="block-title">🔥 大家都在搜</text>
+          <text class="block-title">搜索示例</text>
         </view>
         <view class="hot-list">
           <view v-for="item in hotList" :key="item.title" class="hot-row" @click="doSearch(item.keyword)">
@@ -197,7 +206,7 @@ function goBack() {
 
         <view v-if="(tab === 'all' || tab === 'knowledge') && result.knowledge?.length" class="card">
           <text class="group-title">农技知识</text>
-          <view v-for="item in result.knowledge" :key="item.id" class="list-item" @click="askAi(item.title)">
+          <view v-for="item in result.knowledge" :key="item.id" class="list-item" @click="openKnowledge(item.id)">
             <view class="item-icon">🌱</view>
             <view class="item-body">
               <text class="item-title clamp-2">{{ item.title }}</text>

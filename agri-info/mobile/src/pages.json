@@ -35,7 +35,8 @@
     {
       "path": "pages/market/price-index",
       "style": {
-        "navigationStyle": "custom"
+        "navigationBarTitleText": "价格指数",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -71,7 +72,8 @@
     {
       "path": "pages/message/index",
       "style": {
-        "navigationBarTitleText": "消息通知"
+        "navigationBarTitleText": "消息通知",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -173,25 +175,29 @@
     {
       "path": "pages/report/detail",
       "style": {
-        "navigationStyle": "custom"
+        "navigationBarTitleText": "报告详情",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/report/mine",
       "style": {
-        "navigationBarTitleText": "我的报告"
+        "navigationBarTitleText": "我的报告",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/attest/index",
       "style": {
-        "navigationBarTitleText": "存证记录"
+        "navigationBarTitleText": "存证记录",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/attest/detail",
       "style": {
-        "navigationBarTitleText": "存证详情"
+        "navigationBarTitleText": "存证详情",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -203,7 +209,8 @@
     {
       "path": "pages/expert/apply",
       "style": {
-        "navigationBarTitleText": "专家认证申请"
+        "navigationBarTitleText": "专家认证申请",
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -215,19 +222,56 @@
     {
       "path": "pages/expert/detail",
       "style": {
-        "navigationStyle": "custom"
+        "navigationBarTitleText": "专家资料",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/expert/cert",
       "style": {
-        "navigationBarTitleText": "我的认证"
+        "navigationBarTitleText": "我的认证",
+        "enablePullDownRefresh": true
       }
     },
     {
       "path": "pages/login/index",
       "style": {
         "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/knowledge/index",
+      "style": {
+        "navigationBarTitleText": "农技知识库",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/knowledge/detail",
+      "style": {
+        "navigationBarTitleText": "知识详情",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/ai/detail",
+      "style": {
+        "navigationBarTitleText": "历史问答",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/market/compare",
+      "style": {
+        "navigationBarTitleText": "行情对比",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/expert/index",
+      "style": {
+        "navigationBarTitleText": "农技专家",
+        "enablePullDownRefresh": true
       }
     }
   ],

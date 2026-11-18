@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onLoad, onUnload, onHide } from '@dcloudio/uni-app'
 import {
   infoApi,
   mediaUrl,
@@ -28,6 +28,8 @@ const loading = ref(true)
 const errorText = ref('')
 const positionSec = ref(0)
 const retried = ref(false)
+const progressError = ref('')
+let reporting = false
 
 /** 进度上报节流：每累计 15 秒发一次，暂停/播完再补一次。 */
 const REPORT_STEP = 15
@@ -65,7 +67,10 @@ onUnload(() => {
   }
 })
 
+onHide(onPause)
+
 async function boot() {
+  retried.value = false
   loading.value = true
   errorText.value = ''
   try {
@@ -114,19 +119,12 @@ function onTimeUpdate(event: Event) {
 }
 
 function onPause() {
-  if (dirty) {
-    dirty = false
-    report(positionSec.value)
-  }
+  if (dirty) report(positionSec.value)
 }
 
-function onEnded() {
-  report(lesson.value?.durationSec || positionSec.value, true)
-  if (nextLesson.value) {
-    toast('本节已学完，可继续下一节')
-  } else {
-    toast('本课程已学完', 'success')
-  }
+async function onEnded() {
+  const saved = await report(lesson.value?.durationSec || positionSec.value, true)
+  if (saved) toast(nextLesson.value ? '本节进度已保存，可继续下一节' : '本节学习进度已保存', 'success')
 }
 
 /** 视频拉流失败：签名过期与网络问题都会落到这里，换一次票重试即可。 */
@@ -139,10 +137,19 @@ function onError() {
   void loadTicket()
 }
 
-function report(position: number, finished = false) {
-  if (!lessonId.value) return
-  infoApi.reportProgress(courseId.value, lessonId.value, { positionSec: Math.floor(position), finished })
-    .catch(() => undefined)
+async function report(position: number, finished = false): Promise<boolean> {
+  if (!lessonId.value || reporting) return false
+  reporting = true
+  try {
+    await infoApi.reportProgress(courseId.value, lessonId.value, { positionSec: Math.floor(position), finished })
+    progressError.value = ''
+    dirty = positionSec.value !== Math.floor(position)
+    return true
+  } catch (error) {
+    dirty = true
+    progressError.value = error instanceof Error ? error.message : '进度未保存，请重试'
+    return false
+  } finally { reporting = false }
 }
 
 function switchLesson(target: CourseLesson | null | undefined) {
@@ -172,6 +179,7 @@ function goBack() {
     <view v-else-if="errorText && !playUrl" class="empty">
       <text class="empty-icon">📵</text>
       <text class="muted">{{ errorText }}</text>
+      <button class="btn btn-primary" @tap="boot">重新加载课程</button>
     </view>
 
     <block v-else>
@@ -192,6 +200,7 @@ function goBack() {
       />
 
       <view class="page-pad">
+        <view v-if="progressError" class="native-note"><text>学习进度保存失败：{{progressError}}</text><button class="btn" @tap="report(positionSec)">重试保存进度</button></view>
         <view class="card">
           <text class="play-title">{{ lesson?.title }}</text>
           <text class="tiny muted" style="display: block; margin-top: 8rpx">
@@ -220,6 +229,7 @@ function goBack() {
       </view>
 
       <view class="page-pad">
+        <view v-if="progressError" class="native-note"><text>学习进度保存失败：{{progressError}}</text><button class="btn" @tap="report(positionSec)">重试保存进度</button></view>
         <view class="card">
           <view
             v-for="item in detail?.lessons || []"

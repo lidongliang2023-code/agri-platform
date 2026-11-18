@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, money, toast, type Quote } from '../../api'
-import { currentOwner, getInfoUser } from '../../auth'
+import { currentOwner, getInfoUser, accountStorageKey } from '../../auth'
 
 const sdType = ref<'supply' | 'demand'>('supply')
 const categories = ['蔬菜', '水果', '粮食', '畜牧', '食用菌', '水产']
@@ -34,6 +34,8 @@ const form = ref({
 onLoad((options) => {
   sdType.value = String(options?.type || 'supply') === 'demand' ? 'demand' : 'supply'
   uni.setNavigationBarTitle({ title: sdType.value === 'supply' ? '发布供应' : '发布需求' })
+  const draft = uni.getStorageSync(accountStorageKey(`info_sd_draft:${sdType.value}`))
+  if (draft) form.value = { ...form.value, ...draft }
   const repost = uni.getStorageSync('info_sd_repost')
   if (repost) {
     uni.removeStorageSync('info_sd_repost')
@@ -44,6 +46,11 @@ onLoad((options) => {
       spec: repost.spec || '',
       quantity: String(repost.quantity || '').replace(/[^\d.]/g, ''),
       price: String(repost.price || ''),
+      unit: repost.unit || String(repost.priceUnit || '').split('/')[1] || form.value.unit,
+      contactName: repost.contactName || form.value.contactName,
+      contactPhone: repost.contactPhone || '',
+      orgName: repost.orgName || '',
+      availableDate: repost.availableDate || '',
       origin: repost.origin || '',
       duration: Number(repost.duration || 30),
     }
@@ -60,7 +67,7 @@ async function loadQuotes() {
   }
 }
 
-/** AI 定价建议：用同品种最新行情给出参考区间，与 PC 端口径一致。 */
+/** 最新行情参考：用同品种最新行情给出参考区间，与 PC 端口径一致。 */
 const reference = computed<Quote | undefined>(() => {
   const key = form.value.variety.trim()
   if (!key) return undefined
@@ -70,9 +77,7 @@ const reference = computed<Quote | undefined>(() => {
 const priceHint = computed(() => {
   const quote = reference.value
   if (!quote) return ''
-  const low = quote.price * 0.96
-  const high = quote.price * 1.04
-  return `近 7 日${quote.origin}${quote.name}产地均价 ${money(quote.price)} ${quote.priceUnit}，建议定价区间 ${money(low)} - ${money(high)} ${quote.priceUnit}。`
+  return `${quote.origin}${quote.name}最新报价 ${money(quote.price)} ${quote.priceUnit}，更新时间 ${quote.updatedAt}。请核对规格和计价单位。`
 })
 
 function pickDate(event: { detail: { value: string } }) {
@@ -85,11 +90,14 @@ async function submit() {
     toast('请填写品种')
     return
   }
-  if (!form.value.quantity.trim()) {
-    toast('请填写数量')
+  if (!Number.isFinite(Number(form.value.quantity)) || Number(form.value.quantity) <= 0) {
+    toast('数量必须为大于零的数字')
     return
   }
-  if (!form.value.contactPhone.trim() || form.value.contactPhone.trim().length < 6) {
+  if (!Number.isFinite(Number(form.value.price)) || Number(form.value.price) <= 0) { toast('请填写大于零的单价'); return }
+  if (!form.value.contactName.trim()) { toast('请填写联系人'); return }
+  if (!form.value.origin.trim()) { toast('请填写产地或收货地'); return }
+  if (!/^[+\d][\d\s-]{5,19}$/.test(form.value.contactPhone.trim())) {
     toast('请填写有效联系电话')
     return
   }
@@ -115,7 +123,7 @@ async function submit() {
       variety: form.value.variety.trim(),
       spec: specParts.join(' · '),
       quantity: `${form.value.quantity}${form.value.unit}`,
-      price: Number(form.value.price || reference.value?.price || 0),
+      price: Number(form.value.price),
       priceUnit: `元/${form.value.unit}`,
       origin: form.value.origin.trim() || '待完善产地',
       marketRef: priceHint.value || '平台将在审核后补充行情参考',
@@ -126,6 +134,7 @@ async function submit() {
       orgName: form.value.orgName.trim() || currentOwner() || '平台用户',
       orgType: '个人',
     })
+    uni.removeStorageSync(accountStorageKey(`info_sd_draft:${sdType.value}`))
     uni.showModal({
       title: '提交成功',
       content: `${result.message}\n信息编号：${result.sdNo}\nAI 预估匹配度：${result.matchScore}%`,
@@ -140,12 +149,18 @@ async function submit() {
 }
 
 function saveDraft() {
-  uni.setStorageSync('info_sd_draft', { sdType: sdType.value, ...form.value })
+  uni.setStorageSync(accountStorageKey(`info_sd_draft:${sdType.value}`), { ...form.value })
   toast('草稿已保存到本机')
 }
 
 function useQuote() {
-  if (reference.value) form.value.price = String(reference.value.price)
+  const quote = reference.value
+  if (!quote) return
+  const from = quote.priceUnit.replace('元/', '').trim()
+  const weights: Record<string, number> = { '斤': 0.5, '公斤': 1, '千克': 1, '吨': 1000 }
+  if (from === form.value.unit) form.value.price = String(quote.price)
+  else if (weights[from] && weights[form.value.unit]) form.value.price = String(Number((quote.price / weights[from] * weights[form.value.unit]).toFixed(4)))
+  else toast('无法自动换算该单位，请核实后手动填写单价')
 }
 
 const phoneMasked = computed(() => {
@@ -160,7 +175,7 @@ const phoneMasked = computed(() => {
       <view v-if="priceHint" class="ai-card">
         <view class="ai-icon">✦</view>
         <view class="ai-copy">
-          <text>AI 定价建议</text>
+          <text>最新行情参考</text>
           <text>{{ priceHint }}</text>
           <text>基于平台行情库生成 · 仅供参考</text>
         </view>
@@ -232,7 +247,7 @@ const phoneMasked = computed(() => {
         </view>
 
         <view class="form-item">
-          <text class="form-label">{{ sdType === 'supply' ? '期望单价 *' : '期望价' }}</text>
+          <text class="form-label">{{ sdType === 'supply' ? '期望单价 *' : '期望价 *' }}</text>
           <view class="inline-row">
             <input v-model="form.price" class="input grow" type="digit" placeholder="请输入单价" />
             <text class="unit-label">元/{{ form.unit }}</text>
@@ -305,7 +320,7 @@ const phoneMasked = computed(() => {
 
       <view class="notice">
         <text>·</text>
-        <text>发布后进入平台审核队列，一般 2 小时内完成；审核通过后自动上链存证并由 AI 推送撮合。</text>
+        <text>发布结果与审核状态以服务端返回为准，可在“我的发布”查看。</text>
       </view>
 
       <view class="submit-row">

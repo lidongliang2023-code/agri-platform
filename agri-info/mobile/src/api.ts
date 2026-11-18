@@ -517,6 +517,7 @@ export function request<T>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const token = getInfoToken()
+    if (!token) { handleInfoUnauthorized(); reject(new Error('请先使用统一账号登录')); return }
     uni.request({
       url: `${API_BASE}/api/v1/info${url}${query(params)}`,
       method,
@@ -676,6 +677,8 @@ export const STATUS: Record<string, { label: string; tone: string }> = {
   active: { label: '有效', tone: 'green' },
   paused: { label: '已暂停', tone: 'orange' },
 }
+
+export function statusLabel(status: string): string { return statusMeta(status).label }
 
 export function statusMeta(status: string): { label: string; tone: string } {
   return STATUS[status] ?? { label: status || '—', tone: 'gray' }

@@ -62,6 +62,11 @@ function repost(item: SupplyDemand) {
     spec: item.spec,
     quantity: item.quantity,
     price: String(item.price),
+    priceUnit: item.priceUnit,
+    contactName: item.contactName,
+    contactPhone: item.contactPhone,
+    orgName: item.orgName,
+    availableDate: item.availableDate,
     origin: item.origin,
     duration: item.durationDays,
   })

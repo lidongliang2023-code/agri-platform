@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow, onHide, onUnload } from '@dcloudio/uni-app'
 import { infoApi, money, timeAgo, toast, type SdMessage, type SupplyDemandDetail } from '../../api'
 
 const id = ref(0)
@@ -32,6 +32,19 @@ onLoad((options) => {
   sdType.value = options?.type === 'demand' ? 'demand' : 'supply'
   load()
 })
+let refreshTimer: ReturnType<typeof setInterval> | undefined
+let refreshing = false
+let visible = true
+function stopRefresh() { visible = false; if (refreshTimer) clearInterval(refreshTimer); refreshTimer = undefined }
+onShow(() => { stopRefresh(); visible = true; refreshTimer = setInterval(refreshMessages, 10000) })
+onHide(stopRefresh)
+onUnload(stopRefresh)
+async function refreshMessages() {
+  if (!visible || !id.value || loading.value || refreshing || sending.value) return
+  refreshing = true
+  try { const data = await infoApi.supplyDemand(id.value, sdType.value); if (visible && !sending.value) { messages.value = data.messages || []; detail.value = data } } catch { /* 下次刷新重试，手动刷新仍显示错误 */ }
+  finally { refreshing = false }
+}
 
 async function load() {
   loading.value = true
@@ -49,10 +62,10 @@ async function load() {
 
 async function send(content?: string) {
   const value = (content ?? text.value).trim()
-  if (!value || sending.value) return
+  if (!value || sending.value || refreshing || loading.value || !detail.value) return
   sending.value = true
   try {
-    const result = await infoApi.sendSdMessage(id.value, { content: value }, detail.value?.sdType)
+    const result = await infoApi.sendSdMessage(id.value, { content: value }, sdType.value)
     text.value = ''
     messages.value = result.messages
     scrollToEnd()

@@ -17,7 +17,9 @@ const form = ref({
 
 const metrics = ['价格', '涨跌幅']
 const operators = ['>', '<']
-const channels = ['站内消息', '短信', '电话']
+const channels = ['站内消息']
+const saving = ref(false)
+const toggling = ref<number[]>([])
 
 const quoteNames = computed(() => quotes.value.map((item) => `${item.icon} ${item.name}（${item.origin}）`))
 const selectedQuote = computed<Quote | undefined>(() => quotes.value[form.value.quoteIndex])
@@ -77,15 +79,17 @@ function onChannelChange(event: { detail: { value: number | string } }) {
 }
 
 async function save() {
+  if (saving.value || loading.value) return
   if (!selectedQuote.value) {
     toast('请选择品种')
     return
   }
   const threshold = Number(form.value.threshold)
-  if (!threshold || Number.isNaN(threshold)) {
+  if (!form.value.threshold.trim() || !Number.isFinite(threshold) || (form.value.metric === '价格' && threshold <= 0)) {
     toast('请填写有效阈值')
     return
   }
+  saving.value = true
   try {
     const quote = selectedQuote.value
     await infoApi.createAlertRule({
@@ -101,34 +105,23 @@ async function save() {
     rules.value = await infoApi.alertRules()
   } catch (error) {
     toast(error instanceof Error ? error.message : '创建失败')
-  }
+  } finally { saving.value = false }
 }
 
 async function toggle(rule: AlertRule) {
+  if (toggling.value.includes(rule.id)) return
+  toggling.value.push(rule.id)
   try {
     const result = await infoApi.updateAlertRule(rule.id, { enabled: !rule.enabled })
     rules.value = result.rules
     toast(rule.enabled ? '已暂停该预警' : '已恢复该预警')
   } catch (error) {
     toast(error instanceof Error ? error.message : '操作失败')
-  }
+  } finally { toggling.value = toggling.value.filter(id => id !== rule.id) }
 }
 
 function remove(rule: AlertRule) {
-  uni.showModal({
-    title: '删除预警',
-    content: `确定删除「${rule.ruleName}」吗？删除后不再推送该条件。`,
-    success: async (result: { confirm: boolean }) => {
-      if (!result.confirm) return
-      try {
-        await infoApi.updateAlertRule(rule.id, { enabled: false })
-        rules.value = await infoApi.alertRules()
-        toast('已停止推送，可在运营端彻底删除')
-      } catch (error) {
-        toast(error instanceof Error ? error.message : '操作失败')
-      }
-    },
-  })
+  if (rule.enabled) toggle(rule)
 }
 
 function toMessages() {
@@ -145,8 +138,8 @@ function metricLabel(rule: AlertRule) {
   <view class="page">
     <view class="head">
       <view class="head-copy">
-        <text class="head-title">已关注 {{ quotes.length }} 个品种</text>
-        <text class="head-sub">{{ enabledCount }} 条预警生效中 · 本周触发 {{ hitTotal }} 次</text>
+        <text class="head-title">可设置 {{ quotes.length }} 个品种</text>
+        <text class="head-sub">{{ enabledCount }} 条预警生效中 · 累计触发 {{ hitTotal }} 次</text>
       </view>
       <view class="head-btn" @click="toMessages">预警消息 ›</view>
     </view>
@@ -172,19 +165,17 @@ function metricLabel(rule: AlertRule) {
             </view>
             <switch
               :checked="rule.enabled"
+              :disabled="toggling.includes(rule.id)"
               color="#12764a"
               style="transform: scale(0.72)"
               @change="toggle(rule)"
             />
           </view>
           <view class="rule-body">
-            <text class="tag green">触发条件：{{ metricLabel(rule) }} {{ unit }}</text>
+            <text class="tag green">触发条件：{{ metricLabel(rule) }} {{ rule.metric === '涨跌幅' ? '%' : (quotes.find(q => q.id === rule.quoteId)?.priceUnit || '') }}</text>
             <text class="tag gray">推送：{{ rule.channel }}</text>
             <text v-if="!rule.enabled" class="tag orange">已暂停</text>
             <text v-if="rule.hitCount" class="tag red">已触发 {{ rule.hitCount }} 次</text>
-          </view>
-          <view class="rule-foot">
-            <text class="link" @click="remove(rule)">删除</text>
           </view>
         </view>
       </view>
@@ -239,7 +230,7 @@ function metricLabel(rule: AlertRule) {
           </picker>
         </view>
 
-        <button class="btn btn-primary btn-block" @click="save">保存预警</button>
+        <button class="btn btn-primary btn-block" :disabled="saving || loading" @click="save">保存预警</button>
 
         <view class="notice" style="margin-top: 18rpx">
           <text>·</text>

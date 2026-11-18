@@ -16,9 +16,9 @@
       </view>
       <view class="hero-flow">
         <view class="flow-step active"><text>01</text><text>统一登录</text></view>
-        <i />
+        <view class="flow-line" />
         <view class="flow-step"><text>02</text><text>权限校验</text></view>
-        <i />
+        <view class="flow-line" />
         <view class="flow-step"><text>03</text><text>进入资讯</text></view>
       </view>
     </view>
@@ -94,7 +94,7 @@
         </button>
       </view>
 
-      <view v-if="!challengeToken" class="divider"><i /><text>统一认证安全保障</text><i /></view>
+      <view v-if="!challengeToken" class="divider"><view class="flow-line" /><text>统一认证安全保障</text><view class="flow-line" /></view>
       <view v-if="!challengeToken" class="security-row">
         <view><text class="security-icon">统</text><text>统一身份</text><text>全平台同一账号</text></view>
         <view><text class="security-icon">权</text><text>权限同步</text><text>按角色安全访问</text></view>
@@ -182,6 +182,7 @@ async function submit(): Promise<void> {
     uni.showToast({ title: '登录成功', icon: 'success' })
     setTimeout(() => uni.switchTab({ url: '/pages/news/index' }), 250)
   } catch (error) {
+    if (challengeToken.value) resetMfa()
     notice(error instanceof Error ? error.message : '登录失败，请稍后重试')
   } finally {
     submitting.value = false
@@ -247,7 +248,7 @@ onShow(() => {
 .flow-step text:first-child { display: grid; width: 38rpx; height: 38rpx; place-items: center; border: 1rpx solid rgba(255, 255, 255, .38); border-radius: 50%; font-size: 19rpx; }
 .flow-step.active { color: #fff; }
 .flow-step.active text:first-child { border-color: #b8f1cf; background: #a7e9c3; color: #0e6a41; }
-.hero-flow i, .divider i { display: block; height: 1rpx; flex: 1; background: rgba(255, 255, 255, .22); }
+.hero-flow .flow-line, .divider .flow-line { display: block; height: 1rpx; flex: 1; background: rgba(255, 255, 255, .22); }
 
 .auth-card {
   padding: 32rpx 30rpx 0;
@@ -278,7 +279,7 @@ onShow(() => {
 .primary-button { height: 88rpx; margin-top: 24rpx; border-radius: 15rpx; background: linear-gradient(135deg, #159a5e, #12764a); color: #fff; font-size: 28rpx; font-weight: 700; line-height: 88rpx; letter-spacing: 3rpx; box-shadow: 0 12rpx 26rpx rgba(18, 118, 74, .2); }
 .primary-button[disabled] { opacity: .55; }
 .divider { display: flex; align-items: center; gap: 14rpx; padding: 30rpx 0 20rpx; color: #95a39b; font-size: 22rpx; }
-.divider i { background: #edf1ee; }
+.divider .flow-line { background: #edf1ee; }
 .security-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8rpx; padding-bottom: 26rpx; }
 .security-row view { display: grid; justify-items: center; gap: 6rpx; text-align: center; }
 .security-row text:nth-child(2) { color: #52665a; font-size: 23rpx; font-weight: 700; }

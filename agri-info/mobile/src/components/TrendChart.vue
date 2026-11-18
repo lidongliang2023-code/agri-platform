@@ -18,8 +18,8 @@ const props = withDefaults(
 )
 
 const values = computed(() => props.points.map((point) => Number(point.value || 0)))
-const max = computed(() => Math.max(...values.value, 0.0001))
-const min = computed(() => Math.min(...values.value, 0))
+const max = computed(() => values.value.length ? Math.max(...values.value) : 0)
+const min = computed(() => values.value.length ? Math.min(...values.value) : 0)
 const span = computed(() => (max.value - min.value) || 1)
 const labels = computed(() => props.points.map((point) => point.label))
 
@@ -34,7 +34,7 @@ function barClass(index: number): string {
   if (props.mode === 'down') return 'down'
   if (props.mode === 'neutral') return 'neutral'
   if (index === 0) return 'neutral'
-  return values.value[index] >= values.value[index - 1] ? 'up' : 'down'
+  return values.value[index] === values.value[index - 1] ? 'neutral' : values.value[index] > values.value[index - 1] ? 'up' : 'down'
 }
 
 const axisLabels = computed(() => {

@@ -105,13 +105,12 @@ async function submitComment() {
 function share() {
   uni.setClipboardData({
     data: `丰链云资讯：${detail.value?.title || ''}（编号 ${detail.value?.articleNo || ''}）`,
-    success: () => toast('链接已复制'),
+    success: () => toast('标题与编号已复制'),
   })
 }
 
 function openVariety(name: string) {
   uni.switchTab({ url: '/pages/market/index' })
-  uni.setStorageSync('info_market_keyword', name)
 }
 
 function openAttest(attestId: number) {

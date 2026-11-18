@@ -22,8 +22,7 @@ async function load() {
 }
 
 function askAgain(record: QaRecord) {
-  uni.setStorageSync('info_ai_question', record.question)
-  uni.switchTab({ url: '/pages/ai/index' })
+  uni.navigateTo({ url: `/pages/ai/detail?id=${record.id}` })
 }
 
 function newQuestion() {

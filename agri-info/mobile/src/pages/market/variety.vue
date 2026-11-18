@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import TrendChart from '../../components/TrendChart.vue'
+import { useFavorite } from '../../useNativePage'
 import {
   infoApi,
   money,
@@ -16,6 +17,7 @@ import {
 const id = ref(0)
 const detail = ref<MarketDetail | null>(null)
 const series = ref<SeriesPoint[]>([])
+const { saved, saving, refresh, toggle } = useFavorite('quote', () => detail.value ? { id: detail.value.id, title: detail.value.name, summary: detail.value.origin } : null)
 const horizon = ref('7d')
 const loading = ref(true)
 const statusBarHeight = ref(0)
@@ -60,6 +62,7 @@ async function load() {
     const data = await infoApi.market(id.value)
     detail.value = data
     series.value = data.series || []
+    await refresh()
     pushView({
       type: 'quote',
       id: data.id,
@@ -78,7 +81,9 @@ async function switchHorizon(key: string) {
   horizon.value = key
   try {
     const result = await infoApi.forecast(id.value, key)
-    if (result.series?.length) series.value = result.series
+    if (horizon.value !== key) return
+    series.value = result.series || []
+    if (detail.value) detail.value.forecast = result.forecast
   } catch (error) {
     toast(error instanceof Error ? error.message : '走势加载失败')
   }
@@ -93,8 +98,7 @@ function openArticle(articleId: number) {
 }
 
 function compare() {
-  uni.setStorageSync('info_compare_ids', [id.value])
-  toast('已加入对比清单')
+  uni.navigateTo({ url: `/pages/market/compare?id=${id.value}` })
 }
 
 function goBack() {
@@ -257,9 +261,9 @@ function goBack() {
       </view>
 
       <view class="action-bar">
-        <view class="icon-btn" @click="compare">
+        <view class="icon-btn" @click="toggle">
           <text>☆</text>
-          <text>关注品种</text>
+          <text>{{ saving ? '保存中' : saved ? '已收藏' : '收藏品种' }}</text>
         </view>
         <button class="btn btn-primary grow" @click="goAlert">🔔 设置价格预警</button>
       </view>

@@ -28,9 +28,11 @@ onLoad((options) => {
 })
 
 async function verify() {
+  if (loading.value) return
+  result.value = null
   const value = attestNo.value.trim()
   if (!value) {
-    toast('请输入内容 ID、存证编号或标题')
+    toast('请输入存证编号')
     return
   }
   loading.value = true
@@ -82,13 +84,13 @@ function useHistory(item: VerifyItem) {
     <view class="page-pad">
       <view class="card">
         <view class="card-head">
-          <text class="card-title">按内容 ID 验证</text>
-          <text class="card-sub">支持存证编号 / 文章标题</text>
+          <text class="card-title">按存证编号验证</text>
+          <text class="card-sub">按完整编号查询</text>
         </view>
         <input
           v-model="attestNo"
           class="input"
-          placeholder="请输入内容 ID、存证编号或文章标题"
+          placeholder="请输入存证编号"
           placeholder-class="ph"
           confirm-type="search"
           @confirm="verify()"
@@ -100,7 +102,7 @@ function useHistory(item: VerifyItem) {
       </view>
 
       <view v-if="result" :class="['result', result.valid ? 'ok' : 'bad']">
-        <text class="result-title">{{ result.valid ? '✅ 验证通过 · 内容未被篡改' : '⚠️ 校验不一致' }}</text>
+        <text class="result-title">{{ result.valid ? '✅ 服务端验证通过' : '⚠️ 未通过验证' }}</text>
         <text class="result-desc">{{ result.message }}</text>
 
         <template v-if="result.record">
@@ -126,7 +128,7 @@ function useHistory(item: VerifyItem) {
           </view>
           <view class="result-actions">
             <button class="btn btn-sm grow" @click="copyHash">复制哈希</button>
-            <button class="btn btn-primary btn-sm grow" @click="openRecord">查看链上详情</button>
+            <button class="btn btn-primary btn-sm grow" @click="openRecord">查看存证记录</button>
           </view>
         </template>
       </view>
@@ -149,8 +151,7 @@ function useHistory(item: VerifyItem) {
       <view class="notice ai" style="margin-top: 16rpx">
         <text>✦</text>
         <text>
-          系统对目标内容重新计算 SHA-256 哈希，与链上存证的哈希逐位比对：完全一致即证明内容自发布后未被改动；
-          不一致则说明内容已被修改或并非平台原始版本。
+          验证展示平台服务端的核验结果，不代表独立区块链节点验证。
         </text>
       </view>
     </view>

@@ -41,17 +41,20 @@ onShow(() => {
   load()
 })
 
+let loadGeneration = 0
 async function load() {
+  const stamp = ++loadGeneration
   loading.value = true
   try {
-    data.value = await infoApi.markets({
+    const result = await infoApi.markets({
       category: category.value || undefined,
       keyword: keyword.value || undefined,
     })
+    if (stamp === loadGeneration) data.value = result
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
   } finally {
-    loading.value = false
+    if (stamp === loadGeneration) loading.value = false
   }
 }
 
@@ -92,7 +95,7 @@ function toSearch() {
             <text class="tiny">›</text>
           </view>
         </view>
-        <view class="search-box" @click="toSearch">
+        <view class="search-box">
           <text class="search-icon">⌕</text>
           <input
             v-model="keyword"

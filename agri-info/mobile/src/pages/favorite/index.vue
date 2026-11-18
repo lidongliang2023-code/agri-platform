@@ -13,6 +13,7 @@ const labels: Record<string, string> = {
   course: '课程',
   report: '报告',
   knowledge: '农技',
+  expert: '专家',
   sd: '供需（旧记录）',
   supply: '供应',
   demand: '需求',
@@ -49,6 +50,7 @@ async function load() {
 }
 
 function open(item: Favorite) {
+  if (item.targetType === 'knowledge' || item.targetType === 'expert') { uni.navigateTo({ url: `/pages/${item.targetType}/detail?id=${item.targetId}` }); return }
   if (item.targetType === 'article') {
     uni.navigateTo({ url: `/pages/news/article?id=${item.targetId}` })
     return

@@ -69,10 +69,7 @@ function toSearch() {
 <template>
   <view class="page">
     <view class="bar">
-      <view class="search" @click="toSearch">
-        <text class="search-icon">⌕</text>
-        <text class="search-ph">搜本频道资讯</text>
-      </view>
+      <view class="search"><input v-model="keyword" placeholder="搜本频道资讯" confirm-type="search" @confirm="load(true)"/><button @tap="load(true)">搜索</button></view>
     </view>
 
     <scroll-view scroll-x class="chips type-chips" :show-scrollbar="false">
