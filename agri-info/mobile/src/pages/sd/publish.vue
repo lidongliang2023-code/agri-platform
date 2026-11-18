@@ -8,6 +8,12 @@ const sdType = ref<'supply' | 'demand'>('supply')
 const categories = ['蔬菜', '水果', '粮食', '畜牧', '食用菌', '水产']
 const grades = ['优等', '一级', '二级']
 const durations = [7, 15, 30, 60]
+const defaultDuration = 30
+
+function restoreDuration(value: unknown): number {
+  const days = typeof value === 'number' || typeof value === 'string' ? Number(value) : NaN
+  return durations.includes(days) ? days : defaultDuration
+}
 const units = ['斤', '公斤', '吨', '箱']
 
 const quotes = ref<Quote[]>([])
@@ -43,7 +49,7 @@ const form = ref({
   price: '',
   origin: '',
   availableDate: '',
-  duration: 30,
+  duration: defaultDuration,
   contactName: currentOwner() || '',
   contactPhone: '',
   orgName: '',
@@ -54,7 +60,7 @@ onLoad((options) => {
   sdType.value = String(options?.type || 'supply') === 'demand' ? 'demand' : 'supply'
   uni.setNavigationBarTitle({ title: sdType.value === 'supply' ? '发布供应' : '发布需求' })
   const draft = uni.getStorageSync(accountStorageKey(`info_sd_draft:${sdType.value}`))
-  if (draft) form.value = { ...form.value, ...draft }
+  if (draft) form.value = { ...form.value, ...draft, duration: restoreDuration(draft.duration) }
   const repost = uni.getStorageSync('info_sd_repost')
   if (repost) {
     uni.removeStorageSync('info_sd_repost')
@@ -71,7 +77,7 @@ onLoad((options) => {
       orgName: repost.orgName || '',
       availableDate: repost.availableDate || '',
       origin: repost.origin || '',
-      duration: Number(repost.duration || 30),
+      duration: restoreDuration(repost.duration),
     }
   }
   loadQuotes()
@@ -317,14 +323,18 @@ const phoneMasked = computed(() => {
         <view class="form-item">
           <text class="form-label">信息有效期</text>
           <view class="chip-row">
-            <text
+            <button
               v-for="item in durations"
               :key="item"
-              :class="['chip', { active: form.duration === item }]"
+              role="button"
+              :aria-label="`有效期 ${item} 天`"
+              :aria-pressed="form.duration === item"
+              :class="['duration-option', { selected: form.duration === item }]"
+              :disabled="submitting"
               @click="form.duration = item"
             >
-              {{ item }}天
-            </text>
+              {{ form.duration === item ? '✓ ' : '' }}{{ item }}天
+            </button>
           </view>
         </view>
       </view>
@@ -380,6 +390,28 @@ const phoneMasked = computed(() => {
 
 .chip-row .chip {
   margin-right: 0;
+}
+
+.duration-option {
+  flex: 1 1 96rpx;
+  margin: 0;
+  padding: 0 8rpx;
+  min-height: 44px;
+  line-height: 44px;
+  border: 1px solid #dfe8e2;
+  border-radius: 16rpx;
+  background-color: #fff;
+  color: #35473b;
+  font-size: 26rpx;
+}
+
+.duration-option::after { border: 0; }
+
+.duration-option.selected {
+  border-color: #12764a;
+  background-color: #eaf6ef;
+  color: #105c3b;
+  font-weight: 600;
 }
 
 .inline-row {
