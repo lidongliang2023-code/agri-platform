@@ -85,6 +85,12 @@ public class TradeExceptionHandler {
         return ApiResponse.error(405, "不支持的请求方法: " + e.getMethod());
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStatus(org.springframework.web.server.ResponseStatusException e) {
+        return ResponseEntity.status(e.getStatusCode()).body(
+                ApiResponse.error(e.getStatusCode().value(), e.getReason()));
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ApiResponse<Void> handleUnexpected(Exception e) {

@@ -63,6 +63,7 @@ public class SellerProductController {
     private final PlatformIdentityService identityService;
     private final TradeConfigService configService;
     private final ObjectMapper objectMapper;
+    private final com.agri.trade.common.capability.TradeCapabilityInterceptor capability;
 
     @Value("${agri.trade.upload-dir:uploads}")
     private String uploadDir;
@@ -219,6 +220,7 @@ public class SellerProductController {
         if (!seller.ok()) {
             return ApiResponse.error(seller.error());
         }
+        capability.requirePublish(seller.merchantId(), true);
         TradeProduct product = new TradeProduct();
         apply(product, request, skus);
         product.setSellerId(seller.merchantId());

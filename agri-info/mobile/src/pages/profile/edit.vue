@@ -37,7 +37,7 @@ async function save() {
 
     <view class="page-pad">
       <view v-if="loading" class="loading">正在加载资料…</view>
-      <view v-if="errorText" class="empty"><text>{{ errorText }}</text><button class="btn" @click="load">重新加载</button></view>
+      <view v-if="errorText" class="empty"><text>{{ errorText }}</text><button role="button" tabindex="0" class="btn" @click="load">重新加载</button></view>
       <view class="card">
         <view class="form-item">
           <text class="form-label">昵称</text>
@@ -82,7 +82,7 @@ async function save() {
         </text>
       </view>
 
-      <button class="btn btn-primary btn-block" style="margin-top: 18rpx" :disabled="loading || saving || !!errorText" :loading="saving" @click="save">保存资料</button>
+      <button role="button" tabindex="0" class="btn btn-primary btn-block" style="margin-top: 18rpx" :disabled="loading || saving || !!errorText" :loading="saving" @click="save">保存资料</button>
     </view>
   </view>
 </template>

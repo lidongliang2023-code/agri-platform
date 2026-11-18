@@ -68,6 +68,21 @@ function apiRequest<T>(
   })
 }
 
+export interface InfoMerchant { merchantId: string; merchantName: string }
+
+/** 主体清单取自统一平台，前端选择不构成授权，交易服务仍会校验归属及身份。 */
+export async function getInfoMerchants(): Promise<InfoMerchant[]> {
+  const token = getInfoToken()
+  if (!token) throw new Error('请先登录')
+  const result = await apiRequest<{ code: number; message?: string; data?: InfoMerchant[] }>(
+    `${AUTH_BASE}/api/v1/platform/merchants/mine`, 'GET', undefined, token)
+  if (result.status === 401) handleInfoUnauthorized()
+  if (result.status >= 400 || result.body.code !== 0 || !Array.isArray(result.body.data)) {
+    throw new Error(result.body.message || '经营主体加载失败，请重试')
+  }
+  return result.body.data.map(item => ({ merchantId: String(item.merchantId), merchantName: item.merchantName }))
+}
+
 function permissionGranted(permissions: string[], required: string) {
   return permissions.some(
     (code) => code === '*' || code === required || code === `${required.split(':')[0]}:*`,

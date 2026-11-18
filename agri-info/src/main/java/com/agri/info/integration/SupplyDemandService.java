@@ -331,6 +331,7 @@ public class SupplyDemandService {
                 throw new IllegalArgumentException("品类「" + category + "」在交易模块里不存在，请从下拉列表中选择");
             }
             Map<String, Object> request = new LinkedHashMap<>();
+            request.put("sellerId", body.get("merchantId"));
             request.put("productName", title);
             request.put("categoryId", categoryId);
             request.put("categoryName", category);
@@ -349,6 +350,7 @@ public class SupplyDemandService {
             tradeType = "product";
         } else {
             Map<String, Object> request = new LinkedHashMap<>();
+            request.put("buyerId", body.get("merchantId"));
             request.put("demandName", title);
             request.put("productName", title);
             request.put("categoryName", category);

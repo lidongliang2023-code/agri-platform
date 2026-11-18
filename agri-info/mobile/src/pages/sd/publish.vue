@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { infoApi, money, toast, type Quote } from '../../api'
-import { currentOwner, getInfoUser, accountStorageKey } from '../../auth'
+import { currentOwner, getInfoUser, accountStorageKey, getInfoMerchants, type InfoMerchant } from '../../auth'
 
 const sdType = ref<'supply' | 'demand'>('supply')
 const categories = ['蔬菜', '水果', '粮食', '畜牧', '食用菌', '水产']
@@ -12,6 +12,25 @@ const units = ['斤', '公斤', '吨', '箱']
 
 const quotes = ref<Quote[]>([])
 const submitting = ref(false)
+const merchants = ref<InfoMerchant[]>([])
+const merchantId = ref('')
+const merchantError = ref('')
+const loadingMerchants = ref(false)
+const selectedMerchant = computed(() => merchants.value.find(item => item.merchantId === merchantId.value))
+
+async function loadMerchants() {
+  loadingMerchants.value = true
+  merchantError.value = ''
+  merchantId.value = ''
+  try {
+    merchants.value = await getInfoMerchants()
+    if (merchants.value.length === 1) merchantId.value = merchants.value[0].merchantId
+    if (!merchants.value.length) merchantError.value = '当前账号未绑定经营主体，请在用户中心完成绑定和业务身份申请'
+  } catch (error) {
+    merchants.value = []
+    merchantError.value = error instanceof Error ? error.message : '经营主体加载失败'
+  } finally { loadingMerchants.value = false }
+}
 
 const form = ref({
   category: '水果',
@@ -56,6 +75,7 @@ onLoad((options) => {
     }
   }
   loadQuotes()
+  loadMerchants()
 })
 
 async function loadQuotes() {
@@ -86,6 +106,7 @@ function pickDate(event: { detail: { value: string } }) {
 
 async function submit() {
   if (submitting.value) return
+  if (!selectedMerchant.value) { toast(merchantError.value || '请选择本次发布所属经营主体'); return }
   if (!form.value.variety.trim()) {
     toast('请填写品种')
     return
@@ -118,6 +139,7 @@ async function submit() {
   try {
     const result = await infoApi.publishSupplyDemand({
       sdType: sdType.value,
+      merchantId: merchantId.value,
       title,
       category: form.value.category,
       variety: form.value.variety.trim(),
@@ -131,7 +153,7 @@ async function submit() {
       durationDays: form.value.duration,
       contactName: form.value.contactName.trim() || currentOwner() || '平台用户',
       contactPhone: form.value.contactPhone.trim(),
-      orgName: form.value.orgName.trim() || currentOwner() || '平台用户',
+      orgName: selectedMerchant.value.merchantName,
       orgType: '个人',
     })
     uni.removeStorageSync(accountStorageKey(`info_sd_draft:${sdType.value}`))
@@ -142,7 +164,11 @@ async function submit() {
       success: () => uni.redirectTo({ url: '/pages/sd/mine' }),
     })
   } catch (error) {
-    toast(error instanceof Error ? error.message : '发布失败')
+    uni.showModal({
+      title: '发布失败',
+      content: error instanceof Error ? error.message : '发布失败，请稍后重试',
+      showCancel: false,
+    })
   } finally {
     submitting.value = false
   }
@@ -172,6 +198,18 @@ const phoneMasked = computed(() => {
 <template>
   <view class="page">
     <view class="page-pad">
+      <view class="card">
+        <text class="card-title">发布主体 *</text>
+        <text v-if="loadingMerchants" class="muted">正在加载经营主体…</text>
+        <view v-else-if="merchantError">
+          <text class="muted">{{ merchantError }}</text>
+          <button class="btn btn-sm" @click="loadMerchants">重新加载主体</button>
+        </view>
+        <picker v-else :range="merchants" range-key="merchantName" @change="merchantId = merchants[Number($event.detail.value)]?.merchantId || ''">
+          <view class="picker">{{ selectedMerchant?.merchantName || '请选择经营主体' }} ▾</view>
+        </picker>
+        <text class="tiny">供应需开通批发商、农户或合作社管理员身份；采购需开通批发商或零售商身份。</text>
+      </view>
       <view v-if="priceHint" class="ai-card">
         <view class="ai-icon">✦</view>
         <view class="ai-copy">
@@ -272,7 +310,7 @@ const phoneMasked = computed(() => {
         </view>
 
         <view class="form-item">
-          <text class="form-label">{{ sdType === 'supply' ? '产地' : '收货地' }}</text>
+          <text class="form-label">{{ sdType === 'supply' ? '产地' : '收货地' }} *</text>
           <input v-model="form.origin" class="input" placeholder="例如：山东 济宁 金乡县" />
         </view>
 
@@ -324,8 +362,8 @@ const phoneMasked = computed(() => {
       </view>
 
       <view class="submit-row">
-        <button class="btn grow" @click="saveDraft">存草稿</button>
-        <button class="btn btn-primary grow" :disabled="submitting" @click="submit">
+        <button role="button" aria-label="保存供需草稿" class="btn grow" @click="saveDraft">存草稿</button>
+        <button role="button" aria-label="立即发布供需" class="btn btn-primary grow" :disabled="submitting" @click="submit">
           {{ submitting ? '提交中…' : '立即发布' }}
         </button>
       </view>

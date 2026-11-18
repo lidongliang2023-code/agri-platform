@@ -110,9 +110,9 @@ function goBack() {
   <view class="page variety-page">
     <view class="nav-holder" :style="{ paddingTop: `${statusBarHeight}px` }">
       <view class="custom-nav">
-        <text class="back" @click="goBack">‹</text>
+        <text role="button" tabindex="0" class="back" @click="goBack">‹</text>
         <text class="title">{{ detail ? `${detail.name}行情` : '品种行情' }}</text>
-        <text class="right" @click="goAlert">设预警</text>
+        <text role="button" tabindex="0" class="right" @click="goAlert">设预警</text>
       </view>
     </view>
 
@@ -127,7 +127,7 @@ function goBack() {
             <text class="tiny">{{ detail.origin }} · {{ detail.spec }}</text>
             <text class="tiny">更新于 {{ detail.updatedAt }}</text>
           </view>
-          <view class="compare-btn" @click="compare">＋ 对比</view>
+          <view role="button" tabindex="0" class="compare-btn" @click="compare">＋ 对比</view>
         </view>
 
         <view class="price-block">
@@ -162,7 +162,7 @@ function goBack() {
             <text class="card-sub">{{ detail.priceUnit }}</text>
           </view>
           <view class="seg">
-            <view
+            <view role="button" tabindex="0"
               v-for="item in horizons"
               :key="item.key"
               :class="{ active: horizon === item.key }"
@@ -241,7 +241,7 @@ function goBack() {
           <text class="section-title">相关资讯</text>
         </view>
         <view class="card">
-          <view
+          <view role="button" tabindex="0"
             v-for="item in detail.relatedArticles || []"
             :key="item.id"
             class="list-item"
@@ -261,11 +261,11 @@ function goBack() {
       </view>
 
       <view class="action-bar">
-        <view class="icon-btn" @click="toggle">
+        <view role="button" tabindex="0" class="icon-btn" @click="toggle">
           <text>☆</text>
           <text>{{ saving ? '保存中' : saved ? '已收藏' : '收藏品种' }}</text>
         </view>
-        <button class="btn btn-primary grow" @click="goAlert">🔔 设置价格预警</button>
+        <button role="button" tabindex="0" class="btn btn-primary grow" @click="goAlert">🔔 设置价格预警</button>
       </view>
     </template>
   </view>

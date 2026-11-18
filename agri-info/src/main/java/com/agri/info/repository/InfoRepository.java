@@ -38,7 +38,7 @@ public class InfoRepository extends InfoSupport {
         stats.put("todayArticles", number("SELECT COUNT(*) FROM info_article WHERE status='published'"));
         stats.put("unreadAlerts", number("SELECT COUNT(*) FROM info_alert_message WHERE is_read=FALSE AND owner=?", user));
         // onlineSupplyDemand 由 Controller 层用交易模块的实时数补齐，这里不查本地历史表
-        stats.put("aiCalls", number("SELECT COUNT(*) FROM info_qa_record WHERE owner=?", user));
+        stats.put("aiCalls", number("SELECT COUNT(*) FROM info_qa_record WHERE asked_by=?", user));
         result.put("stats", stats);
 
         Map<String, Object> greeting = new LinkedHashMap<>();

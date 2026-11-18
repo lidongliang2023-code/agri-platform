@@ -57,6 +57,12 @@ public class TradeCapabilityInterceptor implements HandlerInterceptor {
     @Value("${agri.capability.internal-token:agri-internal-dev}")
     private String internalToken;
 
+    private final com.agri.trade.service.PlatformIdentityService identityService;
+
+    public TradeCapabilityInterceptor(@org.springframework.context.annotation.Lazy com.agri.trade.service.PlatformIdentityService identityService) {
+        this.identityService = identityService;
+    }
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -88,8 +94,18 @@ public class TradeCapabilityInterceptor implements HandlerInterceptor {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             return reject(response, HttpServletResponse.SC_UNAUTHORIZED, 401, "请先登录后再进行交易操作");
         }
+        // 创建时主体来自解析后的请求体，由控制器在写库前按实际买方/卖方校验。
+        String uri = request.getRequestURI();
+        if ("POST".equals(request.getMethod()) &&
+                ("/api/trade/seller/product/mine".equals(uri) || "/api/trade/demand".equals(uri))) {
+            return true;
+        }
+        var selected = identityService.selectMerchant(null);
+        if (!selected.ok()) {
+            return reject(response, 403, 403, selected.error());
+        }
         for (String code : required) {
-            Boolean granted = check(authorization, code, response);
+            Boolean granted = check(authorization, code, selected.merchantId(), response);
             if (granted == null) {
                 return false;
             }
@@ -141,14 +157,15 @@ public class TradeCapabilityInterceptor implements HandlerInterceptor {
     }
 
     /** @return true/false 判定结果；null 表示校验服务异常（已写响应，调用方直接返回 false） */
-    private Boolean check(String authorization, String code, HttpServletResponse response) throws Exception {
+    private Boolean check(String authorization, String code, Long merchantId, HttpServletResponse response) throws Exception {
         try {
             HttpRequest checkRequest = HttpRequest.newBuilder(URI.create(checkUrl))
                     .timeout(Duration.ofSeconds(3))
                     .header("Content-Type", "application/json")
                     .header("Authorization", authorization)
                     .header("X-Internal-Token", internalToken)
-                    .POST(HttpRequest.BodyPublishers.ofString("{\"code\":\"" + code + "\"}"))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(
+                            java.util.Map.of("code", code, "merchantId", merchantId))))
                     .build();
             HttpResponse<String> checkResponse = httpClient.send(checkRequest, HttpResponse.BodyHandlers.ofString());
             if (checkResponse.statusCode() != 200) {
@@ -169,11 +186,51 @@ public class TradeCapabilityInterceptor implements HandlerInterceptor {
         }
     }
 
+    /** 必须在主体归属解析成功后、任何持久化之前调用。 */
+    public void requirePublish(Long merchantId, boolean supply) {
+        String token = com.agri.trade.common.security.SecurityUtils.getToken();
+        if (token == null || token.isBlank()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "请先登录后再发布");
+        }
+        if (merchantId == null || !identityService.currentScope().merchantIds().contains(merchantId)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, "你无权以该经营主体发布");
+        }
+        for (String code : supply ? SELL : BUY) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder(URI.create(checkUrl))
+                        .timeout(Duration.ofSeconds(3))
+                        .header("Content-Type", "application/json")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Internal-Token", internalToken)
+                        .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(
+                                java.util.Map.of("code", code, "merchantId", merchantId))))
+                        .build();
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                JsonNode root = objectMapper.readTree(response.body());
+                if (response.statusCode() != 200 || root.path("code").asInt(-1) != 0) {
+                    throw new IllegalStateException("能力校验失败");
+                }
+                if (root.path("data").path("granted").asBoolean(false)) return;
+            } catch (Exception exception) {
+                if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "能力校验服务不可用，请稍后重试");
+            }
+        }
+        throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.FORBIDDEN, supply
+                        ? "当前经营主体需要已审核的批发商、农户或合作社管理员身份，才能发布供应"
+                        : "当前经营主体需要已审核的批发商或零售商身份，才能发布采购需求");
+    }
+
     private boolean reject(HttpServletResponse response, int status, int code, String message) throws Exception {
         response.setStatus(status);
         response.setContentType("application/json");
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        response.getWriter().write("{\"code\":" + code + ",\"message\":\"" + message + "\",\"data\":null}");
+        response.getWriter().write(objectMapper.writeValueAsString(
+                java.util.Map.of("code", code, "message", message)));
         return false;
     }
 }

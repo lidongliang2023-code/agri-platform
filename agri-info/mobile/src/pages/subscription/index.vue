@@ -109,7 +109,7 @@ function switchAddType(type: '品种' | '频道') {
       <template v-else>
         <view class="section-head">
           <text class="section-title">品种行情订阅</text>
-          <text class="card-sub" @click="openAdd">＋ 添加</text>
+          <text role="button" tabindex="0" class="card-sub" @click="openAdd">＋ 添加</text>
         </view>
         <view class="card">
           <view v-if="!quoteSubs.length" class="empty" style="min-height: 180rpx">
@@ -177,16 +177,16 @@ function switchAddType(type: '品种' | '频道') {
       </template>
     </view>
 
-    <view v-if="addOpen" class="mask" @click="addOpen = false">
-      <view class="sheet" @click.stop>
+    <view role="button" tabindex="0" v-if="addOpen" class="mask" @click="addOpen = false">
+      <view role="button" tabindex="0" class="sheet" @click.stop>
         <view class="sheet-head">
           <text class="card-title">添加订阅</text>
-          <text class="card-sub" @click="addOpen = false">关闭</text>
+          <text role="button" tabindex="0" class="card-sub" @click="addOpen = false">关闭</text>
         </view>
 
         <view class="seg" style="margin-bottom: 18rpx">
-          <view :class="{ active: addType === '品种' }" @click="switchAddType('品种')">品种</view>
-          <view :class="{ active: addType === '频道' }" @click="switchAddType('频道')">频道</view>
+          <view role="button" tabindex="0" :class="{ active: addType === '品种' }" @click="switchAddType('品种')">品种</view>
+          <view role="button" tabindex="0" :class="{ active: addType === '频道' }" @click="switchAddType('频道')">频道</view>
         </view>
 
         <picker
@@ -215,7 +215,7 @@ function switchAddType(type: '品种' | '频道') {
           </view>
         </picker>
 
-        <button class="btn btn-primary btn-block" style="margin-top: 18rpx" :disabled="saving" @click="create">
+        <button role="button" tabindex="0" class="btn btn-primary btn-block" style="margin-top: 18rpx" :disabled="saving" @click="create">
           {{ saving ? '创建中…' : '确认订阅' }}
         </button>
       </view>

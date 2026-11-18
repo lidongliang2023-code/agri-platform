@@ -152,7 +152,7 @@ function askPestToChat() {
           <text class="robot">🤖</text>
           <text class="title">农技 AI 助手</text>
         </view>
-        <text class="history" @click="openHistory">历史</text>
+        <text role="button" tabindex="0" class="history" @click="openHistory">历史</text>
       </view>
       <view class="ai-note">
         <text class="tag purple">✦ AI</text>
@@ -165,7 +165,7 @@ function askPestToChat() {
         <view v-if="messages.length <= 1" class="hot-block">
           <text class="hot-title">🔥 热门问题</text>
           <view class="hot-list">
-            <view v-for="item in hotQuestions" :key="item" class="hot-q" @click="send(item)">{{ item }}</view>
+            <view role="button" tabindex="0" v-for="item in hotQuestions" :key="item" class="hot-q" @click="send(item)">{{ item }}</view>
           </view>
         </view>
 
@@ -190,8 +190,8 @@ function askPestToChat() {
                   </text>
                 </view>
                 <view class="ai-actions">
-                  <text class="act" @click="transferExpert">查看专家</text>
-                  <text class="act" @click="markUseful">历史记录</text>
+                  <text role="button" tabindex="0" class="act" @click="transferExpert">查看专家</text>
+                  <text role="button" tabindex="0" class="act" @click="markUseful">历史记录</text>
                 </view>
               </template>
             </view>
@@ -205,7 +205,7 @@ function askPestToChat() {
         </view>
 
         <view v-if="messages.length > 1" class="followups">
-          <text v-for="item in followups" :key="item" class="follow" @click="send(item)">{{ item }}</text>
+          <text role="button" tabindex="0" v-for="item in followups" :key="item" class="follow" @click="send(item)">{{ item }}</text>
         </view>
 
         <view id="chat-bottom" style="height: 20rpx" />
@@ -213,7 +213,7 @@ function askPestToChat() {
     </scroll-view>
 
     <view class="input-bar">
-      <text class="icon" @click="openPest">🌿</text>
+      <text role="button" tabindex="0" class="icon" @click="openPest">🌿</text>
       <input
         v-model="question"
         class="chat-input"
@@ -222,14 +222,14 @@ function askPestToChat() {
         confirm-type="send"
         @confirm="send()"
       />
-      <button class="send-btn" :disabled="sending" @click="send()">发送</button>
+      <button role="button" tabindex="0" class="send-btn" :disabled="sending" @click="send()">发送</button>
     </view>
 
-    <view v-if="pestOpen" class="mask" @click="pestOpen = false">
-      <view class="sheet" @click.stop>
+    <view role="button" tabindex="0" v-if="pestOpen" class="mask" @click="pestOpen = false">
+      <view role="button" tabindex="0" class="sheet" @click.stop>
         <view class="sheet-head">
           <text class="card-title">病虫害症状分析</text>
-          <text class="card-sub" @click="pestOpen = false">关闭</text>
+          <text role="button" tabindex="0" class="card-sub" @click="pestOpen = false">关闭</text>
         </view>
 
         <view class="form-item">
@@ -249,7 +249,7 @@ function askPestToChat() {
 
         <view class="native-note">请描述叶片、根部或果实症状。当前不处理图片。</view>
 
-        <button class="btn btn-primary btn-block" :disabled="pestBusy" @click="runPest">
+        <button role="button" tabindex="0" class="btn btn-primary btn-block" :disabled="pestBusy" @click="runPest">
           {{ pestBusy ? '分析中…' : '分析症状' }}
         </button>
 
@@ -269,7 +269,7 @@ function askPestToChat() {
             <text>✦</text>
             <text>{{ pestResult.advice }}</text>
           </view>
-          <button class="btn btn-ghost btn-block" style="margin-top: 14rpx" @click="askPestToChat">
+          <button role="button" tabindex="0" class="btn btn-ghost btn-block" style="margin-top: 14rpx" @click="askPestToChat">
             继续追问防治方案
           </button>
         </view>

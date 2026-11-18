@@ -102,13 +102,13 @@ function openDetail() {
   <view class="page chat-page">
     <view class="nav-holder" :style="{ paddingTop: `${statusBarHeight}px` }">
       <view class="custom-nav">
-        <text class="back" @click="goBack">‹</text>
+        <text role="button" tabindex="0" class="back" @click="goBack">‹</text>
         <text class="title">在线沟通</text>
-        <text class="right" @click="openDetail">详情</text>
+        <text role="button" tabindex="0" class="right" @click="openDetail">详情</text>
       </view>
     </view>
 
-    <view v-if="detail" class="target" @click="openDetail">
+    <view role="button" tabindex="0" v-if="detail" class="target" @click="openDetail">
       <text class="target-icon">{{ detail.sdType === 'supply' ? '📦' : '🛒' }}</text>
       <view class="target-copy">
         <text class="target-title">{{ detail.title }}</text>
@@ -147,7 +147,7 @@ function openDetail() {
 
     <view class="quick-row">
       <scroll-view scroll-x :show-scrollbar="false" class="quick-scroll">
-        <text v-for="item in quickReplies" :key="item" class="quick" @click="send(item)">{{ item }}</text>
+        <text role="button" tabindex="0" v-for="item in quickReplies" :key="item" class="quick" @click="send(item)">{{ item }}</text>
       </scroll-view>
     </view>
 
@@ -160,7 +160,7 @@ function openDetail() {
         confirm-type="send"
         @confirm="send()"
       />
-      <button class="send-btn" :disabled="sending" @click="send()">发送</button>
+      <button role="button" tabindex="0" class="send-btn" :disabled="sending" @click="send()">发送</button>
     </view>
   </view>
 </template>

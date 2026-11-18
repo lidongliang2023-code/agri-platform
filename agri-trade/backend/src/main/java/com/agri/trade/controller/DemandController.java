@@ -28,6 +28,7 @@ public class DemandController {
     private final MatchRecordMapper matchRecordMapper;
     private final PlatformIdentityService identityService;
     private final ISmartMatchService smartMatchService;
+    private final com.agri.trade.common.capability.TradeCapabilityInterceptor capability;
 
     @GetMapping("/page")
     public ApiResponse<IPage<Demand>> getDemandPage(
@@ -85,6 +86,7 @@ public class DemandController {
         if (!mine.ok()) {
             return ApiResponse.error(mine.error());
         }
+        capability.requirePublish(mine.merchantId(), false);
         demand.setBuyerId(mine.merchantId());
         if (demand.getBuyerName() == null || demand.getBuyerName().isEmpty()) {
             demand.setBuyerName(mine.merchantName());
