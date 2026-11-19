@@ -15,6 +15,14 @@ public interface ISmartMatchService {
 
     List<MatchResultVO> matchDemandToProducts(Long demandId, int limit);
 
+    /**
+     * 需求撮合。
+     *
+     * @param persist 是否把结果落成撮合记录。只有需求主人触发时为 true；
+     *                别人浏览详情只计算、不写库，否则每打开一次详情就多一批记录。
+     */
+    List<MatchResultVO> matchDemandToProducts(Long demandId, int limit, boolean persist);
+
     List<MatchResultVO> matchProductToDemands(Long productId, int limit);
 
     MatchResultVO calculateMatchScore(Demand demand, TradeProduct product);

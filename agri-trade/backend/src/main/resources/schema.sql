@@ -499,8 +499,10 @@ CREATE TABLE IF NOT EXISTS `agri_trade_match_record` (
     `inquiry_status` VARCHAR(255) NULL COMMENT '实体字段补齐（2026-10-13）',
     `order_status` VARCHAR(255) NULL COMMENT '实体字段补齐（2026-10-13）',
     `convert_time` DATETIME NULL COMMENT '实体字段补齐（2026-10-13）',
+    `active_pair` TINYINT AS (IF(IFNULL(`del_flag`, 0) = 0, 1, NULL)) VIRTUAL COMMENT '有效行为 1、软删行为 NULL，供唯一约束使用',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_match_no` (`match_no`),
+    UNIQUE KEY `uk_match_pair_active` (`demand_id`, `product_id`, `active_pair`),
     INDEX `idx_demand_id` (`demand_id`),
     INDEX `idx_product_id` (`product_id`),
     INDEX `idx_buyer_id` (`buyer_id`),
@@ -1284,4 +1286,35 @@ SET @ddl := (SELECT IF(COUNT(*) = 0,
   'SELECT 1')
   FROM INFORMATION_SCHEMA.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_negotiation_message' AND COLUMN_NAME = 'business_price');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 撮合记录：同一「需求 + 货源」只允许一条有效记录（2026-11-19）。
+-- 软删行（del_flag=1）保留历史，不参与约束：active_pair 对软删行取 NULL，
+-- MySQL 唯一索引允许多个 NULL，所以历史行不会和唯一索引冲突。
+-- 本脚本每次启动都执行且不容错，以下三步都必须幂等、不能失败。
+-- 1) 补生成列
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_match_record` ADD COLUMN `active_pair` TINYINT AS (IF(IFNULL(`del_flag`, 0) = 0, 1, NULL)) VIRTUAL COMMENT ''有效行为 1、软删行为 NULL，供唯一约束使用''',
+  'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_match_record' AND COLUMN_NAME = 'active_pair');
+PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+-- 2) 建索引前先把残留重复软删掉，否则加索引失败会导致服务起不来。
+--    每个组合保留一条：有订单、有询价、买家已读的优先，其次最早一条。没有重复时不改任何行。
+UPDATE `agri_trade_match_record` t
+  JOIN (SELECT `id`, ROW_NUMBER() OVER (PARTITION BY `demand_id`, `product_id`
+          ORDER BY (`order_id` IS NOT NULL) DESC,
+                   (`inquiry_status` IS NOT NULL AND `inquiry_status` <> '') DESC,
+                   (IFNULL(`buyer_viewed`, 0) > 0) DESC,
+                   `id`) AS rn
+        FROM `agri_trade_match_record`
+        WHERE IFNULL(`del_flag`, 0) = 0) r ON r.`id` = t.`id`
+   SET t.`del_flag` = 1
+ WHERE r.rn > 1;
+-- 3) 补唯一索引
+SET @ddl := (SELECT IF(COUNT(*) = 0,
+  'ALTER TABLE `agri_trade_match_record` ADD UNIQUE KEY `uk_match_pair_active` (`demand_id`, `product_id`, `active_pair`)',
+  'SELECT 1')
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agri_trade_match_record' AND INDEX_NAME = 'uk_match_pair_active');
 PREPARE stmt FROM @ddl; EXECUTE stmt; DEALLOCATE PREPARE stmt;

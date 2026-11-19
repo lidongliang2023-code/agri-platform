@@ -1,7 +1,9 @@
 package com.agri.trade.controller;
 
 import com.agri.trade.common.entity.ApiResponse;
+import com.agri.trade.entity.Demand;
 import com.agri.trade.entity.MatchRecord;
+import com.agri.trade.mapper.DemandMapper;
 import com.agri.trade.service.ISmartMatchService;
 import com.agri.trade.service.PlatformIdentityService;
 import com.agri.trade.vo.MatchResultVO;
@@ -19,12 +21,16 @@ public class SmartMatchController {
 
     private final ISmartMatchService smartMatchService;
     private final PlatformIdentityService identityService;
+    private final DemandMapper demandMapper;
 
     @PostMapping("/demand/{demandId}")
     public ApiResponse<List<MatchResultVO>> matchDemandToProducts(
             @PathVariable Long demandId,
             @RequestParam(defaultValue = "10") Integer limit) {
-        List<MatchResultVO> results = smartMatchService.matchDemandToProducts(demandId, limit);
+        // 撮合结果谁都能看（供需大厅是公开的），但只有需求主人触发时才落撮合记录：
+        // 否则任何人打开别家的采购详情都会往人家的需求上写一批记录。
+        List<MatchResultVO> results = smartMatchService.matchDemandToProducts(
+                demandId, limit, ownsDemand(demandId));
         return ApiResponse.success(results);
     }
 
@@ -34,6 +40,20 @@ public class SmartMatchController {
             @RequestParam(defaultValue = "10") Integer limit) {
         List<MatchResultVO> results = smartMatchService.matchProductToDemands(productId, limit);
         return ApiResponse.success(results);
+    }
+
+    private boolean ownsDemand(Long demandId) {
+        Demand demand = demandMapper.selectById(demandId);
+        if (demand == null || demand.getBuyerId() == null) {
+            return false;
+        }
+        PlatformIdentityService.MerchantScope scope;
+        try {
+            scope = identityService.currentScope();
+        } catch (RuntimeException e) {
+            return false;
+        }
+        return scope.resolved() && scope.merchantIds().contains(demand.getBuyerId());
     }
 
     @GetMapping("/demand/{demandId}/records")

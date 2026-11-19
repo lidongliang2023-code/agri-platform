@@ -15,6 +15,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,11 @@ public class SmartMatchServiceImpl implements ISmartMatchService {
 
     @Override
     public List<MatchResultVO> matchDemandToProducts(Long demandId, int limit) {
+        return matchDemandToProducts(demandId, limit, true);
+    }
+
+    @Override
+    public List<MatchResultVO> matchDemandToProducts(Long demandId, int limit, boolean persist) {
         Demand demand = demandMapper.selectById(demandId);
         if (demand == null) {
             return Collections.emptyList();
@@ -55,9 +61,24 @@ public class SmartMatchServiceImpl implements ISmartMatchService {
                 .limit(limit)
                 .collect(Collectors.toList());
 
-        batchCreateMatchRecords(demandId, matchResults.stream()
+        if (!persist) {
+            return matchResults;
+        }
+
+        List<MatchRecord> saved = batchCreateMatchRecords(demandId, matchResults.stream()
                 .map(MatchResultVO::getProductId)
                 .collect(Collectors.toList()));
+        // 回填真实撮合记录号，调用方不必再用序号冒充
+        Map<Long, Long> recordIdByProduct = new HashMap<>();
+        for (MatchRecord record : saved) {
+            recordIdByProduct.put(record.getProductId(), record.getId());
+        }
+        for (MatchResultVO result : matchResults) {
+            Long recordId = recordIdByProduct.get(result.getProductId());
+            if (recordId != null) {
+                result.setMatchId(recordId);
+            }
+        }
 
         return matchResults;
     }
@@ -388,8 +409,19 @@ public class SmartMatchServiceImpl implements ISmartMatchService {
 
             MatchResultVO result = calculateMatchScore(demand, product);
 
+            // 同一「需求 + 货源」只保留一条撮合记录：原先每次撮合都无条件 insert，
+            // 资讯详情页每打开一次就多一批重复记录（实测一个组合累积到 17 条）。
+            // 已有记录原地刷新分数与排序，询价 / 订单 / 已读等业务状态保持不动。
+            MatchRecord existing = findActiveRecord(demandId, productId, false);
+            if (existing != null) {
+                refreshRecord(existing, demand, product, result, order);
+                records.add(existing);
+                order++;
+                continue;
+            }
+
             MatchRecord record = new MatchRecord();
-            record.setMatchNo("MT" + System.currentTimeMillis() + "-" + order);
+            record.setMatchNo(newMatchNo(order));
             record.setDemandId(demandId);
             // 表里 buyer_id 是 NOT NULL，实体此前没有这个字段 —— 落库直接报
             // "Field 'buyer_id' doesn't have a default value"。采购方就是这张需求的采购方。
@@ -408,19 +440,74 @@ public class SmartMatchServiceImpl implements ISmartMatchService {
             record.setDelFlag(0);
             record.setCreateTime(new Date());
 
-            records.add(record);
+            // 逐条 insert，不再走那条手写批量 SQL：
+            // 那条 SQL 引用的是 demand_no / product_name / seller_name / match_status 等
+            // **表里根本没有、实体也没有**的列（会先报 "no getter for demandNo"），
+            // 等于撮合记录的落库路径从来没有通过。
+            records.add(insertOrMerge(record, demand, product, result, order));
             order++;
         }
 
-        // 逐条 insert，不再走那条手写批量 SQL：
-        // 那条 SQL 引用的是 demand_no / product_name / seller_name / match_status 等
-        // **表里根本没有、实体也没有**的列（会先报 "no getter for demandNo"），
-        // 等于撮合记录的落库路径从来没有通过。
-        for (MatchRecord record : records) {
-            matchRecordMapper.insert(record);
-        }
-
         return records;
+    }
+
+    /**
+     * 插入一条撮合记录；撞上唯一索引时改为更新已有记录。
+     *
+     * <p>“先查再插”在两个请求同时打开同一需求时会都查不到、各插一条。表上有
+     * {@code uk_match_pair_active(demand_id, product_id, active_pair)}，后到的那条会报重复键：
+     * 这时用加锁读（读到最新已提交版本，不受事务快照影响）拿到对方写入的记录并刷新它。
+     * 加锁读也找不到，说明撞的是 {@code uk_match_no}（编号碰巧重复），换个编号再插一次。</p>
+     */
+    private MatchRecord insertOrMerge(MatchRecord record, Demand demand, TradeProduct product,
+                                      MatchResultVO result, int order) {
+        for (int attempt = 0; ; attempt++) {
+            try {
+                matchRecordMapper.insert(record);
+                return record;
+            } catch (DuplicateKeyException e) {
+                MatchRecord winner = findActiveRecord(record.getDemandId(), record.getProductId(), true);
+                if (winner != null) {
+                    refreshRecord(winner, demand, product, result, order);
+                    return winner;
+                }
+                if (attempt >= 1) {
+                    throw e;
+                }
+                record.setId(null);
+                record.setMatchNo(newMatchNo(order));
+            }
+        }
+    }
+
+    private MatchRecord findActiveRecord(Long demandId, Long productId, boolean lockingRead) {
+        return matchRecordMapper.selectOne(new LambdaQueryWrapper<MatchRecord>()
+                .eq(MatchRecord::getDemandId, demandId)
+                .eq(MatchRecord::getProductId, productId)
+                .eq(MatchRecord::getDelFlag, 0)
+                .orderByAsc(MatchRecord::getId)
+                .last(lockingRead ? "LIMIT 1 FOR UPDATE" : "LIMIT 1"));
+    }
+
+    /** 只刷新分数与排序，询价 / 订单 / 已读等业务状态保持不动。 */
+    private void refreshRecord(MatchRecord existing, Demand demand, TradeProduct product,
+                               MatchResultVO result, int order) {
+        existing.setBuyerId(demand.getBuyerId());
+        existing.setSellerId(product.getSellerId());
+        existing.setMatchScore(result.getMatchScore());
+        existing.setCategoryScore(result.getCategoryScore());
+        existing.setPriceScore(result.getPriceScore());
+        existing.setDistanceScore(result.getDistanceScore());
+        existing.setQualityScore(result.getQualityScore());
+        existing.setMatchReason(result.getMatchReason());
+        existing.setRecommendOrder(order);
+        matchRecordMapper.updateById(existing);
+    }
+
+    /** 原先是「MT + 毫秒 + 序号」，同一毫秒的两个请求会撞上 uk_match_no；末尾加随机串。 */
+    private static String newMatchNo(int order) {
+        String nonce = Long.toHexString(java.util.concurrent.ThreadLocalRandom.current().nextLong(0x1000000L, 0x10000000L));
+        return "MT" + System.currentTimeMillis() + "-" + order + "-" + nonce;
     }
 
     @Override
