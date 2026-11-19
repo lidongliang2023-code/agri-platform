@@ -11,32 +11,50 @@
   同域是上一轮 HttpOnly 刷新令牌能在开发期零 CORS 配置直接生效的前提。
 - **版本目录 + 指针发布**：`bucket/{app}/versions/{version}/` 不可变，`bucket/{app}/index.html` 是指针；
   回滚是把指针切回去，秒级、不用重新构建。
-- **多子系统并存**：当前已在网关上挂生产、交易、物联网、综合服务、政府监管等独立前端，彼此互不串台。
+- **多子系统并存**：当前已在网关上挂生产、交易、S2B2C、供应链金融、物联网、信息资讯、综合服务、政府监管、AI 中台等独立前端，彼此互不串台。
 
 ## 已接入子系统与本地端口
 
-| 子系统 | 子域 | 本地端口 | 栈 | 其自身后端 |
-| :-- | :-- | :-- | :-- | :-- |
-| 生产管理系统 | `prod.agri.local` | `:80` | React + TS + antd | core-platform（:8093，在跑） |
-| 主数据管理平台 | `mdm.agri.local` | `:8080` | React + TS + antd | :8083（未跑） |
-| 物联网管理（用户端） | `iot.agri.local` | `:8101` | React + TS + antd | :8091 |
-| 物联网管理（运营端） | `iot-admin.agri.local` | `:8102` | React + TS + antd | :8091 |
-| 物联网管理（移动端） | `iot-mobile.agri.local` | `:8111` | uni-app（H5 / 微信小程序 / App） | :8091 |
-| 综合服务（用户端） | `service.agri.local` | `:8105` | React + TS + antd | :8094 |
-| 综合服务（移动端） | `service-mobile.agri.local` | `:8106` | uni-app（H5 / 微信小程序 / App） | :8094 |
-| 综合服务（运营端） | `service-ops.agri.local` | `:8107` | React + TS + antd | :8094 |
-| 政府监管（用户端） | `gov.agri.local` | `:8108` | React + TS + antd | :8095 |
-| 政府监管（移动端） | `gov-mobile.agri.local` | `:8109` | uni-app（H5 / 微信小程序 / App） | :8095 |
-| 政府监管（运营端） | `gov-ops.agri.local` | `:8110` | React + TS + antd | :8095 |
-| 交易撮合移动端 | `trade-mobile.agri.local` | `:8181` | uni-app（H5 / 微信小程序 / App） | :8089 |
-| 供应链金融 | `finance.agri.local` | `:8081` | Vue 3 + element-plus | :8087 |
-| S2B2C 商城（消费者端） | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | Vue 3 + vant | :8088 |
-| S2B2C 商城（供应商端） | `mall-supplier.agri.local` | `:8084` | Vue 3 + element-plus | :8088 |
-| S2B2C 商城（商家端） | `mall-channel.agri.local` | `:8085` | Vue 3 + element-plus | :8088 |
-| S2B2C 商城（平台运营端） | `s2b2c-platform.agri.local` | `:8103` | Vue 3 + element-plus | :8088 |
-| 统一认证中心（登录页） | `sso.agri.local` | `:8090` | React + TS | core-platform（:8093，在跑） |
+按 `conf/conf.d/*.conf` 的 `listen` / `server_name` 整理（2026-11-19 核对，共 29 个对外端口）。
+入口地址（带路径）与账号见仓库根目录 README 和 `docs/本地全栈_访问地址与账号_2026-11-02.md`。
+每个子域的 `/api/v1/sso`、`/api/v1/platform` 等统一认证接口都转发到 core-platform（:8093），下表只列该端自己的业务后端。
 
-后端未跑的子域，其 `/api` 会返回 **502** —— 这正是"请求被路由到了该子系统自己的上游"的证据
+| 业务域 | 子系统 | 子域 | 本地端口 | 配置文件 | 业务后端 |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| 统一入口 | 统一认证中心（登录页） | `sso.agri.local` | `:8090` | `50-sso.conf` | core-platform :8093 |
+| 统一入口 | 官网门户 | `portal.agri.local` | `:8098` | `72-portal.conf` | 聚合交易 :8089、资讯 :8096、金融 :8087、S2B2C :8088、生产 :8092、主数据 :8083 |
+| 统一入口 | 用户中心运营端 | `user-center-ops.agri.local` | `:8115` | `73-user-center-ops.conf` | core-platform :8093 |
+| 生产管理 | 用户端 | `prod.agri.local` | `:80` | `20-prod.conf` | agri-production :8092 |
+| 生产管理 | 运营端入口 | `admin.agri.local` | `:8190` | `70-admin-entry.conf` | 转发到 :80 |
+| 生产管理 | 移动端（`/prod-mobile/`）/ 用户入口 | `user.agri.local` | `:8180` | `71-user-entry.conf` | 转发到 :80 |
+| 主数据 | 管理平台 | `mdm.agri.local` | `:8080` | `30-mdm.conf` | mdm :8083 |
+| 交易 | 交易与会员中心 | `trade.agri.local` | `:8086` | `35-trade.conf` | agri-trade :8089 |
+| 交易 | 交易撮合移动端 | `trade-mobile.agri.local` | `:8181` | `36-trade-mobile.conf` | agri-trade :8089 |
+| 供应链金融 | PC 端 | `finance.agri.local` | `:8081` | `40-vue-apps.conf` | agri-finance :8087 |
+| S2B2C | 消费者商城 | `mall.agri.local` / `mall-consumer.agri.local` | `:8082` | `40-vue-apps.conf` | s2b2c :8088 |
+| S2B2C | 供应商端（旧入口） | `mall-supplier.agri.local` | `:8084` | `40-vue-apps.conf` | 跳转到 :8103 供货运营 |
+| S2B2C | 商家（渠道商）工作台 | `mall-channel.agri.local` | `:8085` | `40-vue-apps.conf` | s2b2c :8088 |
+| S2B2C | 平台运营端（含供货运营） | `s2b2c-platform.agri.local` | `:8103` | `39-s2b2c-platform.conf` | s2b2c :8088 |
+| S2B2C | 商城移动端 | `mall-mobile.agri.local` | `:8182` | `43-s2b2c-mobile.conf` | s2b2c :8088 |
+| S2B2C | 商家（渠道商）移动端 | `channel-mobile.agri.local` | `:8184` | `44-s2b2c-role-mobile.conf` | s2b2c :8088 |
+| S2B2C | 供应商移动端 | — | `:8183` | 已从网关配置移除 | **已停用** |
+| 物联网 | 用户端 | `iot.agri.local` | `:8101` | `38-iot.conf` | agri-iot :8091 |
+| 物联网 | 运营端 | `iot-admin.agri.local` | `:8102` | `38-iot.conf` | agri-iot :8091 |
+| 物联网 | 移动端 | `iot-mobile.agri.local` | `:8111` | `38-iot.conf` | agri-iot :8091 |
+| 信息资讯 | PC 端 | `info.agri.local` | `:8104` | `41-info-service.conf` | agri-info :8096（供需走交易 :8089） |
+| 信息资讯 | 运营端（`/info-ops/`） | `info-ops.agri.local` | `:8113` | `41-info-service.conf` | agri-info :8096 |
+| 信息资讯 | 移动端（`/info-mobile/`） | `info-mobile.agri.local` | `:8114` | `41-info-service.conf` | agri-info :8096 |
+| 综合服务 | 用户端 | `service.agri.local` | `:8105` | `41-info-service.conf` | agri-service :8094 |
+| 综合服务 | 移动端 | `service-mobile.agri.local` | `:8106` | `41-info-service.conf` | agri-service :8094 |
+| 综合服务 | 运营端 | `service-ops.agri.local` | `:8107` | `41-info-service.conf` | agri-service :8094 |
+| 政府监管 | 用户端 | `gov.agri.local` | `:8108` | `42-government.conf` | agri-government :8095 |
+| 政府监管 | 移动执法端 | `gov-mobile.agri.local` | `:8109` | `42-government.conf` | agri-government :8095 |
+| 政府监管 | 运营端 | `gov-ops.agri.local` | `:8110` | `42-government.conf` | agri-government :8095 |
+| AI 中台 | 管理端（`/ai-ops/`） | `ai-ops.agri.local` | `:8116` | `45-ai.conf` | agri-ai :8201 |
+
+移动端（8111、8114、8106、8109、8180–8184）都是 uni-app，一套源码出 H5 / 微信小程序 / App，网关只托管 H5 产物。
+
+后端没起来的子域，其 `/api` 会返回 **502** —— 这正是"请求被路由到了该子系统自己的上游"的证据
 （不是被吞掉、也不是 404）。后端起来后无需改配置。
 
 `sso` 这个 vhost 比其它子系统多一条映射：`/authorize` 短路径 → 后端的 `/api/v1/sso/authorize`。
