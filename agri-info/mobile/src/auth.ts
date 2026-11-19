@@ -158,6 +158,7 @@ async function resolveInfoPermissions(token: string): Promise<string[]> {
     message?: string
     data?: { permissions?: string[] }
   }>(`${AUTH_BASE}/api/v1/platform/permissions/mine`, 'GET', undefined, token)
+  if (permission.status === 401) throw new Error('登录已过期，请重新登录')
   const permissions = permission.body.data?.permissions || []
   const allowed = ['info:consumer', 'info:admin']
     .some((code) => permissionGranted(permissions, code))
@@ -173,6 +174,32 @@ export async function loginWithUnifiedAccount(
   password: string,
   remember = true,
 ): Promise<InfoLoginSuccess | InfoMfaChallenge> {
+  return standaloneLogin('login-standalone', { username, password, marketId: 1, remember })
+}
+
+export async function requestInfoLoginCode(phone: string): Promise<string> {
+  const { status, body } = await apiRequest<{
+    code: number; message?: string; data?: { sent?: boolean; devMode?: boolean }
+  }>(`${AUTH_BASE}/api/v1/sso/sms/code`, 'POST', { phone, scene: 'login' })
+  if (status >= 400 || body.code !== 0 || !body.data?.sent) {
+    throw new Error(body.message || '验证码发送失败，请稍后重试')
+  }
+  return body.data.devMode ? '当前为短信开发模式，手机不会收到短信。可改用账号密码登录。' : '验证码已发送，请查看手机短信。'
+}
+
+export function loginWithInfoSms(phone: string, code: string, remember = true) {
+  return standaloneLogin('login-standalone-by-sms', { phone, code, marketId: 1, remember })
+}
+
+export async function continueInfoSession(): Promise<void> {
+  const token = getInfoToken()
+  if (!token || !getInfoUser()) throw new Error('请重新登录')
+  const permissions = await resolveInfoPermissions(token)
+  if (getInfoToken() !== token) throw new Error('账号已切换，请重新登录')
+  uni.setStorageSync(PERMISSION_KEY, permissions)
+}
+
+async function standaloneLogin(endpoint: 'login-standalone' | 'login-standalone-by-sms', fields: Record<string, unknown>): Promise<InfoLoginSuccess | InfoMfaChallenge> {
   const login = await apiRequest<{
     code: number
     message?: string
@@ -183,9 +210,9 @@ export async function loginWithUnifiedAccount(
       challengeToken?: string
     }
   }>(
-    `${AUTH_BASE}/api/v1/sso/login-standalone`,
+    `${AUTH_BASE}/api/v1/sso/${endpoint}`,
     'POST',
-    { username, password, marketId: 1, remember },
+    fields,
   )
   if (login.status >= 400 || login.body.code !== 0) {
     throw new Error(login.body.message || '统一账号登录失败')
