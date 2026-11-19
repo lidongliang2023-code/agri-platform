@@ -184,8 +184,15 @@ agri-platform/
 
 #### 本地全栈一键启动（推荐）
 
-本机形态是「MySQL + Redis + nginx 网关 + 10 个 Java 后端 + 30 个已发布前端」，
-逐条手敲容易漏，统一收在脚本里（幂等，已在跑的跳过）：
+本机形态是「MySQL + Redis + nginx 网关 + 15 个 Java 后端 + 各端已发布前端」，
+逐条手敲容易漏，统一收在脚本里（幂等，已在跑的跳过）。
+
+Windows 本机（推荐，2026-11-19 实测健康检查 18 项全部通过）：
+
+- 双击仓库根目录的 `启动全部服务.cmd`：启动 MySQL、Redis、15 个后端和网关，已在运行的不重启；
+- 双击 `健康巡检.cmd`：只读巡检，不启动、不重启任何服务。
+
+旧的 bash 脚本：
 
 ```bash
 bash scripts/start-local-stack.sh           # 启动缺的组件
@@ -197,16 +204,27 @@ bash scripts/start-local-stack.sh --force   # 先杀掉 10 个后端端口上的
 检查网关 28 个端口是否齐全（进程在跑但配置落后时自动 `reload`）、
 按端口/探针逐个拉起后端。日志在 `__tmpout/logs/`。
 
-入口端口（本地免 hosts，按端口直连）：
+入口地址（本地免 hosts，按端口直连；2026-11-19 实测）：
 
-| 端口 | 子系统 | 端口 | 子系统 |
-| --- | --- | --- | --- |
-| 80 | 生产管理（用户端） | 8105 / 8107 / 8106 | 综合服务（用户端/运营端/移动端） |
-| 8190 | 生产管理（运营端入口） | 8108 / 8110 / 8109 | 政府监管（用户端/运营端/移动端） |
-| 8080 | 主数据管理平台 | 8104 / 8113 / 8114 | 信息资讯（PC/运营端/移动端） |
-| 8081 | 供应链金融 | 8086 / 8181 | 交易与会员中心 / 交易撮合移动端 |
-| 8082 / 8103 / 8182 | S2B2C 消费者商城 / 平台运营端 / 商城移动端 | 8101 / 8102 / 8111 | 物联网（用户端/运营端/移动端） |
-| 8084 / 8085 / 8183 / 8184 | S2B2C 供应商端 / 渠道商端 / 两端移动版 | 8090 / 8098 / 8115 | 统一认证中心 / 官网门户 / 用户中心运营端 |
+| 业务域 | 端 | 地址 |
+| --- | --- | --- |
+| 统一入口 | 统一认证中心 / 官网门户 / 用户中心运营端 | `http://localhost:8090/login` ・ `http://localhost:8098/portal/` ・ `http://localhost:8115/user-center-ops/` |
+| 生产管理 | 用户端 / 运营端 / 移动端 | `http://localhost/` ・ `http://localhost:8190/admin/login` ・ `http://localhost:8180/prod-mobile/` |
+| 交易 | 交易与会员中心 / 交易撮合移动端 | `http://localhost:8086/` ・ `http://localhost:8181/` |
+| 主数据 | 管理平台 | `http://localhost:8080/user/list` |
+| 供应链金融 | PC 端 | `http://localhost:8081/finance/index.html` |
+| S2B2C | 消费者商城 / 商城移动端 | `http://localhost:8082/` ・ `http://localhost:8182/` |
+| S2B2C | 商家（渠道商）工作台 / 移动端 | `http://localhost:8085/` ・ `http://localhost:8184/` |
+| S2B2C | 平台运营端（含供货运营） | `http://localhost:8103/`（供货运营 `/supply/products`，旧入口 `:8084` 自动兼容） |
+| S2B2C | 供应商移动端 | `http://localhost:8183/`（**已停用**） |
+| 物联网 | 用户端 / 运营端 / 移动端 | `http://localhost:8101/` ・ `http://localhost:8102/` ・ `http://localhost:8111/` |
+| 信息资讯 | PC 端 / 运营端 / 移动端 | `http://localhost:8104/` ・ `http://localhost:8113/info-ops/` ・ `http://localhost:8114/info-mobile/` |
+| 综合服务 | 用户端 / 运营端 / 移动端 | `http://localhost:8105/` ・ `http://localhost:8107/` ・ `http://localhost:8106/` |
+| 政府监管 | 用户端 / 运营端 / 移动执法端 | `http://localhost:8108/` ・ `http://localhost:8110/` ・ `http://localhost:8109/` |
+| AI 中台 | 管理端 | `http://localhost:8116/ai-ops/` |
+
+移动端都是 uni-app H5，建议用浏览器手机模拟宽度（375–414px）打开。
+账号与密码见 `docs/本地全栈_访问地址与账号_2026-11-02.md`。
 
 网关路由矩阵与发布/回滚见 `ops/gateway/README.md`；前端产物在
 `ops/gateway/bucket/{app}/versions/{version}/`，指针为 `bucket/{app}/index.html`。
