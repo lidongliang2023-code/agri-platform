@@ -172,7 +172,7 @@ function badgeTone(badge: string) {
             <text v-if="item.verified" class="tag green">✓ 已认证</text>
             <text v-if="item.badge" :class="['tag', badgeTone(item.badge)]">{{ item.badge }}</text>
             <text v-if="item.availableDate" class="tag gray">交期 {{ item.availableDate }}</text>
-            <text class="tag gray">剩余 {{ item.durationDays }} 天</text>
+            <text v-if="item.expireDate" class="tag gray">{{ item.validityLabel }}</text>
           </view>
 
           <view class="sd-foot">

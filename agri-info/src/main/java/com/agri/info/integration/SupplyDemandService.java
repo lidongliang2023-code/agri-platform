@@ -5,6 +5,10 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -318,6 +322,15 @@ public class SupplyDemandService {
         String orgName = text(body, "orgName", owner);
         String orgType = text(body, "orgType", "个人");
 
+        Map<String, Object> request = new LinkedHashMap<>();
+        if (body.get("durationDays") != null) {
+            long days = longValue(body.get("durationDays"), 0);
+            if (!List.of(7L, 15L, 30L, 60L).contains(days)) {
+                throw new IllegalArgumentException("有效期请选择 7、15、30 或 60 天");
+            }
+            request.put("validUntil", LocalDateTime.now(TRADE_ZONE).plusDays(days)
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        }
         long tradeId;
         String tradeType;
         String publishedStatus = "online";
@@ -326,7 +339,6 @@ public class SupplyDemandService {
             if (categoryId == null) {
                 throw new IllegalArgumentException("品类「" + category + "」在交易模块里不存在，请从下拉列表中选择");
             }
-            Map<String, Object> request = new LinkedHashMap<>();
             request.put("sellerId", body.get("merchantId"));
             request.put("productName", title);
             request.put("categoryId", categoryId);
@@ -345,7 +357,6 @@ public class SupplyDemandService {
             tradeId = longValue(created.get("id"), 0);
             tradeType = "product";
         } else {
-            Map<String, Object> request = new LinkedHashMap<>();
             request.put("buyerId", body.get("merchantId"));
             request.put("demandName", title);
             request.put("productName", title);
@@ -663,6 +674,33 @@ public class SupplyDemandService {
 
     // ==================== 映射 ====================
 
+    private static final ZoneId TRADE_ZONE = ZoneId.of("Asia/Shanghai");
+
+    // 交易接口按 GMT+8 输出 yyyy-MM-dd HH:mm:ss；仅有日期时按当天结束计算。
+    static void fillValidity(Map<String, Object> item, Object validUntil, LocalDateTime now) {
+        String raw = validUntil == null ? "" : validUntil.toString().trim();
+        LocalDateTime end = null;
+        if (!raw.isEmpty()) {
+            try {
+                end = raw.length() == 10 ? LocalDate.parse(raw).atTime(java.time.LocalTime.MAX)
+                        : LocalDateTime.parse(raw.replace(' ', 'T'));
+            } catch (DateTimeParseException ignored) {
+                // 上游缺少可用日期时不推算截止日。
+            }
+        }
+        String label = "未提供有效期";
+        Long days = null;
+        if (end != null) {
+            days = Math.max(0L, ChronoUnit.DAYS.between(now.toLocalDate(), end.toLocalDate()));
+            if (!end.isAfter(now)) label = "已过期";
+            else if (days == 0) label = "今日到期";
+            else label = "剩余 " + days + " 天";
+        }
+        item.put("durationDays", days);
+        item.put("expireDate", end == null ? "" : end.toLocalDate().toString());
+        item.put("validityLabel", label);
+    }
+
     private Map<String, Object> fromProduct(Map<String, Object> p) {
         long id = longValue(p.get("id"), 0);
         Map<String, Object> item = new LinkedHashMap<>();
@@ -681,8 +719,7 @@ public class SupplyDemandService {
                 joinOrigin(str(p.get("originProvince")), str(p.get("originCity")), str(p.get("originDistrict")))));
         item.put("marketRef", priceRange(p));
         item.put("availableDate", LocalDate.now().toString());
-        item.put("durationDays", 30);
-        item.put("expireDate", "");
+        fillValidity(item, p.get("validUntil"), LocalDateTime.now(TRADE_ZONE));
         item.put("orgName", str(p.get("sellerName")));
         item.put("orgType", "经营主体");
         item.put("verified", true);
@@ -721,8 +758,7 @@ public class SupplyDemandService {
                 str(d.get("deliveryDistrict"))));
         item.put("marketRef", "采购需求，具体价格面议");
         item.put("availableDate", "");
-        item.put("durationDays", 30);
-        item.put("expireDate", "");
+        fillValidity(item, d.get("validUntil"), LocalDateTime.now(TRADE_ZONE));
         item.put("orgName", str(d.get("buyerName")));
         item.put("orgType", "采购商");
         item.put("verified", true);

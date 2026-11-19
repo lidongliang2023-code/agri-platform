@@ -112,7 +112,7 @@ function openDetail() {
       <text class="target-icon">{{ detail.sdType === 'supply' ? '📦' : '🛒' }}</text>
       <view class="target-copy">
         <text class="target-title">{{ detail.title }}</text>
-        <text class="tiny">{{ money(detail.price) }} {{ detail.priceUnit }} · {{ detail.quantity }} · 剩余 {{ detail.durationDays }} 天</text>
+        <text class="tiny">{{ money(detail.price) }} {{ detail.priceUnit }} · {{ detail.quantity }}{{ detail.expireDate ? ` · ${detail.validityLabel}` : '' }}</text>
       </view>
       <text class="item-arrow">›</text>
     </view>

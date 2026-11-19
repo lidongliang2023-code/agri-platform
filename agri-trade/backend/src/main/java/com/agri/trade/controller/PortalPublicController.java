@@ -234,7 +234,7 @@ public class PortalPublicController {
                 .map(item -> new PublicDemandView(item.getId(), item.getDemandNo(), item.getDemandName(),
                         item.getBuyerName(), item.getProductName(), item.getVariety(), item.getQuantity(), item.getUnit(),
                         item.getPriceMin(), item.getPriceMax(), item.getDeliveryProvince(), item.getDeliveryCity(),
-                        item.getDemandStatus(), item.getResponseCount(), item.getCreateTime()))
+                        item.getDemandStatus(), item.getResponseCount(), item.getCreateTime(), item.getValidUntil()))
                 .collect(Collectors.toList()));
     }
 
@@ -271,7 +271,7 @@ public class PortalPublicController {
                 product.getStockQuantity(),
                 product.getSalesVolume(),
                 product.getOriginProvince(),
-                product.getCategoryId());
+                product.getCategoryId(), product.getValidUntil());
     }
 
     private PortalProductDetailView toDetailView(TradeProduct product) {
@@ -329,7 +329,7 @@ public class PortalPublicController {
                 product.getInquiryCount(),
                 product.getSalesVolume(),
                 product.getPublishStatus(),
-                product.getCreateTime());
+                product.getCreateTime(), product.getValidUntil());
     }
 
     private static String firstNonBlank(String... values) {
@@ -368,7 +368,8 @@ public class PortalPublicController {
             BigDecimal stockQuantity,
             Integer salesVolume,
             String province,
-            Long categoryId) {
+            Long categoryId,
+            java.util.Date validUntil) {
     }
 
     public record PublicSellerView(
@@ -416,7 +417,8 @@ public class PortalPublicController {
             Integer inquiryCount,
             Integer salesVolume,
             String publishStatus,
-            java.util.Date createTime) {
+            java.util.Date createTime,
+            java.util.Date validUntil) {
     }
 
     public record PublicProductSkuView(
@@ -456,6 +458,7 @@ public class PortalPublicController {
             String deliveryCity,
             String demandStatus,
             Integer responseCount,
-            java.util.Date createTime) {
+            java.util.Date createTime,
+            java.util.Date validUntil) {
     }
 }

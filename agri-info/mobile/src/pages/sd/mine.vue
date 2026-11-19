@@ -68,7 +68,6 @@ function repost(item: SupplyDemand) {
     orgName: item.orgName,
     availableDate: item.availableDate,
     origin: item.origin,
-    duration: item.durationDays,
   })
   uni.navigateTo({ url: `/pages/sd/publish?type=${item.sdType}` })
 }

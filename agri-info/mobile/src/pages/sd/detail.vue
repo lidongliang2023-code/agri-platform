@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { openTrade } from '../../trade'
-import { onLoad } from '@dcloudio/uni-app'
-import { infoApi, statusLabel, statusMeta, supplyDemandStatusMeta, money, pushView, timeAgo, toast, type SupplyDemandDetail } from '../../api'
+import { onLoad, onShow, onHide, onUnload } from '@dcloudio/uni-app'
+import PageState from '../../components/PageState.vue'
+import { infoApi, supplyDemandStatusMeta, money, pushView, toast, type SupplyDemandDetail } from '../../api'
 
 const id = ref(0)
 const sdType = ref('supply')
@@ -21,18 +22,62 @@ const topMatch = computed(() => detail.value?.matches?.[0])
 
 const isSupply = computed(() => detail.value?.sdType === 'supply')
 
-onLoad((options) => {
-  id.value = Number(options?.id || 0)
-  sdType.value = options?.type === 'demand' ? 'demand' : 'supply'
-  load()
+const loadError = ref('')
+let revision = 0
+
+function selectRecord(rawId: unknown, rawType: unknown) {
+  const nextId = Number(rawId)
+  const nextType = rawType === 'demand' ? 'demand' : 'supply'
+  if (revision && id.value === nextId && sdType.value === nextType) return
+  id.value = nextId
+  sdType.value = nextType
+  void load()
+}
+
+onLoad(options => selectRecord(options?.id, options?.type))
+
+// #ifdef H5
+// 手动切换 hash 或浏览器前进/后退时，同一页实例可能继续使用。
+function syncHash() {
+  const [path, query] = window.location.hash.slice(1).split('?')
+  if (path !== '/pages/sd/detail') return
+  const params = new URLSearchParams(query)
+  selectRecord(params.get('id'), params.get('type'))
+}
+function stopListening() {
+  window.removeEventListener('hashchange', syncHash)
+}
+onShow(() => {
+  window.addEventListener('hashchange', syncHash)
+  syncHash()
+})
+onHide(stopListening)
+// #endif
+
+onUnload(() => {
+  revision++
+  // #ifdef H5
+  stopListening()
+  // #endif
 })
 
 async function load() {
+  const current = ++revision
+  detail.value = null
+  favorited.value = false
+  loadError.value = ''
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) {
+    loading.value = false
+    loadError.value = '供需编号无效'
+    return
+  }
   loading.value = true
   try {
     const data = await infoApi.supplyDemand(id.value, sdType.value)
+    if (current !== revision) return
     detail.value = data
     const favorites = await infoApi.favorites()
+    if (current !== revision) return
     favorited.value = favorites.some((item) => item.targetType === data.sdType && item.targetId === data.id)
     pushView({
       type: data.sdType,
@@ -42,17 +87,21 @@ async function load() {
       icon: data.sdType === 'supply' ? '📦' : '🛒',
     })
   } catch (error) {
-    toast(error instanceof Error ? error.message : '加载失败')
+    if (current !== revision) return
+    if (detail.value) toast('收藏状态加载失败')
+    else loadError.value = error instanceof Error ? error.message : '详情加载失败'
   } finally {
-    loading.value = false
+    if (current === revision) loading.value = false
   }
 }
 
 async function toggleFavorite() {
   if (!detail.value) return
+  const current = revision
   try {
     if (favorited.value) {
       await infoApi.removeFavoriteTarget(detail.value.sdType, detail.value.id)
+      if (current !== revision) return
       toast('已取消收藏')
       favorited.value = false
       return
@@ -63,10 +112,11 @@ async function toggleFavorite() {
       title: detail.value.title,
       summary: `${detail.value.origin} · ${detail.value.quantity}`,
     })
+    if (current !== revision) return
     favorited.value = true
     toast('已收藏', 'success')
   } catch (error) {
-    toast(error instanceof Error ? error.message : '操作失败')
+    if (current === revision) toast(error instanceof Error ? error.message : '操作失败')
   }
 }
 
@@ -105,11 +155,11 @@ function goBack() {
       <view class="custom-nav">
         <text class="back" @click="goBack">‹</text>
         <text class="title">供需详情</text>
-        <text class="right" @click="share">分享</text>
+        <text class="right" @click="detail && share()">{{ detail ? '分享' : '' }}</text>
       </view>
     </view>
 
-    <view v-if="loading" class="loading">正在加载…</view>
+    <PageState v-if="loading || loadError" :loading="loading" :error="loadError" @retry="load" />
 
     <template v-else-if="detail">
       <view class="head">
@@ -143,7 +193,7 @@ function goBack() {
         <view class="tag-row">
           <text v-if="detail.verified" class="tag green">✓ 已实名认证</text>
           <text v-if="detail.badge" class="tag blue">{{ detail.badge }}</text>
-          <text class="tag gray">剩余 {{ detail.durationDays }} 天</text>
+          <text v-if="detail.expireDate" class="tag gray">{{ detail.validityLabel }}</text>
         </view>
       </view>
 
@@ -183,7 +233,7 @@ function goBack() {
           </view>
           <view class="field">
             <text class="field-label">有效期</text>
-            <text class="field-value">剩余 {{ detail.durationDays }} 天（{{ detail.expireDate }}）</text>
+            <text class="field-value">{{ detail.validityLabel || '未提供有效期' }}{{ detail.expireDate ? `（${detail.expireDate}）` : '' }}</text>
           </view>
           <view class="field">
             <text class="field-label">结算方式</text>

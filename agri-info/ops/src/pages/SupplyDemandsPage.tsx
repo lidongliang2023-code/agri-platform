@@ -152,7 +152,7 @@ export function SupplyDemandsPage(): JSX.Element {
               <div className="kv"><span>报价</span><b>{Number(detail.price).toFixed(2)} {detail.priceUnit}</b></div>
               <div className="kv"><span>产地</span><b>{detail.origin}</b></div>
               <div className="kv"><span>行情参照</span><b>{detail.marketRef}</b></div>
-              <div className="kv"><span>有效期</span><b>{detail.availableDate} 起 {detail.durationDays} 天（至 {detail.expireDate}）</b></div>
+              <div className="kv"><span>有效期</span><b>{detail.validityLabel || '未提供有效期'}{detail.expireDate && `（${detail.expireDate}）`}</b></div>
               <div className="kv"><span>浏览 / 沟通</span><b>{detail.viewCount} / {detail.chatCount}</b></div>
             </div>
             {detail.auditNote && <p className="source-note">审核意见：{detail.auditNote}</p>}

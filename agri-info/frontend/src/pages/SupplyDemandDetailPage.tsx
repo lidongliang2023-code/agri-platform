@@ -80,7 +80,7 @@ export function SupplyDemandDetailPage(): JSX.Element {
               <div className="kv"><span>{data.sdType === 'supply' ? '可供数量' : '求购数量'}</span><b>{data.quantity}</b></div>
               <div className="kv"><span>产地 / 交货地</span><b>{data.origin}</b></div>
               <div className="kv"><span>上市时间</span><b>{data.availableDate}</b></div>
-              <div className="kv"><span>有效期</span><b>{data.durationDays} 天（至 {data.expireDate}）</b></div>
+              <div className="kv"><span>有效期</span><b>{data.validityLabel || '未提供有效期'}{data.expireDate && `（${data.expireDate}）`}</b></div>
               <div className="kv">
                 <span>联系人</span>
                 <b>

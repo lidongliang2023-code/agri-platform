@@ -241,7 +241,8 @@ export interface SupplyDemand {
   origin: string
   marketRef: string
   availableDate: string
-  durationDays: number
+  durationDays: number | null
+  validityLabel?: string
   expireDate: string
   contactName: string
   contactPhone: string

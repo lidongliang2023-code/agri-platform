@@ -166,7 +166,7 @@ export function SupplyDemandPage(): JSX.Element {
                 <span className="small muted">{item.marketRef}</span>
               </div>
               <div className="sd-aside">
-                <span className="small muted">有效期至 {item.expireDate}</span>
+                <span className="small muted">{item.expireDate ? `有效期至 ${item.expireDate}` : '未提供有效期'}</span>
                 <span className="small muted">浏览 {item.viewCount} · 沟通 {item.chatCount}</span>
               </div>
             </div>

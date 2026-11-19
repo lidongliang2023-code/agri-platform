@@ -97,7 +97,8 @@ public class SellerProductController {
             String videoUrl,
             List<String> images,
             List<SkuRequest> skus,
-            Integer status) {
+            Integer status,
+            Date validUntil) {
     }
 
     public record SkuRequest(
@@ -160,7 +161,8 @@ public class SellerProductController {
             Integer status,
             Date createTime,
             List<String> images,
-            String portalUrl) {
+            String portalUrl,
+            Date validUntil) {
     }
 
     public record PageView(List<ProductView> records, long total, long pageNum, long pageSize) {
@@ -326,6 +328,7 @@ public class SellerProductController {
         product.setCertificationJson(writeCertifications(request.certifications()));
         product.setQualityReportUrl(trim(request.qualityReportUrl()));
         product.setDescription(trim(request.description()));
+        if (request.validUntil() != null) product.setValidUntil(request.validUntil());
         product.setVideoUrl(trim(request.videoUrl()));
         product.setRemark(trim(request.barcode()));
         applySkuSummary(product, skus);
@@ -513,7 +516,7 @@ public class SellerProductController {
                 product.getPriceMin(), product.getPriceMax(), product.getPriceType(), product.getMinOrderQuantity(),
                 skus, product.getHarvestBatchNo(), certifications, product.getQualityReportUrl(), product.getDescription(),
                 product.getVideoUrl(), product.getPublishStatus(), product.getStatus(), product.getCreateTime(), images,
-                "http://localhost:8086/product/detail/" + product.getId());
+                "http://localhost:8086/product/detail/" + product.getId(), product.getValidUntil());
     }
 
     private String writeCertifications(List<String> values) {
