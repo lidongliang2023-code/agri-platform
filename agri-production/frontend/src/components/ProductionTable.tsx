@@ -94,6 +94,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
   const selectedCount = controlledSelectedKeys ? controlledSelectedKeys.length : uncontrolledSelectedCount
   const mergedRowSelection = props.rowSelection && typeof props.rowSelection === 'object'
     ? {
+        columnWidth: 48,
         ...props.rowSelection,
         onChange: (keys: Key[], rows: T[], info: any) => {
           setUncontrolledSelectedCount(keys.length)
@@ -101,6 +102,10 @@ export default function ProductionTable<T extends Record<string, any>, P extends
         },
       }
     : props.rowSelection
+  const selectionColumnWidth = mergedRowSelection && typeof mergedRowSelection === 'object'
+    ? (typeof mergedRowSelection.columnWidth === 'number' ? mergedRowSelection.columnWidth : 48)
+    : 0
+  const minScrollX = resizable.totalWidth > 0 ? resizable.totalWidth + selectionColumnWidth : resizable.totalWidth
   const searchableColumnCount = useMemo(() => {
     const countSearchable = (items?: ProColumns<T>[]): number => {
       if (!items?.length) return 0
@@ -140,7 +145,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
     } : undefined)}
     components={{ ...components, header: { ...headerComponents, cell: ResizableTableHeader } }}
     tableLayout={tableLayout ?? 'fixed'}
-    scroll={{ ...scroll, x: typeof scroll?.x === 'number' ? Math.max(scroll.x, resizable.totalWidth) : !scroll?.x || scroll.x === 'max-content' ? resizable.totalWidth : scroll.x }}
+    scroll={{ ...scroll, x: typeof scroll?.x === 'number' ? Math.max(scroll.x, minScrollX) : !scroll?.x || scroll.x === 'max-content' ? minScrollX : scroll.x }}
     className={`production-record-table ${className}`.trim()}
     toolBarRender={props.toolBarRender === false ? () => [] : props.toolBarRender}
     size={density}

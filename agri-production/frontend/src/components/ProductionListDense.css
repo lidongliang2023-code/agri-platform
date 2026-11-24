@@ -235,6 +235,15 @@ html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measur
   vertical-align: middle;
 }
 
+/* 复选框列不套文本省略号和宽左右内边距，避免被挤出省略号「…」或裁切复选框。 */
+html.pc-ui-v1 .production-list-dense .ant-table-thead > tr > th.ant-table-selection-column,
+html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row):not(.ant-table-placeholder) > td.ant-table-selection-column {
+  padding-inline: 8px !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  text-align: center !important;
+}
+
 html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row) > td .ant-space {
   flex-wrap: nowrap !important;
 }

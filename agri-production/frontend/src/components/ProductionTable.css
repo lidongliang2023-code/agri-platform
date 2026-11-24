@@ -15,6 +15,13 @@
 .production-record-table .ant-table-thead > tr > th {
   position: relative;
 }
+.production-record-table .ant-table-thead > tr > th.ant-table-selection-column,
+.production-record-table .ant-table-tbody > tr > td.ant-table-selection-column {
+  padding-inline: 8px !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  text-align: center !important;
+}
 .production-record-table .production-column-resize-handle {
   position: absolute;
   /* 手柄只属于当前列，不能压过 Ant Design 的固定列。 */

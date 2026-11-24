@@ -89,6 +89,8 @@
 .device-member-list .iot-status { border-radius: 999px; }
 .device-member-list .iot-status::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-inline-end: 5px; border-radius: 50%; background: currentColor; vertical-align: 2px; }
 .device-member-list .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell { background: #e8f5e9 !important; }
+.device-member-list .ant-table-thead > tr > th.ant-table-selection-column,
+.device-member-list .ant-table-tbody > tr > td.ant-table-selection-column { padding-inline: 8px !important; overflow: visible !important; text-overflow: clip !important; text-align: center !important; }
 .device-member-list .ant-checkbox-checked .ant-checkbox-inner { background: #258849; border-color: #258849; }
 .device-member-list .device-health { align-items: flex-end; font-variant-numeric: tabular-nums; }
 .device-member-list .entity-copy, .device-member-list .entity-link > div { min-width: 0; overflow-wrap: anywhere; }
