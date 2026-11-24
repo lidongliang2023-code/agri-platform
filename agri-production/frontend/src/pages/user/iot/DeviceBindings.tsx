@@ -1,4 +1,9 @@
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
+import BusinessRecordList from '@/components/BusinessRecordList'
+import ListRowActions from '@/components/ListRowActions'
+import PageContainer from '@/components/ProductionPageContainer'
 /**
  * 页面名称：设备绑定管理
  * 路由路径：/production/iot/bindings
@@ -24,6 +29,7 @@ import '@/components/ProductionDetailCompact.css'
  *   保证物联网端设备详情里的地块归属同步可见。
  */
 import { useEffect, useMemo, useState } from 'react'
+import type { Key } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
@@ -36,7 +42,6 @@ import {
   InputNumber,
   Modal,
   Popconfirm,
-  Row,
   Select,
   Space,
   Table,
@@ -45,7 +50,7 @@ import {
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { DeleteOutlined, PlusOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons'
+import { DeleteOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
 import {
@@ -177,11 +182,16 @@ export default function DeviceBindings(): JSX.Element {
   const farmId = currentFarm?.farmId
 
   /** 设备筛选 */
+  const [draftDeviceFilter, setDraftDeviceFilter] = useState<string | undefined>(undefined)
   const [deviceFilter, setDeviceFilter] = useState<string | undefined>(undefined)
   /** 绑定对象类型筛选 */
+  const [draftTargetTypeFilter, setDraftTargetTypeFilter] = useState<BindTargetType | undefined>(undefined)
   const [targetTypeFilter, setTargetTypeFilter] = useState<BindTargetType | undefined>(undefined)
   /** 状态筛选 */
+  const [draftStatusFilter, setDraftStatusFilter] = useState<number | undefined>(undefined)
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined)
+  /** 行勾选 */
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
   /** 绑定弹窗 */
   const [modalOpen, setModalOpen] = useState<boolean>(false)
   /** 编辑中的绑定 */
@@ -420,6 +430,8 @@ export default function DeviceBindings(): JSX.Element {
     {
       title: '设备名称',
       key: 'deviceName',
+      width: 200,
+      ellipsis: true,
       render: (_value: unknown, row: BindingRow) => (
         <Space size={4}>
           <span>{row.deviceName ?? deviceNameMap.get(row.deviceId) ?? row.deviceId}</span>
@@ -430,6 +442,7 @@ export default function DeviceBindings(): JSX.Element {
     {
       title: '类型',
       key: 'deviceType',
+      width: 120,
       render: (_value: unknown, row: BindingRow) => {
         const device = devices.find((item) => item.deviceId === row.deviceId)
         return <Tag>{device ? deviceTypeLabel(device.deviceType) : '-'}</Tag>
@@ -439,17 +452,22 @@ export default function DeviceBindings(): JSX.Element {
       title: '绑定对象类型',
       dataIndex: 'targetType',
       key: 'targetType',
+      width: 120,
       render: (value: BindTargetType) =>
         TARGET_TYPE_OPTIONS.find((item) => item.value === value)?.label ?? '-',
     },
     {
       title: '绑定对象',
       key: 'targetName',
+      width: 160,
+      ellipsis: true,
       render: (_value: unknown, row: BindingRow) => row.targetName ?? row.targetId ?? '-',
     },
     {
       title: '采集指标',
       key: 'metrics',
+      width: 220,
+      ellipsis: true,
       render: (_value: unknown, row: BindingRow) => {
         // 后端可能给数组 / 逗号串 / null，统一成数组后再渲染，避免对非数组调 .map()
         const metrics = toMetricList(row.metrics)
@@ -469,12 +487,15 @@ export default function DeviceBindings(): JSX.Element {
       title: '采集频率',
       dataIndex: 'collectInterval',
       key: 'collectInterval',
+      width: 110,
+      align: 'right',
       render: (value?: number) => (typeof value === 'number' ? `${value} 分钟` : '-'),
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
+      width: 110,
       render: (status: number) => (
         <Tag color={Number(status) === 1 ? 'green' : 'default'}>
           {Number(status) === 1 ? '已绑定' : '已解绑'}
@@ -485,20 +506,24 @@ export default function DeviceBindings(): JSX.Element {
       title: '绑定时间',
       dataIndex: 'boundAt',
       key: 'boundAt',
+      width: 160,
       render: (value?: string) => (value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '-'),
     },
     {
       title: '操作',
       key: 'action',
+      fixed: 'right',
+      width: 150,
       render: (_value: unknown, row: BindingRow) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<SettingOutlined />} onClick={() => openMapping(row)}>
+        <ListRowActions>
+          <Button key="mapping" type="link" size="small" icon={<SettingOutlined />} onClick={() => openMapping(row)}>
             传感器映射
           </Button>
-          <Button type="link" size="small" onClick={() => openEdit(row)}>
+          <Button key="edit" type="link" size="small" onClick={() => openEdit(row)}>
             {row.implicit ? '转为正式绑定' : '编辑'}
           </Button>
           <Popconfirm
+            key="unbind"
             title="确认解除该绑定关系？"
             okText="解绑"
             cancelText="取消"
@@ -508,70 +533,81 @@ export default function DeviceBindings(): JSX.Element {
               解绑
             </Button>
           </Popconfirm>
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
 
-  return (
-    <div style={{ padding: 24 }}>
-      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
-          🔗 设备绑定管理
-        </Typography.Title>
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: ['binding-list'] })
-              void queryClient.invalidateQueries({ queryKey: ['binding-devices'] })
-            }}
-          >
-            刷新
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新增绑定
-          </Button>
-        </Space>
-      </Row>
+  const handleSearch = (): void => {
+    setDeviceFilter(draftDeviceFilter)
+    setTargetTypeFilter(draftTargetTypeFilter)
+    setStatusFilter(draftStatusFilter)
+  }
 
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap size={12}>
-          <Select
-            allowClear
-            style={{ width: 200 }}
-            placeholder="全部设备"
-            value={deviceFilter}
-            options={devices.map((item) => ({
-              value: item.deviceId,
-              label: item.deviceName || item.deviceCode || item.deviceId,
-            }))}
-            onChange={setDeviceFilter}
-          />
-          <Select
-            allowClear
-            style={{ width: 160 }}
-            placeholder="全部绑定对象"
-            value={targetTypeFilter}
-            options={TARGET_TYPE_OPTIONS}
-            onChange={setTargetTypeFilter}
-          />
-          <Select
-            allowClear
-            style={{ width: 140 }}
-            placeholder="全部状态"
-            value={statusFilter}
-            options={STATUS_OPTIONS}
-            onChange={setStatusFilter}
-          />
-        </Space>
+  const handleReset = (): void => {
+    setDraftDeviceFilter(undefined)
+    setDraftTargetTypeFilter(undefined)
+    setDraftStatusFilter(undefined)
+    setDeviceFilter(undefined)
+    setTargetTypeFilter(undefined)
+    setStatusFilter(undefined)
+  }
+
+  const handleReload = (): Promise<void[]> =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['binding-list'] }),
+      queryClient.invalidateQueries({ queryKey: ['binding-devices'] }),
+    ])
+
+  return (
+    <PageContainer className="production-list-dense production-member-list" title="设备绑定管理">
+      <Card className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>设备</label>
+            <Select
+              allowClear
+              placeholder="全部设备"
+              value={draftDeviceFilter}
+              options={devices.map((item) => ({
+                value: item.deviceId,
+                label: item.deviceName || item.deviceCode || item.deviceId,
+              }))}
+              onChange={setDraftDeviceFilter}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>绑定对象</label>
+            <Select
+              allowClear
+              placeholder="全部绑定对象"
+              value={draftTargetTypeFilter}
+              options={TARGET_TYPE_OPTIONS}
+              onChange={setDraftTargetTypeFilter}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>状态</label>
+            <Select
+              allowClear
+              placeholder="全部状态"
+              value={draftStatusFilter}
+              options={STATUS_OPTIONS}
+              onChange={setDraftStatusFilter}
+            />
+          </div>
+          <div className="production-filter-actions">
+            <Button onClick={handleReset}>重置</Button>
+            <Button type="primary" onClick={handleSearch}>查询</Button>
+          </div>
+        </div>
       </Card>
 
       {bindingsQuery.isError && (
         <Alert
           type="warning"
           showIcon
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 10 }}
           message="绑定关系接口暂不可用，已使用设备地块字段推导展示"
           description={(bindingsQuery.error as Error)?.message ?? '请稍后重试'}
         />
@@ -581,20 +617,32 @@ export default function DeviceBindings(): JSX.Element {
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 10 }}
           message="后端未返回绑定记录"
           description="当前列表由设备实体上的地块字段推导（标记「隐式」），点击「转为正式绑定」可写入正式绑定关系。"
         />
       )}
 
       <Card>
-        <Table<BindingRow>
+        <BusinessRecordList<BindingRow>
+          memberListToolbar
+          columnWidthStorageKey="iot-device-bindings"
           rowKey="bindingId"
           loading={bindingsQuery.isLoading || devicesQuery.isLoading}
           dataSource={filteredRows}
           columns={columns}
+          onReload={handleReload}
+          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          toolbarTitle={
+            <Space size={8} wrap>
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                新增绑定
+              </Button>
+            </Space>
+          }
+          scroll={{ x: 'max-content' }}
           locale={{ emptyText: <Empty description="暂无绑定关系，点击「新增绑定」开始配置" /> }}
-          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (value) => `共 ${value} 条` }}
+          pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         />
       </Card>
 
@@ -810,6 +858,6 @@ export default function DeviceBindings(): JSX.Element {
           </Button>
         </Space>
       </Modal>
-    </div>
+    </PageContainer>
   )
 }

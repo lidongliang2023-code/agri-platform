@@ -1,4 +1,6 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import ProTable from '@/components/ProductionTable'
 import PageContainer from '@/components/ProductionPageContainer'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
@@ -13,7 +15,7 @@ import OfferSubscriptionFlows from './OfferSubscriptionFlows'
  * 价格参考区间仅内部可见，不对外、不参与撮合。
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, App as AntdApp, Button, Drawer, Spin, Popconfirm, Select, Space, Tag, Typography } from 'antd'
+import { Alert, App as AntdApp, Button, Drawer, Spin, Popconfirm, Space, Tag, Typography } from 'antd'
 import {
   ModalForm,
   ProFormDatePicker,
@@ -103,7 +105,6 @@ export default function P2tOffers(): JSX.Element {
   const [formOpen, setFormOpen] = useState<boolean>(false)
   const [editing, setEditing] = useState<P2tOffer | null>(null)
   const [batchId, setBatchId] = useState<number | undefined>(undefined)
-  const [auditStatus, setAuditStatus] = useState<string | undefined>(undefined)
 
   const batchQuery = useQuery({
     queryKey: ['p2t-offer-batches', subjectId],
@@ -193,6 +194,7 @@ export default function P2tOffers(): JSX.Element {
     { title: '供给单号', dataIndex: 'offerNo', width: 170, fixed: 'left', render: (_, row) => <Button type="link" size="small" onClick={() => openDetail(row)}>{row.offerNo}</Button> },
     {
       title: '品种 / 批次',
+      search: false,
       render: (_, row) => (
         <div>
           <b>{row.cropName}{row.varietyName ? `·${row.varietyName}` : ''}</b>
@@ -200,28 +202,37 @@ export default function P2tOffers(): JSX.Element {
         </div>
       ),
     },
-    { title: '可供量', dataIndex: 'availableQty', align: 'right', width: 110, render: (v, r) => `${v} ${r.unit}` },
-    { title: '已认购', dataIndex: 'reservedQty', align: 'right', width: 110, render: (v, r) => `${v} ${r.unit}` },
+    { title: '可供量', dataIndex: 'availableQty', search: false, align: 'right', width: 110, render: (v, r) => `${v} ${r.unit}` },
+    { title: '已认购', dataIndex: 'reservedQty', search: false, align: 'right', width: 110, render: (v, r) => `${v} ${r.unit}` },
     {
       title: '等级结构',
+      search: false,
       width: 150,
       render: (_, r) => `${r.gradeARatio ?? 0}% / ${r.gradeBRatio ?? 0}% / ${r.gradeCRatio ?? 0}%`,
     },
-    { title: '上市窗口', width: 180, render: (_, r) => (r.windowStart ? `${r.windowStart} ~ ${r.windowEnd}` : '—') },
+    { title: '上市窗口', search: false, width: 180, render: (_, r) => (r.windowStart ? `${r.windowStart} ~ ${r.windowEnd}` : '—') },
     {
-      title: '审核',
+      title: '承接状态',
       dataIndex: 'auditStatus',
+      valueType: 'select',
+      valueEnum: {
+        PENDING: '待承接',
+        APPROVED: '已承接',
+        REJECTED: '已驳回',
+      },
       width: 100,
       render: (_, row) => <Tag color={AUDIT_TAG[row.auditStatus]?.color}>{AUDIT_TAG[row.auditStatus]?.text ?? row.auditStatus}</Tag>,
     },
     {
       title: '交易状态',
       dataIndex: 'tradeStatus',
+      search: false,
       width: 100,
       render: (_, row) => <Tag color={TRADE_TAG[row.tradeStatus]?.color}>{TRADE_TAG[row.tradeStatus]?.text ?? row.tradeStatus}</Tag>,
     },
     {
       title: '商品',
+      search: false,
       width: 150,
       render: (_, row) => row.productCode
         ? <div><div>{row.productName}</div><Typography.Text type="secondary" style={{ fontSize: 12 }}>{row.productCode}</Typography.Text></div>
@@ -229,38 +240,41 @@ export default function P2tOffers(): JSX.Element {
     },
     {
       title: '操作',
-      width: 200,
+      key: 'option',
+      valueType: 'option',
+      search: false,
+      width: 150,
       fixed: 'right',
       render: (_, row) => (
-        <Space size={0} wrap>
-          <Button size="small" type="link" onClick={() => openDetail(row)}>详情</Button>
-          {row.tradeStatus === 'PENDING' && row.auditStatus === 'REJECTED' && (
-            <Button size="small" type="link" icon={<SendOutlined />} onClick={() => submitMutation.mutate(row.id)}>重新提交</Button>
-          )}
-          {row.tradeStatus === 'PENDING' && (
-            <>
-              <Button size="small" type="link" icon={<EditOutlined />} onClick={() => {
-                setEditing(row)
-                setBatchId(row.batchId)
-                setFormOpen(true)
-              }}>变更</Button>
-              <Popconfirm title="关闭供给单？" onConfirm={() => closeMutation.mutate(row.id)}>
-                <Button size="small" type="link" danger icon={<CloseCircleOutlined />}>关闭</Button>
-              </Popconfirm>
-            </>
-          )}
+        <ListRowActions>
+          <Button key="detail" size="small" type="link" onClick={() => openDetail(row)}>详情</Button>
+          {row.tradeStatus === 'PENDING' && row.auditStatus === 'REJECTED' ? (
+            <Button key="resubmit" size="small" type="link" icon={<SendOutlined />} onClick={() => submitMutation.mutate(row.id)}>重新提交</Button>
+          ) : null}
+          {row.tradeStatus === 'PENDING' ? (
+            <Button key="edit" size="small" type="link" icon={<EditOutlined />} onClick={() => {
+              setEditing(row)
+              setBatchId(row.batchId)
+              setFormOpen(true)
+            }}>变更</Button>
+          ) : null}
+          {row.tradeStatus === 'PENDING' ? (
+            <Popconfirm key="close" title="关闭供给单？" onConfirm={() => closeMutation.mutate(row.id)}>
+              <Button size="small" type="link" danger icon={<CloseCircleOutlined />}>关闭</Button>
+            </Popconfirm>
+          ) : null}
           {row.reservedQty > 0 || !['PENDING', 'CLOSED'].includes(row.tradeStatus) ? null : (
-            <Popconfirm title="删除供给单？" onConfirm={() => removeMutation.mutate(row.id)}>
+            <Popconfirm key="delete" title="删除供给单？" onConfirm={() => removeMutation.mutate(row.id)}>
               <Button size="small" type="link" danger icon={<DeleteOutlined />}>删除</Button>
             </Popconfirm>
           )}
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
 
   return (
-    <PageContainer title="供给意向">
+    <PageContainer className="production-list-dense production-member-list" title="供给意向">
     <>
       {linkedBatchId && <Alert
         style={{ marginBottom: 16 }}
@@ -275,47 +289,42 @@ export default function P2tOffers(): JSX.Element {
         </Space>}
       />}
       {!linkBlocked && <ProTable<P2tOffer>
+        memberListToolbar
         actionRef={actionRef}
         className="p2t-scroll-table"
         headerTitle={false}
+        tableAlertRender={false}
         key={`${subjectId}-${linkedBatchId ?? "all"}`}
         columnWidthStorageKey="p2t-offers"
-        params={{ auditStatus, subjectId, batchId: linkedBatchId }}
+        params={{ subjectId, batchId: linkedBatchId }}
         rowKey="offerNo"
         columns={columns}
         scroll={SCROLL_BY_CONTENT}
-        search={{ labelWidth: 'auto' }}
-        pagination={{ pageSize: 10 }}
+        search={{ labelWidth: 'auto', layout: 'vertical' }}
+        rowSelection={{}}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         request={async (params) => {
           const res = await listP2tOffers({
             batchId: params.batchId as string | undefined,
             pageNum: params.current ?? 1,
-            pageSize: params.pageSize ?? 10,
+            pageSize: params.pageSize ?? 20,
             keyword: (params.offerNo as string) || (params.keyword as string) || undefined,
             auditStatus: params.auditStatus as string | undefined,
           })
           return { data: res.list, total: res.total, success: true }
         }}
-        toolBarRender={() => [
-          <Select
-            key="audit"
-            allowClear
-            value={auditStatus}
-            placeholder="承接状态"
-            style={{ width: 130 }}
-            options={[
-              { value: 'PENDING', label: '待承接' },
-              { value: 'APPROVED', label: '已承接' },
-              { value: 'REJECTED', label: '已驳回' },
-            ]}
-            onChange={(value) => setAuditStatus(value)}
-          />,
-          <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => {
-            setEditing(null)
-            setBatchId(linkedBatchId ? Number(linkedBatchId) : undefined)
-            setFormOpen(true)
-          }}>新建供给意向</Button>,
-        ]}
+        toolbar={{
+          title: (
+            <Space size={8} wrap>
+              <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => {
+                setEditing(null)
+                setBatchId(linkedBatchId ? Number(linkedBatchId) : undefined)
+                setFormOpen(true)
+              }}>新建供给意向</Button>
+            </Space>
+          ),
+        }}
+        toolBarRender={false}
       />}
 
       <Drawer rootClassName="production-detail-compact production-detail-dialog" title="供给详情" width="min(920px, 100vw)" open={detailVisible} onClose={() => setDetailTarget(null)} destroyOnClose

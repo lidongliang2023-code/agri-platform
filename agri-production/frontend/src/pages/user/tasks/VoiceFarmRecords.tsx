@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { randomId } from '@/utils/random-id'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Alert, App, Button, Card, Checkbox, Col, Descriptions, Drawer, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Statistic, Table, Tabs, Tag, Timeline, Typography, Upload } from 'antd'
-import { AudioOutlined, CheckCircleOutlined, FileTextOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Checkbox, Col, Descriptions, Drawer, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Tabs, Tag, Timeline, Tooltip, Typography, Upload } from 'antd'
+import type { Key } from 'react'
+import { AudioOutlined, CheckCircleOutlined, FileTextOutlined, UploadOutlined } from '@ant-design/icons'
+import BusinessRecordList from '@/components/BusinessRecordList'
+import ListRowActions from '@/components/ListRowActions'
+import PageContainer from '@/components/ProductionPageContainer'
+import '@/components/ProductionListDense.css'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
 import useAuthStore from '@/store/auth'
@@ -20,6 +26,9 @@ export default function VoiceFarmRecords(): JSX.Element {
 function Workspace({ farmId }: { farmId?: string }): JSX.Element {
   const { message } = App.useApp(); const cache = useQueryClient()
   const [tab, setTab] = useState('all'), [active, setActive] = useState<VoiceDetail>(), [capture, setCapture] = useState(false)
+  const [draftKeyword, setDraftKeyword] = useState(''), [draftType, setDraftType] = useState<string>(), [draftState, setDraftState] = useState<string>()
+  const [keyword, setKeyword] = useState(''), [operationType, setOperationType] = useState<string>(), [stateFilter, setStateFilter] = useState<string>()
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
   const [transcript, setTranscript] = useState(''), [file, setFile] = useState<File>(), [busy, setBusy] = useState(false)
   const [recording, setRecording] = useState(false), [seconds, setSeconds] = useState(0), [audioUrl, setAudioUrl] = useState('')
   const [autoProcess, setAutoProcess] = useState(true)
@@ -31,6 +40,35 @@ function Workspace({ farmId }: { farmId?: string }): JSX.Element {
   useEffect(() => () => { recorder.current?.state === 'recording' && recorder.current.stop(); stream.current?.getTracks().forEach(t => t.stop()); if (timer.current) clearInterval(timer.current) }, [])
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl) }, [audioUrl])
   const rows = list.data ?? []; const editable = !!active && ['DRAFT', 'REVIEW_REQUIRED'].includes(active.state)
+  const filteredRows = useMemo(() => {
+    const kw = keyword.trim().toLowerCase()
+    const targetState = stateFilter ?? (tab === 'all' ? undefined : tab)
+    return rows.filter((r) => {
+      if (targetState && r.state !== targetState) return false
+      if (operationType && r.operationType !== operationType) return false
+      if (kw) {
+        const hay = `${r.id} ${r.plotName ?? ''} ${r.transcript ?? ''} ${r.confirmedBy ?? ''} ${r.operationDate ?? ''}`.toLowerCase()
+        if (!hay.includes(kw)) return false
+      }
+      return true
+    })
+  }, [rows, tab, keyword, operationType, stateFilter])
+  const handleSearch = () => {
+    setKeyword(draftKeyword.trim())
+    setOperationType(draftType)
+    setStateFilter(draftState)
+    setTab(draftState && ['DRAFT', 'REVIEW_REQUIRED', 'ARCHIVED'].includes(draftState) ? draftState : 'all')
+  }
+  const handleReset = () => {
+    setDraftKeyword(''); setDraftType(undefined); setDraftState(undefined)
+    setKeyword(''); setOperationType(undefined); setStateFilter(undefined); setTab('all')
+  }
+  const handleTabChange = (nextTab: string) => {
+    setTab(nextTab)
+    const nextState = nextTab === 'all' ? undefined : nextTab
+    setDraftState(nextState)
+    setStateFilter(nextState)
+  }
   const inputType = ['pest_control', 'fertilizing'].includes(draft.operationType ?? '')
   const warnings = active?.risks?.warnings ?? [], missing = active?.risks?.missing ?? []
   function show(value: VoiceDetail) { setActive(value); setDraft(value.draft ?? {}); setEditText(value.transcript ?? ''); setDirty(false); setAudioUrl(''); setConfirmed(false); setAbnormal(false); setExistingUsageId(undefined); void cache.invalidateQueries({ queryKey: ['voice-records', farmId] }) }
@@ -49,7 +87,7 @@ function Workspace({ farmId }: { farmId?: string }): JSX.Element {
     } catch { stream.current?.getTracks().forEach(t => t.stop()); message.error('无法访问麦克风，请上传录音或手工补录。') }
   }
   async function create() {
-    const data = new FormData(); data.append('farmId', farmId!); data.append('requestId', crypto.randomUUID()); data.append('transcript', transcript); if (file) data.append('audio', file)
+    const data = new FormData(); data.append('farmId', farmId!); data.append('requestId', randomId()); data.append('transcript', transcript); if (file) data.append('audio', file)
     let result = await createVoice(data); setCapture(false); setFile(undefined); setTranscript(''); show(result)
     if (autoProcess) {
       try {
@@ -61,20 +99,77 @@ function Workspace({ farmId }: { farmId?: string }): JSX.Element {
   }
   async function act(action: string) { if (!active) return; if (dirty) { message.warning('请先保存核对字段再继续'); return } show(await voiceAction(active.id, action, { revision: active.revision, reason, confirmed, abnormalConfirmed: abnormal, existingUsageId })); if (action === 'archive') { setConfirmOpen(false); message.success('已确认归档') } }
   if (!farmId) return <Empty description="请先在顶部选择农场" />
-  return <div style={{ padding: 24, maxWidth: 1600, margin: '0 auto' }}>
-    <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 20 }} wrap><div><Typography.Title level={3} style={{ marginBottom: 6 }}>语音农事记录与结构化归档</Typography.Title><Typography.Text type="secondary">采集凭证 → 七要素核对 → 异常复核 → 农户确认 → 原台账与溯源</Typography.Text></div><Space wrap><Button icon={<ReloadOutlined />} onClick={() => void list.refetch()}>刷新</Button><Button onClick={() => void run(async () => download(await exportVoice(farmId), '已确认农事归档.json'))}>导出已归档</Button><Button type="primary" icon={<AudioOutlined />} onClick={() => setCapture(true)}>录音 / 补录</Button></Space></Space>
-    <Alert type="info" showIcon message="记录事实，不代替任务验收" description={ctx.data?.notice ?? '语音必须经农户确认才能进入台账与溯源，异常记录先复核，原始音频保留六个月。'} style={{ marginBottom: 18 }} />
-    {ctx.isError && <Alert type="error" message="当前农场数据加载失败" description="请刷新重试，未加载完成时不能创建或归档。" />}
-    <Row gutter={16} style={{ marginBottom: 20 }}>{[['待核对', rows.filter(r => r.state === 'DRAFT').length], ['异常待复核', rows.filter(r => r.state === 'REVIEW_REQUIRED').length], ['已确认归档', rows.filter(r => r.state === 'ARCHIVED').length], ['作业归档组', new Set(rows.filter(r => r.archiveGroup).map(r => r.archiveGroup)).size]].map(([title, value]) => <Col xs={12} md={6} key={title}><Card size="small"><Statistic title={`${title}（最近200条）`} value={value} /></Card></Col>)}</Row>
-    <Card><Tabs activeKey={tab} onChange={setTab} items={[{ key: 'all', label: '全部采集凭证' }, { key: 'DRAFT', label: '待核对' }, { key: 'REVIEW_REQUIRED', label: '异常复核队列' }, { key: 'ARCHIVED', label: '归档台账' }]} /><Table<VoiceSummary> rowKey="id" loading={list.isLoading} dataSource={tab === 'all' ? rows : rows.filter(r => r.state === tab)} scroll={{ x: 1000 }} columns={[
-      { title: '记录编号', dataIndex: 'id', width: 140, render: (v: string, r) => <Button type="link" onClick={() => void run(async () => show(await voiceDetail(r.id)))}>{v.slice(0, 8).toUpperCase()}</Button> },
-      { title: '地块 / 日期', render: (_, r) => <>{r.plotName ?? '待确认地块'}<br /><Typography.Text type="secondary">{r.operationDate ?? '待确认日期'}</Typography.Text></> },
-      { title: '口述摘要', dataIndex: 'transcript', ellipsis: true }, { title: '农事类型', dataIndex: 'operationType', render: v => TYPES.find(t => t.value === v)?.label ?? '待确认' },
-      { title: '结构化摘要', width: 240, render: (_, r) => { try { const d = JSON.parse(r.draftJson ?? '{}') as VoiceDraft; return <>{d.operatedAt ?? '待确认时间'}<br />{d.areaMu == null ? '待确认面积' : `${d.areaMu}亩`} · {d.quantity == null ? d.durationHours == null ? '待核对' : `${d.durationHours}小时` : `${d.quantity}${d.unit ?? ''}`}</> } catch { return '待核对' } } },
-      { title: '抽取置信度', width: 110, render: (_, r) => { try { const e = JSON.parse(r.extractionJson ?? '{}') as { suggestion?: { confidence?: number } }; return e.suggestion?.confidence ?? '未提取' } catch { return '未提取' } } },
-      { title: '状态', dataIndex: 'state' , render: (s: string) => <Tag color={s === 'ARCHIVED' ? 'green' : s === 'REVIEW_REQUIRED' ? 'orange' : 'default'}>{STATES[s] ?? s}</Tag> },
-      { title: '确认人', dataIndex: 'confirmedBy', render: v => v ?? '未确认，不进入溯源' }, { title: '操作', render: (_, r) => <Button onClick={() => void run(async () => show(await voiceDetail(r.id)))}>查看 / 核对</Button> },
-    ]} /></Card>
+  return <PageContainer className="production-list-dense production-member-list" title="语音农事归档" subTitle="采集凭证 → 七要素核对 → 异常复核 → 农户确认 → 原台账与溯源">
+    <div className="production-dense-summary">
+      <div className="production-dense-summary-items">
+        {[
+          ['待核对', rows.filter(r => r.state === 'DRAFT').length, ''],
+          ['异常待复核', rows.filter(r => r.state === 'REVIEW_REQUIRED').length, 'is-warning'],
+          ['已确认归档', rows.filter(r => r.state === 'ARCHIVED').length, 'is-success'],
+          ['作业归档组', new Set(rows.filter(r => r.archiveGroup).map(r => r.archiveGroup)).size, ''],
+        ].map(([title, value, cls]) => (
+          <span className="production-dense-metric" key={String(title)}>
+            <span className="production-dense-metric-label">{title}</span>
+            <span className={`production-dense-metric-value ${cls}`}>{value}</span>
+          </span>
+        ))}
+      </div>
+      <Tooltip title={ctx.data?.notice ?? '语音必须经农户确认才能进入台账与溯源，异常记录先复核，原始音频保留六个月。'}>
+        <span className="production-dense-summary-note">记录事实，不代替任务验收（统计最近 200 条）</span>
+      </Tooltip>
+    </div>
+    {ctx.isError && <Alert type="error" message="当前农场数据加载失败" description="请刷新重试，未加载完成时不能创建或归档。" style={{ marginBottom: 10 }} />}
+    <Card className="production-dense-filter-card">
+      <div className="production-filter-grid">
+        <div className="production-filter-field">
+          <label>关键字</label>
+          <Input allowClear placeholder="记录编号 / 地块 / 口述摘要 / 确认人" value={draftKeyword} onChange={e => setDraftKeyword(e.target.value)} onPressEnter={handleSearch} />
+        </div>
+        <div className="production-filter-field">
+          <label>农事类型</label>
+          <Select allowClear placeholder="全部类型" value={draftType} onChange={setDraftType} options={TYPES} />
+        </div>
+        <div className="production-filter-field">
+          <label>状态</label>
+          <Select allowClear placeholder="全部状态" value={draftState} onChange={setDraftState} options={Object.entries(STATES).map(([value, label]) => ({ value, label }))} />
+        </div>
+        <div className="production-filter-actions">
+          <Button onClick={handleReset}>重置</Button>
+          <Button type="primary" onClick={handleSearch}>查询</Button>
+        </div>
+      </div>
+    </Card>
+    <Card>
+      <Tabs activeKey={tab} onChange={handleTabChange} items={[{ key: 'all', label: '全部采集凭证' }, { key: 'DRAFT', label: '待核对' }, { key: 'REVIEW_REQUIRED', label: '异常复核队列' }, { key: 'ARCHIVED', label: '归档台账' }]} />
+      <BusinessRecordList<VoiceSummary>
+        memberListToolbar
+        columnWidthStorageKey="voice-farm-records"
+        rowKey="id"
+        loading={list.isLoading}
+        dataSource={filteredRows}
+        onReload={() => list.refetch()}
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+        toolbarTitle={
+          <Space size={8} wrap>
+            <Button type="primary" icon={<AudioOutlined />} onClick={() => setCapture(true)}>录音 / 补录</Button>
+            <Button onClick={() => void run(async () => download(await exportVoice(farmId), '已确认农事归档.json'))}>导出已归档</Button>
+          </Space>
+        }
+        scroll={{ x: 1080 }}
+        columns={[
+          { title: '记录编号', dataIndex: 'id', width: 130, ellipsis: true, render: (_, r) => <Button type="link" size="small" onClick={() => void run(async () => show(await voiceDetail(r.id)))}>{String(r.id ?? '').slice(0, 8).toUpperCase()}</Button> },
+          { title: '地块 / 日期', key: 'plotDate', width: 180, ellipsis: true, render: (_, r) => { const txt = `${r.plotName ?? '待确认地块'} · ${r.operationDate ?? '待确认日期'}`; return <span className="production-dense-link-ellipsis" title={txt}>{txt}</span> } },
+          { title: '口述摘要', dataIndex: 'transcript', width: 220, ellipsis: true },
+          { title: '农事类型', dataIndex: 'operationType', width: 110, render: v => TYPES.find(t => t.value === v)?.label ?? '待确认' },
+          { title: '结构化摘要', key: 'summary', width: 220, ellipsis: true, render: (_, r) => { try { const d = JSON.parse(r.draftJson ?? '{}') as VoiceDraft; const txt = `${d.operatedAt ?? '待确认时间'} · ${d.areaMu == null ? '待确认面积' : `${d.areaMu}亩`} · ${d.quantity == null ? d.durationHours == null ? '待核对' : `${d.durationHours}小时` : `${d.quantity}${d.unit ?? ''}`}`; return <span className="production-dense-link-ellipsis" title={txt}>{txt}</span> } catch { return '待核对' } } },
+          { title: '抽取置信度', key: 'confidence', width: 110, align: 'right', render: (_, r) => { try { const e = JSON.parse(r.extractionJson ?? '{}') as { suggestion?: { confidence?: number } }; return e.suggestion?.confidence ?? '未提取' } catch { return '未提取' } } },
+          { title: '状态', dataIndex: 'state', width: 120, render: (s: string) => <Tag color={s === 'ARCHIVED' ? 'green' : s === 'REVIEW_REQUIRED' ? 'orange' : 'default'}>{STATES[s] ?? s}</Tag> },
+          { title: '确认人', dataIndex: 'confirmedBy', width: 150, ellipsis: true, render: v => v ?? '未确认，不进入溯源' },
+          { title: '操作', key: 'action', fixed: 'right', width: 120, render: (_, r) => <ListRowActions><Button key="view" type="link" size="small" onClick={() => void run(async () => show(await voiceDetail(r.id)))}>查看 / 核对</Button></ListRowActions> },
+        ]}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+      />
+    </Card>
     <Modal open={capture} title="记录一段已发生的农事" onCancel={() => { if (recording) { message.warning('请先停止录音'); return } setCapture(false) }} onOk={() => void run(create)} okText="保存采集凭证" confirmLoading={busy} okButtonProps={{ disabled: recording || (!file && !transcript.trim()) || !ctx.data }}>
       <Alert type={ctx.data?.asrConfigured ? 'info' : 'warning'} showIcon message={ctx.data?.asrConfigured ? ctx.data.asrCapability?.description ?? '真实转写可用，结果必须核对' : '语音转写暂不可用：支持保存录音和人工补录'} style={{ marginBottom: 16 }} />
       <Space wrap><Button danger={recording} icon={<AudioOutlined />} onClick={() => recording ? recorder.current?.stop() : void startRecording()}>{recording ? `停止录音 ${seconds}s / 180s` : '开始现场录音'}</Button><Upload maxCount={1} showUploadList={false} accept="audio/*,.webm,.m4a" beforeUpload={f => { if (f.size > 12 * 1024 * 1024) { message.error('音频不得超过12MB'); return false } setFile(f); return false }}><Button icon={<UploadOutlined />} disabled={recording}>上传已有录音</Button></Upload></Space>
@@ -129,5 +224,5 @@ function Workspace({ farmId }: { farmId?: string }): JSX.Element {
         <Input.TextArea rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder="确认说明（至少2字）" />
       </Space>
     </Modal>
-  </div>
+  </PageContainer>
 }

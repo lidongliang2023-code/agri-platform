@@ -1,4 +1,6 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import useAuthStore from '@/store/auth'
 import ProTable from '@/components/ProductionTable'
 /**
@@ -158,47 +160,57 @@ export default function P2tVarietyMapPage(): JSX.Element {
     },
     {
       title: '操作', fixed: 'right', valueType: 'option',
-      width: 140,
+      width: 150,
       render: (_, row) => (
-        <Space size={4}>
-          <Button size="small" type="link" icon={<EditOutlined />} onClick={() => {
+        <ListRowActions>
+          <Button key="edit" size="small" type="link" icon={<EditOutlined />} onClick={() => {
             setEditing(row)
             setFormOpen(true)
           }}>编辑</Button>
-          <Popconfirm title="删除该映射？" onConfirm={() => removeMutation.mutate(row.id)}>
+          <Popconfirm key="delete" title="删除该映射？" onConfirm={() => removeMutation.mutate(row.id)}>
             <Button size="small" type="link" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
 
   return (
     <PageContainer
+      className="production-list-dense production-member-list"
       header={{ title: '品种对接表' }}
-      extra={[
-        <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => {
-          setEditing(null)
-          setFormOpen(true)
-        }}>新增映射</Button>,
-      ]}
     >
 
       <ProTable<P2tVarietyMap>
+        memberListToolbar
+        headerTitle={false}
+        tableAlertRender={false}
         key={scope} params={{ subjectId }} columnWidthStorageKey="p2t-variety-map"
         options={{ reload: true, density: true, setting: true }}
         actionRef={actionRef}
         rowKey="id"
         columns={columns.map(column => column.dataIndex === 'keyword' || column.dataIndex === 'status' ? column : { ...column, search: false })}
         className="p2t-scroll-table" scroll={SCROLL_BY_CONTENT}
-        search={{ labelWidth: 'auto' }}
-        pagination={{ defaultPageSize: 10, showSizeChanger: true }}
+        search={{ labelWidth: 'auto', layout: 'vertical' }}
+        rowSelection={{}}
+        toolbar={{
+          title: (
+            <Space size={8} wrap>
+              <Button key="add" type="primary" icon={<PlusOutlined />} onClick={() => {
+                setEditing(null)
+                setFormOpen(true)
+              }}>新增映射</Button>
+            </Space>
+          ),
+        }}
+        toolBarRender={false}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         request={async (params) => {
           if (!isCurrent()) return { data: [], total: 0, success: false }
           const res = await listVarietyMaps({
             status: params.status === undefined || params.status === '' ? undefined : Number(params.status),
             pageNum: params.current ?? 1,
-            pageSize: params.pageSize ?? 10,
+            pageSize: params.pageSize ?? 20,
             keyword: (params.keyword as string) || undefined,
           })
           return isCurrent() ? { data: res.list, total: res.total, success: true } : { data: [], total: 0, success: false }

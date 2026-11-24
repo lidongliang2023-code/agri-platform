@@ -1,13 +1,17 @@
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
 import { useEffect, useRef, useState } from 'react'
+import type { Key } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getP2tOffer, listP2tDiffs } from '@/api/p2t'
-import { Alert, App, Button, Drawer, Form, Input, Modal, Select, Space, Tabs, Tag } from 'antd'
+import { Alert, App, Button, Card, Drawer, Form, Input, Modal, Select, Space, Tabs, Tag } from 'antd'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { ActionType } from '@ant-design/pro-components'
 import { applyGradeReview, decideGradeReview, pageGradeReviews, fetchInspectionPage } from '@/api/quality'
 import type { GradeReview } from '@/api/quality'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ListRowActions from '@/components/ListRowActions'
 import type { ProColumns } from '@ant-design/pro-components'
 import PageContainer from '@/components/ProductionPageContainer'
 import ProTable from '@/components/ProductionTable'
@@ -38,6 +42,16 @@ export default function QualityGrading(): JSX.Element {
   const [params] = useSearchParams()
   const ticketId = params.get('ticketId') || undefined
   const [tab, setTab] = useState(ticketId ? 'reviews' : 'batches')
+  const [draftBatchKeyword, setDraftBatchKeyword] = useState('')
+  const [draftBatchGrade, setDraftBatchGrade] = useState<string | undefined>(undefined)
+  const [batchKeyword, setBatchKeyword] = useState('')
+  const [batchGrade, setBatchGrade] = useState<string | undefined>(undefined)
+  const [draftReviewStatus, setDraftReviewStatus] = useState<string | undefined>(undefined)
+  const [draftReviewKeyword, setDraftReviewKeyword] = useState('')
+  const [reviewStatus, setReviewStatus] = useState<string | undefined>(undefined)
+  const [reviewKeyword, setReviewKeyword] = useState('')
+  const [selectedBatchKeys, setSelectedBatchKeys] = useState<Key[]>([])
+  const [selectedReviewKeys, setSelectedReviewKeys] = useState<Key[]>([])
   const [open, setOpen] = useState(false)
   const [detail, setDetail] = useState<GradeReview | null>(null)
   const [decision, setDecision] = useState<GradeReview | null>(null)
@@ -108,9 +122,9 @@ export default function QualityGrading(): JSX.Element {
     { title: '原等级', dataIndex: 'originalGrade', width: 90 },
     { title: '复核等级', dataIndex: 'reviewedGrade', width: 100 },
     { title: '检测单号', dataIndex: 'inspectionNo', width: 180 },
-    { title: '状态', dataIndex: 'status', width: 160, render: (_, row) => <Tag>{labels[row.status] || row.status}</Tag> },
+    { title: '状态', dataIndex: 'status', width: 160, render: (_, row) => <Tag color={row.status === 'APPROVED' || row.status === 'CONSUMED' ? 'green' : row.status === 'REJECTED' ? 'red' : 'orange'}>{labels[row.status] || row.status}</Tag> },
     { title: '申请时间', dataIndex: 'createTime', width: 180 },
-    { title: '操作', valueType: 'option', fixed: 'right', width: 150, render: (_, row) => <Space><Button type="link" onClick={() => setDetail(row)}>详情</Button>{row.status === 'PENDING' && <Button type="link" onClick={() => { decisionForm.resetFields(); setDecision(row) }}>确认</Button>}</Space> },
+    { title: '操作', valueType: 'option', fixed: 'right', width: 150, render: (_, row) => <ListRowActions><Button key="detail" type="link" size="small" onClick={() => setDetail(row)}>详情</Button>{row.status === 'PENDING' && <Button key="confirm" type="link" size="small" onClick={() => { decisionForm.resetFields(); setDecision(row) }}>确认</Button>}</ListRowActions> },
   ]
   const columns: ProColumns<HarvestBatch>[] = [
     { title: '采收批次号', dataIndex: 'batchNo', width: 190, copyable: true },
@@ -120,29 +134,90 @@ export default function QualityGrading(): JSX.Element {
     { title: '批次等级', dataIndex: 'grade', width: 110 },
     { title: '检测单号（非检测结论）', dataIndex: 'inspectionNo', width: 200 },
   ]
-  return <PageContainer header={{ title: '批次等级查询', subTitle: '查询正式批次等级，质量合格与否以检测台账为准' }}>
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+  const handleBatchSearch = () => { setBatchKeyword(draftBatchKeyword.trim()); setBatchGrade(draftBatchGrade) }
+  const handleBatchReset = () => { setDraftBatchKeyword(''); setDraftBatchGrade(undefined); setBatchKeyword(''); setBatchGrade(undefined) }
+  const handleReviewSearch = () => { setReviewKeyword(draftReviewKeyword.trim()); setReviewStatus(draftReviewStatus) }
+  const handleReviewReset = () => { setDraftReviewKeyword(''); setDraftReviewStatus(undefined); setReviewKeyword(''); setReviewStatus(undefined) }
+  return <PageContainer className="production-list-dense production-member-list" header={{ title: '批次等级查询', subTitle: '查询正式批次等级，质量合格与否以检测台账为准' }}>
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <Alert type="info" showIcon message="批次等级与检测结论分别管理"
         description="等级来自采收批次。正式等级复核请切换复核凭据标签，由另一位用户确认。复核只认定关联工单履约商品等级，不改写批次原值、历史订单或价格。检测合格不能由等级推断；已关联供给的批次继续受后端变更保护。"
         action={<Button onClick={() => navigate('/production/harvests')}>采收记录</Button>} />
       <Tabs activeKey={tab} onChange={setTab} items={[{ key: 'batches', label: '批次等级' }, { key: 'reviews', label: '正式复核凭据' }]} />
       {tab === 'reviews' && <>
         <Alert type="info" showIcon message="申请 → 双人确认 → 差异工单引用核销" description="仅支持生产侧处理中等级降级工单。关联同批次已完成且合格的检测单，复核等级须低于原等级。不合格检测继续走冻结及召回流程；退款、补差价由交易域另行执行。" />
-        <ProTable<GradeReview> key={`reviews:${scope}:${ticketId ?? ''}`} actionRef={actionRef} rowKey="id" columns={reviewColumns} search={false}
-          params={{ subjectId, ticketId }} columnWidthStorageKey="quality-grade-reviews" scroll={SCROLL_BY_CONTENT}
-          options={{ reload: true, density: true, setting: true }} pagination={{ defaultPageSize: 20, showSizeChanger: true }}
-          toolBarRender={() => [<Button key="apply" type="primary" disabled={!scope} onClick={() => { form.resetFields(); form.setFieldsValue({ ticketId }); setOpen(true) }}>申请等级复核</Button>]}
-          request={async p => { if (!current()) return { data: [], total: 0, success: false }; const result = await pageGradeReviews({ pageNum: p.current ?? 1, pageSize: p.pageSize ?? 20, ticketId }); return current() ? { data: result.list, total: result.total, success: true } : { data: [], total: 0, success: false } }} />
+        <Card className="production-dense-filter-card">
+          <div className="production-filter-grid">
+            <div className="production-filter-field">
+              <label>关键字</label>
+              <Input allowClear placeholder="复核单号 / 工单号 / 原订单 / 检测单号" value={draftReviewKeyword} onChange={e => setDraftReviewKeyword(e.target.value)} onPressEnter={handleReviewSearch} />
+            </div>
+            <div className="production-filter-field">
+              <label>状态</label>
+              <Select allowClear placeholder="全部状态" value={draftReviewStatus} onChange={setDraftReviewStatus} options={Object.entries(labels).map(([value, label]) => ({ value, label }))} />
+            </div>
+            <div className="production-filter-actions">
+              <Button onClick={handleReviewReset}>重置</Button>
+              <Button type="primary" onClick={handleReviewSearch}>查询</Button>
+            </div>
+          </div>
+        </Card>
+        <ProTable<GradeReview> memberListToolbar key={`reviews:${scope}:${ticketId ?? ''}`} actionRef={actionRef} rowKey="id" columns={reviewColumns} search={false}
+          params={{ subjectId, ticketId, reviewKeyword, reviewStatus }} columnWidthStorageKey="quality-grade-reviews" scroll={SCROLL_BY_CONTENT}
+          rowSelection={{ selectedRowKeys: selectedReviewKeys, onChange: setSelectedReviewKeys }}
+          options={{ reload: true }} pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+          toolBarRender={() => [<Button key="apply" type="primary" disabled={!scope} onClick={() => { form.resetFields(); form.setFieldsValue({ ticketId }); setOpen(true) }}>+ 申请等级复核</Button>]}
+          request={async p => {
+            if (!current()) return { data: [], total: 0, success: false }
+            const result = await pageGradeReviews({ pageNum: p.current ?? 1, pageSize: p.pageSize ?? 20, ticketId })
+            const kw = reviewKeyword.trim().toLowerCase()
+            const filtered = result.list.filter(row => {
+              if (reviewStatus && row.status !== reviewStatus) return false
+              if (kw) {
+                const hay = `${row.reviewNo ?? ''} ${row.ticketNo ?? ''} ${row.orderNo ?? ''} ${row.inspectionNo ?? ''}`.toLowerCase()
+                if (!hay.includes(kw)) return false
+              }
+              return true
+            })
+            return current() ? { data: filtered, total: kw || reviewStatus ? filtered.length : result.total, success: true } : { data: [], total: 0, success: false }
+          }} />
       </>}
-      {tab === 'batches' && (!farmId ? <Alert type="warning" message="请先选择农场后查询批次等级" /> :
-        <ProTable<HarvestBatch> key={`${subjectId}:${farmId}`} rowKey="batchId" columns={columns}
-          params={{ subjectId, farmId }} columnWidthStorageKey="quality-batch-grades"
-          scroll={SCROLL_BY_CONTENT} search={false} options={{ reload: true, density: true, setting: true }}
+      {tab === 'batches' && (!farmId ? <Alert type="warning" message="请先选择农场后查询批次等级" /> : <>
+        <Card className="production-dense-filter-card">
+          <div className="production-filter-grid">
+            <div className="production-filter-field">
+              <label>关键字</label>
+              <Input allowClear placeholder="批次号 / 作物 / 地块 / 检测单号" value={draftBatchKeyword} onChange={e => setDraftBatchKeyword(e.target.value)} onPressEnter={handleBatchSearch} />
+            </div>
+            <div className="production-filter-field">
+              <label>批次等级</label>
+              <Select allowClear placeholder="全部等级" value={draftBatchGrade} onChange={setDraftBatchGrade} options={['特级', '一级', '二级', 'A', 'B', 'C', 'D'].map(v => ({ value: v, label: v }))} />
+            </div>
+            <div className="production-filter-actions">
+              <Button onClick={handleBatchReset}>重置</Button>
+              <Button type="primary" onClick={handleBatchSearch}>查询</Button>
+            </div>
+          </div>
+        </Card>
+        <ProTable<HarvestBatch> memberListToolbar key={`${subjectId}:${farmId}`} rowKey="batchId" columns={columns}
+          params={{ subjectId, farmId, batchKeyword, batchGrade }} columnWidthStorageKey="quality-batch-grades"
+          rowSelection={{ selectedRowKeys: selectedBatchKeys, onChange: setSelectedBatchKeys }}
+          scroll={SCROLL_BY_CONTENT} search={false} options={{ reload: true }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           request={async p => {
             const result = await listHarvests({ farmId, pageNum: p.current ?? 1, pageSize: p.pageSize ?? 20 })
-            return { data: result.list, total: result.total, success: true }
-          }} />)}
+            const kw = batchKeyword.trim().toLowerCase()
+            const filtered = result.list.filter(row => {
+              if (batchGrade && row.grade !== batchGrade) return false
+              if (kw) {
+                const hay = `${row.batchNo ?? ''} ${row.cropName ?? ''} ${row.plotName ?? ''} ${row.inspectionNo ?? ''}`.toLowerCase()
+                if (!hay.includes(kw)) return false
+              }
+              return true
+            })
+            return { data: filtered, total: kw || batchGrade ? filtered.length : result.total, success: true }
+          }} />
+      </>)}
     </Space>
     <Modal className="production-form-dialog" title="申请正式等级复核" open={open} confirmLoading={busy} okButtonProps={{ disabled: selectionBusy || !!selectionError || !selectedTicket || !selectedInspection }} onCancel={() => { if (!busy) setOpen(false) }} onOk={() => void save(false)}>
       <Form form={form} layout="vertical">

@@ -1,6 +1,9 @@
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
 import Card from '@/components/SectionCard'
 import '@/pages/user/quality/quality-trace.css'
+import ListRowActions from '@/components/ListRowActions'
 import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：加工记录
@@ -15,6 +18,7 @@ import ProTable from '@/components/ProductionTable'
  *   种植（地块品种台账）→ 采收（本模块批次）→ **加工（本页登记）** → 质检 → 仓储 → 溯源码
  */
 import { useMemo, useState } from 'react'
+import type { Key } from 'react'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
@@ -75,6 +79,14 @@ export default function ProcessRecordManage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [batchNo, setBatchNo] = useState<string>('')
+  const [draftBatchNo, setDraftBatchNo] = useState<string>('')
+  const [draftProcessType, setDraftProcessType] = useState<string | undefined>(undefined)
+  const [draftStatus, setDraftStatus] = useState<string | undefined>(undefined)
+  const [draftKeyword, setDraftKeyword] = useState<string>('')
+  const [processTypeFilter, setProcessTypeFilter] = useState<string | undefined>(undefined)
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined)
+  const [keywordFilter, setKeywordFilter] = useState<string>('')
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
   const [editing, setEditing] = useState<ProcessRecord | null>(null)
   const [creating, setCreating] = useState(false)
   const [form] = Form.useForm<ProcessFormValues>()
@@ -95,12 +107,44 @@ export default function ProcessRecordManage() {
   )
 
   const activeBatch = batchNo || batchOptions[0]?.value || ''
+  const selectedDraftBatch = draftBatchNo || activeBatch
 
   const records = useQuery({
     queryKey: ['process-records', activeBatch],
     queryFn: () => listProcessByBatch(activeBatch),
     enabled: !!activeBatch,
   })
+
+  const filteredRecords = useMemo(() => {
+    const kw = keywordFilter.trim().toLowerCase()
+    return (records.data ?? []).filter((row) => {
+      if (processTypeFilter && row.processType !== processTypeFilter) return false
+      if (statusFilter && row.status !== statusFilter) return false
+      if (kw) {
+        const hay = `${row.processCode ?? ''} ${row.processName ?? ''} ${row.location ?? ''} ${row.operatorName ?? ''}`.toLowerCase()
+        if (!hay.includes(kw)) return false
+      }
+      return true
+    })
+  }, [records.data, processTypeFilter, statusFilter, keywordFilter])
+
+  const handleSearch = () => {
+    setBatchNo(selectedDraftBatch)
+    setProcessTypeFilter(draftProcessType)
+    setStatusFilter(draftStatus)
+    setKeywordFilter(draftKeyword.trim())
+  }
+
+  const handleReset = () => {
+    setDraftBatchNo('')
+    setDraftProcessType(undefined)
+    setDraftStatus(undefined)
+    setDraftKeyword('')
+    setBatchNo('')
+    setProcessTypeFilter(undefined)
+    setStatusFilter(undefined)
+    setKeywordFilter('')
+  }
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['process-records'] })
 
@@ -195,52 +239,93 @@ export default function ProcessRecordManage() {
       title: '操作',
       fixed: 'right',
       dataIndex: 'action',
+      valueType: 'option',
       width: 130,
       render: (_, row) => (
-        <Space size={4}>
-          <Button size="small" type="link" onClick={() => openForm(row)}>编辑</Button>
-          <Popconfirm title="删除该加工记录？" onConfirm={() => remove.mutate(row.id)}>
+        <ListRowActions>
+          <Button key="edit" size="small" type="link" onClick={() => openForm(row)}>编辑</Button>
+          <Popconfirm key="delete" title="删除该加工记录？" onConfirm={() => remove.mutate(row.id)}>
             <Button size="small" type="link" danger>删除</Button>
           </Popconfirm>
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
 
   return (
-    <PageContainer className="quality-trace-page"
+    <PageContainer className="quality-trace-page production-list-dense production-member-list"
       header={{ title: '加工记录', onBack: undefined }}
-      extra={[
-        <Button key="chain" onClick={() => navigate('/production/trace/full-chain')}>查看全链路</Button>,
-        <Button key="new" type="primary" onClick={() => openForm(null)} disabled={!activeBatch}>登记加工工序</Button>,
-      ]}
     >
-      <Card style={{ marginBottom: 16 }}><Space wrap>
-        <span>采收批次</span>
-        <Select
-          style={{ minWidth: 320 }}
-          placeholder={batches.isLoading ? '加载中…' : '选择批次'}
-          loading={batches.isLoading}
-          value={activeBatch || undefined}
-          options={batchOptions}
-          onChange={(value) => setBatchNo(value)}
-          showSearch
-        />
+      <Card className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>采收批次</label>
+            <Select
+              placeholder={batches.isLoading ? '加载中…' : '选择批次'}
+              loading={batches.isLoading}
+              value={selectedDraftBatch || undefined}
+              options={batchOptions}
+              onChange={(value) => setDraftBatchNo(value)}
+              showSearch
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>加工类型</label>
+            <Select
+              allowClear
+              placeholder="全部类型"
+              value={draftProcessType}
+              options={PROCESS_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+              onChange={setDraftProcessType}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>状态</label>
+            <Select
+              allowClear
+              placeholder="全部状态"
+              value={draftStatus}
+              options={PROCESS_STATUS.map((s) => ({ value: s.value, label: s.label }))}
+              onChange={setDraftStatus}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>关键字</label>
+            <Input
+              allowClear
+              placeholder="加工单号 / 工序 / 场地 / 操作人"
+              value={draftKeyword}
+              onChange={(e) => setDraftKeyword(e.target.value)}
+              onPressEnter={handleSearch}
+            />
+          </div>
+          <div className="production-filter-actions">
+            <Button onClick={handleReset}>重置</Button>
+            <Button type="primary" onClick={handleSearch}>查询</Button>
+          </div>
+        </div>
         {!activeBatch && !batches.isLoading && (
-          <span style={{ color: '#c54b4b' }}>
+          <div style={{ color: '#c54b4b', marginTop: 8, fontSize: 12 }}>
             本主体名下没有采收批次：请先到「采收管理」登记批次，加工工序必须挂在真实批次上。
-          </span>
+          </div>
         )}
-      </Space></Card>
+      </Card>
 
       <ProTable<ProcessRecord>
+        memberListToolbar
+        columnWidthStorageKey="process-record-manage"
         rowKey="id"
         search={false}
-        pagination={false}
-        toolBarRender={false}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+        options={{ reload: () => { void refresh() } }}
+        toolBarRender={() => [
+          <Button key="new" type="primary" onClick={() => openForm(null)} disabled={!activeBatch}>登记加工工序</Button>,
+          <Button key="chain" onClick={() => navigate('/production/trace/full-chain')}>查看全链路</Button>,
+        ]}
         loading={records.isFetching}
         columns={columns}
-        dataSource={records.data ?? []}
+        dataSource={filteredRecords}
         locale={{
           emptyText: activeBatch
             ? '该批次还没有登记加工工序（消费者详情页的加工环节因此为空，链路照实只显示到采收）'

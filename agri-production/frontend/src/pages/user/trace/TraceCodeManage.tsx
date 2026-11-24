@@ -1,4 +1,6 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import '@/pages/user/quality/quality-trace.css'
 import Card from '@/components/SectionCard'
 import ProTable from '@/components/ProductionTable'
@@ -26,17 +28,14 @@ import type { ProColumns } from '@ant-design/pro-components'
 import {
   AutoComplete,
   Button,
-  Col,
   DatePicker,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
-  Row,
   Select,
   Space,
-  Statistic,
   Tag,
   Tooltip,
   Typography,
@@ -46,7 +45,6 @@ import type { Dayjs } from 'dayjs'
 import {
   ExportOutlined,
   PlusOutlined,
-  ReloadOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -199,7 +197,7 @@ export default function TraceCodeManage(): JSX.Element {
   const farmId = currentFarm?.farmId
 
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [filters, setFilters] = useState<CodeFilters>({})
   const [filterForm] = Form.useForm<CodeFilters>()
 
@@ -499,8 +497,14 @@ export default function TraceCodeManage(): JSX.Element {
       title: '溯源码',
       dataIndex: 'code',
       width: 220,
+      ellipsis: true,
       render: (_, record) => (
-        <Typography.Text copyable code>
+        <Typography.Text
+          copyable={{ text: record.code }}
+          code
+          className="production-dense-link-ellipsis"
+          title={record.code}
+        >
           {record.code}
         </Typography.Text>
       ),
@@ -509,6 +513,7 @@ export default function TraceCodeManage(): JSX.Element {
       title: '关联产品',
       key: 'productName',
       width: 150,
+      ellipsis: true,
       render: (_, record) =>
         record.productName ?? (record.batchId ? (record.batchNo ?? '-') : <Tag>待分配</Tag>),
     },
@@ -516,9 +521,11 @@ export default function TraceCodeManage(): JSX.Element {
       title: '农场/地块',
       key: 'farmPlot',
       width: 170,
+      ellipsis: true,
       render: (_, record) => {
         const farm = record.farmName ?? currentFarm?.farmName ?? '-'
-        return record.plotName ? `${farm}/${record.plotName}` : farm
+        const text = record.plotName ? `${farm}/${record.plotName}` : farm
+        return <span className="production-dense-link-ellipsis" title={text}>{text}</span>
       },
     },
     {
@@ -596,54 +603,56 @@ export default function TraceCodeManage(): JSX.Element {
       title: '操作',
       fixed: 'right',
       key: 'option',
-      width: 230,
+      width: 160,
       valueType: 'option',
       render: (_, record) => {
         const status = normalizeStatus(record.status)
         const canChain = Boolean(record.batchId)
-        return [
-          canChain ? (
-            <Typography.Link
-              key="chain"
-              onClick={() =>
-                navigate(
-                  `/production/trace/full-chain?batchId=${encodeURIComponent(String(record.batchId))}&code=${encodeURIComponent(record.code)}`,
-                )
-              }
-            >
-              全链路→
-            </Typography.Link>
-          ) : (
-            <Typography.Text key="chain-disabled" type="secondary">
-              未关联批次
-            </Typography.Text>
-          ),
-          status === 'generated' ? (
-            <Typography.Link
-              key="activate"
-              onClick={() => activateMutation.mutate([record.code])}
-            >
-              激活
-            </Typography.Link>
-          ) : null,
-          status === 'activated' || status === 'scanned' ? (
-            <Typography.Link key="scan" onClick={() => scanMutation.mutate(record.code)}>
-              模拟扫码
-            </Typography.Link>
-          ) : null,
-          status === 'expired' ? null : (
-            <Popconfirm
-              key="revoke"
-              title="确认作废该溯源码？"
-              description="作废后消费者扫码将提示已失效，不可恢复。"
-              okText="确认作废"
-              cancelText="取消"
-              onConfirm={() => revokeMutation.mutate([record.code])}
-            >
-              <Typography.Link type="danger">作废</Typography.Link>
-            </Popconfirm>
-          ),
-        ].filter(Boolean)
+        return (
+          <ListRowActions>
+            {canChain ? (
+              <Typography.Link
+                key="chain"
+                onClick={() =>
+                  navigate(
+                    `/production/trace/full-chain?batchId=${encodeURIComponent(String(record.batchId))}&code=${encodeURIComponent(record.code)}`,
+                  )
+                }
+              >
+                全链路→
+              </Typography.Link>
+            ) : (
+              <Typography.Text key="chain-disabled" type="secondary">
+                未关联批次
+              </Typography.Text>
+            )}
+            {status === 'generated' ? (
+              <Typography.Link
+                key="activate"
+                onClick={() => activateMutation.mutate([record.code])}
+              >
+                激活
+              </Typography.Link>
+            ) : null}
+            {status === 'activated' || status === 'scanned' ? (
+              <Typography.Link key="scan" onClick={() => scanMutation.mutate(record.code)}>
+                模拟扫码
+              </Typography.Link>
+            ) : null}
+            {status === 'expired' ? null : (
+              <Popconfirm
+                key="revoke"
+                title="确认作废该溯源码？"
+                description="作废后消费者扫码将提示已失效，不可恢复。"
+                okText="确认作废"
+                cancelText="取消"
+                onConfirm={() => revokeMutation.mutate([record.code])}
+              >
+                <Typography.Link type="danger">作废</Typography.Link>
+              </Popconfirm>
+            )}
+          </ListRowActions>
+        )
       },
     },
   ]
@@ -656,76 +665,42 @@ export default function TraceCodeManage(): JSX.Element {
     generatedQuery.isFetching
 
   return (
-    <PageContainer className="quality-trace-page"
+    <PageContainer
+      className="quality-trace-page production-list-dense production-member-list"
       title="单品码管理"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
-      extra={[
-        <Button
-          key="single"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => openGenerate('single')}
-        >
-          + 生成溯源码
-        </Button>,
-        <Button key="batch" icon={<ThunderboltOutlined />} onClick={() => openGenerate('batch')}>
-          批量生成
-        </Button>,
-        <Button
-          key="reload"
-          icon={<ReloadOutlined />}
-          onClick={() => {
-            void invalidateAll()
-          }}
-        >
-          刷新
-        </Button>,
-      ]}
     >
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col span={6}>
-          <Card loading={statsLoading}>
-            <Statistic title="溯源码总量" value={totalQuery.data?.total ?? 0} suffix="个" />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card loading={statsLoading}>
-            <Statistic
-              title="已激活"
-              value={activatedQuery.data?.total ?? 0}
-              suffix="个"
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card loading={statsLoading}>
-            <Statistic
-              title="已扫码（消费者扫码次数）"
-              value={scannedQuery.data?.total ?? 0}
-              suffix="个"
-              valueStyle={{ color: '#1677ff' }}
-            />
-            <Typography.Text type="secondary">
-              当前页累计扫码 {totalScanCount} 次
-            </Typography.Text>
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card loading={statsLoading}>
-            <Statistic title="待分配" value={generatedQuery.data?.total ?? 0} suffix="个" />
-          </Card>
-        </Col>
-      </Row>
+      <div className="production-dense-summary" aria-busy={statsLoading}>
+        <div className="production-dense-summary-items">
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">溯源码总量</span>
+            <span className="production-dense-metric-value">{totalQuery.data?.total ?? 0} 个</span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">已激活</span>
+            <span className="production-dense-metric-value is-success">{activatedQuery.data?.total ?? 0} 个</span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">已扫码</span>
+            <span className="production-dense-metric-value">{scannedQuery.data?.total ?? 0} 个</span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">待分配</span>
+            <span className="production-dense-metric-value">{generatedQuery.data?.total ?? 0} 个</span>
+          </span>
+        </div>
+        <span className="production-dense-summary-note">
+          当前页累计扫码 {totalScanCount} 次
+        </span>
+      </div>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+      <Card className="production-dense-filter-card">
+        <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
           <Form.Item name="status" label="状态">
             <Select
               allowClear
               placeholder="全部状态"
               options={STATUS_OPTIONS}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="farmId" label="农场">
@@ -736,33 +711,35 @@ export default function TraceCodeManage(): JSX.Element {
                 value: farm.farmId,
                 label: farm.farmName,
               }))}
-              style={{ width: 160 }}
             />
           </Form.Item>
           <Form.Item name="keyword" label="关键字">
-            <Input allowClear placeholder="搜索溯源码 / 批次号 / 产品" style={{ width: 220 }} />
+            <Input allowClear placeholder="搜索溯源码 / 批次号 / 产品" />
           </Form.Item>
           <Form.Item name="chain" label="链上状态">
-            <Select allowClear placeholder="全部" options={CHAIN_OPTIONS} style={{ width: 170 }} />
+            <Select allowClear placeholder="全部" options={CHAIN_OPTIONS} />
           </Form.Item>
           <Form.Item name="expiry" label="有效期">
-            <Select allowClear placeholder="全部" options={EXPIRY_OPTIONS} style={{ width: 150 }} />
+            <Select allowClear placeholder="全部" options={EXPIRY_OPTIONS} />
           </Form.Item>
           <Form.Item name="dateRange" label="生成日期">
-            <DatePicker.RangePicker placeholder={['生成起', '生成止']} style={{ width: 240 }} />
+            <DatePicker.RangePicker placeholder={['生成起', '生成止']} />
           </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
+          <Form.Item className="production-filter-actions">
+            <Space size={8}>
+              <Button onClick={handleReset}>重置</Button>
+              <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
-              <Button onClick={handleReset}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
       </Card>
 
       <ProTable<RawTraceCode>
+        memberListToolbar
+        headerTitle={false}
+        tableAlertRender={false}
         rowKey="code"
         size="small"
         columns={columns}
@@ -792,29 +769,44 @@ export default function TraceCodeManage(): JSX.Element {
             setPageSize(nextSize)
           },
         }}
-        toolBarRender={() => [
-          <Button
-            key="batch-activate"
-            type="primary"
-            disabled={selectedKeys.length === 0}
-            loading={activateMutation.isPending}
-            onClick={() => activateMutation.mutate(selectedKeys)}
-          >
-            批量激活（{selectedKeys.length}）
-          </Button>,
-          <Button
-            key="batch-revoke"
-            danger
-            disabled={selectedKeys.length === 0}
-            loading={revokeMutation.isPending}
-            onClick={() => revokeMutation.mutate(selectedKeys)}
-          >
-            批量作废（{selectedKeys.length}）
-          </Button>,
-          <Button key="export" icon={<ExportOutlined />} loading={exporting} onClick={() => void handleExport()}>
-            导出
-          </Button>,
-        ]}
+        toolbar={{
+          title: (
+            <Space size={8} wrap>
+              <Button
+                key="single"
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => openGenerate('single')}
+              >
+                生成溯源码
+              </Button>
+              <Button key="batch" icon={<ThunderboltOutlined />} onClick={() => openGenerate('batch')}>
+                批量生成
+              </Button>
+              <Button
+                key="batch-activate"
+                disabled={selectedKeys.length === 0}
+                loading={activateMutation.isPending}
+                onClick={() => activateMutation.mutate(selectedKeys)}
+              >
+                批量激活（{selectedKeys.length}）
+              </Button>
+              <Button
+                key="batch-revoke"
+                danger
+                disabled={selectedKeys.length === 0}
+                loading={revokeMutation.isPending}
+                onClick={() => revokeMutation.mutate(selectedKeys)}
+              >
+                批量作废（{selectedKeys.length}）
+              </Button>
+              <Button key="export" icon={<ExportOutlined />} loading={exporting} onClick={() => void handleExport()}>
+                导出
+              </Button>
+            </Space>
+          ),
+        }}
+        toolBarRender={false}
       />
 
       <Modal className="production-form-dialog quality-trace-dialog"

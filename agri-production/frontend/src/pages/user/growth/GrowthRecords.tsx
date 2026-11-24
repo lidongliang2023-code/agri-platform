@@ -1,5 +1,9 @@
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
 import Table from '@/components/BusinessRecordList'
+import ListRowActions from '@/components/ListRowActions'
+import PageContainer from '@/components/ProductionPageContainer'
 /**
  * 页面名称：生长记录
  * 路由路径：/production/growth/records
@@ -13,6 +17,7 @@ import Table from '@/components/BusinessRecordList'
  * - 照片录入：后端 photos 为字符串字段，表单用「每行一个地址」的文本域录入
  */
 import { useEffect, useMemo, useState } from 'react'
+import type { Key } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -38,7 +43,7 @@ import {
   message,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
@@ -138,11 +143,16 @@ export default function GrowthRecords(): JSX.Element {
   const presetPlotId = searchParams.get('plotId') ?? undefined
   /** 分页 */
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
-  /** 筛选条件 */
+  const [pageSize, setPageSize] = useState<number>(20)
+  /** 筛选条件（草稿与已生效） */
+  const [draftPlotFilter, setDraftPlotFilter] = useState<string | undefined>(presetPlotId)
+  const [draftStageFilter, setDraftStageFilter] = useState<string | undefined>(undefined)
+  const [draftDateRange, setDraftDateRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [plotFilter, setPlotFilter] = useState<string | undefined>(presetPlotId)
   const [stageFilter, setStageFilter] = useState<string | undefined>(undefined)
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs] | null>(null)
+  /** 行勾选 */
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
   /** 新增 / 编辑弹窗 */
   const [editing, setEditing] = useState<GrowthRecord | null>(null)
   const [modalOpen, setModalOpen] = useState<boolean>(false)
@@ -306,6 +316,29 @@ export default function GrowthRecords(): JSX.Element {
   }, [presetPlotId, searchParams, form])
 
   /** 打开编辑弹窗 */
+  const handleSearch = (): void => {
+    setPlotFilter(draftPlotFilter)
+    setStageFilter(draftStageFilter)
+    setDateRange(draftDateRange)
+    setPageNum(1)
+  }
+
+  const handleReset = (): void => {
+    setDraftPlotFilter(undefined)
+    setDraftStageFilter(undefined)
+    setDraftDateRange(null)
+    setPlotFilter(undefined)
+    setStageFilter(undefined)
+    setDateRange(null)
+    setPageNum(1)
+  }
+
+  const handleReload = (): Promise<void> =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['growth-records'] }),
+      queryClient.invalidateQueries({ queryKey: ['growth-records-wall'] }),
+    ]).then(() => undefined)
+
   const openEdit = (record: GrowthRecord): void => {
     setEditing(record)
     form.setFieldsValue({
@@ -390,12 +423,15 @@ export default function GrowthRecords(): JSX.Element {
     {
       title: '操作',
       key: 'action',
+      fixed: 'right',
+      width: 140,
       render: (_value: unknown, row: GrowthRecord) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
+        <ListRowActions>
+          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
             编辑
           </Button>
           <Popconfirm
+            key="delete"
             title="确认删除该生长记录？"
             okText="删除"
             cancelText="取消"
@@ -405,7 +441,7 @@ export default function GrowthRecords(): JSX.Element {
               删除
             </Button>
           </Popconfirm>
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
@@ -436,75 +472,64 @@ export default function GrowthRecords(): JSX.Element {
   }, [recordA, recordB])
 
   return (
-    <div style={{ padding: 24 }}>
-      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
-          🌱 生长记录
-        </Typography.Title>
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: ['growth-records'] })
-              void queryClient.invalidateQueries({ queryKey: ['growth-records-wall'] })
-            }}
-          >
-            刷新
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新增记录
-          </Button>
-        </Space>
-      </Row>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap size={12}>
-          <Select
-            allowClear
-            style={{ width: 180 }}
-            placeholder="全部地块"
-            value={plotFilter}
-            options={plots.map((item) => ({ value: item.plotId, label: item.plotName }))}
-            onChange={(value) => {
-              setPlotFilter(value)
-              setPageNum(1)
-            }}
-          />
-          <Select
-            allowClear
-            style={{ width: 160 }}
-            placeholder="全部阶段"
-            value={stageFilter}
-            options={STAGE_OPTIONS.map((stage) => ({ value: stage, label: stage }))}
-            onChange={(value) => {
-              setStageFilter(value)
-              setPageNum(1)
-            }}
-          />
-          <DatePicker.RangePicker
-            value={dateRange}
-            onChange={(value) => {
-              setDateRange(value as [Dayjs, Dayjs] | null)
-              setPageNum(1)
-            }}
-          />
-          <Segmented
-            value={view}
-            onChange={(value) => setView(value as ViewMode)}
-            options={[
-              { label: '列表', value: 'table' },
-              { label: '照片墙', value: 'wall' },
-              { label: '长势对比', value: 'compare' },
-            ]}
-          />
-        </Space>
+    <PageContainer
+      className="production-list-dense production-member-list"
+      title="生长记录"
+      subTitle="作物生育期打卡、现场照片墙与跨时期长势对比"
+      extra={
+        <Segmented
+          value={view}
+          onChange={(value) => setView(value as ViewMode)}
+          options={[
+            { label: '列表', value: 'table' },
+            { label: '照片墙', value: 'wall' },
+            { label: '长势对比', value: 'compare' },
+          ]}
+        />
+      }
+    >
+      <Card className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>地块</label>
+            <Select
+              allowClear
+              placeholder="全部地块"
+              value={draftPlotFilter}
+              options={plots.map((item) => ({ value: item.plotId, label: item.plotName }))}
+              onChange={setDraftPlotFilter}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>生育期</label>
+            <Select
+              allowClear
+              placeholder="全部阶段"
+              value={draftStageFilter}
+              options={STAGE_OPTIONS.map((stage) => ({ value: stage, label: stage }))}
+              onChange={setDraftStageFilter}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>记录日期</label>
+            <DatePicker.RangePicker
+              style={{ width: '100%' }}
+              value={draftDateRange}
+              onChange={(value) => setDraftDateRange(value as [Dayjs, Dayjs] | null)}
+            />
+          </div>
+          <div className="production-filter-actions">
+            <Button onClick={handleReset}>重置</Button>
+            <Button type="primary" onClick={handleSearch}>查询</Button>
+          </div>
+        </div>
       </Card>
 
       {recordsQuery.isError && (
         <Alert
           type="error"
           showIcon
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 12 }}
           message="生长记录加载失败"
           description={(recordsQuery.error as Error)?.message ?? '请稍后重试'}
         />
@@ -513,17 +538,26 @@ export default function GrowthRecords(): JSX.Element {
       {view === 'table' && (
         <Card>
           <Table<GrowthRecord>
+            memberListToolbar
+            columnWidthStorageKey="growth-records"
             rowKey="recordId"
             loading={recordsQuery.isLoading}
             dataSource={records}
             columns={columns}
+            onReload={handleReload}
+            rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+            toolbarTitle={
+              <Space size={8} wrap>
+                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                  新增记录
+                </Button>
+              </Space>
+            }
             locale={{ emptyText: <Empty description="暂无生长记录，点击「新增记录」开始打卡" /> }}
             pagination={{
               current: pageNum,
               pageSize,
               total,
-              showSizeChanger: true,
-              showTotal: (value) => `共 ${value} 条`,
               onChange: (page, size) => {
                 setPageNum(page)
                 setPageSize(size)
@@ -768,6 +802,6 @@ export default function GrowthRecords(): JSX.Element {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </PageContainer>
   )
 }

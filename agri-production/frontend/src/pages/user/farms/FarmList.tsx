@@ -1,4 +1,7 @@
+import ProductionPagination from '@/components/ProductionPagination'
+import { Popover as ListSummary } from 'antd'
 import Card from '@/components/SectionCard'
+import '@/components/ProductionListDense.css'
 /**
  * 页面名称：农场列表
  * 路由路径：/production/farms
@@ -7,7 +10,7 @@ import Card from '@/components/SectionCard'
  * 原型来源：用户端原型 P1 farms
  *
  * 还原要点（对照原型 P1）：
- * - 标题「🏠 农场管理」，右上角操作 `+ 新建农场`、`📥 导入`
+ * - 标题「农场管理」，右上角操作 `+ 新建农场`、`导入`
  * - 筛选器：搜索农场名称/编号、全部状态（运营中 / 已停用）、全部类型（六种业务类型）
  * - 统计条：共 N 个农场（并补充总面积 / 运营中 / 地块总数）
  * - **卡片视图**：每张卡含 🌾 农场名、状态标签、★默认标签、
@@ -40,7 +43,6 @@ import {
   Form,
   Input,
   Modal,
-  Pagination,
   Row,
   Select,
   Segmented,
@@ -51,7 +53,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { deleteFarm, getFarmSummary, listFarms, updateFarmStatus } from '@/api/farms'
-import { DetailInfoGrid, DetailMetricGrid } from '@/components'
+import { DetailInfoGrid } from '@/components'
 import BusinessRecordList from '@/components/BusinessRecordList'
 import FarmImportModal from './FarmImportModal'
 import { listAlerts } from '@/api/alerts'
@@ -161,7 +163,7 @@ export default function FarmList(): JSX.Element {
 
   const [viewMode, setViewMode] = useState<'list' | 'card'>('list')
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(9)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [filters, setFilters] = useState<FilterValues>({})
   const [filterForm] = Form.useForm<FilterValues>()
   /** 导入弹窗开关 */
@@ -171,8 +173,7 @@ export default function FarmList(): JSX.Element {
     queryKey: ['farms', filters, pageNum, pageSize],
     queryFn: () =>
       listFarms({
-        keyword: filters.keyword,
-        farmName: filters.keyword,
+        keyword: filters.keyword?.trim() || undefined,
         status: filters.status,
         pageNum,
         pageSize,
@@ -320,6 +321,9 @@ export default function FarmList(): JSX.Element {
   /** 更多下拉：统一分发 */
   const handleMoreAction = (key: string, farm: Farm): void => {
     switch (key) {
+      case 'monitor':
+        navigate(`/production/monitor?farmId=${farm.farmId}`)
+        break
       case 'default':
         handleSwitchFarm(farm)
         break
@@ -345,6 +349,7 @@ export default function FarmList(): JSX.Element {
 
   /** 构建卡片「更多」菜单 */
   const buildMenuItems = (farm: Farm): MenuProps['items'] => [
+    { key: 'monitor', label: '生产监控' },
     { key: 'default', label: '设为默认农场' },
     { key: 'plots', label: '查看地块' },
     { key: 'plot-create', label: '新增地块' },
@@ -372,43 +377,38 @@ export default function FarmList(): JSX.Element {
   /** 列表与卡片共用数据源和操作，切换不重置筛选与分页。 */
   const farmColumns: ColumnsType<Farm> = [
     {
-      title: '农场名称 / 编号', key: 'name', width: 230, fixed: 'left',
+      title: '农场名称', key: 'name', width: 210, fixed: 'left', ellipsis: true,
       render: (_, farm) => (
-        <Space direction="vertical" size={2}>
-          <Space size={6} wrap>
-            <Typography.Link onClick={() => navigate(`/production/farms/${farm.farmId}`)}>
-              {farm.farmName}
-            </Typography.Link>
-            {currentFarm?.farmId === farm.farmId && <Tag color="gold">★ 默认</Tag>}
-          </Space>
-          <Typography.Text type="secondary">{farm.farmCode || '—'}</Typography.Text>
-        </Space>
+        <span className="production-dense-name-wrap">
+          <Typography.Link title={farm.farmName} onClick={() => navigate(`/production/farms/${farm.farmId}`)}>
+            {farm.farmName}
+          </Typography.Link>
+          {currentFarm?.farmId === farm.farmId && <Tag color="gold">★ 默认</Tag>}
+        </span>
       ),
     },
-    { title: '状态', key: 'status', width: 100, render: (_, farm) => {
+    { title: '农场编号', dataIndex: 'farmCode', key: 'code', width: 150, ellipsis: true, render: (value) => value || '—' },
+    { title: '状态', key: 'status', width: 96, render: (_, farm) => {
       const meta = FARM_STATUS_META[farm.status] ?? { label: '未知', color: 'default' }
       return <Tag color={meta.color}>{meta.label}</Tag>
     } },
-    { title: '类型', key: 'type', width: 120, render: (_, farm) => resolveFarmTypeLabel(farm) },
-    { title: '所在地区', key: 'region', width: 220, render: (_, farm) =>
-      [farm.province, farm.city, farm.district].filter(Boolean).join(' · ') || '—' },
-    { title: '面积（亩）', key: 'area', width: 120, render: (_, farm) => formatArea(farm.areaTotal) },
-    { title: '地块数', key: 'plots', width: 90, render: (_, farm) =>
+    { title: '类型', key: 'type', width: 110, ellipsis: true, render: (_, farm) => resolveFarmTypeLabel(farm) },
+    { title: '所在地区', key: 'region', width: 200, ellipsis: true, render: (_, farm) => {
+      const region = [farm.province, farm.city, farm.district].filter(Boolean).join(' · ') || '—'
+      return <span className="production-dense-link-ellipsis" title={region}>{region}</span>
+    } },
+    { title: '面积（亩）', key: 'area', width: 112, ellipsis: true, render: (_, farm) => formatArea(farm.areaTotal) },
+    { title: '地块数', key: 'plots', width: 84, render: (_, farm) =>
       summaryResults[pageFarmIds.indexOf(farm.farmId)]?.data ? summaryMap[farm.farmId]?.plotCount ?? 0 : '—' },
-    { title: '任务总数', key: 'tasks', width: 100, render: (_, farm) =>
+    { title: '任务总数', key: 'tasks', width: 92, render: (_, farm) =>
       taskResults[pageFarmIds.indexOf(farm.farmId)]?.data ? taskCountMap[farm.farmId] ?? 0 : '—' },
-    { title: '告警总数', key: 'alerts', width: 100, render: (_, farm) =>
+    { title: '告警总数', key: 'alerts', width: 92, render: (_, farm) =>
       alertResults[pageFarmIds.indexOf(farm.farmId)]?.data ? alertCountMap[farm.farmId] ?? 0 : '—' },
-    { title: '负责人 / 联系电话', key: 'manager', width: 180, render: (_, farm) => (
-      <Space direction="vertical" size={2}>
-        <span>{farm.managerName || '—'}</span>
-        <Typography.Text type="secondary">{farm.managerPhone || '—'}</Typography.Text>
-      </Space>
-    ) },
-    { title: '操作', key: 'actions', width: 240, fixed: 'right', render: (_, farm) => (
-      <Space size={12}>
+    { title: '负责人', dataIndex: 'managerName', key: 'managerName', width: 100, ellipsis: true, render: (value) => value || '—' },
+    { title: '联系电话', dataIndex: 'managerPhone', key: 'managerPhone', width: 132, ellipsis: true, render: (value) => value || '—' },
+    { title: '操作', key: 'actions', width: 210, fixed: 'right', render: (_, farm) => (
+      <Space size={10}>
         <Typography.Link onClick={() => navigate(`/production/farms/${farm.farmId}`)}>查看详情</Typography.Link>
-        <Typography.Link onClick={() => navigate(`/production/monitor?farmId=${farm.farmId}`)}>生产监控</Typography.Link>
         <Dropdown trigger={['click']} menu={{ items: buildMenuItems(farm), onClick: (info) => handleMoreAction(info.key, farm) }}>
           <Button type="link" size="small">更多 <DownOutlined /></Button>
         </Dropdown>
@@ -491,10 +491,61 @@ export default function FarmList(): JSX.Element {
   }
 
   /** 渲染内容区（加载 / 错误 / 空 / 卡片 / 列表） */
+  const [selected, setSelected] = useState<React.Key[]>([])
+  const listToolbar = (
+    <Space wrap size={8}>
+      {[
+        <Button key="import" icon={<ImportOutlined />} onClick={openImportModal}>
+          导入
+        </Button>,
+        <Button
+          key="create"
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => navigate('/production/farms/create')}
+        >
+          新建农场
+        </Button>,
+            ]}
+      <Segmented
+            aria-label="农场展示方式"
+            value={viewMode}
+            onChange={(value) => setViewMode(value as 'list' | 'card')}
+            options={[
+              { label: '列表', value: 'list', icon: <UnorderedListOutlined /> },
+              { label: '卡片', value: 'card', icon: <AppstoreOutlined /> },
+            ]}
+          />
+      <ListSummary trigger="click" content={<div className="production-dense-card-title">
+            <span className="production-dense-card-title-text">农场档案</span>
+            <span className="production-dense-summary-inline">
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">符合条件</span>
+                <span className="production-dense-metric-value">{listQuery.isError || !listQuery.data ? '—' : `${stats.total} 个`}</span>
+              </span>
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">当前页运营中</span>
+                <span className="production-dense-metric-value is-success">{listQuery.isError || !listQuery.data ? '—' : `${stats.activeCount} 个`}</span>
+              </span>
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">当前页面积</span>
+                <span className="production-dense-metric-value">{listQuery.isError || !listQuery.data ? '—' : `${stats.areaTotal.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} 亩`}</span>
+              </span>
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">当前页地块数</span>
+                <span className="production-dense-metric-value">{summaryResults.some(result => !result.data || result.isError) || !listQuery.data ? '—' : `${stats.plotCount} 个`}</span>
+              </span>
+            </span>
+          </div>}><Button>统计</Button></ListSummary>
+    </Space>
+  )
+
   const renderContent = (): JSX.Element => {
     if (viewMode === 'list' && !listQuery.isError) {
       return (
         <BusinessRecordList<Farm>
+          memberListToolbar
+          toolbarTitle={listToolbar}
           onReload={() => Promise.all([
             listQuery.refetch(),
             ...summaryResults.map((query) => query.refetch()),
@@ -502,6 +553,7 @@ export default function FarmList(): JSX.Element {
             ...alertResults.map((query) => query.refetch()),
           ])}
           rowKey="farmId"
+          rowSelection={{ selectedRowKeys: selected, onChange: setSelected }}
           columns={farmColumns}
           dataSource={filteredList}
           loading={listQuery.isLoading}
@@ -562,32 +614,20 @@ export default function FarmList(): JSX.Element {
 
   return (
     <PageContainer
-      title="🏠 农场管理"
+      className="production-list-dense production-member-list"
+      title="农场管理"
       subTitle={`共 ${stats.total} 个农场`}
-      extra={[
-        <Button key="import" icon={<ImportOutlined />} onClick={openImportModal}>
-          📥 导入
-        </Button>,
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/production/farms/create')}
-        >
-          新建农场
-        </Button>,
-      ]}
+
     >
-      <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+      <Card className="production-dense-filter-card">
+        <Form form={filterForm} className="production-dense-filter-bar production-filter-grid" onFinish={handleSearch}>
           <Form.Item name="keyword" label="搜索">
-            <Input allowClear placeholder="搜索农场名称/编号..." style={{ width: 200 }} />
+            <Input allowClear placeholder="搜索农场名称/编号..." />
           </Form.Item>
           <Form.Item name="status" label="状态">
             <Select
               allowClear
               placeholder="全部状态"
-              style={{ width: 130 }}
               options={[
                 { value: 1, label: '运营中' },
                 { value: 0, label: '已停用' },
@@ -598,54 +638,30 @@ export default function FarmList(): JSX.Element {
             <Select
               allowClear
               placeholder="全部类型"
-              style={{ width: 140 }}
               options={FARM_TYPE_BUSINESS_OPTIONS.map((label) => ({ value: label, label }))}
             />
           </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
-                搜索
-              </Button>
+          <Form.Item className="production-filter-actions">
+            <Space size={8}>
               <Button onClick={handleReset}>重置</Button>
+              <Button type="primary" htmlType="submit">
+                查询
+              </Button>
             </Space>
           </Form.Item>
         </Form>
       </Card>
+      <Card>
 
-      <div style={{ marginBottom: 16 }}>
-        <DetailMetricGrid items={[
-          { key: 'total', title: '符合检索条件的农场', value: listQuery.isError || !listQuery.data ? null : stats.total, suffix: '个' },
-          { key: 'active', title: '当前页运营中', value: listQuery.isError || !listQuery.data ? null : stats.activeCount, suffix: '个' },
-          { key: 'area', title: '当前页农场面积', value: listQuery.isError || !listQuery.data ? null : stats.areaTotal, suffix: '亩' },
-          { key: 'plots', title: '当前页地块数', value: summaryResults.some(result => !result.data || result.isError) || !listQuery.data ? null : stats.plotCount, suffix: '个' },
-        ]} />
-      </div>
-
-      <Card title="农场档案" extra={
-        <Space wrap>
-          <Typography.Text type="secondary">面积、运营数、地块数按当前页汇总</Typography.Text>
-          <Segmented
-            aria-label="农场展示方式"
-            value={viewMode}
-            onChange={(value) => setViewMode(value as 'list' | 'card')}
-            options={[
-              { label: '列表', value: 'list', icon: <UnorderedListOutlined /> },
-              { label: '卡片', value: 'card', icon: <AppstoreOutlined /> },
-            ]}
-          />
-        </Space>
-      }>
-
+        {(viewMode !== 'list' || listQuery.isError) && listToolbar}
         {renderContent()}
         {filteredList.length > 0 && (
-          <div style={{ marginTop: 16, textAlign: 'right' }}>
-            <Pagination
+          <div style={{ marginTop: 10 }}>
+            <ProductionPagination
+              selectedCount={viewMode === 'list' ? selected.length : 0}
               current={pageNum}
               pageSize={pageSize}
               total={listQuery.data?.total ?? 0}
-              showSizeChanger
-              pageSizeOptions={[6, 9, 12, 24]}
               onChange={(nextPage, nextSize) => {
                 setPageNum(nextPage)
                 setPageSize(nextSize)

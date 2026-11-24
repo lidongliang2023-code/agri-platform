@@ -1,4 +1,7 @@
 import Table from '@/components/BusinessRecordList'
+import PageContainer from '@/components/ProductionPageContainer'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
 /**
  * 页面名称：环境数据
  * 路由路径：/production/growth/environment
@@ -11,26 +14,23 @@ import Table from '@/components/BusinessRecordList'
  * 两条链路在前端统一归一为「指标点」后绘曲线，兼容后端命名差异（见 METRIC_ALIAS）。
  */
 import { useMemo, useState } from 'react'
+import type { Key } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Alert,
   Button,
   Card,
   Checkbox,
-  Col,
   DatePicker,
   Empty,
-  Row,
   Segmented,
   Select,
   Skeleton,
   Space,
-  Statistic,
-  Tag,
-  Typography,
+  Tooltip,
   message,
 } from 'antd'
-import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DownloadOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { EChartsOption } from 'echarts'
 import type { Dayjs } from 'dayjs'
@@ -136,20 +136,49 @@ export default function EnvironmentData(): JSX.Element {
   const { currentFarm } = useFarmStore()
   const farmId = currentFarm?.farmId
 
-  /** 地块筛选 */
+  /** 地块筛选（草稿与已生效） */
+  const [draftPlotId, setDraftPlotId] = useState<string | undefined>(undefined)
   const [plotId, setPlotId] = useState<string | undefined>(undefined)
   /** 设备筛选 */
+  const [draftDeviceId, setDraftDeviceId] = useState<string | undefined>(undefined)
   const [deviceId, setDeviceId] = useState<string | undefined>(undefined)
   /** 时间范围快捷选项 */
+  const [draftRangePreset, setDraftRangePreset] = useState<string>('7d')
   const [rangePreset, setRangePreset] = useState<string>('7d')
   /** 自定义时间范围 */
+  const [draftCustomRange, setDraftCustomRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null)
   /** 历史回溯日期（优先于快捷范围） */
+  const [draftBacktrackDate, setDraftBacktrackDate] = useState<Dayjs | null>(null)
   const [backtrackDate, setBacktrackDate] = useState<Dayjs | null>(null)
   /** 展示指标 */
   const [metrics, setMetrics] = useState<string[]>(DEFAULT_ENV_METRICS)
   /** 手动刷新计数 */
   const [refreshKey, setRefreshKey] = useState<number>(0)
+  /** 行勾选 */
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
+
+  const handleSearch = (): void => {
+    setPlotId(draftPlotId)
+    setDeviceId(draftDeviceId)
+    setRangePreset(draftRangePreset)
+    setCustomRange(draftCustomRange)
+    setBacktrackDate(draftBacktrackDate)
+  }
+
+  const handleReset = (): void => {
+    setDraftPlotId(undefined)
+    setDraftDeviceId(undefined)
+    setDraftRangePreset('7d')
+    setDraftCustomRange(null)
+    setDraftBacktrackDate(null)
+    setPlotId(undefined)
+    setDeviceId(undefined)
+    setRangePreset('7d')
+    setCustomRange(null)
+    setBacktrackDate(null)
+    setMetrics(DEFAULT_ENV_METRICS)
+  }
 
   /** 地块列表 */
   const plotsQuery = useQuery({
@@ -305,87 +334,113 @@ export default function EnvironmentData(): JSX.Element {
   const errorMessage = ((deviceId ? seriesQuery.error : envQuery.error) as Error | undefined)?.message
 
   return (
-    <div style={{ padding: 24 }}>
-      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
-          🌡️ 环境数据
-        </Typography.Title>
-        <Space>
-          <Button icon={<ReloadOutlined />} onClick={() => setRefreshKey((key) => key + 1)}>
-            刷新
-          </Button>
-          <Button
-            icon={<DownloadOutlined />}
-            disabled={tableRows.length === 0}
-            onClick={() => {
-              const rows = filteredPoints.filter((point) => metrics.includes(point.metric))
-              if (rows.length === 0) {
-                message.warning('当前筛选条件下暂无可导出数据')
-                return
-              }
-              exportCsv(rows, `环境数据_${dayjs().format('YYYYMMDDHHmmss')}.csv`)
-              message.success(`已导出 ${rows.length} 条环境数据`)
-            }}
-          >
-            导出CSV
-          </Button>
-        </Space>
-      </Row>
+    <PageContainer
+      className="production-list-dense production-member-list"
+      title="环境数据"
+      subTitle={
+        deviceId
+          ? `设备读数时序（设备 ${deviceId}）`
+          : plotId
+            ? '地块环境数据 /growth/environment'
+            : '全部地块环境数据 /growth/environment'
+      }
+      extra={
+        <Segmented
+          size="small"
+          value={draftRangePreset}
+          onChange={(value) => {
+            const next = String(value)
+            setDraftRangePreset(next)
+            setRangePreset(next)
+            setDraftCustomRange(null)
+            setCustomRange(null)
+            setDraftBacktrackDate(null)
+            setBacktrackDate(null)
+          }}
+          options={RANGE_PRESETS.map((item) => ({ label: item.label, value: item.value }))}
+        />
+      }
+    >
+      <div className="production-dense-summary">
+        <div className="production-dense-summary-items">
+          {ENV_METRIC_DEFS.map((def) => {
+            const point = latestMap.get(def.key)
+            return (
+              <Tooltip
+                key={def.key}
+                title={point ? `最近采集：${dayjs(point.time).format('YYYY-MM-DD HH:mm')}` : '暂无采集数据'}
+              >
+                <span className="production-dense-metric">
+                  <span className="production-dense-metric-label">{def.label}</span>
+                  <span className="production-dense-metric-value">
+                    {point ? `${Number(point.value.toFixed(1))}${def.unit}` : '—'}
+                  </span>
+                </span>
+              </Tooltip>
+            )
+          })}
+        </div>
+        {soilLow && (
+          <span className="production-dense-metric-chip">
+            土壤湿度 {soilPoint?.value}% 低于 {SOIL_LOW}%，建议灌溉
+          </span>
+        )}
+      </div>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap size={12}>
-          <Select
-            allowClear
-            style={{ width: 180 }}
-            placeholder="全部地块"
-            value={plotId}
-            options={plots.map((item) => ({ value: item.plotId, label: item.plotName }))}
-            onChange={setPlotId}
-          />
-          <Select
-            allowClear
-            style={{ width: 200 }}
-            placeholder="按设备查看时序"
-            value={deviceId}
-            options={devices.map((item) => ({ value: item.deviceId, label: item.deviceName || item.deviceCode }))}
-            onChange={setDeviceId}
-          />
-          <Segmented
-            value={rangePreset}
-            onChange={(value) => {
-              setRangePreset(String(value))
-              setCustomRange(null)
-              setBacktrackDate(null)
-            }}
-            options={RANGE_PRESETS.map((item) => ({ label: item.label, value: item.value }))}
-          />
-          <DatePicker.RangePicker
-            value={customRange}
-            onChange={(value) => {
-              setCustomRange(value as [Dayjs, Dayjs] | null)
-              if (value) setBacktrackDate(null)
-            }}
-          />
-          <DatePicker
-            placeholder="历史回溯日期"
-            value={backtrackDate}
-            onChange={(value) => setBacktrackDate(value)}
-          />
-          <Checkbox.Group
-            value={metrics}
-            onChange={(value) => setMetrics(value as string[])}
-            options={ENV_METRIC_DEFS.map((item) => ({ label: item.label, value: item.key }))}
-          />
-        </Space>
-        <div style={{ marginTop: 8 }}>
-          <Typography.Text type="secondary">
-            {deviceId
-              ? `数据源：设备读数时序 /iot/readings/series（设备 ${deviceId}）`
-              : plotId
-                ? '数据源：地块环境数据 /growth/environment'
-                : '数据源：全部地块环境数据 /growth/environment'}
-            {backtrackDate ? ` · 回溯日期 ${backtrackDate.format('YYYY-MM-DD')}` : ''}
-          </Typography.Text>
+      <Card className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>地块</label>
+            <Select
+              allowClear
+              placeholder="全部地块"
+              value={draftPlotId}
+              options={plots.map((item) => ({ value: item.plotId, label: item.plotName }))}
+              onChange={setDraftPlotId}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>设备</label>
+            <Select
+              allowClear
+              placeholder="按设备查看时序"
+              value={draftDeviceId}
+              options={devices.map((item) => ({ value: item.deviceId, label: item.deviceName || item.deviceCode }))}
+              onChange={setDraftDeviceId}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>时间范围</label>
+            <DatePicker.RangePicker
+              style={{ width: '100%' }}
+              value={draftCustomRange}
+              onChange={(value) => {
+                setDraftCustomRange(value as [Dayjs, Dayjs] | null)
+                if (value) setDraftBacktrackDate(null)
+              }}
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>历史回溯日期</label>
+            <DatePicker
+              style={{ width: '100%' }}
+              placeholder="选择单日回溯"
+              value={draftBacktrackDate}
+              onChange={(value) => setDraftBacktrackDate(value)}
+            />
+          </div>
+          <div className="production-filter-field" style={{ gridColumn: '1 / span 3' }}>
+            <label>展示指标</label>
+            <Checkbox.Group
+              value={metrics}
+              onChange={(value) => setMetrics(value as string[])}
+              options={ENV_METRIC_DEFS.map((item) => ({ label: item.label, value: item.key }))}
+            />
+          </div>
+          <div className="production-filter-actions">
+            <Button onClick={handleReset}>重置</Button>
+            <Button type="primary" onClick={handleSearch}>查询</Button>
+          </div>
         </div>
       </Card>
 
@@ -393,72 +448,61 @@ export default function EnvironmentData(): JSX.Element {
         <Alert
           type="error"
           showIcon
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 10 }}
           message="环境数据加载失败"
           description={errorMessage ?? '请稍后重试'}
         />
       )}
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-        {ENV_METRIC_DEFS.map((def) => {
-          const point = latestMap.get(def.key)
-          return (
-            <Col xs={12} sm={8} lg={4} key={def.key}>
-              <Card size="small">
-                <Statistic
-                  title={def.label}
-                  value={point ? Number(point.value.toFixed(1)) : '-'}
-                  suffix={def.unit}
-                  valueStyle={{ fontSize: 20 }}
-                />
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {point ? dayjs(point.time).format('MM-DD HH:mm') : '暂无数据'}
-                </Typography.Text>
-              </Card>
-            </Col>
-          )
-        })}
-      </Row>
-
-      {soilLow && (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={`土壤湿度 ${soilPoint?.value}% 低于 ${SOIL_LOW}%，建议及时灌溉`}
-        />
-      )}
-
-      <Card title="环境指标曲线" style={{ marginBottom: 16 }}>
+      <Card title="环境指标曲线" style={{ marginBottom: 10 }}>
         {isLoading ? (
-          <Skeleton active paragraph={{ rows: 6 }} />
+          <Skeleton active paragraph={{ rows: 5 }} />
         ) : filteredPoints.length === 0 ? (
           <Empty description="当前筛选条件下暂无环境数据，请调整地块 / 设备 / 时间范围" />
         ) : (
-          <ReactECharts option={chartOption} style={{ height: 380 }} notMerge />
+          <ReactECharts option={chartOption} style={{ height: 300 }} notMerge />
         )}
       </Card>
 
-      <Card
-        title="历史回溯明细"
-        extra={<Tag color="blue">共 {tableRows.length} 条</Tag>}
-      >
+      <Card>
         <Table
-          size="small"
+          memberListToolbar
+          columnWidthStorageKey="environment-data"
           rowKey="key"
           loading={isLoading}
           dataSource={tableRows}
-          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (value) => `共 ${value} 条` }}
-          locale={{ emptyText: <Empty description="暂无明细数据" /> }}
+          onReload={() => setRefreshKey((key) => key + 1)}
+          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+          toolbarTitle={
+            <Space size={8} wrap>
+              <Button
+                icon={<DownloadOutlined />}
+                disabled={tableRows.length === 0}
+                onClick={() => {
+                  const rows = filteredPoints.filter((point) => metrics.includes(point.metric))
+                  if (rows.length === 0) {
+                    message.warning('当前筛选条件下暂无可导出数据')
+                    return
+                  }
+                  exportCsv(rows, `环境数据_${dayjs().format('YYYYMMDDHHmmss')}.csv`)
+                  message.success(`已导出 ${rows.length} 条环境数据`)
+                }}
+              >
+                导出 CSV
+              </Button>
+            </Space>
+          }
+          pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+          locale={{ emptyText: <Empty description="当前筛选条件下暂无环境明细数据，请调整地块、设备或时间范围" /> }}
           columns={[
-            { title: '采集时间', dataIndex: 'time', key: 'time' },
-            { title: '指标', dataIndex: 'metric', key: 'metric' },
-            { title: '数值', dataIndex: 'value', key: 'value' },
-            { title: '单位', dataIndex: 'unit', key: 'unit' },
-            { title: '来源', dataIndex: 'source', key: 'source' },
+            { title: '采集时间', dataIndex: 'time', key: 'time', width: 180 },
+            { title: '指标', dataIndex: 'metric', key: 'metric', width: 150 },
+            { title: '数值', dataIndex: 'value', key: 'value', width: 120, align: 'right' },
+            { title: '单位', dataIndex: 'unit', key: 'unit', width: 100 },
+            { title: '来源', dataIndex: 'source', key: 'source', width: 140 },
           ]}
         />
       </Card>
-    </div>
+    </PageContainer>
   )
 }

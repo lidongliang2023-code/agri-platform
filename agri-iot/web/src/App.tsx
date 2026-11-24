@@ -1,8 +1,10 @@
+import { memberListPagination } from '@agri/shared/components/memberListPagination';
+import MemberListToolbar, { columnSettingsTrigger } from '@agri/shared/components/MemberListToolbar';
 import DeviceSampling from "../../shared-ui/DeviceSampling";
 import CommandReceipts from '../../shared-ui/CommandReceipts'
 import DeviceRemoteControl from "./components/DeviceRemoteControl";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Children, useEffect, useMemo, useState, type Key, type ReactNode } from "react";
+import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
 import {
   AlertOutlined,
   ApiOutlined,
@@ -29,6 +31,9 @@ import {
 } from "@ant-design/icons";
 import {
   App as AntApp,
+  Checkbox,
+  Popover,
+  Space,
   Button,
   ConfigProvider,
   Form,
@@ -42,6 +47,7 @@ import {
   Table,
   Tag,
 } from "antd";
+import zhCN from "antd/locale/zh_CN";
 import type { ColumnsType } from "antd/es/table";
 import {
   iotApi,
@@ -68,7 +74,7 @@ import { useClock } from "../../shared-ui/clock";
 import "./iot-app.css";
 import UnifiedSsoGate from "../../shared-ui/sso";
 import { TiandituMap, type TiandituMapPoint } from "@agri/shared";
-import { WorkspaceNavigation, MobileNavigationButton, AccountMenu } from "../../shared-ui/WorkspaceNavigation";
+import { WorkspaceNavigation, MobileNavigationButton, AccountMenu, SidebarUserCard } from "../../shared-ui/WorkspaceNavigation";
 import { useBusinessSubject } from "../../shared-ui/BusinessSubject";
 
 type Page =
@@ -147,6 +153,101 @@ const MENU: Array<{
 function Status({ value }: { value: string }) {
   const s = STATUS[value] ?? { label: value, tone: "gray" };
   return <Tag className={`iot-status tone-${s.tone}`}>{s.label}</Tag>;
+}
+
+/** 行操作收拢：最多平铺 2 个文字链接，超出部分收入「更多」弹层。 */
+function IotRowActions({ children }: { children: ReactNode }) {
+  const actions = Children.toArray(children).filter(Boolean);
+  return (
+    <Space size={8}>
+      {actions.length <= 2 ? (
+        actions
+      ) : (
+        <>
+          {actions[0]}
+          <Popover
+            trigger="click"
+            placement="bottomRight"
+            content={
+              <Space direction="vertical" align="start" size={4}>
+                {actions.slice(1)}
+              </Space>
+            }
+          >
+            <Button type="link" size="small">
+              更多
+            </Button>
+          </Popover>
+        </>
+      )}
+    </Space>
+  );
+}
+
+/** 物联网端表格通用的列显隐偏好存储与「列设置」弹层构建器。 */
+function useIotColumnSettings<T>(
+  storageKey: string,
+  columns: ColumnsType<T>,
+  lockedKeys: string[] = ["actions"],
+) {
+  const [hidden, setHidden] = useState<string[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      return Array.isArray(saved) ? saved.filter((item): item is string => typeof item === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const canHide = (key: string) => !lockedKeys.includes(key);
+  const updateHidden = (next: string[]) => {
+    const clean = next.filter(canHide);
+    setHidden(clean);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(clean));
+    } catch {
+      // 存储受限时仅保留当次页面状态
+    }
+  };
+  const colKeyOf = (col: ColumnsType<T>[number], idx: number) =>
+    String(col.key ?? ("dataIndex" in col ? col.dataIndex : undefined) ?? idx);
+  const visibleColumns = columns.filter((col, idx) => {
+    const key = colKeyOf(col, idx);
+    return !canHide(key) || !hidden.includes(key);
+  });
+  const columnSettings = (
+    <Popover
+      placement="bottomRight"
+      trigger="click"
+      title="显示列"
+      content={
+        <Space direction="vertical" size={6}>
+          {columns.map((column, idx) => {
+            const key = colKeyOf(column, idx);
+            return (
+              <Checkbox
+                key={key}
+                disabled={!canHide(key)}
+                checked={!canHide(key) || !hidden.includes(key)}
+                onChange={(event) =>
+                  updateHidden(
+                    event.target.checked ? hidden.filter((item) => item !== key) : [...hidden, key],
+                  )
+                }
+              >
+                {String(column.title)}
+              </Checkbox>
+            );
+          })}
+          <Button type="link" size="small" onClick={() => updateHidden([])}>
+            恢复默认
+          </Button>
+        </Space>
+      }
+    >
+      {columnSettingsTrigger()}
+    </Popover>
+  );
+  return { visibleColumns, columnSettings };
 }
 function PageTitle({
   title,
@@ -615,7 +716,22 @@ function Monitor() {
   );
 }
 
+const DEVICE_HIDDEN_COLUMNS = "agri:iot:devices:hidden-columns:v1";
+
 function Devices() {
+  const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(DEVICE_HIDDEN_COLUMNS) ?? "[]");
+      return Array.isArray(saved) ? saved.filter((key) => typeof key === "string") : [];
+    } catch { return []; }
+  });
+  const changeHiddenColumns = (next: string[]) => {
+    setHiddenColumns(next);
+    try { localStorage.setItem(DEVICE_HIDDEN_COLUMNS, JSON.stringify(next)); }
+    catch { /* 存储不可用时，当前页面仍可切换列。 */ }
+  };
+
   const { message } = AntApp.useApp();
   const location = useLocation();
   const navigate = useNavigate();
@@ -662,6 +778,10 @@ function Devices() {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    const ids = new Set(items.map((item) => item.id));
+    setSelectedKeys((keys) => keys.filter((key) => ids.has(Number(key))));
+  }, [items]);
   const loadOptions = async () => {
     const [groupRows, gatewayRows, typeRows, farmRows] = await Promise.all([
       iotApi.groups(),
@@ -809,6 +929,8 @@ function Devices() {
   };
   const columns: ColumnsType<IotDevice> = [
     {
+      key: "device",
+      width: 185,
       title: "设备",
       dataIndex: "deviceName",
       render: (_, r) => (
@@ -826,6 +948,8 @@ function Devices() {
       ),
     },
     {
+      key: "protocol",
+      width: 155,
       title: "类型 / 协议",
       render: (_, r) => (
         <div className="entity-copy">
@@ -835,6 +959,8 @@ function Devices() {
       ),
     },
     {
+      key: "location",
+      width: 180,
       title: "安装位置",
       render: (_, r) => {
         const farm = farms.find((item) => item.id === r.farmId);
@@ -849,10 +975,14 @@ function Devices() {
       },
     },
     {
+      key: "group",
+      width: 110,
       title: "设备分组",
       render: (_, r) => groups.find((item) => item.id === r.groupId)?.name || "未分组",
     },
     {
+      key: "status",
+      width: 125,
       title: "状态",
       dataIndex: "onlineStatus",
       render: (v, r) => (
@@ -863,6 +993,9 @@ function Devices() {
       ),
     },
     {
+      key: "quality",
+      width: 130,
+      align: "right",
       title: "连接质量",
       render: (_, r) => (
         <div className="device-health">
@@ -880,6 +1013,10 @@ function Devices() {
       ),
     },
     {
+      key: "actions",
+      width: 118,
+      align: "right",
+      fixed: "right",
       title: "操作",
       render: (_, r) => (
         <Button type="link" onClick={() => open(r.id)}>
@@ -888,111 +1025,110 @@ function Devices() {
       ),
     },
   ];
+  const canHide = (key: string) => key !== "device" && key !== "actions";
+  const visibleColumns = columns.filter(({ key }) => !canHide(String(key)) || !hiddenColumns.includes(String(key)));
   return (
-    <div className="iot-page">
-      <PageTitle
-        title="设备管理"
-        desc="统一管理设备身份、接入拓扑、运行状态与远程控制。"
-        actions={
-          <>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadDevices()}>
-              刷新
-            </Button>
+    <div className="iot-page device-member-list" aria-label="设备管理">
+      <section className="iot-card device-filter-card" aria-label="设备筛选">
+        <Form className="device-filter-grid" layout="vertical" onFinish={() => void loadDevices()}>
+          <Form.Item label="设备名称或编码" htmlFor="device-filter-0">
+            <Input
+              id="device-filter-0"
+              prefix={<SearchOutlined />}
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              allowClear
+              placeholder="输入设备名称或编码"
+            />
+          </Form.Item>
+          <Form.Item label="设备状态" htmlFor="device-filter-1">
+            <Select
+              id="device-filter-1"
+              value={status}
+              onChange={setStatus}
+              options={["all", "online", "offline", "alert"].map((v) => ({
+                value: v,
+                label: STATUS[v]?.label || "全部状态",
+              }))}
+            />
+          </Form.Item>
+          <Form.Item label="设备分组" htmlFor="device-filter-2">
+            <Select
+              id="device-filter-2"
+              allowClear
+              value={group}
+              onChange={setGroup}
+              placeholder="全部设备分组"
+              options={groups.map((g) => ({
+                value: g.id,
+                label: `${g.icon} ${g.name}`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item label="安装地块" htmlFor="device-filter-3">
+            <Select
+              id="device-filter-3"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              value={plotFilter}
+              onChange={setPlotFilter}
+              placeholder="全部地块"
+              options={plots.map((plot) => ({
+                value: plot.id,
+                label: `${plot.plotName} · ${plot.plotCode}`,
+              }))}
+            />
+          </Form.Item>
+          <Space className="device-filter-actions">
+            <Button onClick={() => void resetFilters()}>重置</Button>
+            <Button type="primary" htmlType="submit">查询</Button>
+          </Space>
+        </Form>
+        {plotLoadError && <div role="alert">生产地块暂不可用：{plotLoadError}。请刷新后重试，当前绑定不会改变。</div>}
+      </section>
+      <section className="iot-card iot-table device-table-card" aria-label="设备清单">
+        <div className="device-list-toolbar">
+          <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => void openCreate()}>
               注册设备
             </Button>
-          </>
-        }
-      />
-      <div className="device-summary">
-        <div>
-          <span className="tone-green"><CloudServerOutlined /></span>
-          <small>当前设备</small>
-          <b>{items.length}</b>
-          <em>筛选结果</em>
+            <Popover trigger="click" title="当前筛选结果" content={<Space direction="vertical">
+              <span>当前设备 {items.length} 台</span>
+              <span>在线 {items.filter((item) => item.onlineStatus === 'online').length} 台</span>
+              <span>异常 / 离线 {items.filter((item) => item.onlineStatus !== 'online').length} 台</span>
+              <span>远程可控 {items.filter((item) => item.controlCapable).length} 台</span>
+            </Space>}><Button>设备统计</Button></Popover>
+          </Space>
+          <MemberListToolbar refreshing={loading} onRefresh={loadDevices} columnSettings={
+              <Popover placement="bottomRight" trigger="click" title="显示列" content={
+              <Space direction="vertical" size={6}>
+                {columns.map((column) => {
+                  const key = String(column.key);
+                  return <Checkbox key={key} disabled={!canHide(key)}
+                    checked={!canHide(key) || !hiddenColumns.includes(key)}
+                    onChange={(event) => changeHiddenColumns(event.target.checked
+                      ? hiddenColumns.filter((item) => item !== key) : [...hiddenColumns, key])}>
+                    {String(column.title)}
+                  </Checkbox>;
+                })}
+                <Button type="link" size="small" onClick={() => changeHiddenColumns([])}>恢复默认</Button>
+              </Space>
+            }>
+                {columnSettingsTrigger()}
+              </Popover>
+            } />
         </div>
-        <div>
-          <span className="tone-blue"><ApiOutlined /></span>
-          <small>在线设备</small>
-          <b>{items.filter((item) => item.onlineStatus === "online").length}</b>
-          <em>稳定接入</em>
-        </div>
-        <div>
-          <span className="tone-red"><AlertOutlined /></span>
-          <small>异常 / 离线</small>
-          <b>{items.filter((item) => item.onlineStatus !== "online").length}</b>
-          <em>需要关注</em>
-        </div>
-        <div>
-          <span className="tone-orange"><ThunderboltOutlined /></span>
-          <small>远程可控</small>
-          <b>{items.filter((item) => item.controlCapable).length}</b>
-          <em>支持下发指令</em>
-        </div>
-      </div>
-      <section className="iot-card iot-filter">
-        <div className="iot-filter-main">
-          <Input
-            prefix={<SearchOutlined />}
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onPressEnter={() => void loadDevices()}
-            allowClear
-            placeholder="输入设备名称或编码"
-          />
-          <Select
-            value={status}
-            onChange={setStatus}
-            options={["all", "online", "offline", "alert"].map((v) => ({
-              value: v,
-              label: STATUS[v]?.label || "全部状态",
-            }))}
-          />
-          <Select
-            allowClear
-            value={group}
-            onChange={setGroup}
-            placeholder="全部设备分组"
-            options={groups.map((g) => ({
-              value: g.id,
-              label: `${g.icon} ${g.name}`,
-            }))}
-          />
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            value={plotFilter}
-            onChange={setPlotFilter}
-            placeholder="全部地块"
-            options={plots.map((plot) => ({
-              value: plot.id,
-              label: `${plot.plotName} · ${plot.plotCode}`,
-            }))}
-          />
-          <Button type="primary" onClick={() => void loadDevices()}>查询</Button>
-          <Button onClick={() => void resetFilters()}>
-            重置
-          </Button>
-        </div>
-        {plotLoadError && <div role="alert">生产地块暂不可用：{plotLoadError}。请刷新后重试，当前绑定不会改变。</div>}
-        <span className="filter-result">共 {items.length} 台设备</span>
-      </section>
-      <section className="iot-card iot-table device-table-card">
-        <CardHead title="设备清单" sub="按实时连接状态排序，点击设备查看遥测与控制记录" />
         <Table
           rowKey="id"
-          columns={columns}
+          tableLayout="fixed"
+          rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: 44 }}
+          columns={visibleColumns}
           dataSource={items}
           loading={loading}
-          scroll={{ x: 1050 }}
+          scroll={{ x: visibleColumns.reduce((width, column) => width + Number(column.width), 44) }}
           locale={{ emptyText: <EmptyHint icon="📡" title="暂无设备" desc="当前经营主体还没有登记设备，或筛选条件没有匹配结果。" /> }}
-          pagination={{
-            pageSize: 8,
-            showSizeChanger: true,
-            pageSizeOptions: [8, 16, 32],
-            showTotal: (total) => `共 ${total} 台设备`,
-          }}
+          pagination={memberListPagination({}, selectedKeys.length)}
         />
       </section>
       <Modal title="维护地块绑定" open={bindingOpen} confirmLoading={bindingSaving}
@@ -1745,9 +1881,13 @@ function Plots() {
   const [items, setItems] = useState<IotPlot[]>([]),
     [farms, setFarms] = useState<IotProductionFarm[]>([]),
     [loading, setLoading] = useState(false),
+    [draftKeyword, setDraftKeyword] = useState(""),
+    [draftStatus, setDraftStatus] = useState("all"),
+    [draftFarmFilter, setDraftFarmFilter] = useState<number | undefined>(),
     [keyword, setKeyword] = useState(""),
     [status, setStatus] = useState("all"),
     [farmFilter, setFarmFilter] = useState<number | undefined>(),
+    [selectedKeys, setSelectedKeys] = useState<Key[]>([]),
     [detail, setDetail] = useState<IotPlot | null>(null),
     [detailMonitoring, setDetailMonitoring] = useState<PlotMonitoring | null>(null),
     [detailLoading, setDetailLoading] = useState(false),
@@ -1821,8 +1961,23 @@ function Plots() {
     }
   };
   const openDevices = (plotId: number) => navigate(`/devices?plotId=${plotId}`);
+  const applyFilter = () => {
+    setKeyword(draftKeyword);
+    setStatus(draftStatus);
+    setFarmFilter(draftFarmFilter);
+  };
+  const resetFilter = () => {
+    setDraftKeyword("");
+    setDraftStatus("all");
+    setDraftFarmFilter(undefined);
+    setKeyword("");
+    setStatus("all");
+    setFarmFilter(undefined);
+  };
   const columns: ColumnsType<IotPlot> = [
     {
+      key: "plot",
+      width: 190,
       title: "地块",
       render: (_, plot) => (
         <button type="button" className="entity-link" onClick={() => void openDetail(plot)}>
@@ -1835,6 +1990,8 @@ function Plots() {
       ),
     },
     {
+      key: "farm",
+      width: 190,
       title: "生产农场",
       render: (_, plot) => (
         <div className="entity-copy">
@@ -1844,6 +2001,8 @@ function Plots() {
       ),
     },
     {
+      key: "crop",
+      width: 140,
       title: "当前作物",
       render: (_, plot) => (
         <div className="entity-copy">
@@ -1852,8 +2011,11 @@ function Plots() {
         </div>
       ),
     },
-    { title: "面积", render: (_, plot) => `${plot.area} 亩` },
+    { key: "area", width: 100, align: "right", title: "面积", render: (_, plot) => `${plot.area} 亩` },
     {
+      key: "coverage",
+      width: 150,
+      align: "right",
       title: "设备覆盖",
       render: (_, plot) => {
         const rate = plot.deviceCount
@@ -1869,6 +2031,8 @@ function Plots() {
       },
     },
     {
+      key: "status",
+      width: 140,
       title: "生产状态",
       render: (_, plot) => (
         <div className="plot-state-cell">
@@ -1878,63 +2042,26 @@ function Plots() {
       ),
     },
     {
+      key: "actions",
+      width: 150,
+      align: "right",
+      fixed: "right",
       title: "操作",
       render: (_, plot) => (
-        <Button type="link" onClick={() => void openDetail(plot)}>查看监测</Button>
+        <IotRowActions>
+          <Button key="monitor" type="link" size="small" onClick={() => void openDetail(plot)}>查看监测</Button>
+          <Button key="devices" type="link" size="small" onClick={() => openDevices(plot.id)}>设备</Button>
+        </IotRowActions>
       ),
     },
   ];
+  const plotCols = useIotColumnSettings("iot_plot_hidden_columns_v1", columns, ["plot", "actions"]);
   return (
-    <div className="iot-page">
+    <div className="iot-page device-member-list">
       <PageTitle
         title="地块监测"
         desc="生产地块、作物状态与物联网设备覆盖的一体化监测。"
         actions={
-          <>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>
-            <Button icon={<EnvironmentOutlined />} onClick={() => window.location.assign(`${window.location.protocol}//${window.location.hostname}/production/plots`)}>
-              查看生产地块
-            </Button>
-          </>
-        }
-      />
-      <div className="plot-summary">
-        <div><span className="tone-green"><EnvironmentOutlined /></span><small>地块总数</small><b>{items.length}</b><em>生产管理同步</em></div>
-        <div><span className="tone-blue"><AppstoreOutlined /></span><small>种植面积</small><b>{totalArea.toFixed(1)}</b><em>亩</em></div>
-        <div><span className="tone-orange"><CloudServerOutlined /></span><small>监测设备</small><b>{totalDevices}</b><em>已覆盖地块</em></div>
-        <div><span className="tone-green"><ApiOutlined /></span><small>设备在线率</small><b>{totalDevices ? Math.round((onlineDevices / totalDevices) * 100) : 0}%</b><em>{onlineDevices} 台在线</em></div>
-      </div>
-      <section className="iot-card iot-filter plot-filter-bar">
-        <div className="iot-filter-main">
-          <Input
-            prefix={<SearchOutlined />}
-            allowClear
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            placeholder="地块名称、编码、作物或农场"
-          />
-          <Select
-            value={status}
-            onChange={setStatus}
-            options={[
-              { value: "all", label: "全部状态" },
-              { value: "normal", label: "运行正常" },
-              { value: "warning", label: "需要关注" },
-            ]}
-          />
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            value={farmFilter}
-            onChange={setFarmFilter}
-            placeholder="全部生产农场"
-            options={farms.map((farm) => ({ value: farm.id, label: farm.farmName }))}
-          />
-          <Button onClick={() => { setKeyword(""); setStatus("all"); setFarmFilter(undefined); }}>重置</Button>
-        </div>
-        <div className="plot-view-switch">
-          <span>共 {filteredItems.length} 个地块</span>
           <Segmented
             size="small"
             value={view}
@@ -1945,7 +2072,52 @@ function Plots() {
               { value: "map", label: "地图", icon: <EnvironmentOutlined /> },
             ]}
           />
-        </div>
+        }
+      />
+      <div className="plot-summary">
+        <div><span className="tone-green"><EnvironmentOutlined /></span><small>地块总数</small><b>{items.length}</b><em>生产管理同步</em></div>
+        <div><span className="tone-blue"><AppstoreOutlined /></span><small>种植面积</small><b>{totalArea.toFixed(1)}</b><em>亩</em></div>
+        <div><span className="tone-orange"><CloudServerOutlined /></span><small>监测设备</small><b>{totalDevices}</b><em>已覆盖地块</em></div>
+        <div><span className="tone-green"><ApiOutlined /></span><small>设备在线率</small><b>{totalDevices ? Math.round((onlineDevices / totalDevices) * 100) : 0}%</b><em>{onlineDevices} 台在线</em></div>
+      </div>
+      <section className="iot-card device-filter-card" aria-label="地块筛选">
+        <Form className="device-filter-grid" layout="vertical" onFinish={applyFilter}>
+          <Form.Item label="关键字">
+            <Input
+              prefix={<SearchOutlined />}
+              allowClear
+              value={draftKeyword}
+              onChange={(event) => setDraftKeyword(event.target.value)}
+              placeholder="地块名称、编码、作物或农场"
+            />
+          </Form.Item>
+          <Form.Item label="生产状态">
+            <Select
+              value={draftStatus}
+              onChange={setDraftStatus}
+              options={[
+                { value: "all", label: "全部状态" },
+                { value: "normal", label: "运行正常" },
+                { value: "warning", label: "需要关注" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="生产农场">
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              value={draftFarmFilter}
+              onChange={setDraftFarmFilter}
+              placeholder="全部生产农场"
+              options={farms.map((farm) => ({ value: farm.id, label: farm.farmName }))}
+            />
+          </Form.Item>
+          <Space className="device-filter-actions">
+            <Button onClick={resetFilter}>重置</Button>
+            <Button type="primary" htmlType="submit">查询</Button>
+          </Space>
+        </Form>
       </section>
       {view === "map" ? (
         <section className="iot-card plot-map-view">
@@ -2022,15 +2194,24 @@ function Plots() {
         </div>
       ) : (
         <section className="iot-card iot-table plot-table-card">
-          <CardHead title="地块列表" sub="来自生产管理当前租户，设备统计由物联网实时补充" />
+          <div className="device-list-toolbar">
+            <Space wrap>
+              <Button icon={<EnvironmentOutlined />} onClick={() => window.location.assign(`${window.location.protocol}//${window.location.hostname}/production/plots`)}>
+                查看生产地块
+              </Button>
+            </Space>
+            <MemberListToolbar refreshing={loading} onRefresh={() => void load()} columnSettings={plotCols.columnSettings} />
+          </div>
           <Table
             rowKey="id"
+            tableLayout="fixed"
             loading={loading}
             dataSource={filteredItems}
-            columns={columns}
-            scroll={{ x: 1050 }}
+            columns={plotCols.visibleColumns}
+            rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: 44 }}
+            scroll={{ x: plotCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
             locale={{ emptyText: <EmptyHint icon="🌾" title="暂无地块" desc="当前经营主体还没有同步生产地块，或筛选条件没有匹配结果。" /> }}
-            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 个地块` }}
+            pagination={memberListPagination({}, selectedKeys.length)}
           />
         </section>
       )}
@@ -2143,6 +2324,13 @@ function AlertRuleWorkbench() {
   const [view, setView] = useState<AlertRuleView | null>(null),
     [options, setOptions] = useState<AlertRuleOptions | null>(null),
     [risks, setRisks] = useState<RiskReading[]>([]),
+    [loading, setLoading] = useState(false),
+    [draftKeyword, setDraftKeyword] = useState(""),
+    [draftLevel, setDraftLevel] = useState<string | undefined>(),
+    [keyword, setKeyword] = useState(""),
+    [levelFilter, setLevelFilter] = useState<string | undefined>(),
+    [tenantSelectedKeys, setTenantSelectedKeys] = useState<Key[]>([]),
+    [platformSelectedKeys, setPlatformSelectedKeys] = useState<Key[]>([]),
     [trialMetric, setTrialMetric] = useState("temperature"),
     [trialValue, setTrialValue] = useState("35"),
     [trial, setTrial] = useState<AlertJudgement | null>(null),
@@ -2150,7 +2338,8 @@ function AlertRuleWorkbench() {
     [editing, setEditing] = useState<AlertRule | null>(null),
     [submitting, setSubmitting] = useState(false),
     [form] = Form.useForm();
-  const load = () =>
+  const load = () => {
+    setLoading(true);
     void Promise.all([
       iotApi.alertRuleView(),
       iotApi.alertRuleOptions(),
@@ -2161,7 +2350,9 @@ function AlertRuleWorkbench() {
         setOptions(o);
         setRisks(r);
       })
-      .catch((e: Error) => message.error(e.message));
+      .catch((e: Error) => message.error(e.message))
+      .finally(() => setLoading(false));
+  };
   useEffect(load, [message]);
 
   const openForm = (rule: AlertRule | null) => {
@@ -2243,106 +2434,197 @@ function AlertRuleWorkbench() {
     }
   };
 
+  const tenantColumns: ColumnsType<AlertRule> = [
+    { key: "ruleName", width: 170, title: "规则", dataIndex: "ruleName", ellipsis: true },
+    {
+      key: "condition",
+      width: 190,
+      title: "条件",
+      render: (_, r: AlertRule) => (
+        <span>
+          {r.metricName} {r.operator} {Number(r.threshold)}
+          {r.deviceType ? ` · ${r.deviceType}` : ""}
+        </span>
+      ),
+    },
+    {
+      key: "durationSeconds",
+      width: 100,
+      align: "right",
+      title: "持续",
+      dataIndex: "durationSeconds",
+      render: (v: number) => (v > 0 ? `${v} 秒` : "瞬时"),
+    },
+    { key: "level", width: 100, title: "等级", dataIndex: "level", render: (v: string) => <Status value={v} /> },
+    {
+      key: "enabled",
+      width: 100,
+      title: "状态",
+      dataIndex: "enabled",
+      render: (v: boolean) => <Status value={v ? "running" : "disabled"} />,
+    },
+    {
+      key: "actions",
+      width: 140,
+      align: "right",
+      fixed: "right",
+      title: "操作",
+      render: (_, r: AlertRule) => (
+        <IotRowActions>
+          <Button key="edit" type="link" size="small" onClick={() => openForm(r)}>
+            编辑
+          </Button>
+          <Button key="toggle" type="link" size="small" onClick={() => void toggle(r)}>
+            {r.enabled ? "停用" : "启用"}
+          </Button>
+          <Button key="delete" type="link" size="small" danger onClick={() => remove(r)}>
+            删除
+          </Button>
+        </IotRowActions>
+      ),
+    },
+  ];
+  const platformColumns: ColumnsType<AlertRule> = [
+    { key: "ruleName", width: 170, title: "规则", dataIndex: "ruleName", ellipsis: true },
+    {
+      key: "condition",
+      width: 170,
+      title: "条件",
+      render: (_, r: AlertRule) => `${r.metricName} ${r.operator} ${Number(r.threshold)}`,
+    },
+    {
+      key: "durationSeconds",
+      width: 100,
+      align: "right",
+      title: "持续",
+      dataIndex: "durationSeconds",
+      render: (v: number) => `${v} 秒`,
+    },
+    { key: "level", width: 100, title: "等级", dataIndex: "level", render: (v: string) => <Status value={v} /> },
+    {
+      key: "status",
+      width: 160,
+      title: "状态",
+      render: (_, r: AlertRule) =>
+        r.overridden ? (
+          <Tag color="blue">已由「{r.overriddenByRuleName}」覆盖</Tag>
+        ) : r.enabled ? (
+          <Status value="running" />
+        ) : (
+          <Status value="disabled" />
+        ),
+    },
+  ];
+  const tenantCols = useIotColumnSettings("iot_alert_tenant_rules_hidden_v1", tenantColumns, ["ruleName", "actions"]);
+  const platformCols = useIotColumnSettings("iot_alert_platform_rules_hidden_v1", platformColumns, ["ruleName"]);
   if (!view || !options) return <Loading />;
+  const matchRule = (rule: AlertRule) => {
+    if (levelFilter && rule.level !== levelFilter) return false;
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return true;
+    return `${rule.ruleName} ${rule.metricName} ${rule.deviceType || ""}`.toLowerCase().includes(kw);
+  };
+  const filteredTenant = view.tenant.filter(matchRule);
+  const filteredPlatform = view.platform.filter(matchRule);
   const metricName = (key: string) =>
     options.metrics.find((item) => item.key === key)?.name || key;
   return (
-    <>
+    <div className="device-member-list">
+      <section className="iot-card device-filter-card" aria-label="阈值规则筛选" style={{ marginBottom: 12 }}>
+        <Form
+          className="device-filter-grid"
+          layout="vertical"
+          onFinish={() => {
+            setKeyword(draftKeyword);
+            setLevelFilter(draftLevel);
+          }}
+        >
+          <Form.Item label="关键字">
+            <Input
+              prefix={<SearchOutlined />}
+              allowClear
+              value={draftKeyword}
+              onChange={(e) => setDraftKeyword(e.target.value)}
+              placeholder="规则名称 / 指标 / 设备类型"
+            />
+          </Form.Item>
+          <Form.Item label="告警等级">
+            <Select
+              allowClear
+              placeholder="全部等级"
+              value={draftLevel}
+              onChange={setDraftLevel}
+              options={options.levels.map((level) => ({
+                value: level,
+                label: STATUS[level]?.label || level,
+              }))}
+            />
+          </Form.Item>
+          <Space className="device-filter-actions">
+            <Button
+              onClick={() => {
+                setDraftKeyword("");
+                setDraftLevel(undefined);
+                setKeyword("");
+                setLevelFilter(undefined);
+              }}
+            >
+              重置
+            </Button>
+            <Button type="primary" htmlType="submit">
+              查询
+            </Button>
+          </Space>
+        </Form>
+      </section>
       <div className="iot-two-grid">
         <section className="iot-card iot-table">
-          <CardHead
-            title="我的阈值规则"
-            sub={view.tenantName ? `${view.tenantName} · 同指标覆盖平台预置` : "本经营主体生效"}
-            extra={
-              <Button size="small" type="primary" onClick={() => openForm(null)}>
+          <div className="device-list-toolbar">
+            <Space wrap>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm(null)}>
                 新增阈值
               </Button>
-            }
-          />
-          {view.tenant.length === 0 ? (
+              <span style={{ color: "var(--ink4)", fontSize: 12 }}>
+                我的阈值规则 · {view.tenantName ? `${view.tenantName}（同指标覆盖平台预置）` : "本经营主体生效"}
+              </span>
+            </Space>
+            <MemberListToolbar refreshing={loading} onRefresh={load} columnSettings={tenantCols.columnSettings} />
+          </div>
+          {filteredTenant.length === 0 ? (
             <EmptyHint
               icon="🎚️"
-              title="还没有自定义阈值"
+              title="还没有匹配的自定义阈值"
               desc="不配置也可以：所有指标按平台预置阈值判定。需要更贴合本主体作物/设施的值时再新增。"
             />
           ) : (
             <Table
               rowKey="id"
-              pagination={false}
-              dataSource={view.tenant}
-              columns={[
-                { title: "规则", dataIndex: "ruleName" },
-                {
-                  title: "条件",
-                  render: (_, r: AlertRule) => (
-                    <span>
-                      {r.metricName} {r.operator} {Number(r.threshold)}
-                      {r.deviceType ? ` · ${r.deviceType}` : ""}
-                    </span>
-                  ),
-                },
-                {
-                  title: "持续",
-                  dataIndex: "durationSeconds",
-                  render: (v: number) => (v > 0 ? `${v} 秒` : "瞬时"),
-                },
-                { title: "等级", dataIndex: "level", render: (v: string) => <Status value={v} /> },
-                {
-                  title: "状态",
-                  dataIndex: "enabled",
-                  render: (v: boolean) => <Status value={v ? "running" : "disabled"} />,
-                },
-                {
-                  title: "操作",
-                  render: (_, r: AlertRule) => (
-                    <>
-                      <Button type="link" size="small" onClick={() => openForm(r)}>
-                        编辑
-                      </Button>
-                      <Button type="link" size="small" onClick={() => void toggle(r)}>
-                        {r.enabled ? "停用" : "启用"}
-                      </Button>
-                      <Button type="link" size="small" danger onClick={() => remove(r)}>
-                        删除
-                      </Button>
-                    </>
-                  ),
-                },
-              ]}
+              tableLayout="fixed"
+              loading={loading}
+              dataSource={filteredTenant}
+              columns={tenantCols.visibleColumns}
+              rowSelection={{ selectedRowKeys: tenantSelectedKeys, onChange: setTenantSelectedKeys, columnWidth: 44 }}
+              scroll={{ x: tenantCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
+              pagination={memberListPagination({}, tenantSelectedKeys.length)}
             />
           )}
         </section>
         <section className="iot-card iot-table">
-          <CardHead title="平台预置阈值" sub="全平台兜底默认值，本页面只读" />
+          <div className="device-list-toolbar">
+            <span style={{ fontWeight: 600 }}>
+              平台预置阈值 <small style={{ color: "var(--ink4)", fontWeight: 400 }}>全平台兜底默认值，本页面只读</small>
+            </span>
+            <MemberListToolbar refreshing={loading} onRefresh={load} columnSettings={platformCols.columnSettings} />
+          </div>
           <Table
             rowKey="id"
-            pagination={false}
-            dataSource={view.platform}
-            columns={[
-              { title: "规则", dataIndex: "ruleName" },
-              {
-                title: "条件",
-                render: (_, r: AlertRule) =>
-                  `${r.metricName} ${r.operator} ${Number(r.threshold)}`,
-              },
-              {
-                title: "持续",
-                dataIndex: "durationSeconds",
-                render: (v: number) => `${v} 秒`,
-              },
-              { title: "等级", dataIndex: "level", render: (v: string) => <Status value={v} /> },
-              {
-                title: "状态",
-                render: (_, r: AlertRule) =>
-                  r.overridden ? (
-                    <Tag color="blue">已由「{r.overriddenByRuleName}」覆盖</Tag>
-                  ) : r.enabled ? (
-                    <Status value="running" />
-                  ) : (
-                    <Status value="disabled" />
-                  ),
-              },
-            ]}
+            tableLayout="fixed"
+            loading={loading}
+            dataSource={filteredPlatform}
+            columns={platformCols.visibleColumns}
+            rowSelection={{ selectedRowKeys: platformSelectedKeys, onChange: setPlatformSelectedKeys, columnWidth: 44 }}
+            scroll={{ x: platformCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
+            pagination={memberListPagination({}, platformSelectedKeys.length)}
           />
         </section>
       </div>
@@ -2509,7 +2791,7 @@ function AlertRuleWorkbench() {
           </Form.Item>
         </Form>
       </Modal>
-    </>
+    </div>
   );
 }
 
@@ -2686,6 +2968,14 @@ function Automation() {
   const [scenes, setScenes] = useState<IotScene[]>([]),
     [rules, setRules] = useState<IotRule[]>([]),
     [devices, setDevices] = useState<IotDevice[]>([]),
+    [loading, setLoading] = useState(false),
+    [draftKeyword, setDraftKeyword] = useState(""),
+    [draftExecMode, setDraftExecMode] = useState<string | undefined>(),
+    [draftEnabled, setDraftEnabled] = useState<string | undefined>(),
+    [keyword, setKeyword] = useState(""),
+    [execModeFilter, setExecModeFilter] = useState<string | undefined>(),
+    [enabledFilter, setEnabledFilter] = useState<string | undefined>(),
+    [selectedRuleKeys, setSelectedRuleKeys] = useState<Key[]>([]),
     [sceneOpen, setSceneOpen] = useState(false),
     [ruleOpen, setRuleOpen] = useState(false),
     [editingScene, setEditingScene] = useState<IotScene | null>(null),
@@ -2695,14 +2985,17 @@ function Automation() {
   const [ruleForm] = Form.useForm();
   const selectedRuleType = Form.useWatch("ruleType", ruleForm);
   const selectedTriggerMetric = Form.useWatch("triggerMetric", ruleForm);
-  const load = () =>
+  const load = () => {
+    setLoading(true);
     void Promise.all([iotApi.scenes(), iotApi.rules(), iotApi.devices()])
       .then(([s, r, d]) => {
         setScenes(s);
         setRules(r);
         setDevices(d);
       })
-      .catch((e: Error) => message.error(e.message));
+      .catch((e: Error) => message.error(e.message))
+      .finally(() => setLoading(false));
+  };
   useEffect(load, []);
   const activate = (scene: IotScene) => {
     modal.confirm({
@@ -2899,12 +3192,82 @@ function Automation() {
       },
     });
   };
+  const filteredRules = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    return rules.filter((r) => {
+      if (execModeFilter) {
+        const mode = parseRuleConfig(r.config).executionMode === "cloud" ? "cloud" : "edge";
+        if (mode !== execModeFilter) return false;
+      }
+      if (enabledFilter === "enabled" && !r.enabled) return false;
+      if (enabledFilter === "disabled" && r.enabled) return false;
+      if (kw) {
+        const hay = `${r.ruleName} ${r.ruleCode || ""} ${r.trigger || ""} ${r.action || ""}`.toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      return true;
+    });
+  }, [rules, keyword, execModeFilter, enabledFilter]);
+  const ruleColumns: ColumnsType<IotRule> = [
+    {
+      key: "rule",
+      width: 190,
+      title: "规则",
+      dataIndex: "ruleName",
+      render: (_, r) => (
+        <div className="entity-copy">
+          <b>{r.ruleName}</b>
+          <small>{r.ruleCode}</small>
+        </div>
+      ),
+    },
+    { key: "trigger", width: 200, title: "触发条件", dataIndex: "trigger", ellipsis: true },
+    { key: "action", width: 200, title: "执行动作", dataIndex: "action", ellipsis: true },
+    {
+      key: "mode",
+      width: 110,
+      title: "执行位置",
+      render: (_, r) => (parseRuleConfig(r.config).executionMode === "cloud" ? "云端" : "边缘网关"),
+    },
+    {
+      key: "cooldown",
+      width: 100,
+      align: "right",
+      title: "冷却",
+      render: (_, r) => `${Math.round((r.cooldownSeconds || 0) / 60)} 分钟`,
+    },
+    { key: "triggerCount", width: 100, align: "right", title: "触发次数", dataIndex: "triggerCount" },
+    { key: "lastTrigger", width: 160, title: "最近触发", dataIndex: "lastTrigger" },
+    {
+      key: "enabled",
+      width: 110,
+      title: "状态",
+      dataIndex: "enabled",
+      render: (v) => <Status value={v ? "running" : "disabled"} />,
+    },
+    {
+      key: "actions",
+      width: 150,
+      align: "right",
+      fixed: "right",
+      title: "操作",
+      render: (_, r) => (
+        <IotRowActions>
+          <Button key="exec" size="small" type="link" icon={<PlayCircleOutlined />} onClick={() => void executeRule(r.id)}>执行</Button>
+          <Button key="toggle" size="small" type="link" onClick={() => void toggle(r.id)}>{r.enabled ? "停用" : "启用"}</Button>
+          <Button key="edit" size="small" type="link" icon={<EditOutlined />} onClick={() => openRule(r)}>编辑</Button>
+          <Button key="del" size="small" type="link" danger icon={<DeleteOutlined />} onClick={() => removeRule(r)}>删除</Button>
+        </IotRowActions>
+      ),
+    },
+  ];
+  const ruleCols = useIotColumnSettings("iot_automation_rules_hidden_v1", ruleColumns, ["rule", "actions"]);
   return (
-    <div className="iot-page">
+    <div className="iot-page device-member-list">
       <PageTitle
         title="场景与自动化"
         desc="环境联动场景、自动化规则和手动执行。"
-        actions={<><Button icon={<PlusOutlined />} onClick={() => openScene()}>新建场景</Button><Button type="primary" icon={<PlusOutlined />} onClick={() => openRule()}>新建规则</Button></>}
+        actions={<Button icon={<PlusOutlined />} onClick={() => openScene()}>新建场景</Button>}
       />
       <section className="iot-card">
         <CardHead title="场景模式" sub="一键应用环境控制策略，可新建和编辑" />
@@ -2933,53 +3296,87 @@ function Automation() {
           ))}
         </div>
       </section>
+      <section className="iot-card device-filter-card" aria-label="自动化规则筛选">
+        <Form
+          className="device-filter-grid"
+          layout="vertical"
+          onFinish={() => {
+            setKeyword(draftKeyword);
+            setExecModeFilter(draftExecMode);
+            setEnabledFilter(draftEnabled);
+          }}
+        >
+          <Form.Item label="关键字">
+            <Input
+              prefix={<SearchOutlined />}
+              allowClear
+              value={draftKeyword}
+              onChange={(e) => setDraftKeyword(e.target.value)}
+              placeholder="规则名称 / 编码 / 触发条件 / 动作"
+            />
+          </Form.Item>
+          <Form.Item label="执行位置">
+            <Select
+              allowClear
+              placeholder="全部位置"
+              value={draftExecMode}
+              onChange={setDraftExecMode}
+              options={[
+                { value: "edge", label: "边缘网关" },
+                { value: "cloud", label: "云端" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="状态">
+            <Select
+              allowClear
+              placeholder="全部状态"
+              value={draftEnabled}
+              onChange={setDraftEnabled}
+              options={[
+                { value: "enabled", label: "运行中" },
+                { value: "disabled", label: "已停用" },
+              ]}
+            />
+          </Form.Item>
+          <Space className="device-filter-actions">
+            <Button
+              onClick={() => {
+                setDraftKeyword("");
+                setDraftExecMode(undefined);
+                setDraftEnabled(undefined);
+                setKeyword("");
+                setExecModeFilter(undefined);
+                setEnabledFilter(undefined);
+              }}
+            >
+              重置
+            </Button>
+            <Button type="primary" htmlType="submit">
+              查询
+            </Button>
+          </Space>
+        </Form>
+      </section>
       <section className="iot-card iot-table">
-        <CardHead title="自动化规则" sub="触发条件、执行设备和动作配置" />
+        <div className="device-list-toolbar">
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openRule()}>
+              新建规则
+            </Button>
+          </Space>
+          <MemberListToolbar refreshing={loading} onRefresh={load} columnSettings={ruleCols.columnSettings} />
+        </div>
         <Table
           rowKey="id"
-          pagination={false}
-          dataSource={rules}
-          columns={[
-            {
-              title: "规则",
-              dataIndex: "ruleName",
-              render: (_, r) => (
-                <div className="entity-copy">
-                  <b>{r.ruleName}</b>
-                  <small>{r.ruleCode}</small>
-                </div>
-              ),
-            },
-            { title: "触发条件", dataIndex: "trigger" },
-            { title: "执行动作", dataIndex: "action" },
-            {
-              title: "执行位置",
-              render: (_, r) =>
-                parseRuleConfig(r.config).executionMode === "cloud" ? "云端" : "边缘网关",
-            },
-            { title: "冷却", render: (_, r) => `${Math.round((r.cooldownSeconds || 0) / 60)} 分钟` },
-            { title: "触发次数", dataIndex: "triggerCount" },
-            { title: "最近触发", dataIndex: "lastTrigger" },
-            {
-              title: "状态",
-              dataIndex: "enabled",
-              render: (v, r) => (
-                <Button size="small" onClick={() => void toggle(r.id)}>
-                  {v ? "运行中" : "已停用"}
-                </Button>
-              ),
-            },
-            {
-              title: "操作",
-              render: (_, r) => (
-                <>
-                  <Button size="small" type="text" icon={<PlayCircleOutlined />} onClick={() => void executeRule(r.id)}>执行</Button>
-                  <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openRule(r)}>编辑</Button>
-                  <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => removeRule(r)}>删除</Button>
-                </>
-              ),
-            },
-          ]}
+          tableLayout="fixed"
+          loading={loading}
+          dataSource={filteredRules}
+          columns={ruleCols.visibleColumns}
+          rowSelection={{ selectedRowKeys: selectedRuleKeys, onChange: setSelectedRuleKeys, columnWidth: 44 }}
+          scroll={{ x: ruleCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
+          locale={{ emptyText: <EmptyHint icon="⚡" title="暂无自动化规则" desc="请调整筛选条件或点击「新建规则」配置联动策略。" /> }}
+          pagination={memberListPagination({}, selectedRuleKeys.length)}
         />
       </section>
       <Modal
@@ -3564,10 +3961,20 @@ const IOT_PERMISSIONS = ["iot:read", "iot:write"];
 function IotShell() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1280);
   const clock = useClock();
   const subject = useBusinessSubject();
   const [mobileOpen, setMobileOpen] = useState(false);
+  useEffect(() => {
+    const syncLayout = () => {
+      const w = window.innerWidth;
+      if (w >= 1024 && w < 1280) setCollapsed(true);
+      else if (w >= 1280) setCollapsed(false);
+      if (w >= 1024) setMobileOpen(false);
+    };
+    window.addEventListener("resize", syncLayout);
+    return () => window.removeEventListener("resize", syncLayout);
+  }, []);
   const page = useMemo(
     () => normalizePath(location.pathname),
     [location.pathname],
@@ -3582,15 +3989,16 @@ function IotShell() {
   }, [location.pathname, location.search, location.hash, navigate]);
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={{
         token: {
-          colorPrimary: "#12764a",
-          colorLink: "#12764a",
-          colorText: "#0b1a12",
-          colorTextSecondary: "#6b7c72",
-          colorBorder: "#e1e9e3",
-          colorBgLayout: "#f4f7f5",
-          borderRadius: 10,
+          colorPrimary: "#2d8f4e",
+          colorLink: "#2d8f4e",
+          colorText: "#1a1a1a",
+          colorTextSecondary: "#595959",
+          colorBorder: "#e8e8e8",
+          colorBgLayout: "#f5f6fa",
+          borderRadius: 6,
           controlHeight: 36,
           fontFamily:
             '-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif',
@@ -3613,15 +4021,13 @@ function IotShell() {
                 </div>
               )}
             </button>
-            <WorkspaceNavigation groups={MENU} selected={page} collapsed={collapsed}
+            <WorkspaceNavigation clientId="iot" groups={MENU} selected={page} collapsed={collapsed}
               onNavigate={key => navigate("/" + key)} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
+            <div className="pc-side-user">
+              <SidebarUserCard clientId="iot" roleLabel="物联网用户" collapsed={collapsed}
+                switchUrl={`${window.location.protocol}//${window.location.hostname}:8102/`} switchLabel="切换身份（运营端）" />
+            </div>
             <div className="iot-side-foot">
-              {!collapsed && (
-                <div>
-                  <b>设备与生产地块共用归属</b>
-                  <small>状态以服务端心跳与遥测为准</small>
-                </div>
-              )}
               <button type="button" onClick={() => setCollapsed(!collapsed)}>
                 {collapsed ? (
                   <MenuUnfoldOutlined />
@@ -3672,7 +4078,10 @@ export default function App() {
       landingPath="/dashboard"
       requiredPermissions={IOT_PERMISSIONS}
     >
-      <IotShell />
+      {/* 登录回调先恢复目标地址，再让路由读取首屏路径。 */}
+      <BrowserRouter basename={import.meta.env.VITE_ROUTER_BASE || "/"}>
+        <IotShell />
+      </BrowserRouter>
     </UnifiedSsoGate>
   );
 }

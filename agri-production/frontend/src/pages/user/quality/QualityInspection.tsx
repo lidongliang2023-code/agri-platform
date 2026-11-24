@@ -1,4 +1,6 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import '@/pages/user/quality/quality-trace.css'
 import BusinessRecordList from '@/components/BusinessRecordList'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
@@ -26,7 +28,6 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
-  Alert,
   AutoComplete,
   Button,
   Col,
@@ -40,14 +41,13 @@ import {
   Row,
   Select,
   Space,
-  Statistic,
   Tag,
   Tooltip,
   Typography,
   message,
 } from 'antd'
 import type { Dayjs } from 'dayjs'
-import { DeleteOutlined, FileTextOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { DeleteOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import useFarmStore from '@/store/farm'
 import {
@@ -168,7 +168,8 @@ export default function QualityInspection(): JSX.Element {
   const farmId = currentFarm?.farmId
 
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   /**
    * 支持从存证列表带 `?keyword=<质检单号>` 跳进来（存证的 target_code 就是检测单号）。
    * 没有这个入口时，从一条存证回不到它对应的那张检测单。
@@ -228,6 +229,7 @@ export default function QualityInspection(): JSX.Element {
 
   useEffect(() => {
     setPageNum(1)
+    setSelectedKeys([])
     setDetailId('')
     setCreateOpen(false)
     setResultTarget(null)
@@ -405,6 +407,7 @@ export default function QualityInspection(): JSX.Element {
   const handleSearch = (): void => {
     setFilters(filterForm.getFieldsValue())
     setPageNum(1)
+    setSelectedKeys([])
   }
 
   /** 重置 */
@@ -412,6 +415,7 @@ export default function QualityInspection(): JSX.Element {
     filterForm.resetFields()
     setFilters({})
     setPageNum(1)
+    setSelectedKeys([])
   }
 
   /** 表格列定义 */
@@ -463,9 +467,9 @@ export default function QualityInspection(): JSX.Element {
       render: (_, record) => {
         if (record.status === 'TESTING') return <Tag color="processing">检测中</Tag>
         if (record.status === 'PENDING') return <Tag>待检</Tag>
-        if (record.result === 'PASS') return <Tag color="green">✅ 合格</Tag>
-        if (record.result === 'FAIL') return <Tag color="red">❌ 不合格</Tag>
-        return <Tag>⏳ 待检</Tag>
+        if (record.result === 'PASS') return <Tag color="green">合格</Tag>
+        if (record.result === 'FAIL') return <Tag color="red">不合格</Tag>
+        return <Tag>待检</Tag>
       },
     },
     {
@@ -508,41 +512,43 @@ export default function QualityInspection(): JSX.Element {
       title: '操作',
       fixed: 'right',
       key: 'option',
-      width: 260,
+      width: 150,
       valueType: 'option',
-      render: (_, record) => [
-        <Typography.Link
-          key="report"
-          onClick={() =>
-            navigate(
-              `/production/trace/reports?batchId=${encodeURIComponent(String(record.batchId ?? ''))}`,
-            )
-          }
-        >
-          报告→
-        </Typography.Link>,
-        <Typography.Link
-          key="result"
-          onClick={() => setResultTarget(record)}
-        >
-          结果录入
-        </Typography.Link>,
-        <Typography.Link
-          key="detail"
-          onClick={() => setDetailId(record.inspectionId)}
-        >
-          明细
-        </Typography.Link>,
-        <Popconfirm
-          key="delete"
-          title="确认删除该检测单？"
-          okText="确认删除"
-          cancelText="取消"
-          onConfirm={() => deleteMutation.mutate(record.inspectionId)}
-        >
-          <Typography.Link type="danger">删除</Typography.Link>
-        </Popconfirm>,
-      ],
+      render: (_, record) => (
+        <ListRowActions>
+          <Typography.Link
+            key="detail"
+            onClick={() => setDetailId(record.inspectionId)}
+          >
+            明细
+          </Typography.Link>
+          <Typography.Link
+            key="result"
+            onClick={() => setResultTarget(record)}
+          >
+            结果录入
+          </Typography.Link>
+          <Typography.Link
+            key="report"
+            onClick={() =>
+              navigate(
+                `/production/trace/reports?batchId=${encodeURIComponent(String(record.batchId ?? ''))}`,
+              )
+            }
+          >
+            报告→
+          </Typography.Link>
+          <Popconfirm
+            key="delete"
+            title="确认删除该检测单？"
+            okText="确认删除"
+            cancelText="取消"
+            onConfirm={() => deleteMutation.mutate(record.inspectionId)}
+          >
+            <Typography.Link type="danger">删除</Typography.Link>
+          </Popconfirm>
+        </ListRowActions>
+      ),
     },
   ]
 
@@ -565,44 +571,51 @@ export default function QualityInspection(): JSX.Element {
   }, [detailQuery.data])
 
   return (
-    <PageContainer className="quality-trace-page"
-      title="🔬 质量检测记录"
+    <PageContainer
+      className="quality-trace-page production-list-dense production-member-list"
+      title="质量检测记录"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
-      extra={[
-        <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-          + 录入检测报告
-        </Button>,
-        <Button
-          key="reload"
-          icon={<ReloadOutlined />}
-          onClick={() => {
-            void invalidateAll()
-          }}
-        >
-          刷新
-        </Button>,
-      ]}
     >
-      <Typography.Paragraph type="secondary">统计范围：当前农场全部检测单；合格、不合格仅统计已完成检测，待检与检测中分别按实际状态统计，不受下方列表筛选影响。</Typography.Paragraph>
-      {inspectionStats.some((query) => query.isError) && <Alert type="error" showIcon message="检测统计读取失败，未取得的数量显示为 —" action={<Button onClick={() => void invalidateAll()}>重试</Button>} style={{ marginBottom: 16 }} />}
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        {inspectionStats.map((query, index) => (
-          <Col xs={12} lg={6} key={index}>
-            <Card loading={query.isFetching}>
-              <Statistic title={['合格', '不合格', '待检', '检测中'][index]} value={query.isError || !query.data ? '—' : query.data.count} suffix="单" valueStyle={{ color: query.data?.color }} />
-            </Card>
-          </Col>
-        ))}
-      </Row>
+      <div className="production-dense-summary">
+        <div className="production-dense-summary-items">
+          {inspectionStats.map((query, index) => {
+            const label = ['合格', '不合格', '待检', '检测中'][index]
+            const val = query.isError || !query.data ? '—' : query.data.count
+            const cls =
+              index === 0
+                ? 'is-success'
+                : index === 1
+                  ? 'is-danger'
+                  : index === 2
+                    ? 'is-warning'
+                    : ''
+            return (
+              <span className="production-dense-metric" key={label}>
+                <span className="production-dense-metric-label">{label}</span>
+                <span className={`production-dense-metric-value ${cls}`}>{val} 单</span>
+              </span>
+            )
+          })}
+          {inspectionStats.some((query) => query.isError) && (
+            <Button size="small" type="link" onClick={() => void invalidateAll()}>
+              统计加载失败，重试
+            </Button>
+          )}
+        </div>
+        <Tooltip title="统计范围：当前农场全部检测单；合格、不合格仅统计已完成检测，待检与检测中分别按实际状态统计，不受下方列表筛选影响。">
+          <span className="production-dense-summary-note">
+            统计口径：当前农场全部检测单（不受下方筛选影响）
+          </span>
+        </Tooltip>
+      </div>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+      <Card className="production-dense-filter-card">
+        <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
           <Form.Item name="result" label="结果">
             <Select
               allowClear
               placeholder="全部结果"
               options={RESULT_OPTIONS}
-              style={{ width: 130 }}
             />
           </Form.Item>
           <Form.Item name="labName" label="机构">
@@ -612,30 +625,36 @@ export default function QualityInspection(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部机构"
               options={labOptions}
-              style={{ width: 170 }}
             />
           </Form.Item>
           <Form.Item name="keyword" label="检测编号">
-            <Input allowClear placeholder="搜索检测编号..." style={{ width: 200 }} />
+            <Input allowClear placeholder="搜索检测编号..." />
           </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
+          <Form.Item className="production-filter-actions">
+            <Space size={8}>
+              <Button onClick={handleReset}>重置</Button>
+              <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
-              <Button onClick={handleReset}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
       </Card>
 
       <ProTable<RawInspection>
+        memberListToolbar
+        headerTitle={false}
+        tableAlertRender={false}
         rowKey="inspectionId"
         size="small"
         columns={columns}
         dataSource={pageRows}
         loading={listQuery.isFetching}
         search={false}
+        rowSelection={{
+          selectedRowKeys: selectedKeys,
+          onChange: (keys) => setSelectedKeys(keys.map(String)),
+        }}
         options={{
           reload: () => {
             void invalidateAll()
@@ -656,11 +675,16 @@ export default function QualityInspection(): JSX.Element {
             setPageSize(nextSize)
           },
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            + 录入检测报告
-          </Button>,
-        ]}
+        toolbar={{
+          title: (
+            <Space size={8} wrap>
+              <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                录入检测报告
+              </Button>
+            </Space>
+          ),
+        }}
+        toolBarRender={false}
       />
 
       <Modal className="production-form-dialog quality-trace-dialog"

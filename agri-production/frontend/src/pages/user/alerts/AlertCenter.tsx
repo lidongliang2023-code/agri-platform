@@ -1,5 +1,10 @@
+import AlertReviewPanel from './AlertReviewPanel'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
+import PageContainer from '@/components/ProductionPageContainer'
 import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：告警中心
@@ -25,7 +30,6 @@ import {
   Alert as Feedback,
   Button,
   Card,
-  Col,
   DatePicker,
   Descriptions,
   Empty,
@@ -33,12 +37,10 @@ import {
   Input,
   Modal,
   Popconfirm,
-  Row,
   Segmented,
   Select,
   Space,
   Spin,
-  Statistic,
   Steps,
   Tag,
   Tooltip,
@@ -46,9 +48,7 @@ import {
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  BellOutlined,
   CheckCircleOutlined,
-  ReloadOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
@@ -59,7 +59,7 @@ import { errorMessageOf } from '@/utils/request'
 import type { Alert, AlertStatus } from '@/types'
 
 const { RangePicker } = DatePicker
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
 
 /** 告警来源（对应领域事件中的 scene）文案 */
@@ -144,8 +144,11 @@ export default function AlertCenter(): JSX.Element {
   const queryClient = useQueryClient()
   const farmId = useFarmStore((state) => state.currentFarm?.farmId)
 
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [reviewId, setReviewId] = useState<string>()
+  useEffect(() => {setReviewOpen(false);setReviewId(undefined)}, [farmId])
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [filters, setFilters] = useState<AlertFilters>({})
   const [draft, setDraft] = useState<AlertFilters>({})
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
@@ -344,40 +347,48 @@ export default function AlertCenter(): JSX.Element {
     {
       title: '告警编号',
       dataIndex: 'alertNo',
-      width: 180,
+      width: 190,
+      ellipsis: true,
       render: (value: string, record) => (
-        <Space direction="vertical" size={0}>
-          <Text copyable={{ text: value }} style={{ fontSize: 12 }}>
-            {value}
-          </Text>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {record.plotName ? `地块：${record.plotName}` : '农场级'}
-          </Text>
-        </Space>
+        <Tooltip title={`${value} · ${record.plotName ? `地块：${record.plotName}` : '农场级'}`}>
+          <span className="production-dense-name-wrap">
+            <Text copyable={{ text: value }} style={{ fontSize: 13 }}>
+              {value}
+            </Text>
+          </span>
+        </Tooltip>
       ),
+    },
+    {
+      title: '所属地块',
+      key: 'plotName',
+      width: 120,
+      ellipsis: true,
+      render: (_value: unknown, record) => record.plotName || '农场级',
     },
     {
       title: '告警标题',
       dataIndex: 'alertTitle',
+      width: 260,
+      ellipsis: true,
       render: (value: string, record) => (
-        <Space direction="vertical" size={2} style={{ maxWidth: 320 }}>
-          <Text strong>{value}</Text>
-          <Tooltip title={record.alertContent}>
-            <Paragraph
-              type="secondary"
-              ellipsis={{ rows: 1 }}
-              style={{ marginBottom: 0, fontSize: 12, maxWidth: 320 }}
-            >
-              {record.alertContent}
-            </Paragraph>
-          </Tooltip>
-        </Space>
+        <Tooltip title={record.alertContent ? `${value}：${record.alertContent}` : value}>
+          <span className="production-dense-link-ellipsis">
+            <Text strong>{value}</Text>
+            {record.alertContent ? (
+              <Text type="secondary" style={{ marginLeft: 6, fontSize: 12 }}>
+                {record.alertContent}
+              </Text>
+            ) : null}
+          </span>
+        </Tooltip>
       ),
     },
     {
       title: '级别',
       dataIndex: 'alertLevel',
       width: 90,
+      align: 'center',
       render: (level: number) => {
         const meta = alertLevelMeta(level)
         return <Tag color={meta.color}>{meta.label}</Tag>
@@ -419,20 +430,24 @@ export default function AlertCenter(): JSX.Element {
     {
       title: '操作',
       key: 'action',
-      width: 170,
+      width: 150,
       fixed: 'right',
       render: (_value: unknown, record) => (
-        <Space size={4}>
-          <Button type="link" size="small" onClick={() => setDetailId(record.alertId)}>
+        <ListRowActions>
+          <Button key="detail" type="link" size="small" onClick={() => setDetailId(record.alertId)}>
             详情
           </Button>
+          {[3, 4].includes(record.status) && (
+            <Button key="review" type="link" size="small" onClick={() => { setReviewId(record.alertId); setReviewOpen(true) }}>
+              复盘
+            </Button>
+          )}
           {record.status !== 3 && record.status !== 4 && (
-            <Button type="link" size="small" onClick={() => void openFreshHandle(record)}>
+            <Button key="handle" type="link" size="small" onClick={() => void openFreshHandle(record)}>
               处理
             </Button>
           )}
-
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
@@ -442,64 +457,48 @@ export default function AlertCenter(): JSX.Element {
   const currentStep: number = currentTarget?.status === 1 ? 0 : currentTarget?.status === 2 ? 1 : 2
 
   return (
-    <div style={{ padding: 24 }}>
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Card className="production-custom-page-header">
-          <Row align="middle" gutter={16}>
-            <Col flex="auto">
-              <Space size={8}>
-                <BellOutlined style={{ fontSize: 20, color: '#fa8c16' }} />
-                <span className="production-page-heading">告警中心</span>
-                <Text type="secondary">
-                  事件 prod.alert.triggered · 场景 / 级别 / 内容由规则引擎与 IoT 监听触发
-                </Text>
-              </Space>
-            </Col>
-            <Col>
-              <Space>
-                <Button
-                  icon={<ReloadOutlined />}
-                  onClick={() => {
-                    void queryClient.invalidateQueries({ queryKey: ['production-alerts'] })
-                    void queryClient.invalidateQueries({ queryKey: ['production-alerts-stats'] })
-                  }}
-                >
-                  刷新
-                </Button>
-                <Popconfirm
-                  title={`确认忽略所选 ${selectedKeys.length} 条告警？`}
-                  disabled={selectedKeys.length === 0}
-                  onConfirm={() => ignoreMutation.mutate(selectedKeys)}
-                >
-                  <Button danger disabled={selectedKeys.length === 0}>
-                    批量忽略
-                  </Button>
-                </Popconfirm>
-              </Space>
-            </Col>
-          </Row>
-        </Card>
-
-        {statsQuery.isError && <Feedback type="error" showIcon message="告警统计加载失败" action={<Button onClick={() => void statsQuery.refetch()}>重试</Button>} />}
-        <Row gutter={16}>
+    <PageContainer
+      className="production-list-dense production-member-list"
+      title="告警中心"
+      subTitle="事件 prod.alert.triggered · 场景 / 级别 / 内容由规则引擎与 IoT 监听触发"
+    >
+      <div className="production-dense-summary">
+        <div className="production-dense-summary-items">
           {statCards.map((card) => (
-            <Col span={6} key={card.key}>
-              <Card>
-                <Statistic
-                  title={card.title}
-                  value={statsQuery.isError ? '—' : card.value ?? '—'}
-                  suffix="条"
-                  valueStyle={{ color: card.color }}
-                />
-              </Card>
-            </Col>
+            <span className="production-dense-metric" key={card.key}>
+              <span className="production-dense-metric-label">{card.title}</span>
+              <span
+                className={`production-dense-metric-value ${
+                  card.key === 'unhandled'
+                    ? 'is-danger'
+                    : card.key === 'handling'
+                      ? 'is-warning'
+                      : card.key === 'handled'
+                        ? 'is-success'
+                        : ''
+                }`}
+              >
+                {statsQuery.isError ? '—' : card.value ?? '—'} 条
+              </span>
+            </span>
           ))}
-        </Row>
+        </div>
+        {statsQuery.isError && (
+          <Feedback
+            type="error"
+            showIcon
+            message="告警统计加载失败"
+            action={<Button size="small" onClick={() => void statsQuery.refetch()}>重试</Button>}
+          />
+        )}
+      </div>
 
-        <Card>
-          <Space wrap size={12} style={{ marginBottom: 16 }}>
-            <span>级别</span>
+      <Card className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field production-filter-span-2">
+            <label>级别</label>
             <Segmented
+              size="small"
               value={draft.level ?? 0}
               onChange={(value) =>
                 setDraft((prev) => ({
@@ -515,22 +514,29 @@ export default function AlertCenter(): JSX.Element {
                 })),
               ]}
             />
+          </div>
+          <div className="production-filter-field">
+            <label>状态</label>
             <Select
               allowClear
               placeholder="处理状态"
-              style={{ width: 170 }}
               value={draft.status}
               options={ALERT_STATUS_OPTIONS}
               onChange={(value) => setDraft((prev) => ({ ...prev, status: value }))}
             />
+          </div>
+          <div className="production-filter-field">
+            <label>场景</label>
             <Select
               allowClear
               placeholder="告警场景"
-              style={{ width: 150 }}
               value={draft.source}
               options={ALERT_SOURCE_OPTIONS}
               onChange={(value) => setDraft((prev) => ({ ...prev, source: value }))}
             />
+          </div>
+          <div className="production-filter-field">
+            <label>时间</label>
             <RangePicker
               value={draft.range}
               onChange={(value) =>
@@ -540,54 +546,80 @@ export default function AlertCenter(): JSX.Element {
                 }))
               }
             />
-            <Input.Search
+          </div>
+          <div className="production-filter-field">
+            <label>关键字</label>
+            <Input
               allowClear
               placeholder="编号 / 标题 / 内容"
-              style={{ width: 220 }}
               value={draft.keyword}
               onChange={(event) => setDraft((prev) => ({ ...prev, keyword: event.target.value }))}
-              onSearch={handleSearch}
+              onPressEnter={handleSearch}
             />
+          </div>
+          <div className="production-filter-actions">
+            <Button onClick={handleReset}>重置</Button>
             <Button type="primary" onClick={handleSearch}>
               查询
             </Button>
-            <Button onClick={handleReset}>重置</Button>
-          </Space>
+          </div>
+        </div>
+      </Card>
 
-          {listQuery.isError && (
-            <Empty
-              description="告警加载失败，未展示任何示例数据。请点击刷新重试。"
-              style={{ margin: '12px 0' }}
-            />
-          )}
+      <Card>
+        {listQuery.isError && (
+          <Empty
+            description="告警加载失败，未展示任何示例数据。请点击刷新重试。"
+            style={{ margin: '12px 0' }}
+          />
+        )}
 
-          <Spin spinning={listQuery.isLoading}>
-            <Table<Alert>
-              rowKey="alertId"
-              columns={columns}
-              dataSource={rows}
-              scroll={{ x: 1240 }}
-              rowSelection={{
-                selectedRowKeys: selectedKeys,
-                onChange: (keys) => setSelectedKeys(keys as string[]),
-                getCheckboxProps: (record) => ({ disabled: record.status !== 1 }),
-              }}
-              pagination={{
-                current: pageNum,
-                pageSize,
-                total,
-                showSizeChanger: true,
-                showTotal: (value) => `共 ${formatNumber(value)} 条`,
-                onChange: (page, size) => {
-                  setPageNum(page)
-                  setPageSize(size)
-                },
-              }}
-            />
-          </Spin>
-        </Card>
-      </Space>
+        <Spin spinning={listQuery.isLoading}>
+          <Table<Alert>
+            memberListToolbar
+            rowKey="alertId"
+            columns={columns}
+            dataSource={rows}
+            scroll={{ x: 1320 }}
+            onReload={() => {
+              void queryClient.invalidateQueries({ queryKey: ['production-alerts'] })
+              void queryClient.invalidateQueries({ queryKey: ['production-alerts-stats'] })
+            }}
+            toolbarTitle={(
+              <Space size={8} wrap>
+                <Button onClick={() => { setReviewId(undefined); setReviewOpen(true) }}>复盘与跟进</Button>
+                <Popconfirm
+                  title={`确认忽略所选 ${selectedKeys.length} 条告警？`}
+                  disabled={selectedKeys.length === 0}
+                  onConfirm={() => ignoreMutation.mutate(selectedKeys)}
+                >
+                  <Button danger disabled={selectedKeys.length === 0}>
+                    批量忽略
+                  </Button>
+                </Popconfirm>
+              </Space>
+            )}
+            rowSelection={{
+              selectedRowKeys: selectedKeys,
+              onChange: (keys) => setSelectedKeys(keys as string[]),
+              getCheckboxProps: (record) => ({ disabled: record.status !== 1 }),
+            }}
+            pagination={{
+              current: pageNum,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              showTotal: (value) => `共 ${formatNumber(value)} 条`,
+              onChange: (page, size) => {
+                setPageNum(page)
+                setPageSize(size)
+              },
+            }}
+          />
+        </Spin>
+      </Card>
 
+      <AlertReviewPanel open={reviewOpen} alertId={reviewId} onClose={()=>setReviewOpen(false)}/>
       {/* 处理闭环弹窗 */}
       <Modal className="production-form-dialog"
         title={`告警处置 · ${currentTarget?.alertNo ?? ''}`}
@@ -709,6 +741,6 @@ export default function AlertCenter(): JSX.Element {
           ]} />
         )}
       </Modal>
-    </div>
+    </PageContainer>
   )
 }

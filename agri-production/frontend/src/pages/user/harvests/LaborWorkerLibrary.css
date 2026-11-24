@@ -1,0 +1,44 @@
+.labor-worker-page {
+  background: var(--prod-bg, #f5f6fa);
+  min-height: 100%;
+  padding-bottom: 16px;
+}
+
+.labor-worker-page .ant-page-header {
+  padding-inline: 0;
+}
+
+.lw-table-card {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.lw-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  background: #e8f5e9;
+  color: #2d8f4e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lw-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+@media (max-width: 767px) {
+  .lw-pagination {
+    justify-content: center;
+    overflow: auto;
+  }
+
+  .ant-modal {
+    max-width: calc(100vw - 24px);
+  }
+}

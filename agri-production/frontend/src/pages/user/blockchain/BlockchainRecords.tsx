@@ -1,3 +1,5 @@
+import ListRowActions from '@/components/ListRowActions'
+import '@/components/ProductionListDense.css'
 import ProTable from '@/components/ProductionTable'
 import PageContainer from '@/components/ProductionPageContainer'
 /**
@@ -32,10 +34,8 @@ import {
   Alert,
   Button,
   Card,
-  Col,
   Input,
   Modal,
-  Row,
   Select,
   Space,
   Tag,
@@ -44,9 +44,6 @@ import {
   message,
 } from 'antd'
 import {
-  CheckCircleFilled,
-  ClockCircleOutlined,
-  CloseCircleFilled,
   CopyOutlined,
   ExportOutlined,
   ReloadOutlined,
@@ -248,7 +245,7 @@ export default function BlockchainRecords(): JSX.Element {
   const farmId = useFarmStore((state) => state.currentFarm?.farmId)
 
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [filters, setFilters] = useState<FilterState>(() => {
     const status = searchParams.get('status')
     return {
@@ -481,24 +478,12 @@ export default function BlockchainRecords(): JSX.Element {
       width: 110,
       render: (_, record) => {
         if (record.status === 'SUCCESS') {
-          return (
-            <Tag color="success" icon={<CheckCircleFilled />}>
-              ✅已上链
-            </Tag>
-          )
+          return <Tag color="success">已上链</Tag>
         }
         if (record.status === 'PENDING') {
-          return (
-            <Tag color="processing" icon={<ClockCircleOutlined />}>
-              ⏳上链中
-            </Tag>
-          )
+          return <Tag color="processing">上链中</Tag>
         }
-        return (
-          <Tag color="error" icon={<CloseCircleFilled />}>
-            ❌上链失败
-          </Tag>
-        )
+        return <Tag color="error">上链失败</Tag>
       },
     },
     {
@@ -507,8 +492,9 @@ export default function BlockchainRecords(): JSX.Element {
       width: 150,
       fixed: 'right',
       render: (_, record) => (
-        <Space size={4}>
+        <ListRowActions>
           <Button
+            key="detail"
             type="link"
             size="small"
             onClick={() => navigate(`/production/blockchain/records/${record.recordId}`)}
@@ -517,6 +503,7 @@ export default function BlockchainRecords(): JSX.Element {
           </Button>
           {record.txHash ? (
             <Button
+              key="verify"
               type="link"
               size="small"
               onClick={() =>
@@ -529,88 +516,41 @@ export default function BlockchainRecords(): JSX.Element {
             </Button>
           ) : (
             // 后端验真只接受 txHash：无哈希时不给入口，避免点进去必然失败
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text key="no-verify" type="secondary" style={{ fontSize: 12 }}>
               未上链，不可验真
             </Typography.Text>
           )}
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
 
   return (
-    <PageContainer title="📋 存证记录">
-    <Card
-      extra={
-        <Space>
-          <Button
-            icon={<SafetyCertificateOutlined />}
-            disabled={selectedKeys.length === 0}
-            onClick={() => void handleBatchVerify()}
-          >
-            批量验真
-          </Button>
-          <Button icon={<ExportOutlined />} onClick={handleExport}>
-            导出
-          </Button>
-        </Space>
-      }
-    >
-      <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        {isError && (
-          <Alert
-            type="error"
-            showIcon
-            message="存证记录接口调用失败，未取得任何记录"
-            description={
-              <Space direction="vertical" size={4}>
-                <Typography.Text>
-                  {error ? describeError(error) : '请检查后端服务 /api/v1/production/blockchain/records'}
-                </Typography.Text>
-                <Typography.Text type="secondary">
-                  此处不会用占位数据顶替 —— 列表为空即代表未取得，不代表后端没有存证。
-                </Typography.Text>
-              </Space>
-            }
-            action={
-              <Button size="small" icon={<ReloadOutlined />} onClick={() => void refetch()}>
-                重试
-              </Button>
-            }
-          />
-        )}
-
-        {!isError && !isLoading && total === 0 && (
-          <Alert
-            type="info"
-            showIcon
-            message="后端当前没有存证记录"
-            description="接口调用成功但返回 0 条。这是真实结论，不是接口故障 —— 可先在「区块链存证总览」页用「手动上链」创建一条存证。"
-          />
-        )}
-
-        <Row gutter={[12, 12]}>
-          <Col xs={24} sm={12} md={6}>
+    <PageContainer className="production-list-dense production-member-list" title="存证记录">
+      <Card className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>状态</label>
             <Select
               allowClear
-              style={{ width: '100%' }}
               placeholder="全部状态"
               value={draft.status}
               options={STATUS_OPTIONS}
               onChange={(value) => setDraft((prev) => ({ ...prev, status: value }))}
             />
-          </Col>
-          <Col xs={24} sm={12} md={6}>
+          </div>
+          <div className="production-filter-field">
+            <label>业务类型</label>
             <Select
               allowClear
-              style={{ width: '100%' }}
               placeholder="全部业务类型"
               value={draft.bizType}
               options={BIZ_TYPE_OPTIONS}
               onChange={(value) => setDraft((prev) => ({ ...prev, bizType: value }))}
             />
-          </Col>
-          <Col xs={24} sm={12} md={8}>
+          </div>
+          <div className="production-filter-field">
+            <label>关键字</label>
             <Input
               allowClear
               placeholder="业务单号 / 存证记录号 模糊匹配"
@@ -618,55 +558,105 @@ export default function BlockchainRecords(): JSX.Element {
               onChange={(event) => setDraft((prev) => ({ ...prev, keyword: event.target.value }))}
               onPressEnter={handleSearch}
             />
-          </Col>
-          <Col xs={24} md={24}>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
-                搜索
-              </Button>
-              <Button onClick={handleReset}>重置</Button>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                共 {total.toLocaleString('en-US')} 条（后端真实返回）
-              </Typography.Text>
-            </Space>
-          </Col>
-        </Row>
+          </div>
+          <div className="production-filter-actions">
+            <Button onClick={handleReset}>重置</Button>
+            <Button type="primary" onClick={handleSearch}>
+              查询
+            </Button>
+          </div>
+        </div>
+      </Card>
 
+      <Card>
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          {isError && (
+            <Alert
+              type="error"
+              showIcon
+              message="存证记录接口调用失败，未取得任何记录"
+              description={
+                <Space direction="vertical" size={4}>
+                  <Typography.Text>
+                    {error ? describeError(error) : '请检查后端服务 /api/v1/production/blockchain/records'}
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
+                    此处不会用占位数据顶替 —— 列表为空即代表未取得，不代表后端没有存证。
+                  </Typography.Text>
+                </Space>
+              }
+              action={
+                <Button size="small" icon={<ReloadOutlined />} onClick={() => void refetch()}>
+                  重试
+                </Button>
+              }
+            />
+          )}
 
+          {!isError && !isLoading && total === 0 && (
+            <Alert
+              type="info"
+              showIcon
+              message="后端当前没有存证记录"
+              description="接口调用成功但返回 0 条。这是真实结论，不是接口故障 —— 可先在「区块链存证总览」页用「手动上链」创建一条存证。"
+            />
+          )}
 
-        <ProTable<BlockchainBizRecord>
-          rowKey="recordId"
-          size="small"
-          columns={columns}
-          dataSource={rows}
-          loading={isLoading}
-          search={false}
-          options={false}
-          scroll={{ x: 1620 }}
-          rowSelection={{
-            selectedRowKeys: selectedKeys,
-            onChange: (keys) => setSelectedKeys(keys as string[]),
-          }}
-          pagination={{
-            current: pageNum,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (value) => `共 ${value.toLocaleString('en-US')} 条`,
-            onChange: (nextPage, nextSize) => {
-              setPageNum(nextPage)
-              setPageSize(nextSize)
-            },
-          }}
-          locale={{ emptyText: '后端当前没有存证记录（接口成功返回 0 条）' }}
-        />
+          <ProTable<BlockchainBizRecord>
+            memberListToolbar
+            cardProps={false}
+            headerTitle={false}
+            tableAlertRender={false}
+            rowKey="recordId"
+            size="small"
+            columns={columns}
+            dataSource={rows}
+            loading={isLoading}
+            search={false}
+            options={{ reload: () => { void refetch() } }}
+            toolbar={{
+              title: (
+                <Space size={8} wrap>
+                  <Button
+                    type="primary"
+                    icon={<SafetyCertificateOutlined />}
+                    disabled={selectedKeys.length === 0}
+                    onClick={() => void handleBatchVerify()}
+                  >
+                    批量验真
+                  </Button>
+                  <Button icon={<ExportOutlined />} onClick={handleExport}>
+                    导出
+                  </Button>
+                </Space>
+              ),
+            }}
+            toolBarRender={false}
+            scroll={{ x: 1620 }}
+            rowSelection={{
+              selectedRowKeys: selectedKeys,
+              onChange: (keys) => setSelectedKeys(keys as string[]),
+            }}
+            pagination={{
+              current: pageNum,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (value) => `共 ${value.toLocaleString('en-US')} 条`,
+              onChange: (nextPage, nextSize) => {
+                setPageNum(nextPage)
+                setPageSize(nextSize)
+              },
+            }}
+            locale={{ emptyText: '后端当前没有存证记录（接口成功返回 0 条）' }}
+          />
 
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          已选 {selectedKeys.length} 条 · 批量验真仅支持「已上链（含交易哈希）」的记录 ——
-          后端验真端点只接受 txHash，无哈希的记录不参与。
-        </Typography.Text>
-      </Space>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            批量验真仅支持「已上链（含交易哈希）」的记录 ——
+            后端验真端点只接受 txHash，无哈希的记录不参与。
+          </Typography.Text>
+        </Space>
 
       <Modal
         title="批量验真结果"
@@ -701,7 +691,7 @@ export default function BlockchainRecords(): JSX.Element {
           )}
         </Space>
       </Modal>
-    </Card>
+      </Card>
     </PageContainer>
   )
 }

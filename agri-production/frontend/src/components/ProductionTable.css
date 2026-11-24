@@ -33,7 +33,7 @@
  */
 .production-record-table .ant-table-thead > tr > .ant-table-cell-fix-right {
   z-index: 3;
-  background: var(--ant-table-header-bg, #f4f7f5);
+  background: var(--ant-table-header-bg, #fafafa);
 }
 .production-record-table .ant-table-tbody > tr > .ant-table-cell-fix-right {
   z-index: 3;
@@ -57,3 +57,108 @@
   outline: 2px solid #23744c;
   outline-offset: -2px;
 }
+
+/* 标准列表页筛选区：4 列等宽网格 + 右对齐按钮（重置在左、查询在右）。 */
+.production-filter-grid.ant-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+  align-items: center;
+  width: 100%;
+}
+.production-filter-grid.ant-form .ant-form-item {
+  margin: 0 !important;
+  min-width: 0;
+  width: 100%;
+}
+.production-filter-grid.ant-form .ant-form-item-row {
+  flex-wrap: nowrap;
+  width: 100%;
+}
+.production-filter-grid.ant-form .ant-form-item-label {
+  flex: none;
+  padding-inline-end: 8px;
+}
+.production-filter-grid.ant-form .ant-form-item-control {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.production-filter-grid.ant-form .ant-input,
+.production-filter-grid.ant-form .ant-input-affix-wrapper,
+.production-filter-grid.ant-form .ant-input-group-wrapper,
+.production-filter-grid.ant-form .ant-select,
+.production-filter-grid.ant-form .ant-picker {
+  width: 100% !important;
+  min-width: 0;
+}
+.production-filter-grid.ant-form .production-filter-actions {
+  grid-column: -2 / -1;
+  justify-self: end;
+  width: auto !important;
+}
+.production-filter-grid.ant-form .production-filter-actions .ant-form-item-control-input-content {
+  display: flex;
+  justify-content: flex-end;
+}
+.production-filter-grid.ant-form .production-filter-span-2 {
+  grid-column: span 2;
+}
+/* 非 Form 的独立 div 筛选容器同样适用 4 列等宽网格 */
+.production-filter-grid:not(.ant-form) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 16px;
+  align-items: center;
+  width: 100%;
+}
+.production-filter-grid:not(.ant-form) > .production-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.production-filter-grid:not(.ant-form) > .production-filter-field > label {
+  flex: none;
+  color: #595959;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.production-filter-grid:not(.ant-form) > .production-filter-field > :not(label) {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100% !important;
+}
+.production-filter-grid:not(.ant-form) > .production-filter-span-2 {
+  grid-column: span 2;
+}
+.production-filter-grid:not(.ant-form) > .production-filter-actions {
+  grid-column: -2 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+@media (max-width: 1199px) {
+  .production-filter-grid.ant-form,
+  .production-filter-grid:not(.ant-form) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .production-filter-grid .production-filter-span-2 {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 767px) {
+  .production-filter-grid.ant-form,
+  .production-filter-grid:not(.ant-form) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .production-filter-grid .production-filter-span-2,
+  .production-filter-grid .production-filter-actions {
+    grid-column: 1 / -1;
+  }
+}
+/* ProTable 内置查询表单：对齐按钮右对齐及间距 */
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+

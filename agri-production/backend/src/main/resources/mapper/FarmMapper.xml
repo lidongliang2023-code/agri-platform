@@ -13,9 +13,15 @@
             这个写法与 AlertRecordMapper 既有的 <if test="tenantId != null"> 一致。
         -->
         <if test="tenantId != null and tenantId != ''">AND tenant_id = #{tenantId}</if>
-        <if test="dto.farmName != null and dto.farmName != ''">
-            AND farm_name LIKE CONCAT('%', #{dto.farmName}, '%')
-        </if>
+        <choose>
+            <when test="dto.keyword != null and dto.keyword != ''">
+                AND (farm_name LIKE CONCAT('%', #{dto.keyword}, '%')
+                     OR farm_code LIKE CONCAT('%', #{dto.keyword}, '%'))
+            </when>
+            <when test="dto.farmName != null and dto.farmName != ''">
+                AND farm_name LIKE CONCAT('%', #{dto.farmName}, '%')
+            </when>
+        </choose>
         <if test="dto.farmType != null and dto.farmType != ''">
             AND farm_type = #{dto.farmType}
         </if>

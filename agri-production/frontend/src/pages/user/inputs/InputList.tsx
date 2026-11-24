@@ -1,4 +1,7 @@
+import { Popover as ListSummary } from 'antd'
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import ProTable from '@/components/ProductionTable'
 import Card from '@/components/SectionCard'
 import './inputs.css'
@@ -23,9 +26,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
-  Alert,
   Button,
-  Col,
   Empty,
   Form,
   Input,
@@ -33,13 +34,12 @@ import {
   Modal,
   Popconfirm,
   Radio,
-  Row,
   Segmented,
   Select,
   Space,
-  Statistic,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   Upload,
   message,
@@ -601,14 +601,15 @@ export default function InputList(): JSX.Element {
     {
       title: '投入品',
       dataIndex: 'inputName',
-      width: 180,
+      width: 220,
+      ellipsis: true,
       render: (_, record) => (
-        <Space direction="vertical" size={0}>
+        <span className="production-dense-name-wrap" title={`${record.inputName ?? '-'} (${record.inputCode ?? record.inputId})`}>
           <Typography.Text strong>{record.inputName ?? '-'}</Typography.Text>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {record.inputCode ?? record.inputId}
           </Typography.Text>
-        </Space>
+        </span>
       ),
     },
     {
@@ -714,9 +715,9 @@ export default function InputList(): JSX.Element {
       title: '操作',
       fixed: 'right',
       key: 'option',
-      width: 300,
+      width: 128,
       valueType: 'option',
-      render: (_, record) => [
+      render: (_, record) => <ListRowActions>{[
         <Typography.Link
           key="stock-in"
           onClick={() =>
@@ -754,7 +755,7 @@ export default function InputList(): JSX.Element {
         >
           <Typography.Link type="danger">删除</Typography.Link>
         </Popconfirm>,
-      ],
+      ]}</ListRowActions>,
     },
   ]
 
@@ -765,33 +766,9 @@ export default function InputList(): JSX.Element {
 
   return (
     <PageContainer
-      className="inputs-page"
+      className="inputs-page production-list-dense production-member-list"
       title="农资台账"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
-      // 页头操作按钮只在「投入品档案」Tab 展示；使用台账与流水各自带作业按钮
-      extra={
-        tab !== 'archive'
-          ? undefined
-          : [
-              <Button key="scan" icon={<ScanOutlined />} onClick={() => setScanOpen(true)}>
-                扫码录入
-              </Button>,
-              <Button
-                key="create"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => navigate('/production/inputs/create')}
-              >
-                手动添加
-              </Button>,
-              <Button key="import" icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
-                导入
-              </Button>,
-              <Button key="export" icon={<DownloadOutlined />} onClick={handleExport}>
-                导出
-              </Button>,
-            ]
-      }
     >
       <Card className="input-tabs-card">
         <Tabs
@@ -803,13 +780,15 @@ export default function InputList(): JSX.Element {
               label: `投入品档案(${filteredInputs.length})`,
               children: (
                 <>
-                  <Card style={{ marginBottom: 16 }}>
-                    <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+                  {/* 库存摘要与出入库快捷弹窗保留，紧凑单行展示 */}
+                  <InputStock part="overview" showTable={false} shortcut={stockShortcut} />
+
+                  <Card className="production-dense-filter-card">
+                    <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
                       <Form.Item name="range" label="统计周期">
                         <Select
                           placeholder="请选择周期"
                           options={RANGE_OPTIONS}
-                          style={{ width: 120 }}
                           defaultValue="month"
                         />
                       </Form.Item>
@@ -818,7 +797,6 @@ export default function InputList(): JSX.Element {
                           allowClear
                           placeholder="全部投入品类型"
                           options={INPUT_CATEGORY_OPTIONS}
-                          style={{ width: 120 }}
                         />
                       </Form.Item>
                       <Form.Item name="plotId" label="地块">
@@ -828,14 +806,12 @@ export default function InputList(): JSX.Element {
                           optionFilterProp="label"
                           placeholder="全部地块"
                           options={plotOptions}
-                          style={{ width: 140 }}
                         />
                       </Form.Item>
                       <Form.Item name="compliance" label="合规">
                         <Select
                           allowClear
                           placeholder="全部合规"
-                          style={{ width: 120 }}
                           options={[
                             { value: 'pass', label: '✅ 通过' },
                             { value: 'warning', label: '⚠️ 预警' },
@@ -844,9 +820,9 @@ export default function InputList(): JSX.Element {
                         />
                       </Form.Item>
                       <Form.Item name="keyword" label="关键字">
-                        <Input allowClear placeholder="投入品名称 / 登记证号" style={{ width: 180 }} />
+                        <Input allowClear placeholder="投入品名称 / 登记证号" />
                       </Form.Item>
-                      <Form.Item label="库存状态">
+                      <Form.Item label="库存状态" className="production-filter-span-2">
                         <Segmented
                           size="small"
                           value={filters.stockState ?? 'all'}
@@ -858,62 +834,16 @@ export default function InputList(): JSX.Element {
                           options={STOCK_STATE_OPTIONS}
                         />
                       </Form.Item>
-                      <Form.Item>
-                        <Space>
-                          <Button type="primary" onClick={handleSearch}>
+                      <Form.Item className="production-filter-actions">
+                        <Space size={8}>
+                          <Button onClick={handleReset}>重置</Button>
+                          <Button type="primary" htmlType="submit" onClick={handleSearch}>
                             查询
                           </Button>
-                          <Button onClick={handleReset}>重置</Button>
                         </Space>
                       </Form.Item>
                     </Form>
                   </Card>
-
-                  <Card
-                    title={`📊 投入概况（${rangeLabel}）`}
-                    style={{ marginBottom: 16 }}
-                    loading={loading}
-                  >
-                    <Row gutter={[16, 16]}>
-                      {overview.map((item) => (
-                        <Col key={item.value} xs={12} lg={6}>
-                          <Statistic
-                            title={`${item.label}（${item.count} 次）`}
-                            value={item.qty}
-                            precision={2}
-                            suffix={item.unit || '-'}
-                          />
-                        </Col>
-                      ))}
-                    </Row>
-                  </Card>
-
-                  <Alert
-                    style={{ marginBottom: 16 }}
-                    type={complianceSummary.blocked > 0 ? 'error' : 'success'}
-                    showIcon
-                    message={
-                      <Space size={16} wrap>
-                        <span>
-                          合规状态：
-                          {complianceSummary.blocked > 0 ? (
-                            <Tag color="red">❌ 存在拦截</Tag>
-                          ) : (
-                            <Tag color="green">✅ 全部通过</Tag>
-                          )}
-                        </span>
-                        <span>拦截：{complianceSummary.blocked} 次</span>
-                        <span>预警：{complianceSummary.warning} 次</span>
-                        <span>休药期地块：{complianceSummary.withdrawalPlots} 个</span>
-                        <Typography.Text type="secondary">
-                          统计口径 {rangeStart} ~ {rangeEnd}，共 {complianceSummary.total} 条使用记录
-                        </Typography.Text>
-                      </Space>
-                    }
-                  />
-
-                  {/* 库存统计与作业保留；库存列表已并入下方唯一主表 */}
-                  <InputStock part="overview" showTable={false} shortcut={stockShortcut} />
 
                   {isError ? (
                     <Empty
@@ -925,41 +855,74 @@ export default function InputList(): JSX.Element {
                       }
                     />
                   ) : (
-                    <Card
-                      className="input-record-section"
-                      title="投入品档案"
-                      extra={
-                        <Typography.Text type="secondary">
-                          共 {filteredInputs.length} 种
-                        </Typography.Text>
-                      }
-                    >
-                      <ProTable<InputInfo>
-            cardProps={false}
-            className="input-record-table"
-                        rowKey="inputId"
-                        columns={archiveColumns}
-                        dataSource={pagedInputs}
-                        loading={loading}
-                        search={false}
-                        headerTitle="投入品档案"
-                        rowSelection={{}}
-                        // 库存、效期和作业并入同一张表，窄屏只在这一张表内横向滚动
-                        scroll={{ x: 1750 }}
-                        options={{ reload: () => void invalidateAll(), density: true, setting: true }}
-                        pagination={{
-                          current: pageNum,
-                          pageSize,
-                          total: filteredInputs.length,
-                          showSizeChanger: true,
-                          showTotal: (total) => `共 ${total} 条`,
-                          onChange: (nextPage, nextSize) => {
-                            setPageNum(nextPage)
-                            setPageSize(nextSize)
-                          },
-                        }}
-                      />
-                    </Card>
+                    <ProTable<InputInfo>
+                      memberListToolbar
+                      cardProps={false}
+                      className="input-record-table"
+                      rowKey="inputId"
+                      columns={archiveColumns}
+                      dataSource={pagedInputs}
+                      loading={loading}
+                      search={false}
+                      headerTitle={false}
+                      toolbar={{
+                        title: (
+                          <Space size={8} wrap>
+                            <ListSummary trigger="click" content={<div className="production-dense-summary" aria-busy={loading}>
+                    <div className="production-dense-summary-items">
+                      {overview.map((item) => (
+                        <span className="production-dense-metric" key={item.value}>
+                          <span className="production-dense-metric-label">{item.label}({rangeLabel})</span>
+                          <span className="production-dense-metric-value">
+                            {item.qty.toFixed(2)} {item.unit || '-'}
+                          </span>
+                        </span>
+                      ))}
+                      <Tooltip title={`统计口径 ${rangeStart} ~ ${rangeEnd}，共 ${complianceSummary.total} 条使用记录；拦截 ${complianceSummary.blocked} 次、预警 ${complianceSummary.warning} 次、休药期地块 ${complianceSummary.withdrawalPlots} 个`}>
+                        <span className={`production-dense-metric-chip ${complianceSummary.blocked > 0 ? 'is-danger' : 'is-success'}`}>
+                          合规：{complianceSummary.blocked > 0 ? `拦截 ${complianceSummary.blocked}` : '全部通过'}
+                          {complianceSummary.warning > 0 ? ` · 预警 ${complianceSummary.warning}` : ''}
+                          {complianceSummary.withdrawalPlots > 0 ? ` · 休药期 ${complianceSummary.withdrawalPlots} 块` : ''}
+                        </span>
+                      </Tooltip>
+                    </div>
+                  </div>}><Button>使用统计</Button></ListSummary>
+                            <Button
+                              type="primary"
+                              icon={<PlusOutlined />}
+                              onClick={() => navigate('/production/inputs/create')}
+                            >
+                              手动添加
+                            </Button>
+                            <Button icon={<ScanOutlined />} onClick={() => setScanOpen(true)}>
+                              扫码录入
+                            </Button>
+                            <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
+                              导入
+                            </Button>
+                            <Button icon={<DownloadOutlined />} onClick={handleExport}>
+                              导出
+                            </Button>
+                          </Space>
+                        ),
+                      }}
+                      rowSelection={{}}
+                      tableAlertRender={false}
+                      // 库存、效期和作业并入同一张表，窄屏只在这一张表内横向滚动
+                      scroll={{ x: 1750 }}
+                      options={{ reload: () => void invalidateAll(), density: true, setting: true }}
+                      pagination={{
+                        current: pageNum,
+                        pageSize,
+                        total: filteredInputs.length,
+                        showSizeChanger: true,
+                        showTotal: (total) => `共 ${total} 条`,
+                        onChange: (nextPage, nextSize) => {
+                          setPageNum(nextPage)
+                          setPageSize(nextSize)
+                        },
+                      }}
+                    />
                   )}
                 </>
               ),

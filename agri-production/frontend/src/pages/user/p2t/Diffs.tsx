@@ -1,4 +1,6 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { App, Alert, Button, Drawer, Input, Modal, Select, Space, Tag } from 'antd'
@@ -57,13 +59,26 @@ export default function P2tDiffs(): JSX.Element {
     { title: '处置方式', dataIndex: 'handleWay', search: false, width: 120 },
     { title: '处置说明', dataIndex: 'handleRemark', search: false, width: 240, ellipsis: true },
     { title: '处置时间', dataIndex: 'handleTime', search: false, width: 170 },
-    { title: '操作', valueType: 'option', fixed: 'right', width: 140, render: (_, r) => <Space><Button type="link" onClick={() => setSelected(r)}>详情</Button>{r.status !== 'CLOSED' && r.ownerSide === 'PRODUCTION' && <Button type="link" onClick={() => begin(r)}>登记处置</Button>}</Space> },
+    {
+      title: '操作',
+      valueType: 'option',
+      fixed: 'right',
+      width: 150,
+      render: (_, r) => (
+        <ListRowActions>
+          <Button key="detail" type="link" size="small" onClick={() => setSelected(r)}>详情</Button>
+          {r.status !== 'CLOSED' && r.ownerSide === 'PRODUCTION' ? (
+            <Button key="handle" type="link" size="small" onClick={() => begin(r)}>登记处置</Button>
+          ) : null}
+        </ListRowActions>
+      ),
+    },
   ]
-  return <PageContainer header={{ title: '差异与异常处置' }}>
+  return <PageContainer className="production-list-dense production-member-list" header={{ title: '差异与异常处置' }}>
     {failed && <Alert type="error" message="工单加载失败" action={<Button onClick={() => ref.current?.reload()}>重试</Button>} />}
-    <ProTable<P2tDiffTicket> key={scope} actionRef={ref} rowKey="id" columns={columns} params={{ subjectId }}
+    <ProTable<P2tDiffTicket> memberListToolbar headerTitle={false} tableAlertRender={false} key={scope} actionRef={ref} rowKey="id" columns={columns} params={{ subjectId }}
       columnWidthStorageKey="p2t-diff-tickets" scroll={SCROLL_BY_CONTENT} options={{ reload: true, density: true, setting: true }}
-      search={{ labelWidth: 'auto' }} pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+      search={{ labelWidth: 'auto', layout: 'vertical' }} rowSelection={{}} pagination={{ defaultPageSize: 20, showSizeChanger: true }}
       request={async p => {
         if (!current()) return { data: [], total: 0, success: false }
         setFailed(false)

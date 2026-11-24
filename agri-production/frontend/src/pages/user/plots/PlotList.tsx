@@ -1,8 +1,11 @@
+import ProductionPagination from '@/components/ProductionPagination'
+import { Popover as ListSummary } from 'antd'
+import ListRowActions from '@/components/ListRowActions'
 import PlotImportModal from './PlotImportModal'
 import BusinessRecordList from '@/components/BusinessRecordList'
 import BusinessCards from '@/components/BusinessCards'
-import DetailMetricGrid from '@/components/DetailMetricGrid'
 import Card from '@/components/SectionCard'
+import '@/components/ProductionListDense.css'
 /**
  * 页面名称：地块列表
  * 路由路径：/production/plots
@@ -37,7 +40,6 @@ import {
   Form,
   Input,
   Modal,
-  Pagination,
   Popconfirm,
   Segmented,
   Select,
@@ -107,7 +109,7 @@ export default function PlotList(): JSX.Element {
   const [importOpen, setImportOpen] = useState(false)
   const [view, setView] = useState<ViewMode>('table')
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
   const [filters, setFilters] = useState<PlotFilters>({
     farmId: farmIdFromUrl,
@@ -328,14 +330,14 @@ export default function PlotList(): JSX.Element {
 
   /** 列表视图列定义（原型 P4） */
   const columns: ColumnsType<Plot> = [
-    { title: '地块编号', dataIndex: 'plotCode', width: 140, fixed: 'left', render: (value) => value || '-' },
+    { title: '地块编号', dataIndex: 'plotCode', width: 140, fixed: 'left', ellipsis: true, render: (value) => value || '-' },
     {
       title: '地块名',
       dataIndex: 'plotName',
       width: 180,
       ellipsis: true,
       render: (value: string, record) => (
-        <Typography.Link onClick={() => navigate(`/production/plots/${record.plotId}`)}>
+        <Typography.Link className="production-dense-link-ellipsis" title={value} onClick={() => navigate(`/production/plots/${record.plotId}`)}>
           {value}
         </Typography.Link>
       ),
@@ -343,27 +345,33 @@ export default function PlotList(): JSX.Element {
     {
       title: '农场',
       dataIndex: 'farmId',
-      width: 160,
-      render: (_, record) => record.farmName ?? farmNameMap[record.farmId] ?? '-',
+      width: 170,
+      ellipsis: true,
+      render: (_, record) => {
+        const name = record.farmName ?? farmNameMap[record.farmId] ?? '-'
+        return <span className="production-dense-link-ellipsis" title={name}>{name}</span>
+      },
     },
     {
       title: '面积',
       dataIndex: 'area',
       width: 100,
+      ellipsis: true,
       render: (_, record) => `${Number(record.area || 0).toLocaleString('zh-CN')}亩`,
     },
     {
       title: '作物',
       key: 'crop',
-      width: 120,
+      width: 130,
+      ellipsis: true,
       render: (_, record) => {
         // 作物取 currentCrop（主数据），历史行退回 cropVariety（见 cropLabelOf 的说明）
         const crop = cropLabelOf(record)
         return crop ? (
-          <Space size={4}>
+          <span className="production-dense-name-wrap" title={crop}>
             <span>{CROP_EMOJI_MAP[crop] ?? '🌱'}</span>
-            <span>{crop}</span>
-          </Space>
+            <span className="production-dense-link-ellipsis">{crop}</span>
+          </span>
         ) : (
           <Typography.Text type="secondary">未种植</Typography.Text>
         )
@@ -373,6 +381,7 @@ export default function PlotList(): JSX.Element {
       title: '生长阶段',
       key: 'stage',
       width: 110,
+      ellipsis: true,
       render: (_, record) =>
         plotStageMap[record.plotId] ? (
           <Tag color="geekblue">{plotStageMap[record.plotId]}</Tag>
@@ -392,10 +401,10 @@ export default function PlotList(): JSX.Element {
     {
       title: '操作',
       key: 'option',
-      width: 300,
+      width: 128,
       fixed: 'right',
       render: (_, record) => (
-        <Space size={8}>
+        <ListRowActions>
           <Typography.Link onClick={() => navigate(`/production/plots/${record.plotId}`)}>
             详情
           </Typography.Link>
@@ -427,7 +436,7 @@ export default function PlotList(): JSX.Element {
           >
             <Typography.Link type="danger">删除</Typography.Link>
           </Popconfirm>
-        </Space>
+        </ListRowActions>
       ),
     },
   ]
@@ -484,59 +493,9 @@ export default function PlotList(): JSX.Element {
   )
 
   /** 渲染内容区 */
-  const renderContent = (): JSX.Element => {
-    if (plotsQuery.isLoading || growthQuery.isLoading || plotsQuery.isFetching || growthQuery.isFetching) {
-      return <Card loading />
-    }
-    if (plotsQuery.isError || growthQuery.isError) {
-      return (
-        <Empty
-          description={
-            <Space direction="vertical">
-              <Typography.Text type="danger">全量数据加载失败，筛选与统计暂不可用：{(plotsQuery.error ?? growthQuery.error)?.message ?? '请重试'}</Typography.Text>
-              <Button onClick={() => { void plotsQuery.refetch(); void growthQuery.refetch() }}>重新加载</Button>
-            </Space>
-          }
-        />
-      )
-    }
-    if (pagePlots.length === 0) {
-      return (
-        <Empty
-          description={
-            <Space direction="vertical">
-              <Typography.Text type="secondary">暂无匹配的地块</Typography.Text>
-              <Button type="primary" onClick={() => navigate('/production/plots/create')}>
-                立即新增地块
-              </Button>
-            </Space>
-          }
-        />
-      )
-    }
-    if (view === 'map') return renderMap()
-    if (view === 'board') return renderBoard()
-    return (
-      <BusinessRecordList<Plot>
-        onReload={() => Promise.all([plotsQuery.refetch(), growthQuery.refetch(), farmQuery.refetch()])}
-        rowKey="plotId"
-        dataSource={pagePlots}
-        columns={columns}
-        pagination={false}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys as string[]),
-        }}
-        scroll={{ x: 1400 }}
-      />
-    )
-  }
-
-  return (
-    <PageContainer
-      title="地块管理"
-      subTitle="管理地块档案、空间边界与生产关联记录"
-      extra={[
+  const listToolbar = (
+    <Space wrap size={8}>
+      {[
         <Segmented
           key="view"
           value={view}
@@ -561,24 +520,100 @@ export default function PlotList(): JSX.Element {
           新增地块
         </Button>,
       ]}
-    >
-      <DetailMetricGrid items={[
-        { key: 'total', title: '筛选地块', value: complete ? stats.total : null, suffix: '个' },
-        { key: 'planting', title: '筛选在田', value: complete ? stats.planting : null, suffix: '个' },
-        { key: 'idle', title: '筛选空闲', value: complete ? stats.idle : null, suffix: '个' },
-        { key: 'area', title: '筛选面积', value: complete ? stats.area : null, suffix: '亩', precision: 2 },
-      ]} />
+      
+      <ListSummary trigger="click" content={<div className="production-dense-card-title">
+            <span className="production-dense-card-title-text">地块档案</span>
+            <span className="production-dense-summary-inline">
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">筛选地块</span>
+                <span className="production-dense-metric-value">{complete ? `${stats.total} 个` : '—'}</span>
+              </span>
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">筛选在田</span>
+                <span className="production-dense-metric-value is-success">{complete ? `${stats.planting} 个` : '—'}</span>
+              </span>
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">筛选空闲</span>
+                <span className="production-dense-metric-value">{complete ? `${stats.idle} 个` : '—'}</span>
+              </span>
+              <span className="production-dense-metric">
+                <span className="production-dense-metric-label">筛选面积</span>
+                <span className="production-dense-metric-value">{complete ? `${stats.area.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 亩` : '—'}</span>
+              </span>
+            </span>
+          </div>}><Button>统计</Button></ListSummary>
+    </Space>
+  )
 
-      {(plotsQuery.isError || growthQuery.isError) && <Alert type="error" showIcon message="全量数据未加载完成，暂不显示统计" style={{ marginBottom: 16 }} />}
-      <Card title="筛选地块" style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" onFinish={handleSearch} style={{ rowGap: 12 }}>
+  const renderContent = (): JSX.Element => {
+    if (plotsQuery.isLoading || growthQuery.isLoading || plotsQuery.isFetching || growthQuery.isFetching) {
+      return <Card loading />
+    }
+    if (plotsQuery.isError || growthQuery.isError) {
+      return (
+        <Empty
+          description={
+            <Space direction="vertical">
+              <Typography.Text type="danger">全量数据加载失败，筛选与统计暂不可用：{(plotsQuery.error ?? growthQuery.error)?.message ?? '请重试'}</Typography.Text>
+              <Button onClick={() => { void plotsQuery.refetch(); void growthQuery.refetch() }}>重新加载</Button>
+            </Space>
+          }
+        />
+      )
+    }
+    if (pagePlots.length === 0 && view !== 'table') {
+      return (
+        <Empty
+          description={
+            <Space direction="vertical">
+              <Typography.Text type="secondary">暂无匹配的地块</Typography.Text>
+              <Button type="primary" onClick={() => navigate('/production/plots/create')}>
+                立即新增地块
+              </Button>
+            </Space>
+          }
+        />
+      )
+    }
+    if (view === 'map') return renderMap()
+    if (view === 'board') return renderBoard()
+    return (
+      <BusinessRecordList<Plot>
+        memberListToolbar
+        toolbarTitle={listToolbar}
+        onReload={() => Promise.all([plotsQuery.refetch(), growthQuery.refetch(), farmQuery.refetch()])}
+        rowKey="plotId"
+        dataSource={pagePlots}
+        columns={columns}
+        pagination={false}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: (keys) => setSelectedRowKeys(keys as string[]),
+        }}
+        scroll={{ x: 1400 }}
+      />
+    )
+  }
+
+  return (
+    <PageContainer
+      className="production-list-dense production-member-list"
+      title="地块管理"
+      subTitle="管理地块档案、空间边界与生产关联记录"
+
+
+    >
+      {(plotsQuery.isError || growthQuery.isError) && <Alert type="error" showIcon message="全量数据未加载完成，暂不显示统计" style={{ marginBottom: 8 }} />}
+
+      <Card className="production-dense-filter-card">
+        <Form form={filterForm} className="production-dense-filter-bar production-filter-grid" onFinish={handleSearch}>
           <Form.Item name="farmId" label="农场">
             <Select
+              aria-label="筛选农场"
               allowClear
               showSearch
               optionFilterProp="label"
               placeholder="全部农场"
-              style={{ width: 180 }}
               options={(farmQuery.data ?? []).map((farm) => ({
                 value: String(farm.farmId),
                 label: farm.farmName,
@@ -587,27 +622,27 @@ export default function PlotList(): JSX.Element {
           </Form.Item>
           <Form.Item name="crop" label="作物">
             <Select
+              aria-label="筛选作物"
               allowClear
               showSearch
               optionFilterProp="label"
               placeholder="全部作物"
-              style={{ width: 140 }}
               options={cropOptions.map((crop) => ({ value: crop, label: crop }))}
             />
           </Form.Item>
-          <Form.Item name="stage" label="生长阶段">
+          <Form.Item name="stage" label="阶段">
             <Select
+              aria-label="筛选生长阶段"
               allowClear
               placeholder="全部生长阶段"
-              style={{ width: 150 }}
               options={stageOptions.map((stage) => ({ value: stage, label: stage }))}
             />
           </Form.Item>
           <Form.Item name="status" label="状态">
             <Select
+              aria-label="筛选状态"
               allowClear
               placeholder="全部状态"
-              style={{ width: 130 }}
               options={FILTER_STATUS_VALUES.map((value) => ({
                 value,
                 label: PLOT_STATUS_META[value].label,
@@ -615,29 +650,29 @@ export default function PlotList(): JSX.Element {
             />
           </Form.Item>
           <Form.Item name="keyword" label="关键字">
-            <Input allowClear placeholder="地块编号 / 名称" style={{ width: 180 }} />
+            <Input aria-label="关键字" allowClear placeholder="地块编号 / 名称" />
           </Form.Item>
-          <Form.Item>
-            <Space>
+          <Form.Item className="production-filter-actions">
+            <Space size={8}>
+              <Button onClick={handleReset}>重置</Button>
               <Button type="primary" htmlType="submit">
                 查询
               </Button>
-              <Button onClick={handleReset}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
       </Card>
+      <Card>
 
-      <Card title="地块档案">
+        {(view !== 'table' || !complete) && listToolbar}
         {renderContent()}
         {complete && view !== 'map' && filteredPlots.length > 0 && (
-          <div style={{ marginTop: 16, textAlign: 'right' }}>
-            <Pagination
+          <div style={{ marginTop: 10 }}>
+            <ProductionPagination
+              selectedCount={view === 'table' ? selectedRowKeys.length : 0}
               current={currentPage}
               pageSize={pageSize}
               total={filteredPlots.length}
-              showSizeChanger
-              pageSizeOptions={[10, 20, 50]}
               onChange={(nextPage, nextSize) => {
                 setPageNum(nextPage)
                 setPageSize(nextSize)

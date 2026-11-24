@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
+import type { Key } from 'react'
 import { Alert, Button, Tag, message } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 import { downloadImportCsv } from '@/utils/import-csv'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
+import ListRowActions from '@/components/ListRowActions'
 import ProTable from '@/components/ProductionTable'
 import SectionCard from '@/components/SectionCard'
 import { SCROLL_BY_CONTENT } from '@/components/tableScroll'
@@ -16,6 +18,7 @@ export default function OfferSubscriptionFlows({ offerNo, unit, subjectId }: {
   offerNo: string; unit?: string; subjectId: string
 }): JSX.Element {
   const [selected, setSelected] = useState<P2tSubscription | null>(null)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
   const actionRef = useRef<ActionType>(null)
   const [failed, setFailed] = useState(false)
   const filters = useRef<{ keyword?: string; eventType?: string; writebackStatus?: string }>({})
@@ -113,13 +116,14 @@ export default function OfferSubscriptionFlows({ offerNo, unit, subjectId }: {
     { title: '锁定结束', dataIndex: 'lockTo', width: 170, search: false },
     { title: '支付时间', dataIndex: 'paidAt', width: 170, search: false },
     { title: '回写时间', dataIndex: 'createTime', width: 170, search: false },
-    { title: '操作', valueType: 'option', width: 90, fixed: 'right', render: (_, row) => <Button type="link" onClick={() => setSelected(row)}>详情</Button> },
+    { title: '操作', valueType: 'option', width: 100, fixed: 'right', render: (_, row) => <ListRowActions><Button key="detail" type="link" size="small" onClick={() => setSelected(row)}>详情</Button></ListRowActions> },
   ]
   return (
     <SectionCard title="关联认购流水">
       {selected && <SubscriptionDetail record={selected} subjectId={subjectId} onClose={() => setSelected(null)} />}
       {failed && <Alert type="error" showIcon message="认购流水加载失败" action={<Button size="small" onClick={() => actionRef.current?.reload()}>重试</Button>} />}
       <ProTable<P2tSubscription>
+        memberListToolbar
         actionRef={actionRef}
         columnWidthStorageKey="p2t-offer-subscription-flows"
         rowKey="id"
@@ -127,8 +131,9 @@ export default function OfferSubscriptionFlows({ offerNo, unit, subjectId }: {
         params={{ offerNo, subjectId }}
         scroll={SCROLL_BY_CONTENT}
         search={{ labelWidth: 'auto' }}
-        pagination={{ defaultPageSize: 10, showSizeChanger: true }}
-        options={{ reload: true, density: true, setting: true }}
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+        options={{ reload: true }}
         toolBarRender={() => [
           <Button key="export" icon={<DownloadOutlined />} loading={exporting} onClick={exportFlows}>
             {exporting ? `正在读取 ${exportedCount} 条` : '导出筛选结果（CSV）'}

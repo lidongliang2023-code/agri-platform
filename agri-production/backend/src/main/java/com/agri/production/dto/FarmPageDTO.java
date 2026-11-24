@@ -5,6 +5,9 @@ import lombok.Data;
 @Data
 public class FarmPageDTO {
 
+    /** 用户端列表按农场名称或编号搜索。 */
+    private String keyword;
+
     private String farmName;
 
     private String farmType;

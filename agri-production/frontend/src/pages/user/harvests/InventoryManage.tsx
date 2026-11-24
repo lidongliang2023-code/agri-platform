@@ -1,6 +1,9 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import Card from '@/components/SectionCard'
 import './harvests.css'
+import ExpiredDisposal from './ExpiredDisposal'
 import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：库存管理
@@ -23,20 +26,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageContainer from '@/components/ProductionPageContainer'
 import type { ProColumns } from '@ant-design/pro-components'
 import {
-  Alert,
   Button,
-  Col,
   Empty,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
-  Row,
   Select,
   Space,
-  Statistic,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -59,6 +59,7 @@ import {
   LOSS_REASON_OPTIONS,
   WAREHOUSE_OPTIONS,
   resolveInventoryHealth,
+  inventoryExpiryState,
 } from '@/types'
 
 /** 列表筛选条件 */
@@ -102,15 +103,16 @@ export default function InventoryManage(): JSX.Element {
   const operatorName = useAuthStore((state) => state.userInfo?.realName || state.userInfo?.username)
 
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [filters, setFilters] = useState<InventoryFilters>({})
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [filterForm] = Form.useForm<InventoryFilters>()
 
   const [action, setAction] = useState<StockAction | null>(null)
   const [actionTarget, setActionTarget] = useState<InventoryRecord | null>(null)
   const [stockForm] = Form.useForm<StockFormValues>()
 
-  useEffect(() => { setPageNum(1); closeAction() }, [subjectId])
+  useEffect(() => { setPageNum(1); setSelectedKeys([]); closeAction() }, [subjectId])
 
   /** 库存列表：接口范围为当前经营主体，不依赖顶部农场。 */
   const listQuery = useQuery({
@@ -188,6 +190,7 @@ export default function InventoryManage(): JSX.Element {
 
   /** 打开出入库弹窗 */
   const openAction = (type: StockAction, record: InventoryRecord): void => {
+    if (type === 'out' && (inventoryExpiryState(record.expireDate) === 'expired' || record.healthStatus === 'expired')) { message.warning('库存已过期，禁止出库，请先核查并按损耗流程处置'); return }
     if (inboundMutation.isPending || outboundMutation.isPending || lossMutation.isPending) return
     setAction(type)
     setActionTarget(record)
@@ -197,6 +200,7 @@ export default function InventoryManage(): JSX.Element {
   /** 提交出入库 */
   const handleStockSubmit = (): void => {
     if (!actionTarget || !action) return
+    if (action === 'out' && (inventoryExpiryState(actionTarget.expireDate) === 'expired' || actionTarget.healthStatus === 'expired')) { message.warning('库存已过期，禁止出库，请先核查并按损耗流程处置'); return }
     stockForm.validateFields().then(async (values) => {
       if (subjectId !== useAuthStore.getState().userInfo?.tenantId) throw new Error('经营主体已切换，请重新操作')
       if (action !== 'in') await requireInventorySource(actionTarget)
@@ -250,6 +254,7 @@ export default function InventoryManage(): JSX.Element {
    * 直接归入 normal —— 该行的数量列会显示「— / 未接入」。
    */
   const healthOf = (record: InventoryRecord): string => {
+    if (inventoryExpiryState(record.expireDate) === 'expired') return 'expired'
     if (record.healthStatus) return record.healthStatus
     if (typeof record.currentQty !== 'number') return 'normal'
     return resolveInventoryHealth(record.currentQty, record.safeQty ?? 0, record.expireDate)
@@ -260,7 +265,7 @@ export default function InventoryManage(): JSX.Element {
     () =>
       rows.filter((item) => {
         const health = healthOf(item)
-        return health === 'shortage' || health === 'expiring'
+        return health === 'shortage' || health === 'expiring' || health === 'expired'
       }),
     [rows],
   )
@@ -295,12 +300,14 @@ export default function InventoryManage(): JSX.Element {
   const handleSearch = (): void => {
     setPageNum(1)
     setFilters(filterForm.getFieldsValue())
+    setSelectedKeys([])
   }
 
   const handleReset = (): void => {
     filterForm.resetFields()
     setPageNum(1)
     setFilters({})
+    setSelectedKeys([])
   }
 
   /** 表格列定义（对照原型 P16） */
@@ -358,48 +365,70 @@ export default function InventoryManage(): JSX.Element {
       render: (_, record) => {
         const health = healthOf(record) as keyof typeof INVENTORY_HEALTH_META
         const meta = INVENTORY_HEALTH_META[health] ?? INVENTORY_HEALTH_META.normal
-        return <Tag color={meta.color}>● {meta.label}</Tag>
+        return <Tag color={meta.color}>{meta.label}</Tag>
       },
     },
     {
       title: '操作',
       key: 'option',
       fixed: 'right',
-      width: 280,
+      width: 150,
       valueType: 'option',
-      render: (_, record) => [
-        <Typography.Link
-          key="detail"
-          onClick={() => navigate(`/production/harvests/inventory/${record.inventoryId}`)}
-        >
-          详情
-        </Typography.Link>,
-        <Typography.Link key="in" onClick={() => openAction('in', record)}>
-          入库
-        </Typography.Link>,
-        <Typography.Link disabled={Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))} key="out" onClick={() => openAction('out', record)}>
-          出库
-        </Typography.Link>,
-        <Typography.Link disabled={Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))} key="loss" onClick={() => openAction('loss', record)}>
-          损耗
-        </Typography.Link>,
-        record.frozen ? (
-          <Popconfirm key="unfreeze" title={`确认解冻 ${record.warehouseName} 的库存？`} onConfirm={() => freezeMutation.mutate({ inventoryId: String(record.inventoryId), batchId: record.batchId, frozen: false })}><Typography.Link>解冻</Typography.Link></Popconfirm>
-        ) : (
-          <Popconfirm
-            key="freeze"
-            title={`确认冻结 ${record.warehouseName} 的库存？`}
-            description="冻结后不可出库，请先解冻。"
-            okText="确认冻结"
-            cancelText="取消"
-            onConfirm={() => freezeMutation.mutate({ inventoryId: String(record.inventoryId), batchId: record.batchId, frozen: true })}
-          >
-            <Typography.Link>
-              <LockOutlined /> 冻结
+      render: (_, record) => {
+        const isExpired = inventoryExpiryState(record.expireDate) === 'expired' || record.healthStatus === 'expired'
+        const canDispose = isExpired && record.currentQty > 0
+        return (
+          <ListRowActions>
+            <Typography.Link
+              key="detail"
+              onClick={() => navigate(`/production/harvests/inventory/${record.inventoryId}`)}
+            >
+              详情
             </Typography.Link>
-          </Popconfirm>
-        ),
-      ],
+            {canDispose ? <ExpiredDisposal key="dispose" record={record} onDone={invalidateInventory} /> : null}
+            <Typography.Link key="in" onClick={() => openAction('in', record)}>
+              入库
+            </Typography.Link>
+            <Typography.Link
+              title={isExpired ? '库存已过期，禁止出库' : undefined}
+              disabled={isExpired || Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))}
+              key="out"
+              onClick={() => openAction('out', record)}
+            >
+              出库
+            </Typography.Link>
+            <Typography.Link
+              disabled={Boolean(record.frozen) || !(record.currentQty > (record.frozenQty ?? 0))}
+              key="loss"
+              onClick={() => openAction('loss', record)}
+            >
+              损耗
+            </Typography.Link>
+            {record.frozen ? (
+              <Popconfirm
+                key="unfreeze"
+                title={`确认解冻 ${record.warehouseName} 的库存？`}
+                onConfirm={() => freezeMutation.mutate({ inventoryId: String(record.inventoryId), batchId: record.batchId, frozen: false })}
+              >
+                <Typography.Link>解冻</Typography.Link>
+              </Popconfirm>
+            ) : (
+              <Popconfirm
+                key="freeze"
+                title={`确认冻结 ${record.warehouseName} 的库存？`}
+                description="冻结后不可出库，请先解冻。"
+                okText="确认冻结"
+                cancelText="取消"
+                onConfirm={() => freezeMutation.mutate({ inventoryId: String(record.inventoryId), batchId: record.batchId, frozen: true })}
+              >
+                <Typography.Link>
+                  <LockOutlined /> 冻结
+                </Typography.Link>
+              </Popconfirm>
+            )}
+          </ListRowActions>
+        )
+      },
     },
   ]
 
@@ -412,109 +441,76 @@ export default function InventoryManage(): JSX.Element {
 
   return (
     <PageContainer
-      className="harvest-business-page"
+      className="harvest-business-page production-list-dense production-member-list"
       title="库存管理"
       subTitle="当前经营主体全部仓库"
-      extra={[
-        <Button key="harvests" onClick={() => navigate('/production/harvests')}>
-          采收记录
-        </Button>,
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/production/harvests/inventory/create')}
-        >
-          新增库存
-        </Button>,
-      ]}
     >
+      <div className="production-dense-summary">
+        <div className="production-dense-summary-items">
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">在库记录</span>
+            <span className="production-dense-metric-value">{overview.skuCount} 个</span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">库存总量</span>
+            <span className="production-dense-metric-value is-success">{overview.totalQty}</span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">冻结数量</span>
+            <span className={`production-dense-metric-value ${overview.frozenQty !== '0' && overview.frozenQty !== '—' ? 'is-danger' : ''}`}>
+              {overview.frozenQty}
+            </span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">累计损耗</span>
+            <span className={`production-dense-metric-value ${overview.lossQty !== '0' && overview.lossQty !== '—' ? 'is-warning' : ''}`}>
+              {overview.lossQty}
+            </span>
+          </span>
+        </div>
+        <Space size={8} wrap>
+          {overview.missingQtyCount > 0 && (
+            <Tooltip title={`有 ${overview.missingQtyCount} 条记录后端未返回库存台账字段，汇总仅包含已有数量，请刷新后核实。`}>
+              <span className="production-dense-metric-chip">
+                <WarningOutlined /> {overview.missingQtyCount} 条字段缺失
+              </span>
+            </Tooltip>
+          )}
+          {warnings.length > 0 && (
+            <Tooltip
+              overlayStyle={{ maxWidth: 440 }}
+              title={
+                <Space direction="vertical" size={2}>
+                  {warnings.slice(0, 5).map((item, index) => (
+                    <span key={item.inventoryId ?? `inventory-warn-${index}`}>
+                      {item.warehouseName ?? '—'} - {item.productName ?? '—'}：
+                      {healthOf(item) === 'expiring'
+                        ? `临期（保质期至 ${item.expireDate ?? '—'}）`
+                        : `库存不足（当前 ${item.currentQty ?? '—'}${item.unit ?? ''} / 安全 ${item.safeQty ?? '—'}${item.unit ?? ''}）`}
+                    </span>
+                  ))}
+                  {warnings.length > 5 ? <span>其余 {warnings.length - 5} 条请按状态筛选查看</span> : null}
+                </Space>
+              }
+            >
+              <span
+                className="production-dense-metric-chip"
+                onClick={() => {
+                  const firstWarnHealth = healthOf(warnings[0])
+                  filterForm.setFieldValue('healthStatus', firstWarnHealth)
+                  setPageNum(1)
+                  setFilters((prev) => ({ ...prev, healthStatus: firstWarnHealth }))
+                }}
+              >
+                <WarningOutlined /> 库存预警 {warnings.length} 条（悬停查看 / 点击筛选）
+              </span>
+            </Tooltip>
+          )}
+        </Space>
+      </div>
 
-      {overview.missingQtyCount > 0 ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message={`有 ${overview.missingQtyCount} 条记录后端未返回库存台账字段（inventoryId / currentQty / safeQty / productName），相关列显示为「—」`}
-          description="部分数量缺失，汇总仅包含已有数量，请刷新后核实。"
-        />
-      ) : null}
-
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic title="在库记录" value={overview.skuCount} suffix="个" />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic
-              title="库存总量（按单位）"
-              value={overview.totalQty}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic
-              title="冻结数量"
-              value={overview.frozenQty}
-              valueStyle={{ color: '#fa541c' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic
-              title="累计损耗"
-              value={overview.lossQty}
-              valueStyle={{ color: '#faad14' }}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {warnings.length > 0 ? (
-        <Alert
-          type="warning"
-          showIcon
-          icon={<WarningOutlined />}
-          style={{ marginBottom: 16 }}
-          message={`库存预警：${warnings.length} 条库存需要关注${warnings.length > 5 ? '（仅展示前 5 条，可按状态筛选）' : ''}`}
-          description={
-            <Space direction="vertical" size={2}>
-              {warnings.slice(0, 5).map((item, index) => (
-                <Typography.Text key={item.inventoryId ?? `inventory-row-${index}`}>
-                  {item.warehouseName ?? '—'} - {item.productName ?? '—'} 库存
-                  {healthOf(item) === 'expiring' ? '临期' : '不足'}（当前{' '}
-                  <MetricText
-                    value={typeof item.currentQty === 'number' ? item.currentQty : null}
-                    suffix={item.unit ?? ''}
-                    missingTip="后端未返回 currentQty，显示为「—」"
-                  />
-                  {healthOf(item) === 'expiring' ? (
-                    <>，保质期至 {item.expireDate ?? '—'}</>
-                  ) : (
-                    <>
-                      ，安全库存{' '}
-                      <MetricText
-                        value={typeof item.safeQty === 'number' ? item.safeQty : null}
-                        suffix={item.unit ?? ''}
-                        missingTip="后端未返回 safeQty，显示为「—」"
-                      />
-                    </>
-                  )}
-                  ）
-                </Typography.Text>
-              ))}
-            </Space>
-          }
-        />
-      ) : null}
-
-      <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }} onFinish={handleSearch}>
+      <Card className="production-dense-filter-card">
+        <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
           <Form.Item name="keyword" label="品名"><Input allowClear placeholder="搜索品名" /></Form.Item>
           <Form.Item name="batchNo" label="批次号"><Input allowClear placeholder="搜索采收批次" /></Form.Item>
           <Form.Item name="warehouseName" label="仓库">
@@ -522,7 +518,6 @@ export default function InventoryManage(): JSX.Element {
               allowClear
               placeholder="全部仓库"
               options={WAREHOUSE_OPTIONS}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="category" label="品类">
@@ -530,7 +525,6 @@ export default function InventoryManage(): JSX.Element {
               allowClear
               placeholder="全部品类"
               options={categoryOptions}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="healthStatus" label="状态">
@@ -538,21 +532,20 @@ export default function InventoryManage(): JSX.Element {
               allowClear
               placeholder="全部状态"
               options={INVENTORY_HEALTH_OPTIONS}
-              style={{ width: 140 }}
             />
           </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
+          <Form.Item className="production-filter-actions">
+            <Space size={8}>
+              <Button onClick={handleReset}>重置</Button>
+              <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
-              <Button onClick={handleReset}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
       </Card>
 
-      <Card title="库存记录">
+      <Card>
         {!subjectId ? (
           <Empty description="请先选择经营主体" />
         ) : listQuery.isError ? (
@@ -566,7 +559,10 @@ export default function InventoryManage(): JSX.Element {
           />
         ) : (
           <ProTable<InventoryRecord>
+            memberListToolbar
             cardProps={false}
+            headerTitle={false}
+            tableAlertRender={false}
             columnWidthStorageKey="inventory-records"
             scroll={{ x: 'max-content' }}
             rowKey="inventoryId"
@@ -574,7 +570,27 @@ export default function InventoryManage(): JSX.Element {
             dataSource={rows.slice((pageNum - 1) * pageSize, pageNum * pageSize)}
             loading={listQuery.isFetching}
             search={false}
+            rowSelection={{
+              selectedRowKeys: selectedKeys,
+              onChange: (keys) => setSelectedKeys(keys.map(String)),
+            }}
             options={{ reload: () => void invalidateInventory(), density: true, setting: true }}
+            toolbar={{
+              title: (
+                <Space size={8} wrap>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => navigate('/production/harvests/inventory/create')}
+                  >
+                    新增库存
+                  </Button>
+                  <Button onClick={() => navigate('/production/harvests')}>
+                    采收记录
+                  </Button>
+                </Space>
+              ),
+            }}
             pagination={{
               current: pageNum,
               pageSize,

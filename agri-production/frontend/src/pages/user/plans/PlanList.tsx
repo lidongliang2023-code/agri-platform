@@ -1,4 +1,6 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：农事计划
@@ -167,8 +169,13 @@ export default function PlanList(): JSX.Element {
         title: '计划名称',
         dataIndex: 'planName',
         width: 180,
+        ellipsis: true,
         render: (_dom, entity) => (
-          <Typography.Link onClick={() => navigate(`/production/plans/${entity.planId}`)}>
+          <Typography.Link
+            className="production-dense-link-ellipsis"
+            title={entity.planName}
+            onClick={() => navigate(`/production/plans/${entity.planId}`)}
+          >
             {entity.planName}
           </Typography.Link>
         ),
@@ -260,10 +267,10 @@ export default function PlanList(): JSX.Element {
       {
         title: '操作',
         key: 'option',
-        width: 260,
+        width: 128,
         fixed: 'right',
         valueType: 'option',
-        render: (_dom, entity) => [
+        render: (_dom, entity) => <ListRowActions>{[
           <Button
             key="detail"
             type="link"
@@ -344,27 +351,24 @@ export default function PlanList(): JSX.Element {
               删除
             </Button>
           </Popconfirm>,
-        ],
+        ]}</ListRowActions>,
       },
     ],
     [approveMutation, canApprovePlan, navigate, removeMutation, statusEnum, submitApprovalMutation, terminateMutation],
   )
 
   return (
-    <PageContainer className="production-plans-page" title="📋 农事计划" subTitle={currentFarm?.farmName}>
+    <PageContainer className="production-plans-page production-list-dense production-member-list" title="农事计划" subTitle={currentFarm?.farmName}>
 
       <ProTable<Plan>
+        memberListToolbar
         actionRef={actionRef}
         rowKey="planId"
-        headerTitle={
-          <Space>
-            <CalendarOutlined style={{ color: '#13a05a' }} />
-            <span>农事计划</span>
-          </Space>
-        }
         columns={columns}
-        search={{ labelWidth: 'auto' }}
-        toolBarRender={() => [
+        search={{ labelWidth: 'auto', layout: 'vertical' }}
+        rowSelection={{}}
+        tableAlertRender={false}
+        toolbar={{ title: <Space wrap>{[
           <Button
             key="calendar"
             icon={<CalendarOutlined />}
@@ -382,7 +386,7 @@ export default function PlanList(): JSX.Element {
           >
             新增农事计划
           </Button>,
-        ]}
+        ]}</Space> }}
         request={async (params) => {
           const pageNum = params.current ?? 1
           const pageSize = params.pageSize ?? 10
@@ -405,7 +409,7 @@ export default function PlanList(): JSX.Element {
             return { data: [], success: false, total: 0 }
           }
         }}
-        pagination={{ defaultPageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条计划` }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true, showTotal: (total) => `共 ${total} 条计划` }}
         dateFormatter="string"
         scroll={{ x: 'max-content' }}
         size={tableSize}

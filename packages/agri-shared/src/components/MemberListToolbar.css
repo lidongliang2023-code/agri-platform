@@ -1,0 +1,27 @@
+.agri-member-list-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.agri-member-list-tools .agri-list-tool {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--ant-color-text-secondary, #595959);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 24px;
+  padding: 0 8px;
+}
+
+.agri-member-list-tools .agri-list-tool:hover:not(:disabled),
+.agri-member-list-tools .agri-list-tool:focus-visible {
+  background: var(--ant-color-fill-tertiary, #f5f5f5);
+  color: var(--ant-color-text, #1a1a1a);
+}
+
+.agri-member-list-tools .agri-list-tool:disabled { cursor: wait; opacity: .55; }

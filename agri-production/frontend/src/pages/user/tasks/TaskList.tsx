@@ -1,4 +1,6 @@
+import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：任务列表（看板）
@@ -519,7 +521,7 @@ export default function TaskList(): JSX.Element {
       title: '操作',
       fixed: 'right',
       key: 'option',
-      width: 280,
+      width: 128,
       valueType: 'option',
       render: (_, record) => {
         const actions: JSX.Element[] = [
@@ -585,7 +587,7 @@ export default function TaskList(): JSX.Element {
             </Popconfirm>,
           )
         }
-        return actions
+        return <ListRowActions>{actions}</ListRowActions>
       },
     },
   ]
@@ -708,17 +710,49 @@ export default function TaskList(): JSX.Element {
         />
   )
 
+  /** 工具栏操作（统一放在表格 / 看板顶部工具栏，避免页头主按钮重复） */
+  const renderActionButtons = (): JSX.Element => (
+    <Space size={8} wrap>
+      <Button
+        key="create"
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => navigate('/production/tasks/create')}
+      >
+        新建任务
+      </Button>
+      <Button key="voice" onClick={() => navigate('/production/tasks/voice-records')}>
+        语音农事归档
+      </Button>
+      <Button
+        key="today"
+        onClick={() => {
+          setView('kanban')
+          setTodayOnly((prev) => !prev)
+        }}
+      >
+        今日任务看板
+      </Button>
+      <Button key="export" icon={<ExportOutlined />} onClick={handleExport}>
+        导出
+      </Button>
+    </Space>
+  )
+
   /** 渲染列表 */
   const renderTable = (): JSX.Element => (
     <ProTable<Task>
+      memberListToolbar
       headerTitle={false}
       toolbar={{
-        title: renderStatusTabs(),
+        title: renderActionButtons(),
         style: { padding: 0 },
       }}
       toolBarRender={() => []}
-      cardProps={{ bordered: false, bodyStyle: { padding: '0 20px 16px' }, style: { boxShadow: 'none' } }}
+      cardProps={{ bordered: false, bodyStyle: { padding: 0 }, style: { boxShadow: 'none' } }}
       rowKey="taskId"
+      rowSelection={{}}
+      tableAlertRender={false}
       columns={columns}
       dataSource={tableRows}
       loading={tableLoading}
@@ -741,7 +775,8 @@ export default function TaskList(): JSX.Element {
 
   return (
     <PageContainer
-      title="📋 农事任务管理"
+      className="production-list-dense production-member-list"
+      title="农事任务管理"
       subTitle={currentFarm ? currentFarm.farmName : undefined}
       extra={[
         <Segmented
@@ -753,43 +788,18 @@ export default function TaskList(): JSX.Element {
             { label: '看板', value: 'kanban' },
           ]}
         />,
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/production/tasks/create')}
-        >
-          新建任务
-        </Button>,
-        <Button key="voice" onClick={() => navigate('/production/tasks/voice-records')}>语音农事归档</Button>,
-        <Button
-          key="today"
-          onClick={() => {
-            setView('kanban')
-            setTodayOnly((prev) => !prev)
-          }}
-        >
-          📊 今日任务看板
-        </Button>,
-        <Button key="export" icon={<ExportOutlined />} onClick={handleExport}>
-          导出
-        </Button>,
-        // 「任务模板库」按钮已撤（2026-10-16）：该页搬到运营端由平台运营维护。
-        // 用户端仍在「新建任务」的模板下拉里**使用**模板，只是不再有维护入口 ——
-        // 留着这个按钮会跳到用户端已不存在的路由（404）。
       ]}
     >
-      <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12 }}>
+      <Card className="production-dense-filter-card">
+        <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
           <Form.Item name="keyword" label="关键字">
-            <Input allowClear placeholder="任务名称 / 编号" style={{ width: 180 }} />
+            <Input allowClear placeholder="任务名称 / 编号" />
           </Form.Item>
           <Form.Item name="status" label="状态">
             <Select
               allowClear
               placeholder="全部状态"
               options={TASK_STATUS_OPTIONS}
-              style={{ width: 130 }}
             />
           </Form.Item>
           <Form.Item name="taskType" label="类型">
@@ -797,7 +807,6 @@ export default function TaskList(): JSX.Element {
               allowClear
               placeholder="全部类型"
               options={TASK_TYPE_OPTIONS}
-              style={{ width: 130 }}
             />
           </Form.Item>
           <Form.Item name="priority" label="优先级">
@@ -805,7 +814,6 @@ export default function TaskList(): JSX.Element {
               allowClear
               placeholder="全部优先级"
               options={TASK_PRIORITY_OPTIONS}
-              style={{ width: 120 }}
             />
           </Form.Item>
           <Form.Item name="assigneeId" label="执行人">
@@ -815,7 +823,6 @@ export default function TaskList(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部执行人"
               options={memberOptions}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="plotId" label="地块">
@@ -825,15 +832,14 @@ export default function TaskList(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部地块"
               options={plotOptions}
-              style={{ width: 140 }}
             />
           </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
+          <Form.Item className="production-filter-actions">
+            <Space size={8}>
+              <Button onClick={handleReset}>重置</Button>
+              <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
-              <Button onClick={handleReset}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
@@ -852,7 +858,8 @@ export default function TaskList(): JSX.Element {
       </Card>
 
       <Card>
-        {view === 'kanban' && renderStatusTabs()}
+        {renderStatusTabs()}
+        {view === 'kanban' && <div className="production-dense-toolbar">{renderActionButtons()}</div>}
         {!farmId ? (
           <Empty description="请先在顶部切换农场" />
         ) : view === 'kanban' && boardQuery.isError ? (

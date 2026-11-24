@@ -1,0 +1,328 @@
+/* 生产列表页高密度布局：用于农场监管、IoT 设备监控、农场管理与地块管理，
+ * 在 1440×900 首屏完整呈现至少 10 行 48px 数据，同时保留全部业务统计与操作。 */
+
+.agri-content .production-workspace-pane:has(.production-list-dense) {
+  padding: 8px 20px 16px;
+}
+
+.production-list-dense .ant-pro-page-container-warp-page-header,
+.production-list-dense .ant-page-header {
+  padding: 2px 0 8px !important;
+  margin: 0 !important;
+}
+
+.production-list-dense .ant-pro-page-container-children-container,
+.production-list-dense .ant-pro-page-container-children-content {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.production-list-dense .ant-page-header-heading {
+  margin-block: 0 !important;
+  min-height: 34px;
+}
+
+.production-list-dense .ant-page-header-heading-title {
+  font-size: 18px !important;
+  line-height: 26px !important;
+}
+
+.production-list-dense .ant-page-header-heading-sub-title {
+  font-size: 12px !important;
+  line-height: 20px !important;
+}
+
+/* 紧致统计条：单行展示关键计数与说明，不占用整排独立卡片高度。 */
+.production-dense-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 6px 12px;
+  margin-bottom: 8px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #595959;
+}
+
+.production-dense-summary-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.production-dense-metric {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.production-dense-metric-label {
+  color: #595959;
+  font-size: 12px;
+}
+
+.production-dense-metric-value {
+  color: #1a1a1a;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.production-dense-metric-value.is-success { color: #2d8f4e; }
+.production-dense-metric-value.is-warning { color: #8f4500; }
+.production-dense-metric-value.is-danger { color: #b71c1c; }
+
+.production-dense-summary-note {
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.production-dense-summary-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-weight: 400;
+}
+
+.production-dense-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  min-width: 0;
+}
+
+.production-dense-card-title-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+
+/* 列表卡片紧致化：标题栏与筛选区各占一行，去除多余空白。 */
+.production-list-dense .production-section-card > .ant-card-head,
+.production-list-dense .ant-card > .ant-card-head {
+  min-height: 40px !important;
+  padding: 0 14px !important;
+}
+
+.production-list-dense .production-section-card > .ant-card-head .ant-card-head-title,
+.production-list-dense .ant-card > .ant-card-head .ant-card-head-title {
+  padding: 8px 0 !important;
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.production-list-dense .production-section-card > .ant-card-body,
+.production-list-dense .ant-card > .ant-card-body {
+  padding: 10px 14px 12px !important;
+}
+
+.production-list-dense .production-dense-filter-card {
+  margin-bottom: 10px !important;
+}
+
+.production-list-dense .production-dense-filter-card > .ant-card-body {
+  padding: 10px 14px !important;
+}
+
+.production-list-dense .production-dense-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-height: 40px;
+  margin-bottom: 8px;
+}
+
+.production-list-dense .production-dense-toolbar-left,
+.production-list-dense .production-dense-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.production-list-dense .ant-pro-table-search {
+  padding: 10px 14px !important;
+  margin-bottom: 10px !important;
+}
+
+.production-list-dense .ant-pro-table-list-toolbar-container {
+  padding-block: 8px !important;
+}
+
+.production-list-dense .ant-tabs-top > .ant-tabs-nav {
+  margin-bottom: 8px !important;
+}
+
+.production-list-dense .ant-tabs-tab {
+  padding: 6px 0 !important;
+}
+
+.production-dense-metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  background: #fff7e6;
+  color: #ad4e00;
+  border: 1px solid #ffd591;
+  cursor: pointer;
+}
+
+.production-dense-metric-chip.is-danger {
+  background: #fff1f0;
+  color: #cf1322;
+  border-color: #ffa39e;
+}
+
+.production-dense-metric-chip.is-success {
+  background: #f6ffed;
+  color: #237804;
+  border-color: #b7eb8f;
+}
+
+.production-dense-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.production-dense-filter-bar .ant-form-item {
+  margin-bottom: 0 !important;
+  margin-inline-end: 0 !important;
+}
+
+.production-dense-filter-bar .ant-form-item-label {
+  padding-inline-end: 6px !important;
+}
+
+.production-dense-filter-bar .ant-form-item-label > label {
+  height: 32px;
+  font-size: 13px;
+}
+
+/* 表格行统一单行 48px，长文本单行省略并保留 title 提示，不撑高行距。 */
+html.pc-ui-v1 .production-list-dense .ant-table-thead > tr > th {
+  height: 48px !important;
+  padding: 10px 12px !important;
+  white-space: nowrap;
+}
+
+html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row):not(.ant-table-placeholder) > td {
+  height: 48px !important;
+  padding: 8px 12px !important;
+  line-height: 22px !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row) > td .ant-space {
+  flex-wrap: nowrap !important;
+}
+
+html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row) > td .ant-tag {
+  margin-inline-end: 0;
+  line-height: 20px;
+}
+
+html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row) > td .ant-btn-link,
+html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row) > td .ant-typography {
+  line-height: 22px;
+  vertical-align: middle;
+}
+
+.production-dense-link-ellipsis {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.production-list-dense .ant-btn-link.production-dense-cell-link {
+  display: inline-block;
+  max-width: 100%;
+  height: auto !important;
+  min-height: 22px !important;
+  padding: 0 !important;
+  line-height: 22px !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.production-list-dense .ant-btn-link.production-dense-cell-link > span {
+  display: inline;
+}
+
+.production-dense-name-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: middle;
+}
+
+.production-dense-name-wrap .ant-typography {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.production-dense-name-wrap .ant-tag {
+  flex: none;
+  margin-inline-end: 0;
+}
+
+.production-list-dense .ant-pagination {
+  margin-top: 10px !important;
+}
+
+@media (max-width: 900px) {
+  .agri-content .production-workspace-pane:has(.production-list-dense) {
+    padding: 8px 12px 14px;
+  }
+}
+
+/* 用户端台账：字段名在控件上方，同一行控件等宽。 */
+.production-member-list .production-filter-grid.ant-form .ant-form-item-row { flex-direction: column; align-items: stretch; }
+.production-member-list .production-filter-grid.ant-form .ant-form-item-label { text-align: start; padding: 0 0 4px; }
+.production-member-list .production-filter-grid.ant-form .ant-form-item-label label { height: auto; }
+.production-member-list .production-filter-grid:not(.ant-form) > .production-filter-field { flex-direction: column; align-items: stretch; gap: 4px; }
+.production-member-list .production-filter-grid .production-filter-actions { align-self: end; }
+.production-member-list .production-filter-grid .ant-form-item-control { max-width: 100%; }
+.production-member-list .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell { background: #e8f5e9 !important; }
+.production-member-list .ant-checkbox-checked .ant-checkbox-inner { background: #258849; border-color: #258849; }
+.production-member-list .production-status-cell .ant-tag { border-radius: 999px; padding-inline: 8px; }
+.production-member-list .production-status-cell .ant-tag:not(:has(.ant-badge-status-dot))::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-inline-end: 5px; vertical-align: 2px; border-radius: 50%; background: currentColor; }
+.production-member-list .ant-pro-table-list-toolbar-title { min-width: 0; white-space: normal; }
+
+.production-member-shell .agri-sider, .production-member-shell .agri-sider .ant-menu-dark { background: #001529; }
+.production-member-shell .agri-sider .ant-menu-inline .ant-menu-sub { background: #132b40; }
+.production-member-shell .agri-sider .ant-menu-dark .ant-menu-item-selected { background: #d8efdf; color: #165c33; }
+.production-member-list ul.production-pagination .ant-pagination-item { border-radius: 4px; }
+.production-member-shell .production-member-list ul.production-pagination .ant-pagination-item-active { background: #258849; border-color: #258849; }
+.production-member-shell .production-member-list ul.production-pagination .ant-pagination-item-active a { color: #fff; }

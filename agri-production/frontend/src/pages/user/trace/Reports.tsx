@@ -1,7 +1,10 @@
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
 import '@/pages/user/quality/quality-trace.css'
 import Card from '@/components/SectionCard'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ListRowActions from '@/components/ListRowActions'
 import ProTable from '@/components/ProductionTable'
 /**
  * 页面名称：溯源报告
@@ -35,6 +38,7 @@ import ProTable from '@/components/ProductionTable'
  * ======================================================================
  */
 import { useMemo, useState } from 'react'
+import type { Key } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
 
@@ -217,6 +221,9 @@ export default function Reports(): JSX.Element {
 
   /** 当前实时生成的报告（刷新即消失，不持久化） */
   const [preview, setPreview] = useState<GeneratedReport | null>(null)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([])
+  const [filterBatchId, setFilterBatchId] = useState<string>(paramBatchId)
+  const [filterCode, setFilterCode] = useState<string>(paramCode)
   const [genOpen, setGenOpen] = useState<boolean>(false)
   const [genForm] = Form.useForm<GenerateFormValues>()
 
@@ -390,7 +397,22 @@ export default function Reports(): JSX.Element {
   /** 丢弃当前报告（本页不保存任何报告，丢弃即回到空态） */
   const handleDiscard = (): void => {
     setPreview(null)
+    setSelectedRowKeys([])
     message.success('已丢弃当前报告（本页不保存报告，如需留存请打印或另存为 PDF）')
+  }
+
+  const handleQuickGenerate = (): void => {
+    const batchId = filterBatchId.trim()
+    if (!batchId) {
+      message.warning('请先选择或输入采收批次 ID')
+      return
+    }
+    generateMutation.mutate({ batchId, code: filterCode.trim() || undefined })
+  }
+
+  const handleResetFilter = (): void => {
+    setFilterBatchId('')
+    setFilterCode('')
   }
 
   /** 表格列定义 */
@@ -431,40 +453,42 @@ export default function Reports(): JSX.Element {
       title: '操作',
       fixed: 'right',
       key: 'option',
-      width: 240,
+      width: 150,
       valueType: 'option',
-      render: (_, record) => [
-        <Typography.Link key="preview" onClick={() => setPreview(record)}>
-          预览
-        </Typography.Link>,
-        <Typography.Link key="pdf" onClick={() => handleDownloadPdf(record)}>
-          下载PDF
-        </Typography.Link>,
-        <Typography.Link
-          key="print"
-          onClick={() => {
-            setPreview(record)
-            window.setTimeout(() => window.print(), 300)
-          }}
-        >
-          打印
-        </Typography.Link>,
-        <Popconfirm
-          key="discard"
-          title="确认丢弃当前报告？"
-          description="本页不保存任何报告，丢弃后需重新生成"
-          okText="确认丢弃"
-          cancelText="取消"
-          onConfirm={handleDiscard}
-        >
-          <Typography.Link type="danger">丢弃</Typography.Link>
-        </Popconfirm>,
-      ],
+      render: (_, record) => (
+        <ListRowActions>
+          <Typography.Link key="preview" onClick={() => setPreview(record)}>
+            预览
+          </Typography.Link>
+          <Typography.Link key="pdf" onClick={() => handleDownloadPdf(record)}>
+            下载PDF
+          </Typography.Link>
+          <Typography.Link
+            key="print"
+            onClick={() => {
+              setPreview(record)
+              window.setTimeout(() => window.print(), 300)
+            }}
+          >
+            打印
+          </Typography.Link>
+          <Popconfirm
+            key="discard"
+            title="确认丢弃当前报告？"
+            description="本页不保存任何报告，丢弃后需重新生成"
+            okText="确认丢弃"
+            cancelText="取消"
+            onConfirm={handleDiscard}
+          >
+            <Typography.Link type="danger">丢弃</Typography.Link>
+          </Popconfirm>
+        </ListRowActions>
+      ),
     },
   ]
 
   return (
-    <PageContainer className="quality-trace-page"
+    <PageContainer className="quality-trace-page production-list-dense production-member-list"
       title={
         <Space>
           <Button
@@ -478,32 +502,12 @@ export default function Reports(): JSX.Element {
         </Space>
       }
       subTitle={currentFarm ? currentFarm.farmName : undefined}
-      extra={[
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setGenOpen(true)}
-        >
-          + 生成报告
-        </Button>,
-        <Button
-          key="pdf"
-          icon={<FilePdfOutlined />}
-          disabled={!preview}
-          onClick={() => preview && handleDownloadPdf(preview)}
-        >
-          下载PDF
-        </Button>,
-        <Button key="print" icon={<PrinterOutlined />} disabled={!preview} onClick={handlePrint}>
-          打印
-        </Button>,
-      ]}
     >
       <Alert
         type="warning"
         showIcon
         banner
+        style={{ marginBottom: 10 }}
         message="⚠️ 溯源报告为实时生成，不会保存：后端暂无报告存储能力，本页不落库、也不产生报告清单"
         description={
           <span>
@@ -522,6 +526,39 @@ export default function Reports(): JSX.Element {
         }
       />
 
+      <Card className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>关联批次</label>
+            <AutoComplete
+              value={filterBatchId}
+              options={batchOptions}
+              placeholder="选择或输入采收批次 ID"
+              onChange={setFilterBatchId}
+              filterOption={(input, option) =>
+                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+            />
+          </div>
+          <div className="production-filter-field">
+            <label>溯源码（可选）</label>
+            <Input
+              allowClear
+              value={filterCode}
+              onChange={(e) => setFilterCode(e.target.value)}
+              onPressEnter={handleQuickGenerate}
+              placeholder="如 DEMO-TC-0001"
+            />
+          </div>
+          <div className="production-filter-actions">
+            <Button onClick={handleResetFilter}>重置</Button>
+            <Button type="primary" loading={generateMutation.isPending} onClick={handleQuickGenerate}>
+              查询 / 生成
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       {/* 打印时仅保留报告正文 */}
       <style>
         {`@media print {
@@ -532,13 +569,23 @@ export default function Reports(): JSX.Element {
       </style>
 
       <ProTable<GeneratedReport>
+        memberListToolbar
+        columnWidthStorageKey="trace-reports"
         rowKey="reportId"
-        size="small"
         columns={columns}
         dataSource={preview ? [preview] : []}
         search={false}
-        options={{ density: true, setting: true }}
-        pagination={false}
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+        options={{
+          reload: () => {
+            if (preview?.batchId) {
+              generateMutation.mutate({ batchId: preview.batchId, code: preview.code || undefined })
+            } else {
+              void batchQuery.refetch()
+            }
+          },
+        }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         locale={{
           emptyText: (
             <Empty
@@ -546,7 +593,7 @@ export default function Reports(): JSX.Element {
                 <Space direction="vertical" size={8}>
                   <Typography.Text>当前没有报告 —— 本页不保存报告，也不展示历史清单</Typography.Text>
                   <Typography.Text type="secondary">
-                    点击右上角「+ 生成报告」，按批次实时聚合生成（正文数据来自真实业务接口）
+                    在上方筛选区选择批次或点击「+ 生成报告」，按批次实时聚合生成（正文数据来自真实业务接口）
                   </Typography.Text>
                 </Space>
               }
@@ -561,6 +608,17 @@ export default function Reports(): JSX.Element {
             onClick={() => setGenOpen(true)}
           >
             + 生成报告
+          </Button>,
+          <Button
+            key="pdf"
+            icon={<FilePdfOutlined />}
+            disabled={!preview}
+            onClick={() => preview && handleDownloadPdf(preview)}
+          >
+            下载PDF
+          </Button>,
+          <Button key="print" icon={<PrinterOutlined />} disabled={!preview} onClick={handlePrint}>
+            打印
           </Button>,
         ]}
       />

@@ -1,9 +1,13 @@
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
+import '@/components/ProductionTable.css'
 import { useState } from 'react'
+import type { Key } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Alert, App, Button, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Tabs, Tag } from 'antd'
+import { Alert, App, Button, Card, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Tabs, Tag } from 'antd'
 import type { ProColumns } from '@ant-design/pro-components'
 import dayjs from 'dayjs'
+import ListRowActions from '@/components/ListRowActions'
 import PageContainer from '@/components/ProductionPageContainer'
 import ProTable from '@/components/ProductionTable'
 import useAuthStore from '@/store/auth'
@@ -21,9 +25,13 @@ function ReportContent({ subject }: { subject: string }): JSX.Element {
   const { message } = App.useApp()
   const farm = useFarmStore(s => s.currentFarm)
   const [page, setPage] = useState(1)
-  const [size, setSize] = useState(10)
+  const [size, setSize] = useState(20)
+  const [draftType, setDraftType] = useState<number>()
+  const [draftPeriod, setDraftPeriod] = useState('')
   const [reportType, setType] = useState<number>()
   const [period, setPeriod] = useState('')
+  const [selectedReportKeys, setSelectedReportKeys] = useState<Key[]>([])
+  const [selectedSubKeys, setSelectedSubKeys] = useState<Key[]>([])
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [rowBusy, setRowBusy] = useState('')
@@ -41,7 +49,7 @@ function ReportContent({ subject }: { subject: string }): JSX.Element {
       const result = await generateReport({ reportType: values.reportType, period: values.period.format('YYYY-MM-DD'), farmId: farm?.farmId })
       written = true
       if (!current()) return
-      const readback = await listReports({ pageNum: 1, pageSize: 10, period: result.period })
+      const readback = await listReports({ pageNum: 1, pageSize: 20, period: result.period })
       if (!readback.list.some(row => row.reportId === result.reportId)) throw new Error('生成请求已成功，但列表回读未找到该报表，请刷新核对')
       setOpen(false); setPage(1)
       await list.refetch()
@@ -73,27 +81,55 @@ function ReportContent({ subject }: { subject: string }): JSX.Element {
     { title: '生成时间', dataIndex: 'generatedAt', width: 185 },
     { title: '生成人', dataIndex: 'generatorName', width: 140, renderText: value => value || '未记录' },
     { title: '状态', dataIndex: 'status', width: 110, render: (_, r) => <Tag color={r.status === 2 ? 'success' : 'default'}>{r.status === 2 ? '已生成' : r.status === 3 ? '失败' : '生成中'}</Tag> },
-    { title: '操作', valueType: 'option', fixed: 'right', width: 190, render: (_, r) => <Space><Button type="link" disabled={r.status !== 2 || !!rowBusy} onClick={() => void download(r.reportId)}>下载 CSV</Button><Popconfirm title="删除这份报表记录？" onConfirm={() => remove(r.reportId)}><Button type="link" danger disabled={!!rowBusy}>删除</Button></Popconfirm></Space> },
+    { title: '操作', valueType: 'option', fixed: 'right', width: 160, render: (_, r) => <ListRowActions><Button key="download" type="link" size="small" disabled={r.status !== 2 || !!rowBusy} onClick={() => void download(r.reportId)}>下载 CSV</Button><Popconfirm key="delete" title="删除这份报表记录？" onConfirm={() => remove(r.reportId)}><Button type="link" size="small" danger disabled={!!rowBusy}>删除</Button></Popconfirm></ListRowActions> },
   ]
   const subColumns: ProColumns<ReportSubscription>[] = [
     { title: '报表类型', dataIndex: 'reportType', width: 150, render: (_, r) => TYPES.find(t => t.value === r.reportType)?.label ?? '—' },
     { title: '配置周期', dataIndex: 'period', width: 150 },
     { title: '接收人', dataIndex: 'receivers', width: 260, render: (_, r) => r.receivers.join('、') },
     { title: '执行情况', key: 'execution', width: 240, render: () => '仅保存配置，自动推送未接入' },
-    { title: '操作', valueType: 'option', fixed: 'right', width: 120, render: (_, r) => <Popconfirm title="取消这条历史通知配置？" onConfirm={async () => { try { if (!await unsubscribeReport(r.subscribeId)) throw new Error('服务端未确认取消'); await subscriptions.refetch(); message.success('已取消') } catch (e) { message.error((e as Error).message) } }}><Button type="link" danger>取消配置</Button></Popconfirm> },
+    { title: '操作', valueType: 'option', fixed: 'right', width: 120, render: (_, r) => <ListRowActions><Popconfirm key="cancel" title="取消这条历史通知配置？" onConfirm={async () => { try { if (!await unsubscribeReport(r.subscribeId)) throw new Error('服务端未确认取消'); await subscriptions.refetch(); message.success('已取消') } catch (e) { message.error((e as Error).message) } }}><Button type="link" size="small" danger>取消配置</Button></Popconfirm></ListRowActions> },
   ]
-  return <PageContainer title="生产报表" subTitle="按实际生产记录生成周期快照，按经营主体归档" extra={<Space><Button type="primary" disabled={!subject} onClick={() => { form.setFieldsValue({ reportType: 3, period: dayjs() }); setOpen(true) }}>+ 生成报表</Button><Button onClick={() => { void list.refetch(); void subscriptions.refetch() }}>刷新</Button></Space>}>
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+  const handleSearch = () => {
+    setType(draftType)
+    setPeriod(draftPeriod.trim())
+    setPage(1)
+  }
+  const handleReset = () => {
+    setDraftType(undefined)
+    setDraftPeriod('')
+    setType(undefined)
+    setPeriod('')
+    setPage(1)
+  }
+  return <PageContainer className="production-list-dense production-member-list" title="生产报表" subTitle="按实际生产记录生成周期快照，按经营主体归档">
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <Alert showIcon type="info" message={`本次生成范围：${farm?.farmName ?? '当前主体全部农场'}；历史列表展示当前主体全部报表`} description="日报、周报、月报、季报、年报按所选日期归属周期生成；采收量统一为 kg，任务完成以验收通过为准。无实际成本和收入来源，不生成成本收益结论。历史快照不会自动重算。" />
       <Tabs items={[
-        { key: 'reports', label: '报表归档', children: <Space direction="vertical" style={{ width: '100%' }}>
+        { key: 'reports', label: '报表归档', children: <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Card className="production-dense-filter-card">
+            <div className="production-filter-grid">
+              <div className="production-filter-field">
+                <label>报表类型</label>
+                <Select allowClear placeholder="全部类型" options={TYPES} value={draftType} onChange={setDraftType} />
+              </div>
+              <div className="production-filter-field">
+                <label>名称 / 周期</label>
+                <Input allowClear placeholder="搜索报表名称或周期" value={draftPeriod} onChange={e => setDraftPeriod(e.target.value)} onPressEnter={handleSearch} />
+              </div>
+              <div className="production-filter-actions">
+                <Button onClick={handleReset}>重置</Button>
+                <Button type="primary" onClick={handleSearch}>查询</Button>
+              </div>
+            </div>
+          </Card>
           {list.isError && <Alert type="error" message="报表查询失败" description={(list.error as Error).message} />}
-          <ProTable<ReportItem> rowKey="reportId" headerTitle="生产报表" search={false} columns={columns} dataSource={list.isError ? [] : list.data?.list ?? []} loading={list.isFetching} scroll={{ x: 1200 }} columnWidthStorageKey="production-reports" columnsState={{ persistenceKey: 'production-reports-columns', persistenceType: 'localStorage' }} options={{ reload: () => { void list.refetch() } }} toolbar={{ actions: [<Select key="type" allowClear placeholder="全部类型" options={TYPES} value={reportType} onChange={v => { setType(v); setPage(1) }} style={{ width: 130 }} />, <Input.Search key="period" allowClear placeholder="搜索报表名称或周期" onSearch={v => { setPeriod(v.trim()); setPage(1) }} style={{ width: 240 }} />] }} toolBarRender={() => [<Button key="generate" type="primary" disabled={!subject} onClick={() => { form.setFieldsValue({ reportType: 3, period: dayjs() }); setOpen(true) }}>生成报表</Button>]} pagination={{ current: page, pageSize: size, total: list.data?.total ?? 0, showSizeChanger: true, onChange: (p, s) => { setPage(s === size ? p : 1); setSize(s) } }} />
+          <ProTable<ReportItem> memberListToolbar rowKey="reportId" search={false} columns={columns} dataSource={list.isError ? [] : list.data?.list ?? []} loading={list.isFetching} scroll={{ x: 1200 }} columnWidthStorageKey="production-reports" rowSelection={{ selectedRowKeys: selectedReportKeys, onChange: setSelectedReportKeys }} options={{ reload: () => { void list.refetch() } }} toolBarRender={() => [<Button key="generate" type="primary" disabled={!subject} onClick={() => { form.setFieldsValue({ reportType: 3, period: dayjs() }); setOpen(true) }}>+ 生成报表</Button>]} pagination={{ current: page, pageSize: size, total: list.data?.total ?? 0, showSizeChanger: true, onChange: (p, s) => { setPage(s === size ? p : 1); setSize(s) } }} />
         </Space> },
-        { key: 'subscriptions', label: '历史通知配置', children: <Space direction="vertical" style={{ width: '100%' }}>
+        { key: 'subscriptions', label: '历史通知配置', children: <Space direction="vertical" size={10} style={{ width: '100%' }}>
           <Alert type="warning" showIcon message="自动通知尚未接入" description="站内、邮件、微信均无自动推送执行端。本页仅查看或取消历史配置，暂不新增无执行能力的通知；请在报表归档中主动生成与下载。" />
           {subscriptions.isError && <Alert type="error" message="通知配置读取失败" description={(subscriptions.error as Error).message} />}
-          <ProTable<ReportSubscription> rowKey="subscribeId" headerTitle="历史通知配置" search={false} columns={subColumns} dataSource={subscriptions.isError ? [] : subscriptions.data ?? []} loading={subscriptions.isFetching} scroll={{ x: 1000 }} columnWidthStorageKey="report-subscriptions" options={{ reload: () => { void subscriptions.refetch() } }} pagination={{ defaultPageSize: 10 }} />
+          <ProTable<ReportSubscription> memberListToolbar rowKey="subscribeId" search={false} columns={subColumns} dataSource={subscriptions.isError ? [] : subscriptions.data ?? []} loading={subscriptions.isFetching} scroll={{ x: 1000 }} columnWidthStorageKey="report-subscriptions" rowSelection={{ selectedRowKeys: selectedSubKeys, onChange: setSelectedSubKeys }} options={{ reload: () => { void subscriptions.refetch() } }} pagination={{ defaultPageSize: 20, showSizeChanger: true }} />
         </Space> },
       ]} />
     </Space>

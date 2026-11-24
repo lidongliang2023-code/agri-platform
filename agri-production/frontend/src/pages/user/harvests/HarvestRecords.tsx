@@ -1,4 +1,6 @@
 import Card from '@/components/SectionCard'
+import ListRowActions from '@/components/ListRowActions'
+import '@/components/ProductionListDense.css'
 import './harvests.css'
 import ProTable from '@/components/ProductionTable'
 /**
@@ -25,16 +27,13 @@ import {
   Badge,
   Button,
   Calendar,
-  Col,
   DatePicker,
   Empty,
   Form,
   Input,
-  Row,
   Segmented,
   Select,
   Space,
-  Statistic,
   Tabs,
   Tag,
   Typography,
@@ -107,7 +106,7 @@ export default function HarvestRecords(): JSX.Element {
   const [view, setView] = useState<ViewMode>('table')
   const [tab, setTab] = useState<TabKey>('all')
   const [pageNum, setPageNum] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   const [filters, setFilters] = useState<HarvestFilters>({ plotId: presetPlotId })
   const [selectedKeys, setSelectedKeys] = useState<string[]>([])
   const [filterForm] = Form.useForm<HarvestFilters>()
@@ -419,10 +418,8 @@ export default function HarvestRecords(): JSX.Element {
       render: (_, record) => {
         const inbound = INBOUND_STATUS_META[(record.inboundStatus ?? 0) as InboundStatus]
         return (
-          <Space size={4} wrap>
-            <Tag color={inbound.color}>
-              <span style={{ color: inbound.color }}>●</span> {inbound.label}
-            </Tag>
+          <Space size={4}>
+            <Tag color={inbound.color}>{inbound.label}</Tag>
             <Tag color={BATCH_STATUS_META[record.status]?.color ?? 'default'}>
               {BATCH_STATUS_META[record.status]?.label ?? record.status}
             </Tag>
@@ -434,41 +431,40 @@ export default function HarvestRecords(): JSX.Element {
       title: '采收人',
       dataIndex: 'operatorName',
       width: 120,
+      ellipsis: true,
       render: (_, record) => operatorName(record),
     },
-    { title: '备注', dataIndex: 'remark', width: 200, render: (_, record) => record.remark || '—' },
+    { title: '备注', dataIndex: 'remark', width: 200, ellipsis: true, render: (_, record) => record.remark || '—' },
     {
       title: '操作',
       key: 'option',
       fixed: 'right',
-      width: 220,
+      width: 150,
       valueType: 'option',
-      render: (_, record) => [
-        <Typography.Link
-          key="register"
-          onClick={() => navigate(`/production/harvests/create?plotId=${encodeURIComponent(record.plotId ?? '')}`)}
-        >
-          登记采收
-        </Typography.Link>,
-        <Typography.Link
-          key="detail"
-          onClick={() => navigate(`/production/harvests/${record.batchId}`)}
-        >
-          查看
-        </Typography.Link>,
-        (record.inboundStatus ?? 0) === 0 ? (
+      render: (_, record) => (
+        <ListRowActions>
           <Typography.Link
-            key="inbound"
-            onClick={() => inboundMutation.mutate([record.batchId])}
+            key="detail"
+            onClick={() => navigate(`/production/harvests/${record.batchId}`)}
           >
-            入库
+            查看
           </Typography.Link>
-        ) : (
-          <Typography.Text key="inbound-done" type="secondary">
-            已入库
-          </Typography.Text>
-        ),
-      ],
+          {(record.inboundStatus ?? 0) === 0 ? (
+            <Typography.Link
+              key="inbound"
+              onClick={() => inboundMutation.mutate([record.batchId])}
+            >
+              入库
+            </Typography.Link>
+          ) : null}
+          <Typography.Link
+            key="register"
+            onClick={() => navigate(`/production/harvests/create?plotId=${encodeURIComponent(record.plotId ?? '')}`)}
+          >
+            登记采收
+          </Typography.Link>
+        </ListRowActions>
+      ),
     },
   ]
 
@@ -502,8 +498,10 @@ export default function HarvestRecords(): JSX.Element {
   /** 渲染列表视图 */
   const renderTable = (): JSX.Element => (
     <ProTable<HarvestBatch>
-      headerTitle="采收记录"
+      memberListToolbar
+      headerTitle={false}
       cardProps={false}
+      tableAlertRender={false}
       rowKey="batchId"
       columnWidthStorageKey={JSON.stringify([
         ['batchNo', '采收编号', null], ['crop', '作物品种', null],
@@ -517,6 +515,33 @@ export default function HarvestRecords(): JSX.Element {
       loading={tableQuery.isFetching}
       search={false}
       options={{ reload: () => void invalidateHarvests(), density: true, setting: true }}
+      toolbar={{
+        title: (
+          <Space size={8} wrap>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate('/production/harvests/create')}
+            >
+              新建采收
+            </Button>
+            <Button
+              icon={<InboxOutlined />}
+              loading={inboundMutation.isPending}
+              disabled={selectedKeys.length === 0}
+              onClick={handleBatchInbound}
+            >
+              批量入库
+            </Button>
+            <Button icon={<ExportOutlined />} onClick={handleExport}>
+              批量导出
+            </Button>
+            <Button onClick={() => navigate('/production/harvests/inventory')}>
+              库存管理
+            </Button>
+          </Space>
+        ),
+      }}
       rowSelection={{
         selectedRowKeys: selectedKeys,
         onChange: (keys) => setSelectedKeys(keys.map(String)),
@@ -577,7 +602,7 @@ export default function HarvestRecords(): JSX.Element {
 
   return (
     <PageContainer
-      className="harvest-business-page"
+      className="harvest-business-page production-list-dense production-member-list"
       title="采收记录"
       subTitle={currentFarm?.farmName}
       extra={[
@@ -590,63 +615,37 @@ export default function HarvestRecords(): JSX.Element {
             { label: '日历视图', value: 'calendar' },
           ]}
         />,
-        <Button key="inventory" onClick={() => navigate('/production/harvests/inventory')}>
-          库存管理
-        </Button>,
-        <Button
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/production/harvests/create')}
-        >
-          新建采收
-        </Button>,
       ]}
     >
+      <div className="production-dense-summary">
+        <div className="production-dense-summary-items">
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">本季采收总量</span>
+            <span className="production-dense-metric-value is-success">
+              {overview.seasonQuantity.toFixed(2)} kg
+            </span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">本月采收次数</span>
+            <span className="production-dense-metric-value">{overview.monthCount} 次</span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">A级记录占比</span>
+            <span className="production-dense-metric-value">{overview.gradeARatio}%</span>
+          </span>
+          <span className="production-dense-metric">
+            <span className="production-dense-metric-label">待入库</span>
+            <span className={`production-dense-metric-value ${overview.pendingInbound > 0 ? 'is-warning' : ''}`}>
+              {overview.pendingInbound} 条
+            </span>
+          </span>
+        </div>
+      </div>
 
-      <Row gutter={16} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic
-              title="本季采收总量"
-              value={overview.seasonQuantity}
-              precision={2}
-              suffix="kg"
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic title="本月采收次数" value={overview.monthCount} suffix="次" />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic
-              title="A级记录占比"
-              value={overview.gradeARatio}
-              suffix="%"
-              valueStyle={{ color: '#1677ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} xl={6}>
-          <Card>
-            <Statistic
-              title="待入库数量"
-              value={overview.pendingInbound}
-              suffix="条"
-              valueStyle={{ color: '#faad14' }}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Form form={filterForm} initialValues={{ plotId: presetPlotId }} layout="inline" style={{ rowGap: 12 }}>
+      <Card className="production-dense-filter-card">
+        <Form form={filterForm} initialValues={{ plotId: presetPlotId }} className="production-filter-grid" onFinish={handleSearch}>
           <Form.Item name="dateRange" label="采收日期">
-            <DatePicker.RangePicker style={{ width: 240 }} />
+            <DatePicker.RangePicker />
           </Form.Item>
           <Form.Item name="plotId" label="地块">
             <Select
@@ -655,7 +654,6 @@ export default function HarvestRecords(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部地块"
               options={plotOptions}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="cropId" label="作物">
@@ -665,7 +663,6 @@ export default function HarvestRecords(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部作物"
               options={cropOptions}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="grade" label="等级">
@@ -673,40 +670,23 @@ export default function HarvestRecords(): JSX.Element {
               allowClear
               placeholder="全部等级"
               options={GRADE_OPTIONS}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="batchNo" label="采收编号">
-            <Input allowClear placeholder="按采收编号搜索" style={{ width: 160 }} />
+            <Input allowClear placeholder="按采收编号搜索" />
           </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
+          <Form.Item className="production-filter-actions">
+            <Space size={8}>
+              <Button onClick={handleReset}>重置</Button>
+              <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
-              <Button onClick={handleReset}>重置</Button>
             </Space>
           </Form.Item>
         </Form>
       </Card>
 
-      <Card
-        extra={
-          <Space>
-            <Button
-              icon={<InboxOutlined />}
-              loading={inboundMutation.isPending}
-              disabled={selectedKeys.length === 0}
-              onClick={handleBatchInbound}
-            >
-              批量入库
-            </Button>
-            <Button icon={<ExportOutlined />} onClick={handleExport}>
-              批量导出
-            </Button>
-          </Space>
-        }
-      >
+      <Card>
         <Tabs
           activeKey={tab}
           onChange={(key) => {

@@ -1,3 +1,4 @@
+import '@/components/ProductionListDense.css'
 import Table from '@/components/BusinessRecordList'
 /**
  * 页面名称：设备列表（IoT设备管理）
@@ -27,14 +28,13 @@ import {
   Alert,
   Button,
   Card,
-  Col,
+  Form,
+  Popover,
   Dropdown,
   Empty,
   Input,
-  Row,
   Select,
   Space,
-  Statistic,
   Tag,
   Typography,
   message,
@@ -42,9 +42,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import {
   ApiOutlined,
-  DownloadOutlined,
   PlusOutlined,
-  ReloadOutlined,
   ToolOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -151,6 +149,8 @@ export default function DeviceList(): JSX.Element {
   const { currentFarm } = useFarmStore()
   const farmId = currentFarm?.farmId
 
+  const [form] = Form.useForm()
+  const [page, setPage] = useState(1)
   /** 状态筛选 */
   const [statusFilter, setStatusFilter] = useState<number | undefined>(undefined)
   /** 类型筛选 */
@@ -286,6 +286,7 @@ export default function DeviceList(): JSX.Element {
       title: '电量',
       dataIndex: 'battery',
       key: 'battery',
+      align: 'right',
       render: (value?: number) => (typeof value === 'number' ? `${value}%` : '-'),
     },
     {
@@ -330,21 +331,32 @@ export default function DeviceList(): JSX.Element {
   ]
 
   return (
-    <div style={{ padding: 24 }}>
-      <Row className="production-custom-page-header production-page-header-row" justify="space-between" align="middle" style={{ marginBottom: 8 }}>
-        <Typography.Title className="production-page-heading" level={4} style={{ margin: 0 }}>
-          📡 IoT设备管理
-        </Typography.Title>
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              void queryClient.invalidateQueries({ queryKey: ['iot-devices'] })
-              void queryClient.invalidateQueries({ queryKey: ['iot-bindings-all'] })
-            }}
-          >
-            刷新
-          </Button>
+    <div className="production-list-dense production-member-list">
+      <Card className="production-dense-filter-card">
+        <Form form={form} layout="vertical" className="production-filter-grid" onFinish={(values) => {
+          setKeyword(values.keyword?.trim() ?? ''); setStatusFilter(values.status); setTypeFilter(values.type); setPlotFilter(values.plot)
+          setSelectedIds([]); setPage(1)
+        }}>
+          <Form.Item name="keyword" label="设备名称 / 编码"><Input allowClear placeholder="请输入名称或编码" /></Form.Item>
+          <Form.Item name="status" label="设备状态"><Select allowClear placeholder="全部状态" options={STATUS_OPTIONS} /></Form.Item>
+          <Form.Item name="type" label="设备类型"><Select allowClear placeholder="全部类型" options={typeOptions} /></Form.Item>
+          <Form.Item name="plot" label="关联地块"><Select allowClear placeholder="全部地块" options={plots.map(item => ({ value: item.plotId, label: item.plotName }))} /></Form.Item>
+          <Form.Item className="production-filter-actions"><Space><Button onClick={() => { form.resetFields(); form.submit() }}>重置</Button><Button type="primary" htmlType="submit">查询</Button></Space></Form.Item>
+        </Form>
+      </Card>
+      {devicesQuery.isError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="设备列表加载失败"
+          description={(devicesQuery.error as Error)?.message ?? '请稍后重试'}
+        />
+      )}
+
+      <Card>
+        <Table<IotDevice>
+          toolbarTitle={<Space wrap>
           <Dropdown
             menu={{
               items: [
@@ -369,92 +381,9 @@ export default function DeviceList(): JSX.Element {
           <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/production/iot/bindings')}>
             绑定设备
           </Button>
-        </Space>
-      </Row>
-
-
-
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic
-              title="在线"
-              value={stats.online}
-              valueStyle={{ color: '#3f8600' }}
-              suffix={`/ ${stats.total}`}
-              prefix={<ApiOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic title="离线" value={stats.offline} valueStyle={{ color: 'rgba(0,0,0,0.45)' }} />
-          </Card>
-        </Col>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic
-              title="故障"
-              value={stats.fault}
-              valueStyle={{ color: stats.fault > 0 ? '#cf1322' : undefined }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} lg={6}>
-          <Card>
-            <Statistic title="总计" value={stats.total} suffix="台" prefix={<DownloadOutlined />} />
-          </Card>
-        </Col>
-      </Row>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Space wrap size={12}>
-          <Select
-            allowClear
-            style={{ width: 140 }}
-            placeholder="全部状态"
-            value={statusFilter}
-            options={STATUS_OPTIONS}
-            onChange={setStatusFilter}
-          />
-          <Select
-            allowClear
-            style={{ width: 160 }}
-            placeholder="全部类型"
-            value={typeFilter}
-            options={typeOptions}
-            onChange={setTypeFilter}
-          />
-          <Select
-            allowClear
-            style={{ width: 180 }}
-            placeholder="全部地块"
-            value={plotFilter}
-            options={plots.map((item) => ({ value: item.plotId, label: item.plotName }))}
-            onChange={setPlotFilter}
-          />
-          <Input.Search
-            allowClear
-            style={{ width: 220 }}
-            placeholder="设备名称 / 编码"
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-          />
-        </Space>
-      </Card>
-
-      {devicesQuery.isError && (
-        <Alert
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          message="设备列表加载失败"
-          description={(devicesQuery.error as Error)?.message ?? '请稍后重试'}
-        />
-      )}
-
-      <Card>
-        <Table<IotDevice>
+            <Popover trigger="click" content={`在线 ${stats.online} · 离线 ${stats.offline} · 故障 ${stats.fault} · 共 ${stats.total} 台`}><Button>设备统计</Button></Popover>
+          </Space>}
+          onReload={() => Promise.all([devicesQuery.refetch(), plotsQuery.refetch(), bindingsQuery.refetch()])}
           rowKey="deviceId"
           loading={devicesQuery.isLoading}
           dataSource={filteredDevices}
@@ -464,7 +393,9 @@ export default function DeviceList(): JSX.Element {
             selectedRowKeys: selectedIds,
             onChange: (keys) => setSelectedIds(keys as string[]),
           }}
-          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (value) => `共 ${value} 台` }}
+          pagination={{
+            current: page, defaultPageSize: 20, onChange: setPage,
+          }}
         />
       </Card>
     </div>
