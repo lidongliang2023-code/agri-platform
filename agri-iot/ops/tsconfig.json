@@ -26,6 +26,12 @@
       "@/*": [
         "src/*"
       ],
+      "@agri/shared": [
+        "../../packages/agri-shared/src"
+      ],
+      "@agri/shared/*": [
+        "../../packages/agri-shared/src/*"
+      ],
       "react": [
         "node_modules/@types/react/index.d.ts"
       ],

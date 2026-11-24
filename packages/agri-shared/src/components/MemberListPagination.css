@@ -1,4 +1,4 @@
-:is(.production-member-list, .device-member-list) ul.agri-list-pagination {
+:is(.production-member-list, .device-member-list, .agri-list-page) ul.agri-list-pagination {
   display: flex;
   width: 100%;
   flex-wrap: wrap;
@@ -6,9 +6,10 @@
   justify-content: flex-end;
   gap: 8px;
 }
-:is(.production-member-list, .device-member-list) .agri-list-pagination .ant-pagination-total-text { margin-inline-end: auto; }
-:is(.production-member-list, .device-member-list) ul.agri-list-pagination .ant-pagination-item { border-radius: 4px; }
-:is(.production-member-list, .device-member-list) ul.agri-list-pagination .ant-pagination-item-active { background: #258849; border-color: #258849; }
-:is(.production-member-list, .device-member-list) ul.agri-list-pagination .ant-pagination-item-active a { color: white; }
-:is(.production-member-list, .device-member-list) .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell { background: #e8f5e9 !important; }
-:is(.production-member-list, .device-member-list) .ant-checkbox-checked .ant-checkbox-inner { background: #258849; border-color: #258849; }
+:is(.production-member-list, .device-member-list, .agri-list-page) .agri-list-pagination .ant-pagination-total-text { margin-inline-end: auto; }
+:is(.production-member-list, .device-member-list, .agri-list-page) ul.agri-list-pagination .ant-pagination-item { border-radius: 4px; }
+:is(.production-member-list, .device-member-list, .agri-list-page) ul.agri-list-pagination .ant-pagination-item-active { background: #258849; border-color: #258849; }
+:is(.production-member-list, .device-member-list, .agri-list-page) ul.agri-list-pagination .ant-pagination-item-active a { color: white; }
+:is(.production-member-list, .device-member-list, .agri-list-page) .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell { background: #e8f5e9 !important; }
+:is(.production-member-list, .device-member-list, .agri-list-page) .ant-checkbox-checked .ant-checkbox-inner { background: #258849; border-color: #258849; }
+:is(.production-member-list, .device-member-list, .agri-list-page) .agri-list-pagination .production-pagination-selected { color: #1b6332; font-weight: 500; }

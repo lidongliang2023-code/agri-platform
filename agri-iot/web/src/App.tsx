@@ -1,9 +1,14 @@
-import { memberListPagination } from '@agri/shared/components/memberListPagination';
-import MemberListToolbar, { columnSettingsTrigger } from '@agri/shared/components/MemberListToolbar';
+import {
+  DEFAULT_SELECTION_COLUMN_WIDTH,
+  ListRowActions,
+  MemberListToolbar,
+  memberListPagination,
+  useListColumnSettings,
+} from '@agri/shared/components/list';
 import DeviceSampling from "../../shared-ui/DeviceSampling";
 import CommandReceipts from '../../shared-ui/CommandReceipts'
 import DeviceRemoteControl from "./components/DeviceRemoteControl";
-import { Children, useEffect, useMemo, useState, type Key, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type Key, type ReactNode } from "react";
 import { BrowserRouter, useLocation, useNavigate } from "react-router-dom";
 import {
   AlertOutlined,
@@ -31,7 +36,6 @@ import {
 } from "@ant-design/icons";
 import {
   App as AntApp,
-  Checkbox,
   Popover,
   Space,
   Button,
@@ -155,100 +159,6 @@ function Status({ value }: { value: string }) {
   return <Tag className={`iot-status tone-${s.tone}`}>{s.label}</Tag>;
 }
 
-/** 行操作收拢：最多平铺 2 个文字链接，超出部分收入「更多」弹层。 */
-function IotRowActions({ children }: { children: ReactNode }) {
-  const actions = Children.toArray(children).filter(Boolean);
-  return (
-    <Space size={8}>
-      {actions.length <= 2 ? (
-        actions
-      ) : (
-        <>
-          {actions[0]}
-          <Popover
-            trigger="click"
-            placement="bottomRight"
-            content={
-              <Space direction="vertical" align="start" size={4}>
-                {actions.slice(1)}
-              </Space>
-            }
-          >
-            <Button type="link" size="small">
-              更多
-            </Button>
-          </Popover>
-        </>
-      )}
-    </Space>
-  );
-}
-
-/** 物联网端表格通用的列显隐偏好存储与「列设置」弹层构建器。 */
-function useIotColumnSettings<T>(
-  storageKey: string,
-  columns: ColumnsType<T>,
-  lockedKeys: string[] = ["actions"],
-) {
-  const [hidden, setHidden] = useState<string[]>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
-      return Array.isArray(saved) ? saved.filter((item): item is string => typeof item === "string") : [];
-    } catch {
-      return [];
-    }
-  });
-  const canHide = (key: string) => !lockedKeys.includes(key);
-  const updateHidden = (next: string[]) => {
-    const clean = next.filter(canHide);
-    setHidden(clean);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(clean));
-    } catch {
-      // 存储受限时仅保留当次页面状态
-    }
-  };
-  const colKeyOf = (col: ColumnsType<T>[number], idx: number) =>
-    String(col.key ?? ("dataIndex" in col ? col.dataIndex : undefined) ?? idx);
-  const visibleColumns = columns.filter((col, idx) => {
-    const key = colKeyOf(col, idx);
-    return !canHide(key) || !hidden.includes(key);
-  });
-  const columnSettings = (
-    <Popover
-      placement="bottomRight"
-      trigger="click"
-      title="显示列"
-      content={
-        <Space direction="vertical" size={6}>
-          {columns.map((column, idx) => {
-            const key = colKeyOf(column, idx);
-            return (
-              <Checkbox
-                key={key}
-                disabled={!canHide(key)}
-                checked={!canHide(key) || !hidden.includes(key)}
-                onChange={(event) =>
-                  updateHidden(
-                    event.target.checked ? hidden.filter((item) => item !== key) : [...hidden, key],
-                  )
-                }
-              >
-                {String(column.title)}
-              </Checkbox>
-            );
-          })}
-          <Button type="link" size="small" onClick={() => updateHidden([])}>
-            恢复默认
-          </Button>
-        </Space>
-      }
-    >
-      {columnSettingsTrigger()}
-    </Popover>
-  );
-  return { visibleColumns, columnSettings };
-}
 function PageTitle({
   title,
   desc,
@@ -720,17 +630,6 @@ const DEVICE_HIDDEN_COLUMNS = "agri:iot:devices:hidden-columns:v1";
 
 function Devices() {
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
-  const [hiddenColumns, setHiddenColumns] = useState<string[]>(() => {
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(DEVICE_HIDDEN_COLUMNS) ?? "[]");
-      return Array.isArray(saved) ? saved.filter((key) => typeof key === "string") : [];
-    } catch { return []; }
-  });
-  const changeHiddenColumns = (next: string[]) => {
-    setHiddenColumns(next);
-    try { localStorage.setItem(DEVICE_HIDDEN_COLUMNS, JSON.stringify(next)); }
-    catch { /* 存储不可用时，当前页面仍可切换列。 */ }
-  };
 
   const { message } = AntApp.useApp();
   const location = useLocation();
@@ -1025,8 +924,11 @@ function Devices() {
       ),
     },
   ];
-  const canHide = (key: string) => key !== "device" && key !== "actions";
-  const visibleColumns = columns.filter(({ key }) => !canHide(String(key)) || !hiddenColumns.includes(String(key)));
+  const { visibleColumns, columnSettings: deviceColumnSettings } = useListColumnSettings(
+    DEVICE_HIDDEN_COLUMNS,
+    columns,
+    ["device", "actions"],
+  );
   return (
     <div className="iot-page device-member-list" aria-label="设备管理">
       <section className="iot-card device-filter-card" aria-label="设备筛选">
@@ -1100,33 +1002,16 @@ function Devices() {
               <span>远程可控 {items.filter((item) => item.controlCapable).length} 台</span>
             </Space>}><Button>设备统计</Button></Popover>
           </Space>
-          <MemberListToolbar refreshing={loading} onRefresh={loadDevices} columnSettings={
-              <Popover placement="bottomRight" trigger="click" title="显示列" content={
-              <Space direction="vertical" size={6}>
-                {columns.map((column) => {
-                  const key = String(column.key);
-                  return <Checkbox key={key} disabled={!canHide(key)}
-                    checked={!canHide(key) || !hiddenColumns.includes(key)}
-                    onChange={(event) => changeHiddenColumns(event.target.checked
-                      ? hiddenColumns.filter((item) => item !== key) : [...hiddenColumns, key])}>
-                    {String(column.title)}
-                  </Checkbox>;
-                })}
-                <Button type="link" size="small" onClick={() => changeHiddenColumns([])}>恢复默认</Button>
-              </Space>
-            }>
-                {columnSettingsTrigger()}
-              </Popover>
-            } />
+          <MemberListToolbar refreshing={loading} onRefresh={loadDevices} columnSettings={deviceColumnSettings} />
         </div>
         <Table
           rowKey="id"
           tableLayout="fixed"
-          rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: 44 }}
+          rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
           columns={visibleColumns}
           dataSource={items}
           loading={loading}
-          scroll={{ x: visibleColumns.reduce((width, column) => width + Number(column.width), 44) }}
+          scroll={{ x: visibleColumns.reduce((width, column) => width + Number(column.width), DEFAULT_SELECTION_COLUMN_WIDTH) }}
           locale={{ emptyText: <EmptyHint icon="📡" title="暂无设备" desc="当前经营主体还没有登记设备，或筛选条件没有匹配结果。" /> }}
           pagination={memberListPagination({}, selectedKeys.length)}
         />
@@ -2048,14 +1933,14 @@ function Plots() {
       fixed: "right",
       title: "操作",
       render: (_, plot) => (
-        <IotRowActions>
+        <ListRowActions>
           <Button key="monitor" type="link" size="small" onClick={() => void openDetail(plot)}>查看监测</Button>
           <Button key="devices" type="link" size="small" onClick={() => openDevices(plot.id)}>设备</Button>
-        </IotRowActions>
+        </ListRowActions>
       ),
     },
   ];
-  const plotCols = useIotColumnSettings("iot_plot_hidden_columns_v1", columns, ["plot", "actions"]);
+  const plotCols = useListColumnSettings("iot_plot_hidden_columns_v1", columns, ["plot", "actions"]);
   return (
     <div className="iot-page device-member-list">
       <PageTitle
@@ -2208,7 +2093,7 @@ function Plots() {
             loading={loading}
             dataSource={filteredItems}
             columns={plotCols.visibleColumns}
-            rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: 44 }}
+            rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
             scroll={{ x: plotCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
             locale={{ emptyText: <EmptyHint icon="🌾" title="暂无地块" desc="当前经营主体还没有同步生产地块，或筛选条件没有匹配结果。" /> }}
             pagination={memberListPagination({}, selectedKeys.length)}
@@ -2470,7 +2355,7 @@ function AlertRuleWorkbench() {
       fixed: "right",
       title: "操作",
       render: (_, r: AlertRule) => (
-        <IotRowActions>
+        <ListRowActions>
           <Button key="edit" type="link" size="small" onClick={() => openForm(r)}>
             编辑
           </Button>
@@ -2480,7 +2365,7 @@ function AlertRuleWorkbench() {
           <Button key="delete" type="link" size="small" danger onClick={() => remove(r)}>
             删除
           </Button>
-        </IotRowActions>
+        </ListRowActions>
       ),
     },
   ];
@@ -2515,8 +2400,8 @@ function AlertRuleWorkbench() {
         ),
     },
   ];
-  const tenantCols = useIotColumnSettings("iot_alert_tenant_rules_hidden_v1", tenantColumns, ["ruleName", "actions"]);
-  const platformCols = useIotColumnSettings("iot_alert_platform_rules_hidden_v1", platformColumns, ["ruleName"]);
+  const tenantCols = useListColumnSettings("iot_alert_tenant_rules_hidden_v1", tenantColumns, ["ruleName", "actions"]);
+  const platformCols = useListColumnSettings("iot_alert_platform_rules_hidden_v1", platformColumns, ["ruleName"]);
   if (!view || !options) return <Loading />;
   const matchRule = (rule: AlertRule) => {
     if (levelFilter && rule.level !== levelFilter) return false;
@@ -2603,7 +2488,7 @@ function AlertRuleWorkbench() {
               loading={loading}
               dataSource={filteredTenant}
               columns={tenantCols.visibleColumns}
-              rowSelection={{ selectedRowKeys: tenantSelectedKeys, onChange: setTenantSelectedKeys, columnWidth: 44 }}
+              rowSelection={{ selectedRowKeys: tenantSelectedKeys, onChange: setTenantSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
               scroll={{ x: tenantCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
               pagination={memberListPagination({}, tenantSelectedKeys.length)}
             />
@@ -2622,7 +2507,7 @@ function AlertRuleWorkbench() {
             loading={loading}
             dataSource={filteredPlatform}
             columns={platformCols.visibleColumns}
-            rowSelection={{ selectedRowKeys: platformSelectedKeys, onChange: setPlatformSelectedKeys, columnWidth: 44 }}
+            rowSelection={{ selectedRowKeys: platformSelectedKeys, onChange: setPlatformSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
             scroll={{ x: platformCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
             pagination={memberListPagination({}, platformSelectedKeys.length)}
           />
@@ -3252,16 +3137,16 @@ function Automation() {
       fixed: "right",
       title: "操作",
       render: (_, r) => (
-        <IotRowActions>
+        <ListRowActions>
           <Button key="exec" size="small" type="link" icon={<PlayCircleOutlined />} onClick={() => void executeRule(r.id)}>执行</Button>
           <Button key="toggle" size="small" type="link" onClick={() => void toggle(r.id)}>{r.enabled ? "停用" : "启用"}</Button>
           <Button key="edit" size="small" type="link" icon={<EditOutlined />} onClick={() => openRule(r)}>编辑</Button>
           <Button key="del" size="small" type="link" danger icon={<DeleteOutlined />} onClick={() => removeRule(r)}>删除</Button>
-        </IotRowActions>
+        </ListRowActions>
       ),
     },
   ];
-  const ruleCols = useIotColumnSettings("iot_automation_rules_hidden_v1", ruleColumns, ["rule", "actions"]);
+  const ruleCols = useListColumnSettings("iot_automation_rules_hidden_v1", ruleColumns, ["rule", "actions"]);
   return (
     <div className="iot-page device-member-list">
       <PageTitle
@@ -3373,7 +3258,7 @@ function Automation() {
           loading={loading}
           dataSource={filteredRules}
           columns={ruleCols.visibleColumns}
-          rowSelection={{ selectedRowKeys: selectedRuleKeys, onChange: setSelectedRuleKeys, columnWidth: 44 }}
+          rowSelection={{ selectedRowKeys: selectedRuleKeys, onChange: setSelectedRuleKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
           scroll={{ x: ruleCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
           locale={{ emptyText: <EmptyHint icon="⚡" title="暂无自动化规则" desc="请调整筛选条件或点击「新建规则」配置联动策略。" /> }}
           pagination={memberListPagination({}, selectedRuleKeys.length)}

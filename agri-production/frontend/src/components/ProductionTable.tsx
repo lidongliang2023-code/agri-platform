@@ -7,13 +7,23 @@ import { ProTable } from '@ant-design/pro-components'
 import type { ProColumns, ProTableProps } from '@ant-design/pro-components'
 import { Grid } from 'antd'
 import MemberListToolbar, { columnSettingsTrigger } from '@agri/shared/components/MemberListToolbar'
+import {
+  DEFAULT_SELECTION_COLUMN_WIDTH,
+  MIN_RESIZABLE_COLUMN_WIDTH,
+  isActionColumnMeta,
+  isNumericColumnMeta,
+  isStatusColumnMeta,
+  parseConfiguredWidth,
+  parseStoredWidths,
+  resolveColumnKey,
+  type ColumnWidths,
+} from '@agri/shared/components/list/listColumnUtils'
 import type { TableProps } from 'antd'
 import { useQueryClient } from '@tanstack/react-query'
 import ResizableTableHeader from './ResizableTableHeader'
 import './ProductionTable.css'
 import { productionPagination } from './ProductionPagination'
 
-type ColumnWidths = Record<string, number>
 type ProductionTableProps<T extends Record<string, any>, P extends Record<string, any>> = ProTableProps<T, P> & {
   /** 同一页面存在字段完全一致的多个列表时，指定不同标识。false 关闭持久保存。 */
   columnWidthStorageKey?: string | false
@@ -23,9 +33,7 @@ type ProductionTableProps<T extends Record<string, any>, P extends Record<string
 function readWidths(key: string | null): ColumnWidths {
   if (!key) return {}
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(key) ?? '{}')
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
-    return Object.fromEntries(Object.entries(parsed).filter(([, value]) => typeof value === 'number' && Number.isFinite(value) && value >= 80))
+    return parseStoredWidths(localStorage.getItem(key))
   } catch { return {} }
 }
 
@@ -63,13 +71,13 @@ export default function ProductionTable<T extends Record<string, any>, P extends
   const resizable = useMemo(() => {
     let totalWidth = 0
     const walk = (items: ProColumns<T>[], parent = ''): ProColumns<T>[] => items.map((column, index) => {
-      const key = `${parent}/${String(column.key ?? (Array.isArray(column.dataIndex) ? column.dataIndex.join('.') : column.dataIndex) ?? index)}`
-      if (column.children?.length) return { ...column, children: walk(column.children, key) }
-      const configured = typeof column.width === 'number' ? column.width : typeof column.width === 'string' && /^\d+(px)?$/.test(column.width) ? Number.parseFloat(column.width) : undefined
+      const key = `/${resolveColumnKey(column, index, parent)}`
+      if (column.children?.length) return { ...column, children: walk(column.children, key.slice(1)) }
+      const configured = parseConfiguredWidth(column.width)
       const title = typeof column.title === 'string' ? column.title : ''
-      const isAction = column.valueType === 'option' || title === '操作'
-      const isNumeric = ['money', 'digit', 'percent'].includes(String(column.valueType)) || /^(数量|金额|单价|总价|小计|合计|库存|面积|产量|重量|余额|采收数量|当前库存|安全库存|扫码次数|可供量|已认购|供给总量|净认购量|未认购意向量|认购率|本次数量|差异量|折算系数|区块高度|日薪|可到岗率|工时上限|采集频率|抽取置信度|株高\(cm\)|数值|冻结量|过期未冻结量|库存可用量|供给占用|可发布)$/.test(title)
-      const isStatus = /^(状态|审核|审核状态|承接状态|订单状态|交易状态|回写状态|级别|告警级别|质量等级|风险等级|合规状态|处理状态|在线状态|链上状态|结果|库存校验|质检|品种映射|数据来源)$/.test(title)
+      const isAction = isActionColumnMeta(title, column.key as string | number | undefined, column.valueType)
+      const isNumeric = isNumericColumnMeta(title, column.valueType)
+      const isStatus = isStatusColumnMeta(title)
       const width = widths[key] ?? configured ?? (isAction ? 180 : isNumeric ? 120 : isStatus ? 100 : 160)
       if (!column.hideInTable) totalWidth += width
       return {
@@ -81,7 +89,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
         onHeaderCell: (current) => ({
           ...column.onHeaderCell?.(current),
           resizeWidth: width,
-          onColumnResize: (next: number) => setWidthState((previous) => ({ key: storageKey, values: { ...(previous.key === storageKey ? previous.values : restored), [key]: Math.max(80, next) } })),
+          onColumnResize: (next: number) => setWidthState((previous) => ({ key: storageKey, values: { ...(previous.key === storageKey ? previous.values : restored), [key]: Math.max(MIN_RESIZABLE_COLUMN_WIDTH, next) } })),
         }),
       }
     })
@@ -94,7 +102,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
   const selectedCount = controlledSelectedKeys ? controlledSelectedKeys.length : uncontrolledSelectedCount
   const mergedRowSelection = props.rowSelection && typeof props.rowSelection === 'object'
     ? {
-        columnWidth: 48,
+        columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH,
         ...props.rowSelection,
         onChange: (keys: Key[], rows: T[], info: any) => {
           setUncontrolledSelectedCount(keys.length)
@@ -103,7 +111,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
       }
     : props.rowSelection
   const selectionColumnWidth = mergedRowSelection && typeof mergedRowSelection === 'object'
-    ? (typeof mergedRowSelection.columnWidth === 'number' ? mergedRowSelection.columnWidth : 48)
+    ? (typeof mergedRowSelection.columnWidth === 'number' ? mergedRowSelection.columnWidth : DEFAULT_SELECTION_COLUMN_WIDTH)
     : 0
   const minScrollX = resizable.totalWidth > 0 ? resizable.totalWidth + selectionColumnWidth : resizable.totalWidth
   const searchableColumnCount = useMemo(() => {

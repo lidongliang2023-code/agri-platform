@@ -18,7 +18,12 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@agri/shared": ["../../packages/agri-shared/src"],
+      "@agri/shared/*": ["../../packages/agri-shared/src/*"],
+      "react": ["node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": ["node_modules/@types/react/jsx-runtime.d.ts"],
+      "antd": ["node_modules/antd"]
     }
   },
   "include": ["src"],

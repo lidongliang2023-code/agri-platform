@@ -1,4 +1,4 @@
-import type { TablePaginationConfig } from 'antd/es/table'
+import type { TablePaginationConfig } from 'antd'
 import './MemberListPagination.css'
 
 /** 表格和卡片列表共用的分页规则，保留业务查询及选择回调。 */
