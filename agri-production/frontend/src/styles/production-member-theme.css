@@ -384,10 +384,6 @@
     padding: 0 14px;
   }
 
-  .agri-content {
-    padding: 14px;
-  }
-
   .agri-header-right .ant-select {
     width: 150px !important;
   }
@@ -436,9 +432,11 @@
 
 /* 顶栏与页签组成固定工作区，业务页面在各自面板内滚动。 */
 .agri-layout { height: 100vh; height: 100dvh; overflow: hidden; }
-.agri-main.ant-layout { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
+.agri-main.ant-layout { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; background: var(--prod-bg); }
 .agri-header.ant-layout-header { flex: none; position: relative; }
-.agri-main > .agri-content { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; padding: 0; overflow: hidden; }
+/* 选择器权重高于 pc-ui-v1.css 中 :is(...) 的 (0,4,0)，确保多页签栏紧贴顶栏无留白。 */
+html.pc-ui-v1 .agri-layout > .agri-main > .agri-content,
+.agri-main > .agri-content { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; max-width: none; margin-inline: 0; padding: 0; overflow: hidden; }
 .agri-main > .agri-content > .ant-alert { margin: 16px 24px; }
 .agri-main > .agri-content > .ant-spin-nested-loading { margin: 16px 24px; }
 .agri-main > .agri-footer { flex: none; padding: 6px 16px; font-size: 12px; }

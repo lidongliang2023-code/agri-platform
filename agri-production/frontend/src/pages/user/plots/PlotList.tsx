@@ -1,5 +1,6 @@
 import ProductionPagination from '@/components/ProductionPagination'
 import { Popover as ListSummary } from 'antd'
+import { CollapsibleFilterForm } from '@/components/CollapsibleFilterGrid'
 import ListRowActions from '@/components/ListRowActions'
 import PlotImportModal from './PlotImportModal'
 import BusinessRecordList from '@/components/BusinessRecordList'
@@ -606,7 +607,9 @@ export default function PlotList(): JSX.Element {
       {(plotsQuery.isError || growthQuery.isError) && <Alert type="error" showIcon message="全量数据未加载完成，暂不显示统计" style={{ marginBottom: 8 }} />}
 
       <Card className="production-dense-filter-card">
-        <Form form={filterForm} className="production-dense-filter-bar production-filter-grid" onFinish={handleSearch}>
+        <CollapsibleFilterForm fieldCount={5} form={filterForm} className="production-dense-filter-bar production-filter-grid" onFinish={handleSearch}>
+          {({ toggleButton }) => (
+            <>
           <Form.Item name="farmId" label="农场">
             <Select
               aria-label="筛选农场"
@@ -653,14 +656,17 @@ export default function PlotList(): JSX.Element {
             <Input aria-label="关键字" allowClear placeholder="地块编号 / 名称" />
           </Form.Item>
           <Form.Item className="production-filter-actions">
-            <Space size={8}>
+            <Space size={6}>
               <Button onClick={handleReset}>重置</Button>
               <Button type="primary" htmlType="submit">
                 查询
               </Button>
+              {toggleButton}
             </Space>
           </Form.Item>
-        </Form>
+            </>
+          )}
+        </CollapsibleFilterForm>
       </Card>
       <Card>
 

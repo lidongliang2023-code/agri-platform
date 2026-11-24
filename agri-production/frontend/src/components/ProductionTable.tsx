@@ -101,10 +101,26 @@ export default function ProductionTable<T extends Record<string, any>, P extends
         },
       }
     : props.rowSelection
+  const searchableColumnCount = useMemo(() => {
+    const countSearchable = (items?: ProColumns<T>[]): number => {
+      if (!items?.length) return 0
+      return items.reduce((sum, column) => {
+        if (column.children?.length) return sum + countSearchable(column.children)
+        if (column.search === false || column.hideInSearch || column.valueType === 'option') return sum
+        return sum + 1
+      }, 0)
+    }
+    return countSearchable(columns)
+  }, [columns])
   const normalizedSearch = props.search === false
     ? false
     : props.search && typeof props.search === 'object'
-      ? { span: { xs: 24, sm: 12, md: 12, lg: 6, xl: 6, xxl: 6 }, defaultCollapsed: false, ...props.search }
+      ? {
+          span: { xs: 24, sm: 12, md: 12, lg: 6, xl: 6, xxl: 6 },
+          searchGutter: 12,
+          defaultCollapsed: searchableColumnCount >= 5,
+          ...props.search,
+        }
       : props.search
   return <ProTable<T, P>
     {...props}

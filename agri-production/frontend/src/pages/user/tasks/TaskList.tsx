@@ -1,3 +1,4 @@
+import { CollapsibleFilterForm } from '@/components/CollapsibleFilterGrid'
 import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
 import '@/components/ProductionListDense.css'
@@ -791,7 +792,9 @@ export default function TaskList(): JSX.Element {
       ]}
     >
       <Card className="production-dense-filter-card">
-        <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
+        <CollapsibleFilterForm fieldCount={6} form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
+          {({ toggleButton }) => (
+            <>
           <Form.Item name="keyword" label="关键字">
             <Input allowClear placeholder="任务名称 / 编号" />
           </Form.Item>
@@ -835,14 +838,17 @@ export default function TaskList(): JSX.Element {
             />
           </Form.Item>
           <Form.Item className="production-filter-actions">
-            <Space size={8}>
+            <Space size={6}>
               <Button onClick={handleReset}>重置</Button>
               <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
+              {toggleButton}
             </Space>
           </Form.Item>
-        </Form>
+            </>
+          )}
+        </CollapsibleFilterForm>
         {todayOnly && (
           <Tag
             closable

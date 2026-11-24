@@ -1,3 +1,4 @@
+import { CollapsibleFilterForm } from '@/components/CollapsibleFilterGrid'
 import '@/components/ProductionDetailCompact.css'
 import ProTable from '@/components/ProductionTable'
 import Card from '@/components/SectionCard'
@@ -875,12 +876,13 @@ export default function InputUsages(): JSX.Element {
           </Typography.Text>
         }
       >
-        <Form form={filterForm} layout="inline" style={{ rowGap: 12, marginBottom: 12 }}>
+        <CollapsibleFilterForm fieldCount={6} form={filterForm} className="production-filter-grid" style={{ marginBottom: 12 }} onFinish={handleSearch}>
+          {({ toggleButton }) => (
+            <>
           <Form.Item name="ledgerType" label="台账类型">
             <Select
               allowClear
               placeholder="全部台账"
-              style={{ width: 120 }}
               options={[
                 { value: 'all', label: '全部台账' },
                 { value: 'usage', label: '使用记录' },
@@ -899,7 +901,6 @@ export default function InputUsages(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部投入品"
               options={inputOptions}
-              style={{ width: 160 }}
             />
           </Form.Item>
           <Form.Item name="plotId" label="地块">
@@ -909,7 +910,6 @@ export default function InputUsages(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部地块"
               options={plotOptions}
-              style={{ width: 140 }}
             />
           </Form.Item>
           <Form.Item name="taskId" label="关联任务">
@@ -919,24 +919,26 @@ export default function InputUsages(): JSX.Element {
               optionFilterProp="label"
               placeholder="全部任务"
               options={taskOptions}
-              style={{ width: 160 }}
             />
           </Form.Item>
           <Form.Item name="batchNo" label="批次号">
-            <Input allowClear placeholder="仅筛选库存业务" style={{ width: 150 }} />
+            <Input allowClear placeholder="仅筛选库存业务" />
           </Form.Item>
           <Form.Item name="dateRange" label="业务日期">
             <DatePicker.RangePicker allowClear placeholder={['开始日期', '结束日期']} />
           </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" onClick={handleSearch}>
+          <Form.Item className="production-filter-actions">
+            <Space size={6}>
+              <Button onClick={handleReset}>重置</Button>
+              <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
-              <Button onClick={handleReset}>重置</Button>
+              {toggleButton}
             </Space>
           </Form.Item>
-        </Form>
+            </>
+          )}
+        </CollapsibleFilterForm>
 
         {isError ? (
           <Empty

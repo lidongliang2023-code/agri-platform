@@ -1,4 +1,5 @@
 import AlertReviewPanel from './AlertReviewPanel'
+import { CollapsibleFilterDiv } from '@/components/CollapsibleFilterGrid'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
 import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
@@ -494,7 +495,9 @@ export default function AlertCenter(): JSX.Element {
       </div>
 
       <Card className="production-dense-filter-card">
-        <div className="production-filter-grid">
+        <CollapsibleFilterDiv fieldCount={5} className="production-filter-grid">
+          {({ toggleButton }) => (
+            <>
           <div className="production-filter-field production-filter-span-2">
             <label>级别</label>
             <Segmented
@@ -562,8 +565,11 @@ export default function AlertCenter(): JSX.Element {
             <Button type="primary" onClick={handleSearch}>
               查询
             </Button>
+            {toggleButton}
           </div>
-        </div>
+            </>
+          )}
+        </CollapsibleFilterDiv>
       </Card>
 
       <Card>

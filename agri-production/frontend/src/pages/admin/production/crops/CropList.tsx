@@ -231,7 +231,7 @@ export default function CropList(): JSX.Element {
         rowKey="cropId"
         headerTitle="作物档案列表"
         columns={columns}
-        search={{ labelWidth: 'auto', defaultCollapsed: false }}
+        search={{ labelWidth: 'auto' }}
         options={{
           density: true,
           fullScreen: true,
@@ -262,7 +262,7 @@ export default function CropList(): JSX.Element {
             return { data: [], success: true, total: 0 }
           }
         }}
-        pagination={{ pageSize: 10, showSizeChanger: true }}
+        pagination={{ pageSize: 20, showSizeChanger: true }}
         dateFormatter="string"
         scroll={{ x: 1100 }}
       />

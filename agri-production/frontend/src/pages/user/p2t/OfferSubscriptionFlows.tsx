@@ -130,7 +130,7 @@ export default function OfferSubscriptionFlows({ offerNo, unit, subjectId }: {
         columns={columns}
         params={{ offerNo, subjectId }}
         scroll={SCROLL_BY_CONTENT}
-        search={{ labelWidth: 'auto' }}
+        search={{ labelWidth: 'auto', layout: 'vertical' }}
         rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         pagination={{ defaultPageSize: 20, showSizeChanger: true }}
         options={{ reload: true }}

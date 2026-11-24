@@ -297,7 +297,7 @@ export default function TaskTemplates(): JSX.Element {
         rowKey="templateId"
         headerTitle="标准模板台账"
         columns={columns}
-        search={{ labelWidth: 'auto', defaultCollapsed: false }}
+        search={{ labelWidth: 'auto' }}
         options={{
           density: true,
           fullScreen: true,
@@ -323,7 +323,7 @@ export default function TaskTemplates(): JSX.Element {
             success: true,
           }
         }}
-        pagination={{ defaultPageSize: 10, showSizeChanger: true }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true }}
       />
 
       <ModalForm<TemplateFormValues>

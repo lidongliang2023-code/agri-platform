@@ -1,3 +1,4 @@
+import { CollapsibleFilterForm } from '@/components/CollapsibleFilterGrid'
 import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
 import '@/components/ProductionListDense.css'
@@ -695,7 +696,9 @@ export default function TraceCodeManage(): JSX.Element {
       </div>
 
       <Card className="production-dense-filter-card">
-        <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
+        <CollapsibleFilterForm fieldCount={6} form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
+          {({ toggleButton }) => (
+            <>
           <Form.Item name="status" label="状态">
             <Select
               allowClear
@@ -726,14 +729,17 @@ export default function TraceCodeManage(): JSX.Element {
             <DatePicker.RangePicker placeholder={['生成起', '生成止']} />
           </Form.Item>
           <Form.Item className="production-filter-actions">
-            <Space size={8}>
+            <Space size={6}>
               <Button onClick={handleReset}>重置</Button>
               <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
+              {toggleButton}
             </Space>
           </Form.Item>
-        </Form>
+            </>
+          )}
+        </CollapsibleFilterForm>
       </Card>
 
       <ProTable<RawTraceCode>

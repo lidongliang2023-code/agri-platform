@@ -58,12 +58,12 @@
   outline-offset: -2px;
 }
 
-/* 标准列表页筛选区：4 列等宽网格 + 右对齐按钮（重置在左、查询在右）。 */
+/* 标准列表页筛选区：4 列等宽网格 + 右对齐紧致按钮（重置在左、查询在右）。 */
 .production-filter-grid.ant-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 16px;
-  align-items: center;
+  gap: 8px 12px;
+  align-items: end;
   width: 100%;
 }
 .production-filter-grid.ant-form .ant-form-item {
@@ -107,8 +107,8 @@
 .production-filter-grid:not(.ant-form) {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px 16px;
-  align-items: center;
+  gap: 8px 12px;
+  align-items: end;
   width: 100%;
 }
 .production-filter-grid:not(.ant-form) > .production-filter-field {
@@ -156,9 +156,180 @@
     grid-column: 1 / -1;
   }
 }
-/* ProTable 内置查询表单：对齐按钮右对齐及间距 */
+/* 宽屏下 3 字段 + 按钮 / 4 字段 + 按钮合并为单行，按钮列仅占自身紧致宽度，不另起一行 */
+@media (min-width: 1200px) {
+  .production-filter-grid:not(:has(.production-filter-span-2)):has(> :nth-child(4):last-child):has(> .production-filter-actions:last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+  .production-filter-grid:not(:has(.production-filter-span-2)):has(> :nth-child(5):last-child):has(> .production-filter-actions:last-child) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  }
+}
+/* ProTable 内置查询表单：紧凑排版、单行右对齐操作区（重置 / 查询 / 展开收起同一行且占用最小空间） */
+html.pc-ui-v1 .production-record-table .ant-pro-table-search.ant-pro-table-search-query-filter,
+.production-record-table .ant-pro-table-search.ant-pro-table-search-query-filter {
+  padding: 10px 14px !important;
+  margin-bottom: 10px !important;
+}
+.production-record-table .ant-pro-query-filter {
+  padding: 0 !important;
+}
+html.pc-ui-v1 .production-record-table .ant-pro-query-filter .ant-form-item,
+.production-record-table .ant-pro-query-filter .ant-form-item {
+  margin-bottom: 0 !important;
+}
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-row {
+  row-gap: 8px !important;
+  align-items: flex-end;
+}
+.production-record-table .ant-pro-query-filter .ant-form-item-label {
+  padding: 0 0 4px !important;
+}
+.production-record-table .ant-pro-query-filter .ant-form-item-label > label {
+  height: auto !important;
+  line-height: 20px;
+}
 .production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions {
   display: flex;
   justify-content: flex-end;
+  margin-bottom: 0 !important;
 }
+/* 行已底对齐（align-items: flex-end），隐藏按钮列的空占位 label，避免额外垂直高度 */
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions .ant-form-item-label {
+  display: none !important;
+}
+/* 保证重置、查询、展开/收起始终在同一行且紧致排布 */
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions .ant-form-item-control-input {
+  min-height: 32px;
+}
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions .ant-form-item-control-input-content {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions .ant-space {
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+}
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions .ant-space-item {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-actions .ant-btn {
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-collapse-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline: 2px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-collapse-button .anticon {
+  margin-inline-start: 2px !important;
+  font-size: 11px;
+}
+/* 按钮列默认按内容自适应并贴右，不占用多余列宽 */
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-row > .ant-col:has(.ant-pro-query-filter-actions) {
+  margin-inline-start: auto !important;
+  flex: 0 0 auto !important;
+  max-width: none !important;
+  width: auto !important;
+}
+/* 仅当按钮独占新行（前一行已满）时撑满整行右对齐 */
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-row > .ant-col-6.ant-col-offset-18:has(.ant-pro-query-filter-actions),
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-row > .ant-col-8.ant-col-offset-16:has(.ant-pro-query-filter-actions),
+.production-record-table .ant-pro-query-filter .ant-pro-query-filter-row > .ant-col-12.ant-col-offset-12:has(.ant-pro-query-filter-actions) {
+  margin-inline-start: 0 !important;
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+}
+/* 宽屏（≥1200px）下：3 字段收起/展示 或 恰好 4 字段展开，都与“重置/查询/展开收起”合并到同一行，按钮仅占最小空间 */
+@media (min-width: 1200px) {
+  .production-record-table .ant-pro-query-filter .ant-pro-query-filter-row:has(> .ant-col-6.ant-pro-query-filter-row-split:nth-child(4) + .ant-col-6.ant-col-offset-18):has(> .ant-col-6.ant-col-offset-18 .ant-pro-query-filter-actions) {
+    flex-wrap: nowrap;
+  }
+  .production-record-table .ant-pro-query-filter .ant-pro-query-filter-row:has(> .ant-col-6.ant-pro-query-filter-row-split:nth-child(4) + .ant-col-6.ant-col-offset-18):has(> .ant-col-6.ant-col-offset-18 .ant-pro-query-filter-actions) > .ant-col-6.ant-pro-query-filter-row-split {
+    flex: 1 1 0 !important;
+    max-width: none !important;
+    min-width: 0;
+  }
+  .production-record-table .ant-pro-query-filter .ant-pro-query-filter-row:has(> .ant-col-6.ant-pro-query-filter-row-split:nth-child(4) + .ant-col-6.ant-col-offset-18):has(> .ant-col-6.ant-col-offset-18 .ant-pro-query-filter-actions) > .ant-col-6.ant-col-offset-18 {
+    margin-inline-start: 0 !important;
+    flex: 0 0 auto !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+  .production-record-table .ant-pro-query-filter .ant-pro-query-filter-row:has(> .ant-col-6.ant-pro-query-filter-row-split:nth-child(3)):not(:has(> .ant-col-6.ant-pro-query-filter-row-split:nth-child(4))) {
+    flex-wrap: nowrap;
+  }
+  .production-record-table .ant-pro-query-filter .ant-pro-query-filter-row:has(> .ant-col-6.ant-pro-query-filter-row-split:nth-child(3)):not(:has(> .ant-col-6.ant-pro-query-filter-row-split:nth-child(4))) > .ant-col-6.ant-pro-query-filter-row-split {
+    flex: 1 1 0 !important;
+    max-width: none !important;
+    min-width: 0;
+  }
+}
+/* 自定义 4 列筛选区按钮紧致单行不折行 */
+.production-filter-grid .production-filter-actions .ant-space {
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+}
+.production-filter-grid .production-filter-actions .ant-btn {
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+.production-filter-grid .production-filter-actions .production-filter-collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline: 2px;
+  height: 32px;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.production-filter-grid .production-filter-actions .production-filter-collapse-btn .anticon {
+  margin-inline-start: 2px;
+  font-size: 11px;
+}
+.production-filter-grid:not(.ant-form) > .production-filter-actions {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+/* 5 个及以上筛选条件默认收起：保留首行常用字段与操作区同行，展开后恢复完整多行网格 */
+.production-filter-grid.production-filter-collapsed > :not(.production-filter-actions):nth-child(n + 4) {
+  display: none !important;
+}
+.production-filter-grid.production-filter-collapsed:has(> .production-filter-span-2:nth-child(-n + 2)) > :not(.production-filter-actions):nth-child(n + 3) {
+  display: none !important;
+}
+@media (min-width: 1200px) {
+  .production-filter-grid.production-filter-collapsed {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+}
+@media (max-width: 1199px) and (min-width: 768px) {
+  .production-filter-grid.production-filter-collapsed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .production-filter-grid.production-filter-collapsed > :not(.production-filter-actions):nth-child(n + 3) {
+    display: none !important;
+  }
+  .production-filter-grid.production-filter-collapsed:has(> .production-filter-span-2:nth-child(1)) > :not(.production-filter-actions):nth-child(n + 2) {
+    display: none !important;
+  }
+}
+@media (max-width: 767px) {
+  .production-filter-grid.production-filter-collapsed > :not(.production-filter-actions):nth-child(n + 2) {
+    display: none !important;
+  }
+}
+
 

@@ -69,12 +69,22 @@
 @media(max-width:620px){.plot-telemetry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.plot-alert-list>div{grid-template-columns:1fr auto}.plot-alert-list>div>.iot-status:first-child{grid-column:1/-1;justify-self:start}.plot-alert-list small{white-space:normal}}
 
 /* 物联网用户端台账：四段式筛选、选中态、状态圆点胶囊、工具栏和分页与生产端保持一致。 */
-.device-member-list .device-filter-card { padding: 16px; }
-.device-member-list .device-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
-.device-filter-grid .ant-form-item { min-width: 0; margin: 0; }
-.device-filter-grid .ant-form-item-label { padding-bottom: 4px; }
+.device-member-list .device-filter-card { padding: 10px 14px; }
+.device-member-list .device-filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; align-items: end; }
+.device-filter-grid .ant-form-item { min-width: 0; margin: 0 !important; }
+.device-filter-grid .ant-form-item-label { padding-bottom: 4px !important; }
+.device-filter-grid .ant-form-item-label > label { height: auto !important; line-height: 20px; }
 .device-filter-grid .ant-select { width: 100%; }
-.device-filter-actions { grid-column: 1 / -1; justify-self: end; }
+.device-filter-actions { grid-column: -2 / -1; justify-self: end; flex-wrap: nowrap !important; gap: 6px !important; }
+.device-filter-actions .ant-btn { padding-inline: 10px; white-space: nowrap; }
+@media (min-width: 1200px) {
+  .device-member-list .device-filter-grid:has(> :nth-child(4):last-child):has(> .device-filter-actions:last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+  .device-member-list .device-filter-grid:has(> :nth-child(5):last-child):has(> .device-filter-actions:last-child) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  }
+}
 .device-list-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding: 12px 16px; }
 .device-member-list .iot-status { border-radius: 999px; }
 .device-member-list .iot-status::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-inline-end: 5px; border-radius: 50%; background: currentColor; vertical-align: 2px; }

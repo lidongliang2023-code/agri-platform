@@ -1,4 +1,5 @@
 import Card from '@/components/SectionCard'
+import { CollapsibleFilterForm } from '@/components/CollapsibleFilterGrid'
 import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionListDense.css'
 import './harvests.css'
@@ -643,7 +644,9 @@ export default function HarvestRecords(): JSX.Element {
       </div>
 
       <Card className="production-dense-filter-card">
-        <Form form={filterForm} initialValues={{ plotId: presetPlotId }} className="production-filter-grid" onFinish={handleSearch}>
+        <CollapsibleFilterForm fieldCount={5} form={filterForm} initialValues={{ plotId: presetPlotId }} className="production-filter-grid" onFinish={handleSearch}>
+          {({ toggleButton }) => (
+            <>
           <Form.Item name="dateRange" label="采收日期">
             <DatePicker.RangePicker />
           </Form.Item>
@@ -676,14 +679,17 @@ export default function HarvestRecords(): JSX.Element {
             <Input allowClear placeholder="按采收编号搜索" />
           </Form.Item>
           <Form.Item className="production-filter-actions">
-            <Space size={8}>
+            <Space size={6}>
               <Button onClick={handleReset}>重置</Button>
               <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
+              {toggleButton}
             </Space>
           </Form.Item>
-        </Form>
+            </>
+          )}
+        </CollapsibleFilterForm>
       </Card>
 
       <Card>

@@ -1,3 +1,4 @@
+import { CollapsibleFilterDiv } from '@/components/CollapsibleFilterGrid'
 import Table from '@/components/BusinessRecordList'
 import PageContainer from '@/components/ProductionPageContainer'
 import '@/components/ProductionListDense.css'
@@ -388,7 +389,9 @@ export default function EnvironmentData(): JSX.Element {
       </div>
 
       <Card className="production-dense-filter-card">
-        <div className="production-filter-grid">
+        <CollapsibleFilterDiv fieldCount={5} className="production-filter-grid">
+          {({ toggleButton }) => (
+            <>
           <div className="production-filter-field">
             <label>地块</label>
             <Select
@@ -440,8 +443,11 @@ export default function EnvironmentData(): JSX.Element {
           <div className="production-filter-actions">
             <Button onClick={handleReset}>重置</Button>
             <Button type="primary" onClick={handleSearch}>查询</Button>
+            {toggleButton}
           </div>
-        </div>
+            </>
+          )}
+        </CollapsibleFilterDiv>
       </Card>
 
       {isError && (

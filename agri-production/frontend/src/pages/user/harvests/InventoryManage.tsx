@@ -1,3 +1,4 @@
+import { CollapsibleFilterForm } from '@/components/CollapsibleFilterGrid'
 import ListRowActions from '@/components/ListRowActions'
 import '@/components/ProductionDetailCompact.css'
 import '@/components/ProductionListDense.css'
@@ -510,7 +511,9 @@ export default function InventoryManage(): JSX.Element {
       </div>
 
       <Card className="production-dense-filter-card">
-        <Form form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
+        <CollapsibleFilterForm fieldCount={5} form={filterForm} className="production-filter-grid" onFinish={handleSearch}>
+          {({ toggleButton }) => (
+            <>
           <Form.Item name="keyword" label="品名"><Input allowClear placeholder="搜索品名" /></Form.Item>
           <Form.Item name="batchNo" label="批次号"><Input allowClear placeholder="搜索采收批次" /></Form.Item>
           <Form.Item name="warehouseName" label="仓库">
@@ -535,14 +538,17 @@ export default function InventoryManage(): JSX.Element {
             />
           </Form.Item>
           <Form.Item className="production-filter-actions">
-            <Space size={8}>
+            <Space size={6}>
               <Button onClick={handleReset}>重置</Button>
               <Button type="primary" htmlType="submit" onClick={handleSearch}>
                 查询
               </Button>
+              {toggleButton}
             </Space>
           </Form.Item>
-        </Form>
+            </>
+          )}
+        </CollapsibleFilterForm>
       </Card>
 
       <Card>
