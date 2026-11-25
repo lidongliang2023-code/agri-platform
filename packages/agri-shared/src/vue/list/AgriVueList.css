@@ -1,0 +1,734 @@
+/* 跨子系统通用 Vue 3 四段式列表页样式（筛选区 → 工具栏 → 表格 → 分页）。
+ * 同时兼容无 Element Plus 的纯 Vue 子系统（主数据管理平台）与 Element Plus 子系统（供应链金融、S2B2C）。 */
+
+.agri-vue-list-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.agri-vue-filter-card {
+  padding: 10px 14px;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.agri-vue-table-card {
+  padding: 10px 14px 12px;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ==================== 1. 筛选区：4 列等宽网格，5+ 条件默认收起，按钮右对齐同行 ==================== */
+.agri-vue-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 12px;
+  align-items: end;
+  width: 100%;
+}
+
+.agri-vue-filter-grid > .agri-vue-filter-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.agri-vue-filter-grid > .agri-vue-filter-field > label {
+  flex: none;
+  color: var(--pc-secondary, #595959);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.agri-vue-filter-grid > .agri-vue-filter-field > :not(label) {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100% !important;
+}
+
+.agri-vue-filter-grid :is(.el-form-item) {
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  width: 100%;
+}
+
+.agri-vue-filter-grid :is(.el-form-item__label) {
+  height: auto !important;
+  line-height: 20px !important;
+  padding: 0 0 4px !important;
+  justify-content: flex-start !important;
+  text-align: left !important;
+  color: var(--pc-secondary, #595959) !important;
+  font-size: 13px !important;
+}
+
+.agri-vue-filter-grid :is(.el-form-item__content) {
+  min-width: 0;
+  width: 100%;
+  margin-left: 0 !important;
+}
+
+.agri-vue-filter-grid :is(.el-input, .el-select, .el-date-editor, .el-cascader) {
+  width: 100% !important;
+  min-width: 0;
+}
+
+.agri-vue-filter-grid .agri-vue-filter-span-2 {
+  grid-column: span 2;
+}
+
+.agri-vue-filter-grid .agri-vue-filter-actions {
+  grid-column: -2 / -1;
+  justify-self: end;
+  align-self: end;
+  width: auto !important;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.agri-vue-filter-grid .agri-vue-filter-actions :is(.el-button, .agri-vue-btn) {
+  padding-inline: 10px;
+  white-space: nowrap;
+  margin-left: 0 !important;
+}
+
+.agri-vue-filter-collapse-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--pc-active, #1b6332);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 32px;
+  padding: 0 4px;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.agri-vue-filter-collapse-btn:hover,
+.agri-vue-filter-collapse-btn:focus-visible {
+  background: #f0f9f1;
+  color: var(--pc-brand, #2d8f4e);
+}
+
+.agri-vue-filter-chevron {
+  display: inline-block;
+  font-size: 11px;
+  transition: transform 0.16s ease;
+}
+
+.agri-vue-filter-chevron.is-expanded {
+  transform: rotate(180deg);
+}
+
+@media (min-width: 1200px) {
+  .agri-vue-filter-grid:not(:has(.agri-vue-filter-span-2)):has(> :nth-child(4):last-child):has(> .agri-vue-filter-actions:last-child) {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+  .agri-vue-filter-grid:not(:has(.agri-vue-filter-span-2)):has(> :nth-child(5):last-child):has(> .agri-vue-filter-actions:last-child) {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  }
+  .agri-vue-filter-grid.is-collapsed {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+}
+
+.agri-vue-filter-grid.is-collapsed > :not(.agri-vue-filter-actions):nth-child(n + 4) {
+  display: none !important;
+}
+
+.agri-vue-filter-grid.is-collapsed:has(> .agri-vue-filter-span-2:nth-child(-n + 2)) > :not(.agri-vue-filter-actions):nth-child(n + 3) {
+  display: none !important;
+}
+
+@media (max-width: 1199px) {
+  .agri-vue-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .agri-vue-filter-grid .agri-vue-filter-span-2 {
+    grid-column: span 2;
+  }
+  .agri-vue-filter-grid.is-collapsed > :not(.agri-vue-filter-actions):nth-child(n + 3) {
+    display: none !important;
+  }
+  .agri-vue-filter-grid.is-collapsed:has(> .agri-vue-filter-span-2:nth-child(1)) > :not(.agri-vue-filter-actions):nth-child(n + 2) {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .agri-vue-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agri-vue-filter-grid .agri-vue-filter-span-2,
+  .agri-vue-filter-grid .agri-vue-filter-actions {
+    grid-column: 1 / -1;
+  }
+  .agri-vue-filter-grid.is-collapsed > :not(.agri-vue-filter-actions):nth-child(n + 2) {
+    display: none !important;
+  }
+}
+
+/* ==================== 2. 工具栏：左侧主操作，右侧「列设置 / 刷新」 ==================== */
+.agri-vue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-height: 40px;
+  margin-bottom: 10px;
+}
+
+.agri-vue-toolbar-left,
+.agri-vue-toolbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.agri-vue-toolbar-right {
+  margin-inline-start: auto;
+  position: relative;
+}
+
+.agri-vue-tool-btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--pc-secondary, #595959);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 24px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.agri-vue-tool-btn:hover:not(:disabled),
+.agri-vue-tool-btn:focus-visible {
+  background: #f5f5f5;
+  color: var(--pc-text, #1a1a1a);
+}
+
+.agri-vue-tool-btn:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.agri-vue-colset-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.agri-vue-colset-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 1200;
+  min-width: 210px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.agri-vue-colset-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pc-text, #1a1a1a);
+}
+
+.agri-vue-colset-reset {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--pc-active, #1b6332);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.agri-vue-colset-reset:hover {
+  text-decoration: underline;
+}
+
+.agri-vue-colset-list {
+  display: grid;
+  gap: 6px;
+}
+
+.agri-vue-colset-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--pc-text, #1a1a1a);
+  cursor: pointer;
+  user-select: none;
+}
+
+.agri-vue-colset-item.is-locked {
+  color: var(--pc-muted, #8c8c8c);
+  cursor: not-allowed;
+}
+
+.agri-vue-colset-item input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: #258849;
+  cursor: inherit;
+}
+
+/* ==================== 3. 表格规范：固定列宽、复选框防省略号、选中行 #e8f5e9、状态圆点胶囊 ==================== */
+.agri-vue-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.agri-vue-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: var(--pc-text, #1a1a1a);
+  background: #fff;
+}
+
+.agri-vue-table thead th {
+  box-sizing: border-box;
+  height: 44px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--pc-secondary, #595959);
+  background: #fafafa;
+  border-bottom: 1px solid var(--pc-border, #e8e8e8);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agri-vue-table tbody td {
+  box-sizing: border-box;
+  height: 48px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 21px;
+  color: var(--pc-text, #1a1a1a);
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  vertical-align: middle;
+}
+
+.agri-vue-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.agri-vue-table tbody tr:hover td {
+  background: #f0f9f1;
+}
+
+.agri-vue-table tbody tr.is-selected td {
+  background: #e8f5e9 !important;
+}
+
+.agri-vue-table th.is-selection,
+.agri-vue-table td.is-selection {
+  width: 48px;
+  padding-inline: 8px;
+  text-align: center;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.agri-vue-table th.is-selection input[type='checkbox'],
+.agri-vue-table td.is-selection input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #258849;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.agri-vue-table .is-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agri-vue-table .is-align-right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.agri-vue-table .is-align-center {
+  text-align: center;
+}
+
+.agri-vue-table .is-kind-code {
+  font-family: var(--pc-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+}
+
+.agri-vue-table .is-kind-action {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.agri-vue-table .agri-vue-table-empty {
+  height: 112px;
+  text-align: center;
+  color: var(--pc-muted, #8c8c8c);
+}
+
+/* Element Plus 表格同步规范 */
+.agri-vue-list-page .el-table {
+  width: 100%;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 8px;
+  overflow: hidden;
+  --el-table-border-color: #f0f0f0;
+  --el-table-header-bg-color: #fafafa;
+  --el-table-row-hover-bg-color: #f0f9f1;
+}
+
+.agri-vue-list-page .el-table__header,
+.agri-vue-list-page .el-table__body {
+  table-layout: fixed !important;
+}
+
+.agri-vue-list-page .el-table th.el-table-column--selection,
+.agri-vue-list-page .el-table td.el-table-column--selection {
+  padding-inline: 8px !important;
+  text-align: center !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.agri-vue-list-page .el-table .el-table-column--selection .cell {
+  padding: 0 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.agri-vue-list-page .el-table__body tr.agri-vue-row-selected > td.el-table__cell {
+  background: #e8f5e9 !important;
+}
+
+.agri-vue-list-page .el-checkbox__input.is-checked .el-checkbox__inner,
+.agri-vue-list-page .el-checkbox__input.is-indeterminate .el-checkbox__inner {
+  background-color: #258849;
+  border-color: #258849;
+}
+
+.agri-vue-list-page .agri-vue-status-cell .el-tag {
+  border-radius: 999px;
+  padding-inline: 8px;
+}
+
+.agri-vue-list-page .agri-vue-status-cell .el-tag::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* 通用状态胶囊（无 Element Plus 时直接使用） */
+.agri-vue-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.agri-vue-status-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.agri-vue-status-pill.tone-success { color: #1b6332; background: #e8f5e9; }
+.agri-vue-status-pill.tone-warning { color: #8f4500; background: #fff3e0; }
+.agri-vue-status-pill.tone-danger  { color: #b71c1c; background: #ffebee; }
+.agri-vue-status-pill.tone-info    { color: #0958d9; background: #e6f4ff; }
+.agri-vue-status-pill.tone-default { color: #595959; background: #f5f5f5; }
+
+/* 操作列：最多平铺 2 个文字链接，其余收进「更多」 */
+.agri-vue-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.agri-vue-action-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--pc-active, #1b6332);
+  cursor: pointer;
+}
+
+.agri-vue-action-link:hover:not(:disabled) {
+  color: var(--pc-brand, #2d8f4e);
+  text-decoration: underline;
+}
+
+.agri-vue-action-link.is-danger {
+  color: #b71c1c;
+}
+
+.agri-vue-action-link:disabled {
+  color: var(--pc-disabled, #bfbfbf);
+  cursor: not-allowed;
+}
+
+.agri-vue-more-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.agri-vue-more-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 1300;
+  min-width: 112px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  display: grid;
+  gap: 2px;
+}
+
+.agri-vue-more-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 4px;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  color: var(--pc-text, #1a1a1a);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.agri-vue-more-item:hover:not(:disabled) {
+  background: #f0f9f1;
+  color: var(--pc-active, #1b6332);
+}
+
+.agri-vue-more-item.is-danger {
+  color: #b71c1c;
+}
+
+.agri-vue-more-item.is-danger:hover:not(:disabled) {
+  background: #ffebee;
+}
+
+.agri-vue-more-item:disabled {
+  color: var(--pc-disabled, #bfbfbf);
+  cursor: not-allowed;
+}
+
+/* ==================== 4. 分页区：左「已选 N 项 · 共 M 条」，右页码 + 每页条数 ==================== */
+.agri-vue-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--pc-secondary, #595959);
+}
+
+.agri-vue-pagination-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.agri-vue-pagination-selected {
+  color: #1b6332;
+  font-weight: 500;
+}
+
+.agri-vue-pagination-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.agri-vue-page-btn {
+  appearance: none;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--pc-text, #1a1a1a);
+  font: inherit;
+  font-size: 13px;
+  line-height: 28px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.agri-vue-page-btn:hover:not(:disabled):not(.is-active) {
+  border-color: #258849;
+  color: #258849;
+}
+
+.agri-vue-page-btn.is-active {
+  background: #258849;
+  border-color: #258849;
+  color: #fff;
+  font-weight: 500;
+}
+
+.agri-vue-page-btn:disabled {
+  color: var(--pc-disabled, #bfbfbf);
+  background: #fafafa;
+  cursor: not-allowed;
+}
+
+.agri-vue-page-ellipsis {
+  padding: 0 4px;
+  color: var(--pc-muted, #8c8c8c);
+  user-select: none;
+}
+
+.agri-vue-page-size {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--pc-text, #1a1a1a);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 兼容内嵌 Element Plus 分页样式统一 */
+.agri-vue-pagination .el-pagination {
+  margin-top: 0 !important;
+}
+
+.agri-vue-pagination .el-pagination.is-background .el-pager li.is-active,
+.agri-vue-pagination .el-pagination .el-pager li.is-active {
+  background: #258849 !important;
+  border-color: #258849 !important;
+  color: #fff !important;
+  border-radius: 4px;
+}
+
+/* 基础按钮辅助（供无 Element Plus 场景快速复用） */
+.agri-vue-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--pc-border, #e8e8e8);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--pc-text, #1a1a1a);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.agri-vue-btn:hover:not(:disabled) {
+  border-color: var(--pc-brand, #2d8f4e);
+  color: var(--pc-brand, #2d8f4e);
+}
+
+.agri-vue-btn--primary {
+  background: var(--pc-brand, #2d8f4e);
+  border-color: var(--pc-brand, #2d8f4e);
+  color: #fff;
+}
+
+.agri-vue-btn--primary:hover:not(:disabled) {
+  background: var(--pc-hover, #247a3f);
+  border-color: var(--pc-hover, #247a3f);
+  color: #fff;
+}
+
+.agri-vue-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

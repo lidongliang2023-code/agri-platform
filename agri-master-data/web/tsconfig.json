@@ -18,6 +18,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
+      "vue": ["./node_modules/vue"],
+      "@agri/shared": ["../../packages/agri-shared/src/index.ts"],
+      "@agri/shared/vue/list": ["../../packages/agri-shared/src/vue/list/index.ts"],
+      "@agri/shared/vue/element": ["../../packages/agri-shared/src/vue/element/index.ts"],
       "@agri/shared/*": ["../../packages/agri-shared/src/*"]
     }
   },

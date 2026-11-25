@@ -10,7 +10,11 @@
     ".": "./src/index.ts",
     "./tokens/*": "./src/tokens/*",
     "./types/*": "./src/types/*",
-    "./styles/*": "./src/styles/*"
+    "./styles/*": "./src/styles/*",
+    "./vue/list": "./src/vue/list/index.ts",
+    "./vue/list/*": "./src/vue/list/*",
+    "./vue/element": "./src/vue/element/index.ts",
+    "./vue/element/*": "./src/vue/element/*"
   },
   "sideEffects": [
     "*.css",

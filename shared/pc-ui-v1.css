@@ -454,6 +454,10 @@ html.pc-ui-v1 .pc-fixed-list > tbody > tr > td[data-pc-text-title]:not(:has(*)) 
 /* 按 48px 单行设计，复合内容仍可撑高；不干预测量行或可调密度表。 */
 html.pc-ui-v1 :is(.pc-fixed-list,.el-table__body) > tbody > tr:not(.ant-table-measure-row,.ant-table-expanded-row,.ant-table-placeholder) > td:not([colspan]) { padding-block:5px !important; padding-inline:10px !important; height:48px; }
 html.pc-ui-v1 .pc-fixed-list > thead > tr > th { padding-inline:10px !important; }
+/* 复选框列豁免单行省略与宽内边距，避免 32~48px 窄列被挤出省略号或错位。 */
+html.pc-ui-v1 .el-table th.el-table-column--selection,
+html.pc-ui-v1 .el-table td.el-table-column--selection { padding-inline:8px !important; text-align:center !important; overflow:visible !important; text-overflow:clip !important; }
+html.pc-ui-v1 .el-table .el-table-column--selection .cell { padding:0 !important; overflow:visible !important; text-overflow:clip !important; display:inline-flex; align-items:center; justify-content:center; width:100%; }
 @media (min-width:768px) {
   html.pc-ui-v1 .mds-page:has(.mds-table) :is(.mds-page-head,.mds-notice,.mds-stat-grid) { margin-bottom:8px; }
   html.pc-ui-v1 .mds-page:has(.mds-table) :is(.mds-notice,.mds-stat,.mds-filter) { padding-block:7px; }
