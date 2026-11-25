@@ -1,6 +1,6 @@
-import type { CommandReceipt } from '../../../shared-ui/CommandReceipts'
+import type { CommandReceipt, SamplingConfig } from '../../../shared-ui/vue/types'
 import axios from 'axios'
-import { attachUnifiedAuth } from '../../../shared-ui/sso'
+import { attachUnifiedAuth } from '../../../shared-ui/vue/sso'
 
 export interface IotFarm { id:number;farmName:string;manager:string;phone:string;address:string;area:number;deviceCount:number;onlineCount:number;alertCount:number;status:string }
 export interface IotDevice { id:number;tenantId:number;farmId:number;plotId:number|null;gatewayId:number|null;groupId:number|null;deviceCode:string;deviceName:string;typeId:number;typeName:string;protocol:string;onlineStatus:string;status:string;lastReport:string;rssi:number|null;battery:number;firmwareVersion:string;latitude?:number|null;longitude?:number|null;controlCapable:boolean;config:string;telemetry?:Telemetry[];history?:Array<{time:string;temperature:number|null;humidity:number|null;soilMoisture:number|null}>;controls?:ControlLog[] }
@@ -59,8 +59,8 @@ export class CommandSubmissionError extends Error {
   constructor(message:string, public readonly uncertain:boolean) { super(message); this.name='CommandSubmissionError' }
 }
 export const iotApi={
-  sampling:(id:number)=>req<import('../../../shared-ui/DeviceSampling').SamplingConfig>(client.get(`/devices/${id}/sampling`)),
-  saveSampling:(id:number,body:import('../../../shared-ui/DeviceSampling').SamplingConfig)=>req<import('../../../shared-ui/DeviceSampling').SamplingConfig>(client.put(`/devices/${id}/sampling`,body)),
+  sampling:(id:number)=>req<SamplingConfig>(client.get(`/devices/${id}/sampling`)),
+  saveSampling:(id:number,body:SamplingConfig)=>req<SamplingConfig>(client.put(`/devices/${id}/sampling`,body)),
   otaReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/ota`,{params:{page,size:20}})),
   gatewayCommandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/gateways/${id}/commands`,{params:{page,size:20}})),
   commandReceipts:(id:number,page:number)=>req<CommandReceipt[]>(client.get(`/devices/${id}/commands`,{params:{page,size:20}})),

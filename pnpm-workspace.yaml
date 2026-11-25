@@ -30,6 +30,7 @@ packages:
   - 'agri-s2b2c/mobile-channel'
   # 统一认证中心登录页（sso 子域）：判据①「登录页部署于 sso 子域」的载体。
   - 'agri-sso/frontend'
+  - 'agri-sso/ops'
   # 官网门户（首页 / 产业链 / 认证中心）：静态托管在网关 bucket，独立流水线。
   - 'agri-portal/frontend'
   # 综合服务用户端（服务交易、农险、政策、培训、问诊与资源对接）。

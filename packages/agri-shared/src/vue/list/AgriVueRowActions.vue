@@ -57,11 +57,14 @@ import './AgriVueList.css'
 
 const props = withDefaults(
   defineProps<{
-    actions: readonly VueRowActionItem[]
+    actions?: readonly VueRowActionItem[]
+    items?: readonly VueRowActionItem[]
     maxVisible?: number
     moreLabel?: string
   }>(),
   {
+    actions: undefined,
+    items: undefined,
     maxVisible: 2,
     moreLabel: '更多',
   },
@@ -76,7 +79,7 @@ const moreRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
 const menuStyle = ref<Record<string, string>>({})
-const partitioned = computed(() => partitionRowActions(props.actions, props.maxVisible))
+const partitioned = computed(() => partitionRowActions(props.actions ?? props.items ?? [], props.maxVisible))
 
 function updateMenuPosition() {
   if (!triggerRef.value || typeof window === 'undefined') return

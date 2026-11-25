@@ -19,6 +19,8 @@
     "./vue/antdv/*": "./src/vue/antdv/*",
     "./vue/http": "./src/vue/http/index.ts",
     "./vue/http/*": "./src/vue/http/*",
+    "./vue/map": "./src/vue/map/index.ts",
+    "./vue/map/*": "./src/vue/map/*",
     "./vue/element": "./src/vue/element/index.ts",
     "./vue/element/*": "./src/vue/element/*"
   },

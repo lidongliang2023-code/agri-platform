@@ -1,0 +1,6 @@
+<template>
+  <AuditRecordPage kind="realname" />
+</template>
+<script setup lang="ts">
+import AuditRecordPage from '../components/AuditRecordPage.vue'
+</script>

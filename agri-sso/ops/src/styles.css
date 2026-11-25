@@ -1318,3 +1318,113 @@ h1, h2, h3, h4, p { margin: 0; }
 
 /* <small> 走浏览器默认 0.833em，父级 ≤14px 时会掉到 12px 以下（info-ops 行情页实测 11.6667px）；同一个下限兜住它。 */
 small { font-size: max(var(--o-fs-micro), 0.833em); }
+
+/* 用户列表页高密度布局：1440×900 首屏完整呈现至少 10 行 48px 数据，同时保留全部字段提示。 */
+html.pc-ui-v1 .app-content:has(.uc-user-list-dense) {
+  padding: 12px 20px 18px !important;
+}
+
+.uc-user-list-dense {
+  gap: 10px !important;
+}
+
+.uc-dense-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+
+.uc-dense-head h1 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+
+.uc-dense-head-meta {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--ink-500);
+}
+
+.uc-user-list-dense .uc-dense-card {
+  padding: 12px 14px !important;
+}
+
+.uc-user-list-dense .uc-dense-filter {
+  margin-bottom: 10px;
+  gap: 8px;
+  align-items: center;
+}
+
+html.pc-ui-v1 .uc-user-list-dense .ant-table-thead > tr > th {
+  height: 48px !important;
+  padding: 10px 12px !important;
+  white-space: nowrap;
+}
+
+html.pc-ui-v1 .uc-user-list-dense .ant-table-tbody > tr:not(.ant-table-measure-row):not(.ant-table-placeholder) > td {
+  height: 48px !important;
+  padding: 8px 12px !important;
+  line-height: 22px !important;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.uc-user-list-dense .ant-table-pagination.ant-pagination {
+  margin: 10px 0 0 !important;
+}
+
+.uc-dense-inline-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.uc-dense-primary {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.uc-dense-count {
+  flex: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.uc-dense-secondary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.uc-dense-nowrap {
+  flex-wrap: nowrap !important;
+  align-items: center;
+  gap: 4px !important;
+  overflow: hidden;
+}
+
+.uc-user-list-dense .soft-tag {
+  line-height: 20px;
+  padding: 1px 7px;
+  white-space: nowrap;
+  flex: none;
+}
+
+@media (max-width: 900px) {
+  html.pc-ui-v1 .app-content:has(.uc-user-list-dense) {
+    padding: 10px 12px 16px !important;
+  }
+}

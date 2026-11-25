@@ -319,4 +319,4 @@ export const ucApi = {
   }) => get<PageResult<AuditLog>>('/api/v1/admin/uc/audit-logs', params).then(normalizePage),
 }
 
-export const healthMonitor = () => request<import('./pages/HealthMonitorPage').HealthSnapshot>(client.get('/api/v1/admin/uc/health-monitor'))
+export const healthMonitor = () => request<import('./types').HealthSnapshot>(client.get('/api/v1/admin/uc/health-monitor'))

@@ -1,15 +1,18 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import vue from '@vitejs/plugin-vue'
+import vueJsx from '@vitejs/plugin-vue-jsx'
 import path from 'path'
 
 // 产物按 /info/ 前缀引用资源：网关把 bucket/info/versions/<v>/ 挂在该前缀下，
 // 与综合服务 /service/、政府监管 /gov/ 的口径一致。
 export default defineConfig({
-  plugins: [react()],
+  plugins: [vue(), vueJsx()],
   base: '/info/',
   resolve: {
     alias: {
-      'antd': path.resolve(__dirname, 'node_modules/antd'),
+      'vue': path.resolve(__dirname, 'node_modules/vue'),
+      'ant-design-vue': path.resolve(__dirname, 'node_modules/ant-design-vue'),
+      '@ant-design/icons-vue': path.resolve(__dirname, 'node_modules/@ant-design/icons-vue'),
       '@agri/shared': path.resolve(__dirname, '../../packages/agri-shared/src'),
       '@': path.resolve(__dirname, './src'),
     },

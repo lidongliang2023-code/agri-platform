@@ -6,25 +6,27 @@
   "description": "农业产业互联网平台信息资讯用户端",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.2.6",
-    "antd": "^5.13.2",
     "axios": "^1.6.5",
     "hls.js": "^1.7.3",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "@agri/shared": "workspace:*",
+    "vue": "^3.5.13",
+    "ant-design-vue": "^4.2.6",
+    "@ant-design/icons-vue": "^7.0.1",
+    "pinia": "^2.3.1",
+    "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
-    "@types/react": "^18.2.48",
-    "@types/react-dom": "^18.2.18",
-    "@vitejs/plugin-react": "^4.2.1",
     "typescript": "^5.3.3",
-    "vite": "^5.0.11"
+    "vite": "^5.0.11",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vitejs/plugin-vue-jsx": "^3.1.0",
+    "vue-tsc": "^2.2.12"
   },
   "engines": {
     "node": ">=18.0.0",

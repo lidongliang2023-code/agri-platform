@@ -1,14 +1,16 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
-// 用户中心运营端：网关下挂在 /user-center-ops/，与 SSO 登录页（/）分属不同应用。
 export default defineConfig({
-  plugins: [react()],
+  plugins: [vue()],
   base: '/user-center-ops/',
   resolve: {
     alias: {
-      'antd': path.resolve(__dirname, 'node_modules/antd'),
+      'ant-design-vue': path.resolve(__dirname, 'node_modules/ant-design-vue'),
+      '@ant-design/icons-vue': path.resolve(__dirname, 'node_modules/@ant-design/icons-vue'),
+      'vue': path.resolve(__dirname, 'node_modules/vue'),
+      'axios': path.resolve(__dirname, 'node_modules/axios'),
       '@agri/shared': path.resolve(__dirname, '../../packages/agri-shared/src'),
       '@': path.resolve(__dirname, './src'),
     },

@@ -471,3 +471,22 @@ export interface OperationLog {
   result: string | null
   createdAt: string | null
 }
+
+export interface HealthSnapshot {
+  checkedAt: string
+  intervalSeconds: number
+  services: Array<{
+    id: string
+    name: string
+    status: string
+    checkedAt: string
+    probes: Array<{
+      name: string
+      status: string
+      message: string
+      httpCode: number
+      latencyMs: number
+    }>
+  }>
+  events: Array<{ name: string; from: string; to: string; at: string }>
+}

@@ -1,15 +1,18 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import vue from '@vitejs/plugin-vue'
+import vueJsx from '@vitejs/plugin-vue-jsx'
 import path from 'path'
 
 // 运营端与用户端同源同栈，仅以 base 与 dev 端口区分：
 // 网关下 /info/ 归用户端，/info-ops/ 归运营端，避免两个应用互相覆盖产物。
 export default defineConfig({
-  plugins: [react()],
+  plugins: [vue(), vueJsx()],
   base: '/info-ops/',
   resolve: {
     alias: {
-      'antd': path.resolve(__dirname, 'node_modules/antd'),
+      'vue': path.resolve(__dirname, 'node_modules/vue'),
+      'ant-design-vue': path.resolve(__dirname, 'node_modules/ant-design-vue'),
+      '@ant-design/icons-vue': path.resolve(__dirname, 'node_modules/@ant-design/icons-vue'),
       '@agri/shared': path.resolve(__dirname, '../../packages/agri-shared/src'),
       '@': path.resolve(__dirname, './src'),
     },
