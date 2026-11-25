@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, message } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Alert, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Tag, message } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { ListRowActions } from '@agri/shared'
 import { changeCarrierStatus, createCarrier, getCarrierPage, type CarrierRow } from '@/api/carrier'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 const CARRIER_TYPE: Record<string, string> = {
   express: '快递',
   cold_chain: '冷链',
   normal: '普通货运',
-  // 库里存的是 railway（中铁特货那一条），原先这里写的是 rail ——
-  // 对不上就原样打印，页面上会出现英文的 "railway"。
   railway: '铁路特货',
   rail: '铁路',
   air: '航空',
@@ -18,16 +18,12 @@ const CARRIER_TYPE: Record<string, string> = {
 
 /**
  * 承运商管理（运营端）。
- *
- * 承运商是全平台共用的运力主数据。原先只有用户侧的列表/新增，而"新增"挂在用户侧路径上
- * 且没有任何校验 —— 任何登录用户都能往运力库里加一条。这里把新增与启停收归运营端。
- *
- * 停用而不是删除：已经用这家承运商发过货的物流单还要能查到它。
  */
 export default function AdminCarrier() {
   const [rows, setRows] = useState<CarrierRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState<{ carrierName?: string; status?: number }>({})
   const [draft, setDraft] = useState<{ carrierName?: string; status?: number }>({})
   const [loading, setLoading] = useState(false)
@@ -38,7 +34,7 @@ export default function AdminCarrier() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await getCarrierPage({ pageNum: page, pageSize: 10, ...filters })
+      const res = await getCarrierPage({ pageNum: page, pageSize, ...filters })
       if (res?.code === 200) {
         setRows(res.data?.records ?? [])
         setTotal(Number(res.data?.total ?? 0))
@@ -50,11 +46,22 @@ export default function AdminCarrier() {
     } finally {
       setLoading(false)
     }
-  }, [page, filters])
+  }, [page, pageSize, filters])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const handleQuery = () => {
+    setPage(1)
+    setFilters({ ...draft, carrierName: draft.carrierName?.trim() || undefined })
+  }
+
+  const handleReset = () => {
+    setDraft({})
+    setFilters({})
+    setPage(1)
+  }
 
   const submit = async () => {
     const values = await form.validateFields()
@@ -93,55 +100,97 @@ export default function AdminCarrier() {
 
   return (
     <div style={{ padding: 20 }}>
-      <Card
-        title={`承运商 ${total} 家`}
-        extra={
-          <Space>
-            <Input placeholder="按名称搜索" style={{ width: 160 }} allowClear
-              onChange={(e) => setDraft((p) => ({ ...p, carrierName: e.target.value || undefined }))} />
-            <Select placeholder="状态" style={{ width: 110 }} allowClear
-              onChange={(v) => setDraft((p) => ({ ...p, status: v }))}
-              options={[{ value: 1, label: '启用' }, { value: 0, label: '停用' }]} />
-            <Button onClick={() => { setPage(1); setFilters(draft) }}>查询</Button>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.resetFields(); form.setFieldsValue({ status: 1 }); setOpen(true) }}>新增承运商</Button>
-          </Space>
-        }
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="承运商是全平台共用的运力主数据"
-          description="商家在编辑物流单时从这里选承运商。停用后不再出现在可选列表里，但已经用过的物流单仍能查到它 —— 所以这里用停用而不是删除。"
-        />
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={rows}
-          scroll={{ x: 1300 }}
-          pagination={{ current: page, pageSize: 10, total, onChange: setPage }}
-          columns={[
-            { title: '承运商编码', dataIndex: 'carrierCode', width: 160 },
-            { title: '名称', dataIndex: 'carrierName', width: 160 },
-            { title: '类型', dataIndex: 'carrierType', width: 110,
-              render: (v: string) => CARRIER_TYPE[v] ?? v ?? '—' },
-            { title: '联系人', dataIndex: 'contactPerson', width: 100, render: (v: string) => v ?? '—' },
-            { title: '联系电话', dataIndex: 'contactPhone', width: 140, render: (v: string) => v ?? '—' },
-            { title: '覆盖范围', dataIndex: 'serviceScope', ellipsis: true, render: (v: string) => v ?? '—' },
-            { title: '准时率', dataIndex: 'onTimeRate', width: 100, align: 'right' as const,
-              render: (v: number) => (v == null ? '—' : `${v}%`) },
-            { title: '评分', dataIndex: 'rating', width: 90, align: 'right' as const,
-              render: (v: number) => (v == null ? '—' : v) },
-            { title: '承运单数', dataIndex: 'orderCount', width: 100, align: 'right' as const,
-              render: (v: number) => v ?? 0 },
-            { title: '状态', dataIndex: 'status', width: 90,
-              render: (v: number) => <Tag color={v === 1 ? 'success' : 'default'}>{v === 1 ? '启用' : '停用'}</Tag> },
-            {
-              title: '操作',
-              width: 100,
-              fixed: 'right' as const,
-              render: (_: unknown, row: CarrierRow) => (
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="承运商是全平台共用的运力主数据"
+        description="商家在编辑物流单时从这里选承运商。停用后不再出现在可选列表里，但已经用过的物流单仍能查到它 —— 所以这里用停用而不是删除。"
+      />
+
+      <TradeList<CarrierRow>
+        listId="admin-carrier"
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={(
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              form.resetFields()
+              form.setFieldsValue({ status: 1 })
+              setOpen(true)
+            }}
+          >
+            新增承运商
+          </Button>
+        )}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={handleQuery}
+            onReset={handleReset}
+            fields={[
+              {
+                label: '承运商名称',
+                control: (
+                  <Input
+                    allowClear
+                    value={draft.carrierName}
+                    placeholder="按名称搜索"
+                    onChange={(e) => setDraft((p) => ({ ...p, carrierName: e.target.value || undefined }))}
+                    onPressEnter={handleQuery}
+                  />
+                ),
+              },
+              {
+                label: '状态',
+                control: (
+                  <Select
+                    allowClear
+                    value={draft.status}
+                    placeholder="全部状态"
+                    onChange={(v) => setDraft((p) => ({ ...p, status: v }))}
+                    options={[{ value: 1, label: '启用' }, { value: 0, label: '停用' }]}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          onChange: (nextPage, nextSize) => {
+            setPage(nextPage)
+            setPageSize(nextSize)
+          },
+        }}
+        columns={[
+          { title: '承运商编码', dataIndex: 'carrierCode', width: 160, ellipsis: true },
+          { title: '名称', dataIndex: 'carrierName', width: 160, ellipsis: true },
+          { title: '类型', dataIndex: 'carrierType', width: 110, render: (v: string) => CARRIER_TYPE[v] ?? v ?? '—' },
+          { title: '联系人', dataIndex: 'contactPerson', width: 100, render: (v: string) => v ?? '—' },
+          { title: '联系电话', dataIndex: 'contactPhone', width: 140, render: (v: string) => v ?? '—' },
+          { title: '覆盖范围', dataIndex: 'serviceScope', width: 200, ellipsis: true, render: (v: string) => v ?? '—' },
+          { title: '准时率', dataIndex: 'onTimeRate', width: 100, render: (v: number) => (v == null ? '—' : `${v}%`) },
+          { title: '评分', dataIndex: 'rating', width: 90, render: (v: number) => (v == null ? '—' : v) },
+          { title: '承运单数', dataIndex: 'orderCount', width: 100, render: (v: number) => v ?? 0 },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            width: 100,
+            render: (v: number) => <Tag color={v === 1 ? 'success' : 'default'}>{v === 1 ? '启用' : '停用'}</Tag>
+          },
+          {
+            title: '操作',
+            key: 'action',
+            width: 104,
+            render: (_: unknown, row: CarrierRow) => (
+              <ListRowActions>
                 <Popconfirm
                   title={row.status === 1 ? '停用这家承运商？' : '重新启用这家承运商？'}
                   description={row.status === 1 ? '停用后不再出现在商家的可选列表里，已用的物流单不受影响。' : undefined}
@@ -149,13 +198,13 @@ export default function AdminCarrier() {
                   cancelText="取 消"
                   onConfirm={() => toggle(row)}
                 >
-                  <Button type="link">{row.status === 1 ? '停用' : '启用'}</Button>
+                  <Button type="link" size="small">{row.status === 1 ? '停用' : '启用'}</Button>
                 </Popconfirm>
-              )
-            }
-          ]}
-        />
-      </Card>
+              </ListRowActions>
+            )
+          }
+        ]}
+      />
 
       <Modal title="新增承运商" open={open} onCancel={() => setOpen(false)} onOk={submit}
         confirmLoading={saving} destroyOnClose width={640}>

@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Alert, Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Timeline, Typography, message } from 'antd'
 import dayjs from 'dayjs'
+import { ListRowActions } from '@agri/shared'
 import { agentWorkspace, createAgentMandate, revokeAgentMandate, runAgent, agentDetail, confirmAgent, rejectAgent, type AgentRole, type AgentWorkspace, type AgentDetail, type AgentSession, type AgentComparison } from '@/api/trade-agent'
+import { TradeList } from '@/components/TradeList'
 
 const names: Record<string, string> = { ACTIVE: '委托生效', REVOKED: '已撤销', COMPLETED: '已完成', AWAITING_CONFIRMATION: '等待双方确认', NO_AGREEMENT: '未达成一致', ORDERED: '已生成订单', REJECTED: '已拒绝', EXPIRED: '已失效' }
 const eventNames: Record<string, string> = { NEGOTIATION_ROUND: '双方Agent议价', PROPOSAL_READY: '形成待确认方案', NO_AGREEMENT: '本轮未达成一致', BUYER_CONFIRMED: '采购方最终确认', SELLER_CONFIRMED: '供货方最终确认', ORDER_LINKED: '已关联原交易订单', REJECTED: '方案已拒绝' }
@@ -29,13 +31,13 @@ export default function TradeAgentPanel({ role }: { role: AgentRole }) {
   const openDetail = async (id: string) => { await action(async () => setDetail(await agentDetail(id)), '已读取最新协商与履约状态') }
   const confirm = (row: AgentDetail) => Modal.confirm({ title: `${buyer ? '采购方' : '供货方'}最终确认`, content: <Space direction="vertical"><span>方案版本 {row.revision}；{amount(row.quantity)} {row.unit}</span><span>单价 ¥{amount(row.agreed_price)} / {row.unit}，运费 ¥{amount(row.freight)}</span><strong>合计 ¥{amount(total(row.agreed_price, row.quantity, row.freight))}</strong><span>交付日 {String(row.delivery_date).slice(0, 10)}</span><span>双方均确认后将复用原交易流程生成待确认订单及合同，不自动付款、签约或发货。</span></Space>, okText: '确认以上交易条款', onOk: () => action(async () => { setDetail(await confirmAgent(row.id, role, row.revision)) }, '本方最终确认已记录') })
   const sessionColumns = [
-    { title: '货源 / 对手方', key: 'product', render: (_: unknown, r: AgentSession) => { const s = snapshot(r.public_snapshot); return <Space direction="vertical" size={0}><strong>{String(s.productName || `货源 #${r.product_id}`)}</strong><span>{String((buyer ? s.sellerName : s.buyerName) || '未维护主体名称')}</span></Space> } },
-    { title: '数量', key: 'qty', render: (_: unknown, r: AgentSession) => `${amount(r.quantity)} ${r.unit}` },
-    { title: '协商单价', key: 'price', render: (_: unknown, r: AgentSession) => r.agreed_price == null ? '无交集' : `¥${amount(r.agreed_price)}` },
-    { title: '含运费总额', key: 'total', render: (_: unknown, r: AgentSession) => r.agreed_price == null ? '—' : `¥${amount(total(r.agreed_price, r.quantity, r.freight))}` },
-    { title: '交付日', dataIndex: 'delivery_date', render: (v: string) => String(v).slice(0, 10) },
-    { title: '状态', key: 'status', render: (_: unknown, r: AgentSession) => <Space direction="vertical" size={0}><Tag color={status(r) === 'ORDERED' ? 'green' : 'blue'}>{names[status(r)] || r.status}</Tag><small>买方 {r.buyer_confirmed ? '已确认' : '未确认'} / 卖方 {r.seller_confirmed ? '已确认' : '未确认'}</small></Space> },
-    { title: '操作', key: 'action', render: (_: unknown, r: AgentSession) => <Button onClick={() => void openDetail(r.id)}>查看协商与履约</Button> },
+    { title: '货源 / 对手方', key: 'product', width: 200, render: (_: unknown, r: AgentSession) => { const s = snapshot(r.public_snapshot); return <Space direction="vertical" size={0}><strong>{String(s.productName || `货源 #${r.product_id}`)}</strong><span>{String((buyer ? s.sellerName : s.buyerName) || '未维护主体名称')}</span></Space> } },
+    { title: '数量', key: 'qty', width: 110, render: (_: unknown, r: AgentSession) => `${amount(r.quantity)} ${r.unit}` },
+    { title: '协商单价', key: 'price', width: 120, render: (_: unknown, r: AgentSession) => r.agreed_price == null ? '无交集' : `¥${amount(r.agreed_price)}` },
+    { title: '含运费总额', key: 'total', width: 130, render: (_: unknown, r: AgentSession) => r.agreed_price == null ? '—' : `¥${amount(total(r.agreed_price, r.quantity, r.freight))}` },
+    { title: '交付日', dataIndex: 'delivery_date', width: 120, render: (v: string) => String(v).slice(0, 10) },
+    { title: '状态', key: 'status', width: 170, render: (_: unknown, r: AgentSession) => <Space direction="vertical" size={0}><Tag color={status(r) === 'ORDERED' ? 'green' : 'blue'}>{names[status(r)] || r.status}</Tag><small>买方 {r.buyer_confirmed ? '已确认' : '未确认'} / 卖方 {r.seller_confirmed ? '已确认' : '未确认'}</small></Space> },
+    { title: '操作', key: 'action', width: 150, render: (_: unknown, r: AgentSession) => <ListRowActions><Button type="link" size="small" onClick={() => void openDetail(r.id)}>查看协商与履约</Button></ListRowActions> },
   ]
   return <Spin spinning={busy}><Space direction="vertical" size={16} style={{ width: '100%' }}>
     <Card style={{ background: 'linear-gradient(110deg,#f0faf6,#eef5ff)' }}><Space direction="vertical" style={{ width: '100%' }}>
@@ -45,15 +47,49 @@ export default function TradeAgentPanel({ role }: { role: AgentRole }) {
     </Space></Card>
     {error && <Alert type="error" showIcon message="Agent工作台请求失败" description={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     <Alert type="info" showIcon message="独立委托、双方确认、原单履约" description="双方私有价格边界互不可见。只协商同品类、同单位、品种规格及质量可核验的有效货源；专项认证、样品和附加条款先走人工询报价。每张方案承接需求全部数量，暂不自动拆单。委托有效期3天；重设或撤销委托会使旧方案失效。" />
-    <Card title="我的私有委托"><Table rowKey="id" dataSource={workspace?.mandates || []} pagination={{ pageSize: 5 }} scroll={{ x: 950 }} columns={[
-      { title: buyer ? '需求' : '货源', dataIndex: 'ref_id', render: (id: number) => { const r = workspace?.references.find(x => x.id === id); return r?.demandName || r?.productName || `#${id}` } },
-      { title: '期望单价', dataIndex: 'target_price', render: (v: number) => `¥${amount(v)}` },
-      { title: buyer ? '最高单价（仅我方）' : '最低单价（仅我方）', dataIndex: 'limit_price', render: (v: number) => `¥${amount(v)}` },
-      { title: '数量', dataIndex: 'quantity', render: amount }, { title: '有效至', dataIndex: 'expires_at' },
-      { title: '状态', key: 'status', render: (_, r) => names[r.status === 'ACTIVE' && dayjs(r.expires_at).isBefore(dayjs()) ? 'EXPIRED' : r.status] || r.status },
-      { title: '操作', key: 'action', render: (_, r) => <Space>{buyer && <Button onClick={() => void action(async () => { setComparison(await runAgent(r.id)) }, '已完成比价和协商')}>比价 / 推进</Button>}<Button disabled={r.status !== 'ACTIVE'} onClick={() => Modal.confirm({ title: '撤销该委托？未成交方案将不可确认。', onOk: () => action(() => revokeAgentMandate(r.id), '已撤销委托') })}>撤销</Button></Space> },
-    ]} /></Card>
-    <Card title="协商方案与履约跟踪"><Table rowKey="id" columns={sessionColumns} dataSource={workspace?.sessions || []} pagination={{ pageSize: 8 }} scroll={{ x: 1150 }} locale={{ emptyText: <Empty description="暂无协商方案。双方创建匹配委托后自动进行议价。" /> }} /></Card>
+    <TradeList
+      listId={`agent-${role.toLowerCase()}-mandates`}
+      rowKey="id"
+      dataSource={workspace?.mandates || []}
+      onRefresh={() => void load()}
+      toolbarLeft={<span style={{ fontWeight: 600 }}>我的私有委托</span>}
+      columns={[
+        { title: buyer ? '需求' : '货源', dataIndex: 'ref_id', width: 180, ellipsis: true, render: (id: number) => { const r = workspace?.references.find(x => x.id === id); return r?.demandName || r?.productName || `#${id}` } },
+        { title: '期望单价', dataIndex: 'target_price', width: 120, render: (v: number) => `¥${amount(v)}` },
+        { title: buyer ? '最高单价（仅我方）' : '最低单价（仅我方）', dataIndex: 'limit_price', align: 'right', width: 160, render: (v: number) => `¥${amount(v)}` },
+        { title: '数量', dataIndex: 'quantity', width: 110, render: amount },
+        { title: '有效至', dataIndex: 'expires_at', width: 170 },
+        { title: '状态', key: 'status', width: 110, render: (_, r) => { const s = r.status === 'ACTIVE' && dayjs(r.expires_at).isBefore(dayjs()) ? 'EXPIRED' : r.status; return <Tag color={s === 'ACTIVE' ? 'green' : 'default'}>{names[s] || r.status}</Tag> } },
+        {
+          title: '操作',
+          key: 'action',
+          width: 160,
+          render: (_, r) => (
+            <ListRowActions
+              items={[
+                buyer && (
+                  <Button key="run" type="link" size="small" onClick={() => void action(async () => { setComparison(await runAgent(r.id)) }, '已完成比价和协商')}>
+                    比价 / 推进
+                  </Button>
+                ),
+                <Button key="revoke" type="link" size="small" danger disabled={r.status !== 'ACTIVE'} onClick={() => Modal.confirm({ title: '撤销该委托？未成交方案将不可确认。', onOk: () => action(() => revokeAgentMandate(r.id), '已撤销委托') })}>
+                  撤销
+                </Button>,
+              ]}
+            />
+          ),
+        },
+      ]}
+    />
+    <TradeList
+      listId={`agent-${role.toLowerCase()}-sessions`}
+      rowKey="id"
+      columns={sessionColumns}
+      dataSource={workspace?.sessions || []}
+      onRefresh={() => void load()}
+      toolbarLeft={<span style={{ fontWeight: 600 }}>协商方案与履约跟踪</span>}
+      locale={{ emptyText: <Empty description="暂无协商方案。双方创建匹配委托后自动进行议价。" /> }}
+    />
     <Modal open={editing} title={`设置${buyer ? '采购' : '供货'} Agent 委托`} onCancel={() => setEditing(false)} onOk={() => form.submit()} confirmLoading={busy} width={620}>
       <Form form={form} layout="vertical" initialValues={{ maxRounds: 5, freight: 0 }} onFinish={v => void action(async () => { await createAgentMandate({ ...v, role, deliveryDate: v.deliveryDate.format('YYYY-MM-DD') }); setEditing(false) }, '委托已生效，系统已自动匹配和协商')}>
         <Form.Item name="refId" label={buyer ? '我的采购需求' : '我的上架货源'} rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={workspace?.references.map(r => ({ value: r.id, label: `${r.demandName || r.productName || `#${r.id}`} · ${r.buyerName || r.sellerName || ''} · ${r.unit || '单位未维护'}` }))} /></Form.Item>
@@ -65,7 +101,7 @@ export default function TradeAgentPanel({ role }: { role: AgentRole }) {
         <Alert type="warning" showIcon message="本操作授权Agent在上述范围内协商，形成方案后仍须双方最终确认。新委托将撤销同需求或货源的旧委托。" />
       </Form>
     </Modal>
-    <Modal open={comparison !== undefined} title="采购Agent比价 · 按含运费总额排序" width={1000} footer={null} onCancel={() => setComparison(undefined)}><Alert type="info" message="仅展示当前委托已形成的双边协商，不使用虚构报价。数量和单位一致；质量资质不以价格替代。" style={{ marginBottom: 12 }} /><Table rowKey="id" dataSource={comparison} pagination={false} columns={[{ title: '货源', dataIndex: 'product_name' }, { title: '供货方', dataIndex: 'seller_name' }, { title: '单价', dataIndex: 'agreed_price', render: v => v == null ? '未达成一致' : `¥${amount(v)}` }, { title: '运费', dataIndex: 'freight', render: amount }, { title: '含运费总额', dataIndex: 'total_amount', render: v => v == null ? '—' : `¥${amount(v)}` }, { title: '详情', render: (_, r) => <Button onClick={() => void openDetail(r.id)}>查看方案</Button> }]} /></Modal>
+    <Modal open={comparison !== undefined} title="采购Agent比价 · 按含运费总额排序" width={1000} footer={null} onCancel={() => setComparison(undefined)}><Alert type="info" message="仅展示当前委托已形成的双边协商，不使用虚构报价。数量和单位一致；质量资质不以价格替代。" style={{ marginBottom: 12 }} /><Table rowKey="id" dataSource={comparison} pagination={false} columns={[{ title: '货源', dataIndex: 'product_name' }, { title: '供货方', dataIndex: 'seller_name' }, { title: '单价', dataIndex: 'agreed_price', align: 'right', render: v => v == null ? '未达成一致' : `¥${amount(v)}` }, { title: '运费', dataIndex: 'freight', align: 'right', render: amount }, { title: '含运费总额', dataIndex: 'total_amount', align: 'right', render: v => v == null ? '—' : `¥${amount(v)}` }, { title: '详情', align: 'right', render: (_, r) => <Button type="link" size="small" onClick={() => void openDetail(r.id)}>查看方案</Button> }]} /></Modal>
     <Drawer open={!!detail} width={760} title="双边协商方案与履约" onClose={() => setDetail(undefined)} extra={detail && <Button onClick={() => void openDetail(detail.id)}>刷新履约</Button>}>
       {detail && <Space direction="vertical" style={{ width: '100%' }} size={16}>
         {!detail.effective && detail.status !== 'ORDERED' && <Alert type="warning" message="委托撤销或已过期，方案不可确认。需要重新委托。" />}

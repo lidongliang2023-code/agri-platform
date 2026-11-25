@@ -1,3 +1,4 @@
+import { TradeList } from '@/components/TradeList'
 import { useCallback, useEffect, useState } from 'react'
 import { DatePicker, Form, Input, InputNumber, Select, Spin, message } from 'antd'
 import {
@@ -67,7 +68,7 @@ export default function QuoteList(): JSX.Element {
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<QuoteVO[]>([])
   const [total, setTotal] = useState(0)
-  const [queryParams, setQueryParams] = useState<QuoteQuery>({ pageNum: 1, pageSize: 10 })
+  const [queryParams, setQueryParams] = useState<QuoteQuery>({ pageNum: 1, pageSize: 20 })
   const [currentItem, setCurrentItem] = useState<QuoteVO | null>(null)
   const [quoteTarget, setQuoteTarget] = useState<InquiryVO | null>(null)
   const [myMerchantIds, setMyMerchantIds] = useState<string[]>([])
@@ -421,38 +422,29 @@ export default function QuoteList(): JSX.Element {
             })}
           </div>
         ) : (
-          <div className="mc-table-wrap quote-received-table">
-            <table className="mc-table">
-              <thead>
-                <tr><th>询价单号</th><th>商品</th><th>采购方</th><th>采购数量</th><th>期望价格</th><th>报价截止</th><th>已报价</th><th>状态</th><th>操作</th></tr>
-              </thead>
-              <tbody>
-                {received.map((inquiry) => {
-                  const meta = INQUIRY_STATUS[inquiry.inquiryStatus] ?? {
+          <TradeList
+            listId="seller-received-inquiry"
+            rowKey="id"
+            dataSource={received}
+            onRefresh={loadReceived}
+            columns={[
+              { title: "询价单号", key: 'col-1', width: 160, render: (_, inquiry) => (<span className="mc-mono">{inquiry.inquiryNo}</span>) },
+              { title: "商品", key: 'col-2', width: 160, render: (_, inquiry) => (<><strong className="quote-received-product">{inquiry.productName || `商品 #${inquiry.productId}`}</strong></>) },
+              { title: "采购方", key: 'col-3', width: 160, render: (_, inquiry) => (<>{inquiry.buyerName || '采购方'}</>) },
+              { title: "采购数量", key: 'col-4', width: 108, render: (_, inquiry) => (<span className="mc-mono">{inquiry.quantity} {inquiry.unit}</span>) },
+              { title: "期望价格", key: 'col-5', width: 160, render: (_, inquiry) => (<span className="mc-price">{money(inquiry.priceMin)} - {money(inquiry.priceMax)}</span>) },
+              { title: "报价截止", key: 'col-6', width: 160, render: (_, inquiry) => (<span className="mc-mono mc-xs">{shortDate(inquiry.replyDeadline)}</span>) },
+              { title: "已报价", key: 'col-7', width: 160, render: (_, inquiry) => (<span className="mc-mono">{inquiry.replyCount ?? 0} 份</span>) },
+              { title: "状态", key: 'col-8', width: 108, render: (_, inquiry) => { const meta = INQUIRY_STATUS[inquiry.inquiryStatus] ?? {
                     text: inquiry.inquiryStatus || '未知',
                     tone: 'ghost',
                   }
-                  return (
-                    <tr key={inquiry.id}>
-                      <td className="mc-mono">{inquiry.inquiryNo}</td>
-                      <td><strong className="quote-received-product">{inquiry.productName || `商品 #${inquiry.productId}`}</strong></td>
-                      <td>{inquiry.buyerName || '采购方'}</td>
-                      <td className="mc-mono">{inquiry.quantity} {inquiry.unit}</td>
-                      <td className="mc-price">{money(inquiry.priceMin)} - {money(inquiry.priceMax)}</td>
-                      <td className="mc-mono mc-xs">{shortDate(inquiry.replyDeadline)}</td>
-                      <td className="mc-mono">{inquiry.replyCount ?? 0} 份</td>
-                      <td><span className={`mc-tag ${meta.tone}`}>{meta.text}</span></td>
-                      <td>
-                        <button type="button" className="mc-link" onClick={() => openInquiryQuote(inquiry)}>
+ return (<><span className={`mc-tag ${meta.tone}`}>{meta.text}</span></>) } },
+              { title: "操作", key: 'action', width: 170, render: (_, inquiry) => (<><button type="button" className="mc-link" onClick={() => openInquiryQuote(inquiry)}>
                           去报价
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </button></>) },
+            ]}
+          />
         )}
       </Panel>
 
@@ -479,7 +471,7 @@ export default function QuoteList(): JSX.Element {
             options={Object.entries(STATUS).map(([value, item]) => ({ value, label: item.text }))}
           />
           <button type="button" className="mc-btn" onClick={() => setQueryParams((previous) => ({ ...previous, pageNum: 1 }))}>搜索</button>
-          <button type="button" className="mc-btn ghost" onClick={() => setQueryParams({ pageNum: 1, pageSize: 10 })}>重置</button>
+          <button type="button" className="mc-btn ghost" onClick={() => setQueryParams({ pageNum: 1, pageSize: 20 })}>重置</button>
         </div>
         <div className="quote-list-summary">
           <span>本页 {data.length} 份报价</span>

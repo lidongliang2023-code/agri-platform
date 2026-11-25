@@ -1,0 +1,30 @@
+.trade-list {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.trade-list:not(:has(.agri-list-table-card)) {
+  padding: 10px 14px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.trade-list .ant-tag,
+.trade-list .mc-tag {
+  margin-inline-end: 0;
+}
+
+.trade-list .agri-status-cell .mc-tag::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.trade-list .ant-table-cell-fix-right {
+  white-space: nowrap;
+}

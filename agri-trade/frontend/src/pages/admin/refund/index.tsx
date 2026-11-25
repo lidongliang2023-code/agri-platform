@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Card, Col, Form, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Form, Input, Modal, Popconfirm, Select, Tag, message } from 'antd'
+import { ListRowActions } from '@agri/shared'
 import { auditRefund, getAdminRefundPage } from '@/api/admin'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 interface RefundRow {
   id: number
@@ -29,18 +30,18 @@ const STATUS: Record<string, { text: string; color: string }> = {
 /**
  * 退款审核（运营端）。
  *
- * <p>退款记录此前只有"申请"与"审核"两个写接口、**没有任何列表入口** ——
- * 运营端看不到有哪些退款等着审。本页补上列表，并把结果讲清楚：
- * 通过 → 订单置为 refunded 并累加已退金额；驳回 → 只改退款单，不动订单。</p>
+ * <p>通过 → 订单置为 refunded 并累加已退金额；驳回 → 只改退款单，不动订单。</p>
  */
 export default function AdminRefund() {
   const [rows, setRows] = useState<RefundRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [pageNum, setPageNum] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [status, setStatus] = useState('pending')
   const [keyword, setKeyword] = useState('')
+  const [draftStatus, setDraftStatus] = useState('pending')
+  const [draftKeyword, setDraftKeyword] = useState('')
   const [current, setCurrent] = useState<RefundRow | null>(null)
   const [form] = Form.useForm()
 
@@ -63,9 +64,21 @@ export default function AdminRefund() {
     load()
   }, [load])
 
+  const handleQuery = () => {
+    setPageNum(1)
+    setStatus(draftStatus)
+    setKeyword(draftKeyword.trim())
+  }
+
+  const handleReset = () => {
+    setDraftStatus('pending')
+    setDraftKeyword('')
+    setPageNum(1)
+    setStatus('pending')
+    setKeyword('')
+  }
+
   const doAudit = async (row: RefundRow, approved: boolean, remark?: string) => {
-    // 审核人由后端从访问令牌取（以前这里拼当前昵称、取不到就写"运营"再传上去 ——
-    // 那种留痕谁都能填）。页面只把结论与备注交出去，回来后用库里的那份显示。
     const res = await auditRefund(row.id, approved ? 'approved' : 'rejected', remark)
     if (res?.code === 200) {
       message.success(approved ? '已通过，订单将置为已退款' : '已驳回')
@@ -79,125 +92,126 @@ export default function AdminRefund() {
 
   return (
     <div style={{ padding: 20 }}>
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col flex="180px">
-            <Select
-              value={status}
-              style={{ width: '100%' }}
-              onChange={(value) => {
-                setPageNum(1)
-                setStatus(value)
-              }}
-              options={[
-                { value: 'pending', label: '待审核' },
-                { value: 'approved', label: '已通过' },
-                { value: 'rejected', label: '已驳回' },
-                { value: '', label: '全部状态' }
-              ]}
-            />
-          </Col>
-          <Col flex="280px">
-            <Input.Search
-              allowClear
-              placeholder="退款单号 / 订单号 / 申请人"
-              onSearch={(value) => {
-                setPageNum(1)
-                setKeyword(value)
-              }}
-            />
-          </Col>
-          <Col flex="auto">
-            <Button icon={<ReloadOutlined />} onClick={load}>
-              刷新
-            </Button>
-          </Col>
-        </Row>
-      </Card>
-
-      <Card title={`退款单 ${total} 条`}>
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={rows}
-          scroll={{ x: 1200 }}
-          pagination={{
-            current: pageNum,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (page, size) => {
-              setPageNum(page)
-              setPageSize(size)
+      <TradeList<RefundRow>
+        listId="admin-refund"
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={<span style={{ fontWeight: 600 }}>退款单（共 {total} 条）</span>}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={handleQuery}
+            onReset={handleReset}
+            fields={[
+              {
+                label: '退款状态',
+                control: (
+                  <Select
+                    value={draftStatus}
+                    onChange={(value) => {
+                      setDraftStatus(value)
+                      setPageNum(1)
+                      setStatus(value)
+                    }}
+                    options={[
+                      { value: 'pending', label: '待审核' },
+                      { value: 'approved', label: '已通过' },
+                      { value: 'rejected', label: '已驳回' },
+                      { value: '', label: '全部状态' }
+                    ]}
+                  />
+                ),
+              },
+              {
+                label: '关键字',
+                control: (
+                  <Input
+                    allowClear
+                    value={draftKeyword}
+                    placeholder="退款单号 / 订单号 / 申请人"
+                    onChange={(e) => setDraftKeyword(e.target.value)}
+                    onPressEnter={handleQuery}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        pagination={{
+          current: pageNum,
+          pageSize,
+          total,
+          onChange: (page, size) => {
+            setPageNum(page)
+            setPageSize(size)
+          },
+        }}
+        columns={[
+          { title: '退款单号', dataIndex: 'refundNo', width: 160, ellipsis: true },
+          { title: '关联订单', dataIndex: 'orderNo', width: 170, ellipsis: true },
+          { title: '申请人', dataIndex: 'applicantName', width: 140, ellipsis: true },
+          {
+            title: '退款类型',
+            dataIndex: 'refundType',
+            width: 100,
+            render: (val: string) => ({
+              full: '全额退款',
+              partial: '部分退款',
+              refund_only: '仅退款',
+              return_refund: '退货退款',
+            } as Record<string, string>)[val] ?? val ?? '—'
+          },
+          { title: '退款金额', dataIndex: 'refundAmount', width: 120, render: (val: number) => `¥${val}` },
+          {
+            title: '退款原因',
+            dataIndex: 'refundReason',
+            width: 240,
+            ellipsis: true,
+            render: (val: string) => val || '—'
+          },
+          {
+            title: '状态',
+            dataIndex: 'refundStatus',
+            width: 104,
+            render: (val: string) => {
+              const tag = STATUS[val] ?? { text: val, color: 'default' }
+              return <Tag color={tag.color}>{tag.text}</Tag>
             }
-          }}
-          columns={[
-            { title: '退款单号', dataIndex: 'refundNo', width: 160 },
-            { title: '关联订单', dataIndex: 'orderNo', width: 170 },
-            { title: '申请人', dataIndex: 'applicantName', width: 140 },
-            {
-              title: '退款类型',
-              dataIndex: 'refundType',
-              width: 100,
-              render: (val: string) => ({
-                full: '全额退款',
-                partial: '部分退款',
-                refund_only: '仅退款',
-                return_refund: '退货退款',
-              } as Record<string, string>)[val] ?? val ?? '—'
-            },
-            { title: '退款金额', dataIndex: 'refundAmount', width: 120, render: (val: number) => `¥${val}` },
-            {
-              title: '退款原因',
-              dataIndex: 'refundReason',
-              width: 240,
-              ellipsis: true,
-              render: (val: string) => val || '—'
-            },
-            {
-              title: '状态',
-              dataIndex: 'refundStatus',
-              width: 100,
-              render: (val: string) => {
-                const tag = STATUS[val] ?? { text: val, color: 'default' }
-                return <Tag color={tag.color}>{tag.text}</Tag>
-              }
-            },
-            {
-              title: '审核记录',
-              width: 220,
-              render: (_: unknown, row: RefundRow) =>
-                row.reviewer
-                  ? `${row.reviewer} / ${row.reviewTime ?? ''}${row.reviewRemark ? ' / ' + row.reviewRemark : ''}`
-                  : '—'
-            },
-            { title: '申请时间', dataIndex: 'createTime', width: 170 },
-            {
-              title: '操作',
-              width: 150,
-              fixed: 'right',
-              render: (_: unknown, row: RefundRow) =>
-                row.refundStatus === 'pending' ? (
-                  <Space size="small">
-                    <Popconfirm
-                      title="通过后订单将置为已退款并累加已退金额，确认？"
-                      onConfirm={() => doAudit(row, true, '审核通过')}
-                    >
-                      <Button type="link" size="small">
-                        通过
-                      </Button>
-                    </Popconfirm>
-                    <Button type="link" size="small" danger onClick={() => setCurrent(row)}>
-                      驳回
-                    </Button>
-                  </Space>
-                ) : (
-                  <span style={{ color: '#a0aec0' }}>已处理</span>
-                )
-            }
-          ]}
-        />
-      </Card>
+          },
+          {
+            title: '审核记录',
+            key: 'reviewRecord',
+            width: 220,
+            ellipsis: true,
+            render: (_: unknown, row: RefundRow) =>
+              row.reviewer
+                ? `${row.reviewer} / ${row.reviewTime ?? ''}${row.reviewRemark ? ' / ' + row.reviewRemark : ''}`
+                : '—'
+          },
+          { title: '申请时间', dataIndex: 'createTime', width: 170 },
+          {
+            title: '操作',
+            key: 'action',
+            width: 140,
+            render: (_: unknown, row: RefundRow) =>
+              row.refundStatus === 'pending' ? (
+                <ListRowActions>
+                  <Popconfirm
+                    title="通过后订单将置为已退款并累加已退金额，确认？"
+                    onConfirm={() => doAudit(row, true, '审核通过')}
+                  >
+                    <Button type="link" size="small">通过</Button>
+                  </Popconfirm>
+                  <Button type="link" size="small" danger onClick={() => setCurrent(row)}>驳回</Button>
+                </ListRowActions>
+              ) : (
+                <span style={{ color: '#a0aec0' }}>已处理</span>
+              )
+          }
+        ]}
+      />
 
       <Modal
         open={Boolean(current)}

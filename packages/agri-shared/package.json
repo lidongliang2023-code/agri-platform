@@ -13,6 +13,8 @@
     "./styles/*": "./src/styles/*",
     "./vue/list": "./src/vue/list/index.ts",
     "./vue/list/*": "./src/vue/list/*",
+    "./vue/workspace": "./src/vue/workspace/index.ts",
+    "./vue/workspace/*": "./src/vue/workspace/*",
     "./vue/element": "./src/vue/element/index.ts",
     "./vue/element/*": "./src/vue/element/*"
   },

@@ -1,0 +1,228 @@
+/* 跨子系统通用顶部多页签工作区样式（参照生产管理用户端规范，紧贴顶栏下方无空隙）。 */
+.agri-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.agri-workspace-tabbar {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+  min-height: 40px;
+  padding: 3px 24px;
+  margin: 0;
+  background: #fff;
+  border-top: 0;
+  border-bottom: 1px solid #e8e8e8;
+  border-radius: 0;
+  z-index: 10;
+}
+
+.agri-workspace-tabbar > .ant-tabs {
+  flex: 1;
+  min-width: 0;
+}
+
+.agri-workspace-tabbar .ant-tabs-nav {
+  margin: 0 !important;
+}
+
+.agri-workspace-tabbar .ant-tabs-nav::before {
+  border: 0 !important;
+}
+
+.agri-workspace-tabbar .ant-tabs-content-holder {
+  display: none;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px !important;
+  margin: 0 6px 0 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: #61766a;
+  transition: background-color 0.16s, border-color 0.16s, opacity 0.16s;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab:hover {
+  background: #f5f8f6 !important;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab-active {
+  background: #eaf5ee !important;
+  border-color: #cee5d6 !important;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab-btn {
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 20px;
+  font-size: 14px;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #23744c !important;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-inline-start: 8px;
+  padding: 0;
+  border-radius: 4px;
+  color: #7c8e83;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab-remove:hover {
+  background: #dcebe1;
+  color: #23744c;
+}
+
+.agri-workspace-tabbar > .ant-btn.agri-workspace-actions-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  margin: 0;
+  border-inline-start: 1px solid #e0e9e3;
+  border-radius: 0 6px 6px 0;
+  color: #61766a;
+}
+
+.agri-workspace-tabbar > .ant-btn.agri-workspace-actions-btn:hover {
+  color: #23744c;
+  background: #f5f8f6;
+}
+
+/* 路由型页签栏外层：放在顶栏与内容区之间，随页面滚动时吸附在顶栏下方。 */
+.agri-route-workspace {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  flex: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.agri-route-workspace:empty {
+  display: none;
+}
+
+.agri-workspace-pane {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 16px 24px 24px;
+  scrollbar-gutter: stable;
+}
+
+.agri-workspace-pane[hidden] {
+  display: none !important;
+}
+
+.agri-workspace-tab-label {
+  position: relative;
+  display: block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+}
+
+.agri-workspace-tab-label:active {
+  cursor: grabbing;
+}
+
+.agri-workspace-tab-label.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab:has(.is-dragging) {
+  opacity: 0.45;
+  border-style: dashed !important;
+  border-color: #9ac2ab !important;
+}
+
+.agri-workspace-tabbar .ant-tabs-tab:has(.is-drop-left)::before,
+.agri-workspace-tab-label.is-drop-left::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #23744c;
+  border-radius: 2px;
+  z-index: 10;
+  box-shadow: 0 0 4px rgba(35, 116, 76, 0.4);
+}
+
+.agri-workspace-tabbar .ant-tabs-tab:has(.is-drop-right)::after,
+.agri-workspace-tab-label.is-drop-right::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: #23744c;
+  border-radius: 2px;
+  z-index: 10;
+  box-shadow: 0 0 4px rgba(35, 116, 76, 0.4);
+}
+
+@media (max-width: 900px) {
+  .agri-workspace-tabbar {
+    padding-inline: 14px;
+  }
+
+  .agri-workspace-pane {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 767px) {
+  .agri-workspace-tabbar {
+    gap: 4px;
+    min-height: 42px;
+    padding: 4px 8px;
+    margin: 0;
+  }
+
+  .agri-workspace-tabbar .ant-tabs-tab {
+    padding-inline: 10px !important;
+    margin-inline-end: 4px !important;
+  }
+
+  .agri-workspace-tabbar .ant-tabs-tab-btn,
+  .agri-workspace-tab-label {
+    max-width: 128px;
+  }
+}

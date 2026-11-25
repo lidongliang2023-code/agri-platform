@@ -1,0 +1,51 @@
+/*
+ * 生产业务内嵌模式（uni-app H5 / 微信小程序 / APP 的 web-view 容器内打开）。
+ * 导航、账号、消息都由 uni-app 客户端负责，这里只保留业务内容和经营主体 / 农场上下文。
+ */
+.agri-layout.is-embedded { min-height: 100dvh; background: #f5f6fa; }
+.agri-layout.is-embedded > .agri-main { margin-left: 0 !important; width: 100%; min-height: 100dvh; background: #f5f6fa; }
+.agri-layout.is-embedded .agri-embedded-header.ant-layout-header {
+  position: sticky; top: 0; z-index: 20; height: auto; line-height: normal;
+  padding: 8px max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+  background: #fff; border-bottom: 1px solid #edf1ed; box-shadow: 0 2px 8px rgba(22, 70, 46, 0.04);
+}
+.agri-embedded-context { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; }
+.agri-embedded-context > .ant-select { width: 100% !important; min-width: 0; }
+.agri-embedded-context .ant-select-selector { min-height: 36px; border-radius: 10px !important; background: #f6f9f6 !important; border-color: #e3ebe3 !important; }
+.agri-embedded-context .ant-select-single { height: 36px; }
+.agri-embedded-context .ant-select-selection-item,
+.agri-embedded-context .ant-select-selection-placeholder { font-size: 14px; }
+.agri-embedded-context-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.agri-embedded-context-actions > .ant-btn { flex: 1; height: 36px; }
+.agri-layout.is-embedded .agri-content { background: #f5f6fa; }
+.agri-layout.is-embedded .agri-content .production-workspace-pane {
+  padding: 12px max(12px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  overflow-x: hidden;
+}
+.agri-layout.is-embedded .agri-content > .ant-alert,
+.agri-layout.is-embedded .agri-content > .ant-spin-nested-loading { margin: 12px; }
+.agri-layout.is-embedded .ant-pro-page-container-children-container { padding-inline: 0; }
+.agri-layout.is-embedded .ant-card { border-radius: 14px; }
+.agri-layout.is-embedded .ant-btn { min-height: 36px; }
+
+/* 手机宽度下的业务内容适配（内嵌页与窄屏浏览器共用）。 */
+@media (max-width: 767px) {
+  .agri-content .ant-table-wrapper { max-width: 100%; overflow-x: auto; }
+  .agri-content .ant-table-content,
+  .agri-content .ant-table-body { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  .agri-content .ant-table table { min-width: 640px; }
+  .agri-content .ant-table-cell { word-break: normal; }
+  .agri-content .ant-space { flex-wrap: wrap; }
+  .agri-content .ant-tabs-nav-list { max-width: none; }
+  .agri-content .ant-descriptions-view { overflow-x: auto; }
+  .agri-content .ant-row > [class*="ant-col-"] { min-width: 0; }
+  .agri-content input,
+  .agri-content textarea { font-size: 16px; }
+  .agri-content .ant-form-item { max-width: 100%; }
+  .agri-content .ant-card-extra > .ant-space { justify-content: flex-end; }
+  .agri-content .ant-pagination { flex-wrap: wrap; row-gap: 8px; justify-content: center; }
+  body:has(.agri-layout) .ant-modal { top: 12px; max-width: calc(100vw - 16px); padding-bottom: 12px; }
+  body:has(.agri-layout) .ant-modal-body { max-height: calc(100dvh - 180px); overflow: auto; }
+  body:has(.agri-layout) .ant-modal-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  body:has(.agri-layout) .ant-drawer-content-wrapper { max-width: 100vw; }
+}

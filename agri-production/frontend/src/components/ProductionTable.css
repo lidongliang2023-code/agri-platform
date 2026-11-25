@@ -24,10 +24,10 @@
 }
 .production-record-table .production-column-resize-handle {
   position: absolute;
-  /* 手柄只属于当前列，不能压过 Ant Design 的固定列。 */
-  z-index: 1;
+  /* 手柄贴合当前列右内侧，既不被 ellipsis 的 overflow:hidden 裁切，也不压过固定列。 */
+  z-index: 2;
   top: 0;
-  right: -5px;
+  right: 0;
   bottom: 0;
   width: 10px;
   cursor: col-resize;
@@ -51,13 +51,14 @@
   position: absolute;
   top: 20%;
   bottom: 20%;
-  left: 4px;
+  right: 1px;
   width: 2px;
   border-radius: 2px;
   background: #cbdcd1;
 }
 .production-record-table .production-column-resize-handle:hover::after,
-.production-record-table .production-column-resize-handle:focus-visible::after {
+.production-record-table .production-column-resize-handle:focus-visible::after,
+.production-record-table .production-column-resize-handle.is-dragging::after {
   background: #23744c;
 }
 .production-record-table .production-column-resize-handle:focus-visible {

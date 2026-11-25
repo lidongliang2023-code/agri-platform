@@ -1,5 +1,5 @@
 <template>
-  <div class="finance-shell" :class="{ 'nav-open': navOpen }">
+  <div class="finance-shell" :class="{ 'is-collapsed': !isMobile && collapsed, 'nav-open': navOpen }">
     <aside class="finance-sidebar">
       <router-link to="/borrower/home" class="finance-brand" @click="navOpen = false">
         <img class="finance-brand-mark" :src="brandLogoSrc" alt="丰链云" />
@@ -9,50 +9,45 @@
         </span>
       </router-link>
 
-      <div class="finance-role">
-        <span>融资方</span>
-        <small>供应链金融工作台</small>
-      </div>
-
       <nav class="finance-nav">
-        <span class="finance-nav-title">融资服务</span>
-        <router-link v-for="item in primaryNav" :key="item.path" :to="item.path" @click="navOpen = false">
+        <router-link v-for="item in primaryNav" :key="item.path" :to="item.path" :title="item.label" :aria-label="item.label" @click="navOpen = false">
           <component :is="item.icon" />
           <span>{{ item.label }}</span>
         </router-link>
-
-        <span class="finance-nav-title">资金与履约</span>
-        <router-link v-for="item in secondaryNav" :key="item.path" :to="item.path" @click="navOpen = false">
+        <router-link v-for="item in secondaryNav" :key="item.path" :to="item.path" :title="item.label" :aria-label="item.label" @click="navOpen = false">
           <component :is="item.icon" />
           <span>{{ item.label }}</span>
           <i v-if="item.badge && unreadCount > 0">{{ unreadCount }}</i>
         </router-link>
       </nav>
 
-      <div class="finance-sidebar-foot">
-        <div>
-          <span class="finance-avatar">{{ financeUser.name.slice(0, 1) }}</span>
-          <div><strong>{{ financeUser.name }}</strong><small>认证融资主体</small></div>
-        </div>
-        <div class="finance-account-actions">
-          <a href="http://localhost:8098/portal/" title="返回官网门户">官网</a>
-          <button type="button" @click="logout">退出</button>
+      <div class="finance-sidebar-foot pc-side-user">
+        <button type="button" class="pc-side-user-trigger" :title="`${financeUser.name} · 认证融资主体`" :aria-expanded="userMenuOpen" aria-haspopup="menu" @click.stop="userMenuOpen = !userMenuOpen">
+          <span class="pc-side-user-avatar">{{ financeUser.name.slice(0, 1) }}</span>
+          <span class="pc-side-user-meta"><strong>{{ financeUser.name }}</strong><small>认证融资主体</small></span>
+          <span class="pc-side-user-caret" aria-hidden="true">⌃</span>
+        </button>
+        <div v-if="userMenuOpen" class="pc-side-user-menu" role="menu">
+          <a :href="personalCenter" target="_blank" rel="noreferrer" role="menuitem" @click="userMenuOpen = false">个人中心</a>
+          <a href="http://localhost:8098/portal/" role="menuitem" @click="userMenuOpen = false">切换身份（官网门户）</a>
+          <div class="pc-side-user-divider" />
+          <button type="button" class="is-danger" role="menuitem" @click="logout">退出登录</button>
         </div>
       </div>
     </aside>
 
     <div class="finance-workspace">
-      <header class="finance-topbar">
-        <div class="finance-topbar-left">
-          <button class="finance-menu-button" type="button" aria-label="打开菜单" @click="navOpen = !navOpen">
-            <Menu />
-          </button>
-          <div>
-            <small>供应链金融 / 融资方</small>
-            <strong>{{ route.meta.title || '融资工作台' }}</strong>
-          </div>
-        </div>
-        <div class="finance-topbar-right">
+      <AgriVueTopHeader
+        header-class="finance-topbar"
+        left-class="finance-topbar-left"
+        right-class="finance-topbar-right"
+        :collapsed="collapsed"
+        :mobile="isMobile"
+        :mobile-open="navOpen"
+        :breadcrumbs="['供应链金融', '融资方', String(route.meta.title || '融资工作台')]"
+        @toggle-collapse="toggleSidebar"
+      >
+        <template #right>
           <router-link to="/borrower/message" class="finance-icon-button" aria-label="消息通知">
             <Bell />
             <i v-if="unreadCount > 0">{{ unreadCount }}</i>
@@ -62,8 +57,8 @@
             <span>{{ financeUser.name.slice(0, 1) }}</span>
             <div><strong>{{ financeUser.name }}</strong><small>融资方账户</small></div>
           </div>
-        </div>
-      </header>
+        </template>
+      </AgriVueTopHeader>
 
       <main class="finance-content">
         <router-view />
@@ -75,7 +70,7 @@
 
 <script setup>
 const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Bell,
@@ -83,18 +78,45 @@ import {
   CreditCard,
   Document,
   HomeFilled,
-  Menu,
   Tickets,
   TrendCharts,
   Wallet,
 } from '@element-plus/icons-vue'
+import { AgriVueTopHeader } from '@agri/shared/vue/workspace'
 import { financeApi, financeUser } from '@/api/finance'
 import { logoutFinance } from '@/auth'
 
 const route = useRoute()
 const navOpen = ref(false)
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 1024)
+const collapsed = ref(typeof window !== 'undefined' && window.innerWidth >= 1024 && window.innerWidth < 1280)
+const toggleSidebar = () => {
+  if (isMobile.value) navOpen.value = !navOpen.value
+  else collapsed.value = !collapsed.value
+}
+const syncViewport = () => {
+  const w = window.innerWidth
+  isMobile.value = w < 1024
+  if (w >= 1024) {
+    navOpen.value = false
+    collapsed.value = w < 1280
+  }
+}
 const unreadCount = ref(0)
 const logout = () => logoutFinance()
+const userMenuOpen = ref(false)
+const personalCenter = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
+const closeUserMenu = (event) => {
+  if (!(event.target instanceof Element) || !event.target.closest('.pc-side-user')) userMenuOpen.value = false
+}
+onMounted(() => {
+  document.addEventListener('click', closeUserMenu)
+  window.addEventListener('resize', syncViewport)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeUserMenu)
+  window.removeEventListener('resize', syncViewport)
+})
 
 const primaryNav = [
   { path: '/borrower/home', label: '融资工作台', icon: HomeFilled },

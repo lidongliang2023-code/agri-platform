@@ -11,8 +11,6 @@ import {
   FileSearchOutlined,
   FundOutlined,
   InsuranceOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
@@ -45,17 +43,21 @@ import {
   type Strategy,
   type TeamMember,
 } from './api'
+import { ExpertsPage } from './ExpertsPage'
 import { logoutUnified, useUnifiedUser } from '../../frontend/src/sso'
+import { SidebarUserCard } from './SidebarUserCard'
+import { RouteWorkspaceTabs, WorkspaceHeader } from '@agri/shared'
 
 type Page = 'dashboard' | 'providers' | 'provider-detail' | 'catalog' | 'orders' | 'dispatch'
   | 'disputes' | 'quality' | 'policies' | 'insurance' | 'settlement' | 'ai' | 'campaigns'
-  | 'reports' | 'team' | 'logs'
+  | 'reports' | 'team' | 'logs' | 'experts'
 
 interface Route { page: Page; id?: number }
 
-const PAGES: Page[] = ['dashboard', 'providers', 'provider-detail', 'catalog', 'orders', 'dispatch', 'disputes', 'quality', 'policies', 'insurance', 'settlement', 'ai', 'campaigns', 'reports', 'team', 'logs']
+const PAGES: Page[] = ['experts', 'dashboard', 'providers', 'provider-detail', 'catalog', 'orders', 'dispatch', 'disputes', 'quality', 'policies', 'insurance', 'settlement', 'ai', 'campaigns', 'reports', 'team', 'logs']
 
 const TITLES: Record<Page, string> = {
+  experts: '专家账号绑定',
   dashboard: '运营大盘', providers: '服务商管理', 'provider-detail': '服务商详情档案', catalog: '服务商品审核',
   orders: '全量订单', dispatch: '调度派单', disputes: '投诉与仲裁', quality: '质量与评价预警',
   policies: '政策项目运营', insurance: '农险理赔运营', settlement: '结算与分账', ai: 'AI 运营与策略',
@@ -74,6 +76,7 @@ const NAV: Array<{ group: string; items: Array<{ page: Page; label: string; icon
   {
     group: '服务供给',
     items: [
+      { page: 'experts', label: '专家账号绑定', icon: <TeamOutlined /> },
       { page: 'catalog', label: '品类与商品审核', icon: <AppstoreOutlined /> },
       { page: 'campaigns', label: '营销与优惠券', icon: <ShopOutlined /> },
     ],
@@ -105,9 +108,19 @@ const NAV: Array<{ group: string; items: Array<{ page: Page; label: string; icon
   },
 ]
 
+const PAGE_ALIASES: Record<string, Page> = {
+  'service-provider': 'providers',
+  claims: 'insurance',
+}
+
+function resolvePage(raw: string): Page {
+  const normalized = PAGE_ALIASES[raw] ?? raw
+  return PAGES.includes(normalized as Page) ? (normalized as Page) : 'dashboard'
+}
+
 function parseRoute(): Route {
   const parts = window.location.hash.replace(/^#\/?/, '').split('/')
-  const page = PAGES.includes(parts[0] as Page) ? parts[0] as Page : 'dashboard'
+  const page = resolvePage(parts[0] ?? '')
   const id = Number(parts[1])
   return { page, id: Number.isFinite(id) ? id : undefined }
 }
@@ -179,7 +192,7 @@ function DashboardPage(): JSX.Element {
         </section>
         <section className="ops-card ops-todo-card">
           <div className="ops-card-head"><div><b>今日待办</b><small>按业务实数聚合</small></div><Tag color="orange">{data.todos.reduce((sum, item) => sum + Number(item.count || 0), 0)} 项</Tag></div>
-          {data.todos.map((todo) => <button type="button" key={todo.route} onClick={() => go(todo.route as Page)}><span>{todo.count}</span><div><b>{todo.title}</b><small>{todo.description}</small></div><em>处理 ›</em></button>)}
+          {data.todos.map((todo) => <button type="button" key={`${todo.route}-${todo.title}`} onClick={() => go(resolvePage(todo.route))}><span>{todo.count}</span><div><b>{todo.title}</b><small>{todo.description}</small></div><em>处理 ›</em></button>)}
           {data.todos.length === 0 && <div className="ops-empty">当前没有待办事项</div>}
         </section>
       </div>
@@ -294,23 +307,50 @@ function ProvidersPage(): JSX.Element {
   }
 
   const columns: ColumnsType<OpsProvider> = [
-    { title: '服务商', dataIndex: 'name', render: (_, row) => <button type="button" className="ops-entity" onClick={() => go('provider-detail', row.id)}><span>{row.categoryIcon}</span><div><b>{row.name}</b><small>{row.creditCode ?? `SV${row.id}`}</small></div></button> },
-    { title: '服务类型', dataIndex: 'category', render: (value) => <Tag>{value}</Tag> },
-    { title: '覆盖区域', dataIndex: 'region' },
+    {
+      title: '服务商',
+      dataIndex: 'name',
+      width: 280,
+      ellipsis: true,
+      render: (_, row) => {
+        const code = row.creditCode ?? `SV${row.id}`
+        return (
+          <button
+            type="button"
+            className="ops-entity ops-entity-inline"
+            title={`${row.name}（${code}）`}
+            onClick={() => go('provider-detail', row.id)}
+          >
+            <span>{row.categoryIcon}</span>
+            <b>{row.name}</b>
+            <small>{code}</small>
+          </button>
+        )
+      },
+    },
+    { title: '服务类型', dataIndex: 'category', width: 112, render: (value) => <Tag>{value}</Tag> },
+    {
+      title: '覆盖区域',
+      dataIndex: 'region',
+      width: 170,
+      ellipsis: true,
+      render: (value: string) => <span className="ops-cell-ellipsis" title={value}>{value || '—'}</span>,
+    },
     {
       title: '平台主体',
       dataIndex: 'merchantId',
+      width: 104,
       render: (value) => value ? <Tag color="green">已绑定</Tag> : <Tag color="red">未绑定</Tag>,
     },
-    { title: '信用分', dataIndex: 'creditScore', sorter: (a, b) => a.creditScore - b.creditScore, render: (value) => <b className={value < 70 ? 'text-red' : value > 90 ? 'text-green' : ''}>{value}</b> },
-    { title: '评分', dataIndex: 'rating', render: (value) => <span className="ops-rating">★ {value}</span> },
-    { title: '取消率', dataIndex: 'cancelRate', render: (value) => <span className={Number(value) > 10 ? 'text-red' : ''}>{value}%</span> },
-    { title: '状态', dataIndex: 'status', render: (value) => <Status status={value} labels={PROVIDER_STATUS} /> },
+    { title: '信用分', dataIndex: 'creditScore', width: 92, sorter: (a, b) => a.creditScore - b.creditScore, render: (value) => <b className={value < 70 ? 'text-red' : value > 90 ? 'text-green' : ''}>{value}</b> },
+    { title: '评分', dataIndex: 'rating', width: 88, render: (value) => <span className="ops-rating">★ {value}</span> },
+    { title: '取消率', dataIndex: 'cancelRate', width: 92, render: (value) => <span className={Number(value) > 10 ? 'text-red' : ''}>{value}%</span> },
+    { title: '状态', dataIndex: 'status', width: 100, render: (value) => <Status status={value} labels={PROVIDER_STATUS} /> },
     {
       title: '操作',
       key: 'actions',
       fixed: 'right',
-      width: 200,
+      width: 180,
       render: (_, row) => <>
         <Button type="link" size="small" onClick={() => go('provider-detail', row.id)}>档案</Button>
         <Button type="link" size="small" onClick={() => openReview(row)}>{row.status === 'pending' ? '审核' : '处置'}</Button>
@@ -320,14 +360,20 @@ function ProvidersPage(): JSX.Element {
   ]
 
   return (
-    <div className="ops-page">
-      <PageTitle title="服务商管理" description="主体资质、经营状态、信用等级与平台账号绑定统一管理。" actions={<Button onClick={exportCsv}>导出当前名录</Button>} />
+    <div className="ops-page ops-providers-dense">
+      <div className="ops-dense-head">
+        <div className="ops-dense-head-copy">
+          <h1>服务商管理</h1>
+          <span className="ops-dense-head-meta">主体资质、经营状态、信用等级与平台账号绑定统一管理</span>
+        </div>
+        <div className="ops-page-actions"><Button onClick={exportCsv}>导出当前名录</Button></div>
+      </div>
       <section className="ops-card ops-filter">
         <div className="ops-tabs">{['all', 'pending', 'available', 'restricted', 'frozen', 'removed'].map((key) => <button type="button" key={key} className={status === key ? 'on' : ''} onClick={() => setStatus(key)}>{key === 'all' ? '全部' : PROVIDER_STATUS[key]?.label}</button>)}</div>
         <Input prefix={<SearchOutlined />} value={keyword} onChange={(event) => setKeyword(event.target.value)} onPressEnter={load} placeholder="搜索名称、服务类型或区域" />
         <Button type="primary" onClick={load}>查询</Button>
       </section>
-      <section className="ops-card ops-table-card"><Table rowKey="id" loading={loading} columns={columns} dataSource={items} scroll={{ x: 1240 }} pagination={{ pageSize: 8 }} /></section>
+      <section className="ops-card ops-table-card"><Table rowKey="id" loading={loading} columns={columns} dataSource={items} scroll={{ x: 1240 }} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
       <Modal title={`服务商处置 · ${target?.name ?? ''}`} open={Boolean(target)} onCancel={() => setTarget(null)} onOk={() => void submitReview()} confirmLoading={submitting} okText="确认提交">
         <Form layout="vertical">
           <Form.Item label="审核后状态"><Select value={reviewStatus} onChange={setReviewStatus} options={Object.entries(PROVIDER_STATUS).map(([value, item]) => ({ value, label: item.label }))} /></Form.Item>
@@ -428,7 +474,7 @@ function CatalogPage(): JSX.Element {
     <div className="ops-page">
       <PageTitle title="服务商品审核" description="服务内容、价格区间、资质与版权材料统一审核。" actions={<Button onClick={exportCsv}>导出当前清单</Button>} />
       <section className="ops-card ops-filter"><div className="ops-tabs">{['pending', 'approved', 'rejected', 'all'].map((key) => <button type="button" key={key} className={tab === key ? 'on' : ''} onClick={() => setTab(key)}>{key === 'pending' ? '待审核' : key === 'approved' ? '已上架' : key === 'rejected' ? '已驳回' : '全部'}</button>)}</div><Button onClick={load}>刷新</Button></section>
-      <section className="ops-card ops-table-card"><Table rowKey="id" columns={columns} dataSource={items} scroll={{ x: 960 }} /></section>
+      <section className="ops-card ops-table-card"><Table rowKey="id" columns={columns} dataSource={items} scroll={{ x: 960 }} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
       <Modal title={`商品审核 · ${target?.name ?? ''}`} open={Boolean(target)} onCancel={() => setTarget(null)} onOk={() => void submit()} okText="提交审核"><div className="ops-review-summary"><span>AI 预检 {target?.aiScore} 分</span><p>{target?.description}</p></div><Form layout="vertical"><Form.Item label="审核结果"><Select value={result} onChange={setResult} options={[{ value: 'approved', label: '通过上架' }, { value: 'rejected', label: '驳回或退回补件' }]} /></Form.Item><Form.Item label="审核意见"><Input.TextArea rows={4} value={reason} onChange={(event) => setReason(event.target.value)} /></Form.Item></Form><div className="ops-notice">审核结果将同步给服务商并写入审计日志。</div></Modal>
     </div>
   )
@@ -466,7 +512,7 @@ function OrdersPage(): JSX.Element {
     <div className="ops-page">
       <PageTitle title="全量服务订单" description="查看全量订单、风险订单与派单状态，并支持人工改派。" actions={<Button onClick={() => go('dispatch')}>进入调度看板</Button>} />
       <section className="ops-card ops-filter"><div className="ops-tabs">{['all', 'confirmed', 'in_progress', 'completed', 'cancelled'].map((key) => <button type="button" key={key} className={status === key ? 'on' : ''} onClick={() => setStatus(key)}>{key === 'all' ? '全部' : ORDER_STATUS[key]?.label}</button>)}</div><Input prefix={<SearchOutlined />} value={keyword} onChange={(event) => setKeyword(event.target.value)} onPressEnter={load} placeholder="订单号 / 服务商 / 服务项目" /><Button onClick={load}>查询</Button></section>
-      <section className="ops-card ops-table-card"><Table rowKey="id" columns={columns} dataSource={orders} scroll={{ x: 1160 }} /></section>
+      <section className="ops-card ops-table-card"><Table rowKey="id" columns={columns} dataSource={orders} scroll={{ x: 1160 }} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
       <Modal title={`派单 · ${target?.orderNo ?? ''}`} open={Boolean(target)} onCancel={() => setTarget(null)} onOk={() => void dispatch()} okText="确认派单"><Form layout="vertical"><Form.Item label="指派服务商（必选）"><Select showSearch optionFilterProp="label" placeholder="点名一家在营服务商" value={providerId} onChange={setProviderId} options={providers.map((provider) => ({ value: provider.id, label: `${provider.name} · ${provider.category} · ★${provider.rating}` }))} /></Form.Item><Form.Item label="派单说明（必填）"><Input.TextArea rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="写明改派原因与约束，会写入订单动态并通知下单主体" /></Form.Item></Form><div className="ops-notice warn">改派只允许派给状态为「正常经营」的服务商；目标服务商当前不可接单会被服务端拒绝。</div></Modal>
     </div>
   )
@@ -579,28 +625,49 @@ function PoliciesPage(): JSX.Element {
   const { message } = AntApp.useApp()
   const [items, setItems] = useState<PolicyApplication[]>([])
   const [target, setTarget] = useState<PolicyApplication | null>(null)
-  const [status, setStatus] = useState('town_review')
-  const [note, setNote] = useState('材料完整，进入下一审核节点')
+  const [status, setStatus] = useState<string>()
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  const ready = !!status && !!target?.allowedStatuses?.includes(status) && !!note.trim()
   const load = (): void => { opsApi.policies().then(setItems).catch((error: Error) => message.error(error.message)) }
   useEffect(load, [])
   const submit = async (): Promise<void> => {
-    if (!target) return
-    try { await opsApi.reviewPolicy(target.id, { status, note }); setTarget(null); message.success('政策审核节点已更新'); load() }
-    catch (error) { message.error(error instanceof Error ? error.message : '审核失败') }
+    if (!target || !ready || saving) return
+    setSaving(true)
+    try {
+      await opsApi.reviewPolicy(target.id, { status, expectedStatus: target.status, note: note.trim() })
+      setTarget(null)
+      message.success('政策审核节点已更新')
+      load()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '审核失败')
+      load()
+    } finally {
+      setSaving(false)
+    }
   }
   return (
     <div className="ops-page">
       <PageTitle title="政策项目运营" description="匹配结果、主体资格、材料核验与补贴兑付进度。" />
-      <section className="ops-card ops-table-card"><Table<PolicyApplication> rowKey="id" dataSource={items} pagination={false} columns={[
+      <section className="ops-card ops-table-card"><Table<PolicyApplication> rowKey="id" dataSource={items} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} columns={[
         { title: '申报单', dataIndex: 'applicationNo', render: (_, row) => <div className="ops-table-entity"><b>{row.applicationNo}</b><small>{row.policyTitle}</small></div> },
         { title: '申报主体', dataIndex: 'applicant' },
         { title: '预计金额', dataIndex: 'amountText', render: (value) => <b>{value}</b> },
         { title: '进度', render: (_, row) => <Progress percent={row.progress} size="small" strokeColor="#159a5e" /> },
         { title: '状态', dataIndex: 'status', render: (value) => <Status status={value} labels={POLICY_STATUS} /> },
         { title: '提交时间', dataIndex: 'submittedAt' },
-        { title: '操作', render: (_, row) => <Button type="link" onClick={() => { setTarget(row); setStatus(row.status === 'town_review' ? 'county_review' : 'paid'); setNote('材料完整，审核通过') }}>审核 / 兑付</Button> },
+        { title: '操作', render: (_, row) => row.allowedStatuses?.length ? <Button type="link" onClick={() => { setTarget(row); setStatus(undefined); setNote('') }}>审核</Button> : <span>无可用操作</span> },
       ]} /></section>
-      <Modal title="政策申报审核" open={Boolean(target)} onCancel={() => setTarget(null)} onOk={() => void submit()} okText="确认更新"><div className="ops-review-summary"><b>{target?.policyTitle}</b><span>{target?.applicant} · {target?.amountText}</span></div><Form layout="vertical"><Form.Item label="审核节点"><Select value={status} onChange={setStatus} options={Object.entries(POLICY_STATUS).map(([value, item]) => ({ value, label: item.label }))} /></Form.Item><Form.Item label="审核意见"><Input.TextArea rows={3} value={note} onChange={(event) => setNote(event.target.value)} /></Form.Item></Form><div className="ops-notice warn">标记为已兑付属于资金状态变更，正式环境应接入双人复核。</div></Modal>
+      <Modal title="政策申报审核" open={Boolean(target)} onCancel={() => { if (!saving) setTarget(null) }}
+        onOk={() => void submit()} okText="确认更新" confirmLoading={saving} okButtonProps={{ disabled: !ready || saving }}>
+        <div className="ops-review-summary"><b>{target?.policyTitle}</b><span>{target?.applicant} · {target && POLICY_STATUS[target.status]?.label}</span></div>
+        <Form layout="vertical" disabled={saving}>
+          <Form.Item label="下一节点" required><Select placeholder="请选择审核节点" value={status} onChange={setStatus}
+            options={(target?.allowedStatuses ?? []).map(value => ({ value, label: POLICY_STATUS[value]?.label ?? value }))} /></Form.Item>
+          <Form.Item label="审核意见" required><Input.TextArea rows={3} value={note} placeholder="填写本次审核意见，将通知申报主体" onChange={event => setNote(event.target.value)} /></Form.Item>
+        </Form>
+        {status === 'paid' && <div className="ops-notice warn">确认后将标记为已兑付，请核对兑付记录和金额 {target?.amountText}。</div>}
+      </Modal>
     </div>
   )
 }
@@ -661,7 +728,7 @@ function SettlementPage(): JSX.Element {
   return (
     <div className="ops-page">
       <PageTitle title="结算与分账" description="按批次复核交易额与佣金；本版本只落复核结论，不执行真实资金动作。" actions={<Button onClick={() => load()}>重新拉取批次</Button>} />
-      <section className="ops-card ops-table-card"><Table<Settlement> rowKey="id" dataSource={items} pagination={false} columns={[
+      <section className="ops-card ops-table-card"><Table<Settlement> rowKey="id" dataSource={items} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} columns={[
         { title: '批次', dataIndex: 'batchNo', render: (_, row) => <div className="ops-table-entity"><b>{row.batchNo}</b><small>{row.period}</small></div> },
         { title: '订单数', dataIndex: 'orderCount', render: (value) => Number(value).toLocaleString() },
         { title: '交易金额', dataIndex: 'amount', render: (value) => <b>¥{Number(value).toLocaleString()}</b> },
@@ -819,7 +886,7 @@ function LogsPage(): JSX.Element {
   return (
     <div className="ops-page">
       <PageTitle title="操作审计日志" description="审核、派单、仲裁、政策与结算等敏感操作留痕；操作人与来源 IP 均由服务端从访问令牌和请求头解析。" actions={<Button onClick={exportCsv}>导出当前日志</Button>} />
-      <section className="ops-card ops-table-card"><Table rowKey="id" dataSource={items} pagination={{ pageSize: 10 }} columns={[
+      <section className="ops-card ops-table-card"><Table rowKey="id" dataSource={items} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} columns={[
         { title: '时间', dataIndex: 'createdAt' },
         { title: '操作人', render: (_, row: OpLog) => <div className="ops-table-entity"><b>{row.operator}</b><small>{row.role}</small></div> },
         { title: '动作', dataIndex: 'action', render: (value) => <Tag>{value}</Tag> },
@@ -832,10 +899,23 @@ function LogsPage(): JSX.Element {
 }
 
 export function App(): JSX.Element {
+  const { permissions } = useUnifiedUser()
+  if (!['*', 'service:*', 'service:admin'].some(code => permissions.includes(code))) {
+    return <main className="ops-page"><PoliciesPage /></main>
+  }
+  return <OperationsApp />
+}
+
+function OperationsApp(): JSX.Element {
   const { user } = useUnifiedUser()
   const [route, setRoute] = useState<Route>(parseRoute)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth < 1280)
   const [keyword, setKeyword] = useState('')
+  useEffect(() => {
+    const syncLayout = (): void => { setCollapsed(window.innerWidth < 1280) }
+    window.addEventListener('resize', syncLayout)
+    return () => window.removeEventListener('resize', syncLayout)
+  }, [])
   const [pendingTodos, setPendingTodos] = useState<Array<{ title: string; count: number }>>([])
   const displayName = user.nickname || user.username
   const todayText = useMemo(() => {
@@ -855,6 +935,7 @@ export function App(): JSX.Element {
   }, [])
   const content = useMemo(() => {
     switch (route.page) {
+      case 'experts': return <ExpertsPage />
       case 'providers': return <ProvidersPage />
       case 'provider-detail': return <ProviderDetailPage />
       case 'catalog': return <CatalogPage />
@@ -877,15 +958,44 @@ export function App(): JSX.Element {
     <div className={`ops-shell${collapsed ? ' collapsed' : ''}`}>
       <aside className="ops-sidebar">
         <button type="button" className="ops-brand" onClick={() => go('dashboard')}><img className="ops-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />{!collapsed && <div><b>丰链云</b><small>FENGCHAIN · AGRI</small></div>}</button>
-        <nav>{NAV.map((group) => <section key={group.group}>{!collapsed && <h3>{group.group}</h3>}{group.items.map((item) => <button type="button" key={item.page} className={route.page === item.page ? 'on' : ''} onClick={() => go(item.page)} title={item.label}>{item.icon}{!collapsed && <span>{item.label}</span>}</button>)}</section>)}</nav>
-        <div className="ops-side-foot">{!collapsed && <div><b>运营值守</b><small>今日 09:00-21:00</small></div>}<button type="button" onClick={() => setCollapsed(!collapsed)}>{collapsed ? <MenuUnfoldOutlined /> : <><MenuFoldOutlined /> 收起导航</>}</button></div>
+        <nav>{NAV.map((group) => <section key={group.group}>{group.items.map((item) => <button type="button" key={item.page} className={route.page === item.page ? 'on' : ''} onClick={() => go(item.page)} title={item.label}>{item.icon}{!collapsed && <span>{item.label}</span>}</button>)}</section>)}</nav>
+        <SidebarUserCard name={displayName} role="综合服务运营" collapsed={collapsed}
+          switchLabel="切换身份（服务用户端）" switchUrl={`${window.location.protocol}//${window.location.hostname}:8105/`}
+          onLogout={() => void logoutUnified('service-ops')} />
       </aside>
       <div className="ops-main">
-        <header className="ops-header">
-          <div><span>综合服务</span><b>/</b><strong>{TITLES[route.page]}</strong></div>
-          <form onSubmit={(event) => { event.preventDefault(); if (keyword.trim()) go('providers') }}><SearchOutlined /><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索服务商 / 订单 / 工单号" /></form>
-          <div className="ops-header-right"><span className="ops-date">{todayText}</span><button type="button" className="ops-bell" onClick={() => go('dispatch')} title="待办事项"><Badge count={pendingTodos.reduce((sum, item) => sum + Number(item.count || 0), 0)} size="small"><BellOutlined /></Badge></button><Dropdown menu={{ items: [{ key: 'team', label: '岗位与权限', onClick: () => go('team') }, { key: 'logs', label: '操作审计', onClick: () => go('logs') }, { key: 'logout', label: '退出统一登录', onClick: () => void logoutUnified('service-ops') }] }}><button type="button" className="ops-user"><Avatar size={30} className="ops-avatar">{displayName.slice(0, 1)}</Avatar><span><b>{displayName}</b><small>统一账号 · 运营端</small></span></button></Dropdown></div>
-        </header>
+        <WorkspaceHeader
+          className="ops-header"
+          rightClassName="ops-header-right"
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((prev) => !prev)}
+          breadcrumbs={['综合服务', TITLES[route.page]]}
+          center={
+            <form onSubmit={(event) => { event.preventDefault(); if (keyword.trim()) go('providers') }}>
+              <SearchOutlined />
+              <input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索服务商 / 订单 / 工单号" />
+            </form>
+          }
+          right={
+            <>
+              <span className="ops-date">{todayText}</span>
+              <button type="button" className="ops-bell" onClick={() => go('dispatch')} title="待办事项">
+                <Badge count={pendingTodos.reduce((sum, item) => sum + Number(item.count || 0), 0)} size="small"><BellOutlined /></Badge>
+              </button>
+              <Dropdown menu={{ items: [{ key: 'team', label: '岗位与权限', onClick: () => go('team') }, { key: 'logs', label: '操作审计', onClick: () => go('logs') }, { key: 'logout', label: '退出统一登录', onClick: () => void logoutUnified('service-ops') }] }}>
+                <button type="button" className="ops-user"><Avatar size={30} className="ops-avatar">{displayName.slice(0, 1)}</Avatar><span><b>{displayName}</b><small>统一账号 · 运营端</small></span></button>
+              </Dropdown>
+            </>
+          }
+        />
+        <RouteWorkspaceTabs
+          activeKey={route.id === undefined ? route.page : `${route.page}/${route.id}`}
+          activeLabel={route.id === undefined ? TITLES[route.page] : `${TITLES[route.page]} · ${route.id}`}
+          homeKey="dashboard"
+          homeLabel={TITLES.dashboard}
+          onNavigate={(path) => { window.location.hash = `/${path}` }}
+          storageKey="agri-service-ops:workspace-tabs"
+        />
         <main>{content}</main>
       </div>
     </div>

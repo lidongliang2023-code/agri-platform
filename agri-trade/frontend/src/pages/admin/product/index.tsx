@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Card, Col, Input, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Input, Modal, Popconfirm, Select, Tag, message } from 'antd'
+import { ListRowActions } from '@agri/shared'
 import { auditProduct, getAdminProductPage } from '@/api/admin'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 interface ProductRow {
   id: number
@@ -41,9 +42,11 @@ export default function AdminProductAudit() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [pageNum, setPageNum] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [publishStatus, setPublishStatus] = useState('pending')
   const [keyword, setKeyword] = useState('')
+  const [draftStatus, setDraftStatus] = useState('pending')
+  const [draftKeyword, setDraftKeyword] = useState('')
   const [rejecting, setRejecting] = useState<ProductRow | null>(null)
   const [rejectRemark, setRejectRemark] = useState('')
 
@@ -71,6 +74,20 @@ export default function AdminProductAudit() {
     load()
   }, [load])
 
+  const handleQuery = () => {
+    setPageNum(1)
+    setPublishStatus(draftStatus)
+    setKeyword(draftKeyword.trim())
+  }
+
+  const handleReset = () => {
+    setDraftStatus('pending')
+    setDraftKeyword('')
+    setPageNum(1)
+    setPublishStatus('pending')
+    setKeyword('')
+  }
+
   const handleAudit = async (row: ProductRow, approved: boolean, remark?: string) => {
     const res = await auditProduct(row.id, approved, remark)
     if (res?.code === 200) {
@@ -85,110 +102,113 @@ export default function AdminProductAudit() {
 
   return (
     <div style={{ padding: 20 }}>
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col flex="180px">
-            <Select
-              value={publishStatus}
-              style={{ width: '100%' }}
-              onChange={(value) => {
-                setPageNum(1)
-                setPublishStatus(value)
-              }}
-              options={[
-                { value: 'pending', label: '待审核' },
-                { value: 'published', label: '已发布' },
-                { value: 'offline', label: '已下架' },
-                { value: 'rejected', label: '已驳回' },
-                { value: 'draft', label: '草稿' },
-                { value: '', label: '全部状态' }
-              ]}
-            />
-          </Col>
-          <Col flex="260px">
-            <Input.Search
-              allowClear
-              placeholder="货源名称 / 编码 / 供应商"
-              onSearch={(value) => {
-                setPageNum(1)
-                setKeyword(value)
-              }}
-            />
-          </Col>
-          <Col flex="auto">
-            <Button icon={<ReloadOutlined />} onClick={load}>
-              刷新
-            </Button>
-          </Col>
-        </Row>
-      </Card>
-
-      <Card title={`货源 ${total} 条`}>
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={rows}
-          scroll={{ x: 1200 }}
-          pagination={{
-            current: pageNum,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (page, size) => {
-              setPageNum(page)
-              setPageSize(size)
+      <TradeList<ProductRow>
+        listId="admin-product"
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={<span style={{ fontWeight: 600 }}>货源审核（共 {total} 条）</span>}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={handleQuery}
+            onReset={handleReset}
+            fields={[
+              {
+                label: '审核状态',
+                control: (
+                  <Select
+                    value={draftStatus}
+                    onChange={(value) => {
+                      setDraftStatus(value)
+                      setPageNum(1)
+                      setPublishStatus(value)
+                    }}
+                    options={[
+                      { value: 'pending', label: '待审核' },
+                      { value: 'published', label: '已发布' },
+                      { value: 'offline', label: '已下架' },
+                      { value: 'rejected', label: '已驳回' },
+                      { value: 'draft', label: '草稿' },
+                      { value: '', label: '全部状态' }
+                    ]}
+                  />
+                ),
+              },
+              {
+                label: '关键字',
+                control: (
+                  <Input
+                    allowClear
+                    value={draftKeyword}
+                    placeholder="货源名称 / 编码 / 供应商"
+                    onChange={(e) => setDraftKeyword(e.target.value)}
+                    onPressEnter={handleQuery}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        pagination={{
+          current: pageNum,
+          pageSize,
+          total,
+          onChange: (page, size) => {
+            setPageNum(page)
+            setPageSize(size)
+          },
+        }}
+        columns={[
+          { title: '货源编码', dataIndex: 'productCode', width: 150, ellipsis: true },
+          { title: '货源名称', dataIndex: 'productName', width: 200, ellipsis: true },
+          { title: '供应商', dataIndex: 'sellerName', width: 150, ellipsis: true },
+          { title: '品类', dataIndex: 'categoryName', width: 90, ellipsis: true },
+          { title: '品种', dataIndex: 'variety', width: 110, ellipsis: true },
+          { title: '单价', dataIndex: 'price', width: 110, render: (val: number, row: ProductRow) => `¥${val}/${row.unit}` },
+          {
+            title: '产地',
+            key: 'origin',
+            width: 130,
+            ellipsis: true,
+            render: (_: unknown, row: ProductRow) => [row.originProvince, row.originCity].filter(Boolean).join(' ') || '—'
+          },
+          {
+            title: '状态',
+            dataIndex: 'publishStatus',
+            width: 104,
+            render: (val: string) => {
+              const tag = STATUS[val] ?? { text: val, color: 'default' }
+              return <Tag color={tag.color}>{tag.text}</Tag>
             }
-          }}
-          columns={[
-            { title: '货源编码', dataIndex: 'productCode', width: 150 },
-            { title: '货源名称', dataIndex: 'productName', width: 200 },
-            { title: '供应商', dataIndex: 'sellerName', width: 150 },
-            { title: '品类', dataIndex: 'categoryName', width: 90 },
-            { title: '品种', dataIndex: 'variety', width: 110 },
-            { title: '单价', dataIndex: 'price', width: 110, render: (val: number, row: ProductRow) => `¥${val}/${row.unit}` },
-            {
-              title: '产地',
-              width: 130,
-              render: (_: unknown, row: ProductRow) => [row.originProvince, row.originCity].filter(Boolean).join(' ') || '—'
-            },
-            {
-              title: '状态',
-              dataIndex: 'publishStatus',
-              width: 100,
-              render: (val: string) => {
-                const tag = STATUS[val] ?? { text: val, color: 'default' }
-                return <Tag color={tag.color}>{tag.text}</Tag>
-              }
-            },
-            {
-              title: '审核痕迹',
-              width: 200,
-              render: (_: unknown, row: ProductRow) =>
-                row.auditor ? `${row.auditor} / ${row.auditTime ?? ''}${row.auditRemark ? ' / ' + row.auditRemark : ''}` : '—'
-            },
-            {
-              title: '操作',
-              width: 160,
-              fixed: 'right',
-              render: (_: unknown, row: ProductRow) =>
-                row.publishStatus === 'pending' ? (
-                  <Space size="small">
-                    <Popconfirm title="通过后该货源对买家可见，确认？" onConfirm={() => handleAudit(row, true)}>
-                      <Button type="link" size="small">
-                        通过
-                      </Button>
-                    </Popconfirm>
-                    <Button type="link" size="small" danger onClick={() => setRejecting(row)}>
-                      驳回
-                    </Button>
-                  </Space>
-                ) : (
-                  <span style={{ color: '#a0aec0' }}>已处理</span>
-                )
-            }
-          ]}
-        />
-      </Card>
+          },
+          {
+            title: '审核痕迹',
+            key: 'auditTrace',
+            width: 200,
+            ellipsis: true,
+            render: (_: unknown, row: ProductRow) =>
+              row.auditor ? `${row.auditor} / ${row.auditTime ?? ''}${row.auditRemark ? ' / ' + row.auditRemark : ''}` : '—'
+          },
+          {
+            title: '操作',
+            key: 'action',
+            width: 140,
+            render: (_: unknown, row: ProductRow) =>
+              row.publishStatus === 'pending' ? (
+                <ListRowActions>
+                  <Popconfirm title="通过后该货源对买家可见，确认？" onConfirm={() => handleAudit(row, true)}>
+                    <Button type="link" size="small">通过</Button>
+                  </Popconfirm>
+                  <Button type="link" size="small" danger onClick={() => setRejecting(row)}>驳回</Button>
+                </ListRowActions>
+              ) : (
+                <span style={{ color: '#a0aec0' }}>已处理</span>
+              )
+          }
+        ]}
+      />
 
       <Modal
         open={Boolean(rejecting)}

@@ -290,10 +290,11 @@ export function useEvaluations(params: { evaluatorId?: number | string; evaluate
   return { rows, loading, error }
 }
 
-export function useDisputes(): { rows: DisputeVO[]; loading: boolean; error: string } {
+export function useDisputes(): { rows: DisputeVO[]; loading: boolean; error: string; reload: () => void } {
   const [rows, setRows] = useState<DisputeVO[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -307,8 +308,8 @@ export function useDisputes(): { rows: DisputeVO[]; loading: boolean; error: str
       .catch(() => { if (!cancelled) setError('加载售后工单失败') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [])
-  return { rows, loading, error }
+  }, [tick])
+  return { rows, loading, error, reload: () => setTick((value) => value + 1) }
 }
 
 export function useProducts(sellerId: string | null): {

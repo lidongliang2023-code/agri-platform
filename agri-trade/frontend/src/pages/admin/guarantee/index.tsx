@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Alert, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Select, Space, Table, Tag, message
+  Alert, Button, Descriptions, Form, Input, InputNumber, Modal, Select, Table, Tag, message
 } from 'antd'
-import { EyeOutlined, LockOutlined, ReloadOutlined, UnlockOutlined } from '@ant-design/icons'
+import { ListRowActions } from '@agri/shared'
 import {
   freezeGuarantee, getGuaranteeLogs, getGuarantees, unfreezeGuarantee, verifyGuarantee,
   type GuaranteeLogRow, type GuaranteeRow
 } from '@/api/guarantee'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 const STATUS: Record<string, { text: string; color: string }> = {
   pending: { text: '待审核', color: 'warning' },
@@ -32,16 +33,12 @@ const ACTION: Record<string, string> = {
 
 /**
  * 保证金管理（运营端）。
- *
- * 保证金是商家押在平台、用于赔付的钱。这一页做三件事：审核开立、按需冻结/解冻、查流水。
- *
- * 冻结/解冻必须填原因，并且每一步都会写一条流水（含动作前后的可用与冻结额）——
- * 原先这些动作只改账户上的四个数字、不留记录，商家来问"我的钱为什么被冻了"就只能对着净额猜。
  */
 export default function AdminGuarantee() {
   const [rows, setRows] = useState<GuaranteeRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState<{ guaranteeStatus?: string; merchantName?: string }>({})
   const [draft, setDraft] = useState<{ guaranteeStatus?: string; merchantName?: string }>({})
   const [loading, setLoading] = useState(false)
@@ -59,7 +56,7 @@ export default function AdminGuarantee() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await getGuarantees({ pageNum: page, pageSize: 10, ...filters })
+      const res = await getGuarantees({ pageNum: page, pageSize, ...filters })
       if (res?.code === 200) {
         setRows(res.data?.records ?? [])
         setTotal(Number(res.data?.total ?? 0))
@@ -71,11 +68,22 @@ export default function AdminGuarantee() {
     } finally {
       setLoading(false)
     }
-  }, [page, filters])
+  }, [page, pageSize, filters])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const handleQuery = () => {
+    setPage(1)
+    setFilters({ ...draft, merchantName: draft.merchantName?.trim() || undefined })
+  }
+
+  const handleReset = () => {
+    setDraft({})
+    setFilters({})
+    setPage(1)
+  }
 
   const openLogs = async (row: GuaranteeRow) => {
     setLogRow(row)
@@ -140,65 +148,108 @@ export default function AdminGuarantee() {
 
   return (
     <div style={{ padding: 20 }}>
-      <Card title={`保证金账户 ${total} 个`}>
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="冻结与解冻必须填写原因，并会留下流水"
-          description="每次动作都会记下金额与动作前后的可用/冻结额，商家来问「我的钱为什么被冻了」时能答得上。审核开立只有「待审核」的账户可以做。"
-        />
-        <Space style={{ marginBottom: 12 }} wrap>
-          <Select placeholder="账户状态" style={{ width: 140 }} allowClear
-            onChange={(v) => setDraft((p) => ({ ...p, guaranteeStatus: v }))}
-            options={Object.entries(STATUS).map(([value, item]) => ({ value, label: item.text }))} />
-          <Input placeholder="主体名称" style={{ width: 180 }} allowClear
-            onChange={(e) => setDraft((p) => ({ ...p, merchantName: e.target.value || undefined }))} />
-          <Button type="primary" onClick={() => { setPage(1); setFilters(draft) }}>查询</Button>
-          <Button onClick={() => { setDraft({}); setFilters({}); setPage(1) }}>重置</Button>
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
-        </Space>
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={rows}
-          scroll={{ x: 1400 }}
-          locale={{ emptyText: '暂无保证金账户' }}
-          pagination={{ current: page, pageSize: 10, total, onChange: setPage }}
-          columns={[
-            { title: '主体', dataIndex: 'merchantName', width: 170, render: (v: string) => v ?? '—' },
-            { title: '保证金单号', dataIndex: 'guaranteeNo', width: 180 },
-            { title: '类型', dataIndex: 'guaranteeType', width: 110,
-              render: (v: string) => TYPE[v] ?? v ?? '—' },
-            { title: '总额', dataIndex: 'totalAmount', width: 130, align: 'right' as const, render: money },
-            { title: '可用', dataIndex: 'availableAmount', width: 130, align: 'right' as const, render: money },
-            { title: '冻结', dataIndex: 'frozenAmount', width: 120, align: 'right' as const, render: money },
-            { title: '已用', dataIndex: 'usedAmount', width: 120, align: 'right' as const, render: money },
-            { title: '状态', dataIndex: 'guaranteeStatus', width: 100,
-              render: (v: string) => <Tag color={STATUS[v]?.color ?? 'default'}>{STATUS[v]?.text ?? v}</Tag> },
-            { title: '到期时间', dataIndex: 'expireTime', width: 170, render: (v: string) => v ?? '—' },
-            {
-              title: '操作',
-              width: 230,
-              fixed: 'right' as const,
-              render: (_: unknown, row: GuaranteeRow) => (
-                <Space size={0}>
-                  <Button type="link" icon={<EyeOutlined />} onClick={() => openLogs(row)}>流水</Button>
-                  {row.guaranteeStatus === 'pending' && (
-                    <Button type="link" onClick={() => { setVerifyRow(row); verifyForm.setFieldsValue({ status: 'active' }) }}>审核</Button>
-                  )}
-                  {row.guaranteeStatus === 'active' && (
-                    <>
-                      <Button type="link" icon={<LockOutlined />} onClick={() => { setFreezeRow(row); freezeForm.resetFields() }}>冻结</Button>
-                      <Button type="link" icon={<UnlockOutlined />} onClick={() => { setUnfreezeRow(row); unfreezeForm.resetFields() }}>解冻</Button>
-                    </>
-                  )}
-                </Space>
-              )
-            }
-          ]}
-        />
-      </Card>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="冻结与解冻必须填写原因，并会留下流水"
+        description="每次动作都会记下金额与动作前后的可用/冻结额，商家来问「我的钱为什么被冻了」时能答得上。审核开立只有「待审核」的账户可以做。"
+      />
+
+      <TradeList<GuaranteeRow>
+        listId="admin-guarantee"
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={<span style={{ fontWeight: 600 }}>保证金账户（共 {total} 个）</span>}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={handleQuery}
+            onReset={handleReset}
+            fields={[
+              {
+                label: '账户状态',
+                control: (
+                  <Select
+                    allowClear
+                    value={draft.guaranteeStatus}
+                    placeholder="全部状态"
+                    onChange={(v) => setDraft((p) => ({ ...p, guaranteeStatus: v }))}
+                    options={Object.entries(STATUS).map(([value, item]) => ({ value, label: item.text }))}
+                  />
+                ),
+              },
+              {
+                label: '主体名称',
+                control: (
+                  <Input
+                    allowClear
+                    value={draft.merchantName}
+                    placeholder="按主体名称搜索"
+                    onChange={(e) => setDraft((p) => ({ ...p, merchantName: e.target.value || undefined }))}
+                    onPressEnter={handleQuery}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        locale={{ emptyText: '暂无保证金账户' }}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          onChange: (nextPage, nextSize) => {
+            setPage(nextPage)
+            setPageSize(nextSize)
+          },
+        }}
+        columns={[
+          { title: '主体', dataIndex: 'merchantName', width: 170, ellipsis: true, render: (v: string) => v ?? '—' },
+          { title: '保证金单号', dataIndex: 'guaranteeNo', width: 180, ellipsis: true },
+          { title: '类型', dataIndex: 'guaranteeType', width: 110, render: (v: string) => TYPE[v] ?? v ?? '—' },
+          { title: '总额', dataIndex: 'totalAmount', width: 130, render: money },
+          { title: '可用', dataIndex: 'availableAmount', width: 130, render: money },
+          { title: '冻结', dataIndex: 'frozenAmount', width: 120, render: money },
+          { title: '已用', dataIndex: 'usedAmount', width: 120, render: money },
+          {
+            title: '状态',
+            dataIndex: 'guaranteeStatus',
+            width: 104,
+            render: (v: string) => <Tag color={STATUS[v]?.color ?? 'default'}>{STATUS[v]?.text ?? v}</Tag>
+          },
+          { title: '到期时间', dataIndex: 'expireTime', width: 170, render: (v: string) => v ?? '—' },
+          {
+            title: '操作',
+            key: 'action',
+            width: 150,
+            render: (_: unknown, row: GuaranteeRow) => (
+              <ListRowActions
+                items={[
+                  <Button key="logs" type="link" size="small" onClick={() => openLogs(row)}>流水</Button>,
+                  row.guaranteeStatus === 'pending' && (
+                    <Button key="verify" type="link" size="small" onClick={() => { setVerifyRow(row); verifyForm.setFieldsValue({ status: 'active' }) }}>
+                      审核
+                    </Button>
+                  ),
+                  row.guaranteeStatus === 'active' && (
+                    <Button key="freeze" type="link" size="small" onClick={() => { setFreezeRow(row); freezeForm.resetFields() }}>
+                      冻结
+                    </Button>
+                  ),
+                  row.guaranteeStatus === 'active' && (
+                    <Button key="unfreeze" type="link" size="small" onClick={() => { setUnfreezeRow(row); unfreezeForm.resetFields() }}>
+                      解冻
+                    </Button>
+                  ),
+                ]}
+              />
+            )
+          }
+        ]}
+      />
 
       <Modal title="审核保证金账户" open={!!verifyRow} onCancel={() => setVerifyRow(null)}
         onOk={submitVerify} confirmLoading={saving} destroyOnClose>

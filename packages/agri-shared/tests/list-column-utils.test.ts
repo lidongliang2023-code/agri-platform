@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_RESIZABLE_COLUMN_WIDTH,
   MIN_RESIZABLE_COLUMN_WIDTH,
+  clampColumnWidth,
+  deriveColumnWidthStorageKey,
   isActionColumnMeta,
   isNumericColumnMeta,
   isStatusColumnMeta,
@@ -42,12 +45,23 @@ describe('listColumnUtils：跨子系统列表列元信息与持久化校验', (
       parseStoredWidths(
         JSON.stringify({
           valid: MIN_RESIZABLE_COLUMN_WIDTH,
-          wider: 240,
+          wider: 240.4,
           tooNarrow: 40,
+          tooWide: MAX_RESIZABLE_COLUMN_WIDTH + 100,
           notNum: '120',
         }),
       ),
     ).toEqual({ valid: 80, wider: 240 })
+
+    expect(clampColumnWidth(50)).toBe(MIN_RESIZABLE_COLUMN_WIDTH)
+    expect(clampColumnWidth(2000)).toBe(MAX_RESIZABLE_COLUMN_WIDTH)
+    expect(clampColumnWidth(185.6)).toBe(186)
+    expect(clampColumnWidth(Number.NaN, 100)).toBe(100)
+
+    expect(deriveColumnWidthStorageKey('custom:widths', 'cols:key')).toBe('custom:widths')
+    expect(deriveColumnWidthStorageKey(undefined, 'cols:key')).toBe('cols:key:widths')
+    expect(deriveColumnWidthStorageKey(false, 'cols:key')).toBeNull()
+    expect(deriveColumnWidthStorageKey(undefined, false)).toBeNull()
   })
 
   it('解析与清洗隐藏列键，并生成稳定的列键', () => {

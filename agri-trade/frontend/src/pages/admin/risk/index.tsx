@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Select, Space, Statistic, Table, Tag, message } from 'antd'
-import { EyeOutlined, ReloadOutlined, SafetyOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Select, Statistic, Tag, message } from 'antd'
+import { SafetyOutlined } from '@ant-design/icons'
+import { ListRowActions } from '@agri/shared'
 import { getRiskAlerts, getRiskRules, getRiskSummary, handleRiskAlert, scanRisk, type RiskAlertRow, type RiskRule, type RiskSummary } from '@/api/risk'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 const LEVEL: Record<string, { text: string; color: string }> = {
   high: { text: '高', color: 'error' },
@@ -23,12 +25,6 @@ const SUBJECT_TYPE: Record<string, string> = {
 
 /**
  * 风控管理（运营端）。
- *
- * 三条规则的判定依据都写在服务端，且 detail 里带着当时算出的真实数字，
- * 运营可以自己对账。阈值在「系统配置」里调整，改了下次扫描即生效。
- *
- * 扫描是**按需触发**的：三条规则依赖运营自己定的阈值，自动跑会让人不知道
- * 告警是按哪套阈值出来的。
  */
 export default function AdminRisk() {
   const [summary, setSummary] = useState<RiskSummary | null>(null)
@@ -36,6 +32,7 @@ export default function AdminRisk() {
   const [rows, setRows] = useState<RiskAlertRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [filters, setFilters] = useState<{ alertStatus?: string; alertLevel?: string; ruleCode?: string }>({})
   const [draft, setDraft] = useState<{ alertStatus?: string; alertLevel?: string; ruleCode?: string }>({})
   const [loading, setLoading] = useState(false)
@@ -51,7 +48,7 @@ export default function AdminRisk() {
       const [s, r, a] = await Promise.all([
         getRiskSummary(),
         getRiskRules(),
-        getRiskAlerts({ pageNum: page, pageSize: 10, ...filters })
+        getRiskAlerts({ pageNum: page, pageSize, ...filters })
       ])
       if (s?.code === 200) setSummary(s.data)
       if (r?.code === 200) setRules(r.data ?? [])
@@ -64,7 +61,7 @@ export default function AdminRisk() {
     } finally {
       setLoading(false)
     }
-  }, [page, filters])
+  }, [page, pageSize, filters])
 
   useEffect(() => {
     load()
@@ -113,97 +110,168 @@ export default function AdminRisk() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <Row gutter={16} style={{ marginBottom: 16 }}>
+    <div style={{ padding: 20, display: 'grid', gap: 16 }}>
+      <Row gutter={16}>
         <Col span={8}><Card><Statistic title="待处理告警" value={summary?.newCount ?? 0} suffix="条" /></Card></Col>
         <Col span={8}><Card><Statistic title="已处理" value={summary?.handledCount ?? 0} suffix="条" /></Card></Col>
         <Col span={8}><Card><Statistic title="已忽略" value={summary?.ignoredCount ?? 0} suffix="条" /></Card></Col>
       </Row>
 
-      <Card
-        title="风控规则（当期阈值）"
-        style={{ marginBottom: 16 }}
-        extra={
-          <Space>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
-            <Button type="primary" icon={<SafetyOutlined />} loading={scanning} onClick={doScan}>执行扫描</Button>
-          </Space>
-        }
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="扫描是按需触发的，不是定时任务"
-          description="三条规则都依赖运营自己定的阈值，自动跑会让人不知道告警是按哪套阈值出来的。阈值在「系统配置 → 风控」里调整，改了下次扫描即生效。同一条规则 + 同一个对象在未处理时只保留一条，不会每次扫描都刷重复。"
-        />
-        <Table
-          rowKey="ruleCode"
-          size="small"
-          pagination={false}
-          dataSource={rules}
-          columns={[
-            { title: '规则', dataIndex: 'ruleName', width: 120 },
-            { title: '等级', dataIndex: 'alertLevel', width: 80,
-              render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag> },
-            { title: '阈值配置键', dataIndex: 'thresholdKey', width: 260,
-              render: (v: string) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{v}</span> },
-            { title: '当前阈值', dataIndex: 'thresholdValue', width: 110,
-              render: (v: string) => v ?? '（用默认值）' },
-            { title: '判定依据', dataIndex: 'description' }
-          ]}
-        />
-      </Card>
+      <Alert
+        type="info"
+        showIcon
+        message="扫描是按需触发的，不是定时任务"
+        description="三条规则都依赖运营自己定的阈值，自动跑会让人不知道告警是按哪套阈值出来的。阈值在「系统配置 → 风控」里调整，改了下次扫描即生效。同一条规则 + 同一个对象在未处理时只保留一条，不会每次扫描都刷重复。"
+      />
 
-      <Card title={`告警 ${total} 条`}>
-        <Space style={{ marginBottom: 12 }} wrap>
-          <Select placeholder="处理状态" style={{ width: 130 }} allowClear
-            onChange={(v) => setDraft((p) => ({ ...p, alertStatus: v }))}
-            options={Object.entries(STATUS).map(([value, item]) => ({ value, label: item.text }))} />
-          <Select placeholder="等级" style={{ width: 110 }} allowClear
-            onChange={(v) => setDraft((p) => ({ ...p, alertLevel: v }))}
-            options={Object.entries(LEVEL).map(([value, item]) => ({ value, label: item.text }))} />
-          <Select placeholder="规则" style={{ width: 150 }} allowClear
-            onChange={(v) => setDraft((p) => ({ ...p, ruleCode: v }))}
-            options={rules.map((r) => ({ value: r.ruleCode, label: r.ruleName }))} />
-          <Button type="primary" onClick={() => { setPage(1); setFilters(draft) }}>查询</Button>
-          <Button onClick={() => { setDraft({}); setFilters({}); setPage(1) }}>重置</Button>
-        </Space>
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={rows}
-          scroll={{ x: 1300 }}
-          locale={{ emptyText: '还没有告警，点右上角「执行扫描」跑一次' }}
-          pagination={{ current: page, pageSize: 10, total, onChange: setPage }}
-          columns={[
-            { title: '告警编号', dataIndex: 'alertNo', width: 190, ellipsis: true },
-            { title: '规则', dataIndex: 'ruleName', width: 110 },
-            { title: '等级', dataIndex: 'alertLevel', width: 80,
-              render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag> },
-            { title: '对象', dataIndex: 'subjectName', width: 190,
-              render: (v: string, row: RiskAlertRow) => `${SUBJECT_TYPE[row.subjectType] ?? row.subjectType}：${v ?? row.subjectId}` },
-            { title: '告警', dataIndex: 'title', width: 200 },
-            { title: '判定依据', dataIndex: 'detail', ellipsis: true },
-            { title: '状态', dataIndex: 'alertStatus', width: 100,
-              render: (v: string) => <Tag color={STATUS[v]?.color ?? 'default'}>{STATUS[v]?.text ?? v}</Tag> },
-            { title: '检出时间', dataIndex: 'detectedAt', width: 170 },
-            {
-              title: '操作',
-              width: 150,
-              fixed: 'right' as const,
-              render: (_: unknown, row: RiskAlertRow) => (
-                <Space size={0}>
-                  <Button type="link" icon={<EyeOutlined />} onClick={() => setDetail(row)}>详情</Button>
-                  {row.alertStatus === 'new' && (
-                    <Button type="link" onClick={() => { setHandleRow(row); form.setFieldsValue({ status: 'handled' }) }}>处理</Button>
-                  )}
-                </Space>
-              )
-            }
-          ]}
-        />
-      </Card>
+      <TradeList<RiskRule>
+        listId="admin-risk-rules"
+        rowKey="ruleCode"
+        size="small"
+        loading={loading}
+        dataSource={rules}
+        onRefresh={load}
+        toolbarLeft={(
+          <>
+            <Button type="primary" icon={<SafetyOutlined />} loading={scanning} onClick={doScan}>
+              执行扫描
+            </Button>
+            <span style={{ fontWeight: 600 }}>风控规则（当期阈值）</span>
+          </>
+        )}
+        columns={[
+          { title: '规则', dataIndex: 'ruleName', width: 130, ellipsis: true },
+          {
+            title: '等级',
+            dataIndex: 'alertLevel',
+            width: 96,
+            render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag>
+          },
+          {
+            title: '阈值配置键',
+            dataIndex: 'thresholdKey',
+            width: 260,
+            ellipsis: true,
+            render: (v: string) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{v}</span>
+          },
+          { title: '当前阈值', dataIndex: 'thresholdValue', width: 120, render: (v: string) => v ?? '（用默认值）' },
+          { title: '判定依据', dataIndex: 'description', width: 320, ellipsis: true }
+        ]}
+      />
+
+      <TradeList<RiskAlertRow>
+        listId="admin-risk-alerts"
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={<span style={{ fontWeight: 600 }}>风控告警（共 {total} 条）</span>}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={() => {
+              setPage(1)
+              setFilters(draft)
+            }}
+            onReset={() => {
+              setDraft({})
+              setFilters({})
+              setPage(1)
+            }}
+            fields={[
+              {
+                label: '处理状态',
+                control: (
+                  <Select
+                    allowClear
+                    value={draft.alertStatus}
+                    placeholder="全部状态"
+                    onChange={(v) => setDraft((p) => ({ ...p, alertStatus: v }))}
+                    options={Object.entries(STATUS).map(([value, item]) => ({ value, label: item.text }))}
+                  />
+                ),
+              },
+              {
+                label: '告警等级',
+                control: (
+                  <Select
+                    allowClear
+                    value={draft.alertLevel}
+                    placeholder="全部等级"
+                    onChange={(v) => setDraft((p) => ({ ...p, alertLevel: v }))}
+                    options={Object.entries(LEVEL).map(([value, item]) => ({ value, label: item.text }))}
+                  />
+                ),
+              },
+              {
+                label: '风控规则',
+                control: (
+                  <Select
+                    allowClear
+                    value={draft.ruleCode}
+                    placeholder="全部规则"
+                    onChange={(v) => setDraft((p) => ({ ...p, ruleCode: v }))}
+                    options={rules.map((r) => ({ value: r.ruleCode, label: r.ruleName }))}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        locale={{ emptyText: '还没有告警，点上方「执行扫描」跑一次' }}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          onChange: (nextPage, nextSize) => {
+            setPage(nextPage)
+            setPageSize(nextSize)
+          },
+        }}
+        columns={[
+          { title: '告警编号', dataIndex: 'alertNo', width: 190, ellipsis: true },
+          { title: '规则', dataIndex: 'ruleName', width: 110, ellipsis: true },
+          {
+            title: '等级',
+            dataIndex: 'alertLevel',
+            width: 92,
+            render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag>
+          },
+          {
+            title: '对象',
+            dataIndex: 'subjectName',
+            width: 190,
+            ellipsis: true,
+            render: (v: string, row: RiskAlertRow) => `${SUBJECT_TYPE[row.subjectType] ?? row.subjectType}：${v ?? row.subjectId}`
+          },
+          { title: '告警', dataIndex: 'title', width: 200, ellipsis: true },
+          { title: '判定依据', dataIndex: 'detail', width: 240, ellipsis: true },
+          {
+            title: '状态',
+            dataIndex: 'alertStatus',
+            width: 104,
+            render: (v: string) => <Tag color={STATUS[v]?.color ?? 'default'}>{STATUS[v]?.text ?? v}</Tag>
+          },
+          { title: '检出时间', dataIndex: 'detectedAt', width: 170 },
+          {
+            title: '操作',
+            key: 'action',
+            width: 130,
+            render: (_: unknown, row: RiskAlertRow) => (
+              <ListRowActions
+                items={[
+                  <Button key="detail" type="link" size="small" onClick={() => setDetail(row)}>详情</Button>,
+                  row.alertStatus === 'new' && (
+                    <Button key="handle" type="link" size="small" onClick={() => { setHandleRow(row); form.setFieldsValue({ status: 'handled' }) }}>
+                      处理
+                    </Button>
+                  ),
+                ]}
+              />
+            )
+          }
+        ]}
+      />
 
       <Modal title="处理告警" open={!!handleRow} onCancel={() => setHandleRow(null)} onOk={submitHandle}
         confirmLoading={saving} destroyOnClose>

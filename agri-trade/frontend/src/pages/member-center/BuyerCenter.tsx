@@ -1,3 +1,6 @@
+import type { TablePaginationConfig } from 'antd'
+import { ListRowActions } from '@agri/shared'
+import { TradeList, TradeFilters } from '@/components/TradeList'
 import TradeAgentPanel from './TradeAgentPanel'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -14,7 +17,6 @@ import {
   HeartOutlined,
   HomeOutlined,
   SafetyCertificateOutlined,
-  SearchOutlined,
   SendOutlined,
   ShoppingCartOutlined,
   StarOutlined,
@@ -58,17 +60,17 @@ import {
 } from './shared'
 
 const NAV: MemberNavItem[] = [
-  { key: 'agent', label: '采购 Agent', icon: <FileTextOutlined /> },
-  { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
-  { key: 'demand-list', label: '采购需求', icon: <FileSearchOutlined /> },
-  { key: 'inquiry', label: '询价与报价', icon: <FileSearchOutlined /> },
-  { key: 'chat', label: '洽谈消息', icon: <CustomerServiceOutlined /> },
-  { key: 'purchase', label: '采购订单', icon: <ShoppingCartOutlined /> },
-  { key: 'after', label: '收货与售后', icon: <TruckOutlined /> },
-  { key: 'rate', label: '采购评价', icon: <StarOutlined /> },
-  { key: 'contract', label: '合同管理', icon: <FileTextOutlined /> },
-  { key: 'fund', label: '资金与发票', icon: <DollarOutlined /> },
-  { key: 'favorite', label: '收藏与关注', icon: <HeartOutlined /> },
+  { key: 'agent', label: '采购 Agent', icon: <FileTextOutlined />, group: '交易寻源' },
+  { key: 'overview', label: '首页概览', icon: <HomeOutlined />, group: '交易寻源' },
+  { key: 'demand-list', label: '采购需求', icon: <FileSearchOutlined />, group: '交易寻源' },
+  { key: 'inquiry', label: '询价与报价', icon: <FileSearchOutlined />, group: '交易寻源' },
+  { key: 'chat', label: '洽谈消息', icon: <CustomerServiceOutlined />, group: '交易寻源' },
+  { key: 'purchase', label: '采购订单', icon: <ShoppingCartOutlined />, group: '订单履约' },
+  { key: 'after', label: '收货与售后', icon: <TruckOutlined />, group: '订单履约' },
+  { key: 'rate', label: '采购评价', icon: <StarOutlined />, group: '订单履约' },
+  { key: 'contract', label: '合同管理', icon: <FileTextOutlined />, group: '资产与账务' },
+  { key: 'fund', label: '资金与发票', icon: <DollarOutlined />, group: '资产与账务' },
+  { key: 'favorite', label: '收藏与关注', icon: <HeartOutlined />, group: '资产与账务' },
 ]
 
 const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
@@ -119,10 +121,15 @@ export default function BuyerCenter(): JSX.Element {
   const buyerId = buyerMerchant ? String(buyerMerchant.merchantId) : null
   const allOrders = useOrders('buyer', '', 1, 100)
   const [status, setStatus] = useState('')
+  const [draftOrderStatus, setDraftOrderStatus] = useState('')
   const [demandKeyword, setDemandKeyword] = useState('')
   const [demandStatus, setDemandStatus] = useState('')
+  const [draftDemandKeyword, setDraftDemandKeyword] = useState('')
+  const [draftDemandStatus, setDraftDemandStatus] = useState('')
+  const [demandPage, setDemandPage] = useState(1)
   const [page, setPage] = useState(1)
-  const pagedOrders = useOrders('buyer', status, page, 10)
+  const [pageSize, setPageSize] = useState(20)
+  const pagedOrders = useOrders('buyer', status, page, pageSize)
   const demands = useDemands(buyerId)
   const inquiries = useMyInquiryRows()
   const disputes = useDisputes()
@@ -204,9 +211,6 @@ export default function BuyerCenter(): JSX.Element {
     if (active === 'favorite') loadFollowing()
   }, [active, loadFollowing])
 
-  useEffect(() => {
-    setPage(1)
-  }, [status])
 
   useEffect(() => {
     if (active === 'demand-list') demands.reload()
@@ -291,7 +295,7 @@ export default function BuyerCenter(): JSX.Element {
   }
 
   const orderActions = (order: OrderRow): JSX.Element => (
-    <div className="mc-actions">
+    <ListRowActions>
       <a className="mc-link" href={`/order/detail/${order.id}`}>查看详情</a>
       {order.orderStatus === 'shipped' && (
         <button type="button" className="mc-link" onClick={() => confirmReceive(order)}>确认收货</button>
@@ -299,7 +303,7 @@ export default function BuyerCenter(): JSX.Element {
       {['received', 'completed'].includes(order.orderStatus) && !evaluatedOrderIds.has(order.id) && (
         <a className="mc-link" href="/evaluation">去评价</a>
       )}
-    </div>
+    </ListRowActions>
   )
 
   const acceptBuyerQuote = async (quote: QuoteVO): Promise<void> => {
@@ -362,6 +366,8 @@ export default function BuyerCenter(): JSX.Element {
           <button type="button" className={`buyer-task ${item.tone}`} key={item.label}
             onClick={() => {
               setStatus(item.status)
+              setDraftOrderStatus(item.status)
+              setPage(1)
               setActive('purchase')
             }}>
             <span className="buyer-task-icon">{item.icon}</span>
@@ -468,97 +474,55 @@ export default function BuyerCenter(): JSX.Element {
         </div>
       </section>
 
-      <div className="mc-toolbar buyer-demand-toolbar">
-        <Input allowClear prefix={<SearchOutlined />} value={demandKeyword}
-          onChange={(event) => setDemandKeyword(event.target.value)}
-          placeholder="搜索需求编号、标题、品类或品种" />
-        <Select value={demandStatus} onChange={setDemandStatus} style={{ width: 132 }}
-          options={[
+      <TradeList
+            listId="buyer-demands"
+            rowKey="id"
+            dataSource={filteredDemands}
+            onRefresh={demands.reload}
+            loading={demands.loading}
+            pagination={{ current: demandPage, onChange: setDemandPage }}
+            filterSlot={<TradeFilters fields={[
+              { label: '关键字', control: <Input allowClear value={draftDemandKeyword} onChange={(event) => setDraftDemandKeyword(event.target.value)} placeholder="需求编号、标题、品类或品种" /> },
+              { label: '需求状态', control: <Select value={draftDemandStatus} onChange={setDraftDemandStatus} options={[
             { value: '', label: '全部状态' },
             { value: 'pending', label: '待匹配' },
             { value: 'matching', label: '匹配中' },
             { value: 'quoted', label: '报价中' },
             { value: 'completed', label: '已成交' },
             { value: 'closed', label: '已关闭' },
-          ]} />
-        <span className="mc-spacer" />
-        <button type="button" className="mc-btn ghost" onClick={demands.reload}>刷新</button>
-        <button type="button" className="mc-btn" onClick={() => setActive('publish')}>
-          <SendOutlined />发布采购需求
-        </button>
-      </div>
-
-      <Panel title={`需求列表（${filteredDemands.length}）`}
-        extra={<span className="mc-toolbar-muted">点击“查看详情”进入撮合、询价与报价工作台</span>}>
-        {demands.loading ? (
-          <div className="mc-loading">加载采购需求中…</div>
-        ) : demands.error ? (
-          <div className="mc-alert"><AlertOutlined />{demands.error}</div>
-        ) : filteredDemands.length === 0 ? (
-          <EmptyState title={demands.rows.length ? '没有符合筛选条件的需求' : '还没有采购需求'}
-            desc={demands.rows.length ? '调整关键词或状态后重试。' : '发布采购需求后，平台可辅助匹配供应商并接收正式报价。'}
-            action={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布采购需求</button>} />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead>
-                <tr><th>需求编号</th><th>需求标题</th><th>品类 / 品种</th><th>采购量</th><th>期望价</th><th>报价数</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
-              </thead>
-              <tbody>
-                {filteredDemands.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.demandNo}</td>
-                    <td><strong className="buyer-demand-name">{row.demandName || row.productName || '—'}</strong></td>
-                    <td>{row.categoryName ?? '—'} / {row.variety ?? '—'}</td>
-                    <td className="mc-mono">{row.quantity ?? '—'}</td>
-                    <td className="mc-mono">{row.priceMin != null || row.priceMax != null
-                      ? `${row.priceMin ?? '—'} ~ ${row.priceMax ?? '—'}` : '—'}</td>
-                    <td className="mc-mono">{row.responseCount ?? 0}</td>
-                    <td><span className="mc-tag tech">{demandStatusText(row.demandStatus)}</span></td>
-                    <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                    <td className="buyer-demand-row-actions">
-                      <a className="mc-link" href={`/demand/detail/${row.id}`}>查看详情</a>
+          ]} /> },
+            ]} onQuery={() => { setDemandKeyword(draftDemandKeyword); setDemandStatus(draftDemandStatus); setDemandPage(1) }}
+               onReset={() => { setDraftDemandKeyword(''); setDraftDemandStatus(''); setDemandKeyword(''); setDemandStatus(''); setDemandPage(1) }} />}
+            toolbarLeft={<button type="button" className="mc-btn" onClick={() => setActive('publish')}><SendOutlined />发布采购需求</button>}
+            locale={{ emptyText: <EmptyState title={demands.error || '没有符合条件的需求'} /> }}
+            columns={[
+              { title: "需求编号", key: 'col-1', width: 160, render: (_, row) => (<span className="mc-mono">{row.demandNo}</span>) },
+              { title: "需求标题", key: 'col-2', width: 160, render: (_, row) => (<><strong className="buyer-demand-name">{row.demandName || row.productName || '—'}</strong></>) },
+              { title: "品类 / 品种", key: 'col-3', width: 160, render: (_, row) => (<>{row.categoryName ?? '—'} / {row.variety ?? '—'}</>) },
+              { title: "采购量", key: 'col-4', width: 160, render: (_, row) => (<span className="mc-mono">{row.quantity ?? '—'}</span>) },
+              { title: "期望价", key: 'col-5', width: 160, render: (_, row) => (<span className="mc-mono">{row.priceMin != null || row.priceMax != null
+                      ? `${row.priceMin ?? '—'} ~ ${row.priceMax ?? '—'}` : '—'}</span>) },
+              { title: "报价数", key: 'col-6', width: 108, render: (_, row) => (<span className="mc-mono">{row.responseCount ?? 0}</span>) },
+              { title: "状态", key: 'col-7', width: 108, render: (_, row) => (<><span className="mc-tag tech">{demandStatusText(row.demandStatus)}</span></>) },
+              { title: "创建时间", key: 'col-8', width: 160, render: (_, row) => (<span className="mc-mono mc-xs">{shortDate(row.createTime)}</span>) },
+              { title: "操作", key: 'action', width: 170, render: (_, row) => (<span className="buyer-demand-row-actions"><a className="mc-link" href={`/demand/detail/${row.id}`}>查看详情</a>
                       <button type="button" className="mc-link"
-                        onClick={() => navigate(`/member/buyer?tab=publish&id=${row.id}`)}>编辑</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+                        onClick={() => navigate(`/member/buyer?tab=publish&id=${row.id}`)}>编辑</button></span>) },
+            ]}
+          />
     </div>
   )
 
   const renderPurchase = (): JSX.Element => (
-    <>
-      <div className="mc-toolbar">
-        <span className="mc-toolbar-label">状态</span>
-        <div className="mc-chips">
-          {BUYER_STATUS.map((item) => (
-            <button type="button" key={item.value} className={status === item.value ? 'on' : ''}
-              onClick={() => setStatus(item.value)}>{item.label}</button>
-          ))}
-        </div>
-        <span className="mc-spacer" />
-        <button type="button" className="mc-btn ghost" onClick={() => setActive('publish')}>
-          发布采购需求
-        </button>
-        <button type="button" className="mc-btn" onClick={() => navigate('/order/create')}>
-          <ShoppingCartOutlined />创建采购订单
-        </button>
-      </div>
-      <Panel title={`采购订单（${pagedOrders.total}）`}
-        extra={<span className="mc-toolbar-muted">交易大厅下单与创建采购订单均汇总于此</span>}>
-        {renderOrdersTable(pagedOrders.rows, pagedOrders.loading, pagedOrders.error, orderActions)}
-        <div className="mc-pager">
-          <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
-          <span>第 {page} / {Math.max(1, Math.ceil(pagedOrders.total / 10))} 页 · 共 {pagedOrders.total} 笔</span>
-          <button type="button" disabled={page >= Math.ceil(pagedOrders.total / 10)} onClick={() => setPage(page + 1)}>下一页</button>
-        </div>
-      </Panel>
-    </>
+    renderOrdersTable(pagedOrders.rows, pagedOrders.loading, pagedOrders.error, orderActions, {
+      onRefresh: pagedOrders.reload,
+      filterSlot: <TradeFilters fields={[
+        { label: '订单状态', control: <Select value={draftOrderStatus} onChange={setDraftOrderStatus} options={BUYER_STATUS} /> },
+      ]} onQuery={() => { setStatus(draftOrderStatus); setPage(1) }}
+         onReset={() => { setDraftOrderStatus(''); setStatus(''); setPage(1) }} />,
+      toolbarLeft: <><button type="button" className="mc-btn" onClick={() => navigate('/order/create')}>创建采购订单</button><button type="button" className="mc-btn ghost" onClick={() => setActive('publish')}>发布采购需求</button></>,
+      pagination: { current: page, pageSize, total: pagedOrders.total, onChange: (nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize) } },
+    })
   )
 
   const renderInquiry = (): JSX.Element => (
@@ -573,41 +537,32 @@ export default function BuyerCenter(): JSX.Element {
         {inquiries.rows.length === 0 ? (
           <EmptyState title="还没有询价单" desc="在交易大厅对货源发起询价后，会在这里跟踪报价与议价进展。" />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>询价单号</th><th>商品</th><th>供应方</th><th>数量</th><th>报价数</th><th>截止时间</th><th>状态</th></tr></thead>
-              <tbody>
-                {inquiries.rows.map((row) => (
-                  <tr key={row.id} tabIndex={0}
-                    className={`buyer-inquiry-row${selectedInquiryId === row.id ? ' selected' : ''}`}
-                    onClick={() => setSelectedInquiryId(selectedInquiryId === row.id ? null : row.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        setSelectedInquiryId(selectedInquiryId === row.id ? null : row.id)
-                      }
-                    }}>
-                    <td className="mc-mono">{row.inquiryNo}</td>
-                    <td>{row.productName}</td>
-                    <td>{row.sellerName}</td>
-                    <td className="mc-mono">{row.quantity} {row.unit}</td>
-                    <td className="mc-mono">{row.replyCount ?? 0}</td>
-                    <td className="mc-mono mc-xs">{shortDate(row.replyDeadline)}</td>
-                    <td>
-                      <span className={`mc-tag ${(INQUIRY_STATUS[row.inquiryStatus] ?? { tone: 'ghost' }).tone}`}>
+          <TradeList
+            listId="buyer-inquiries"
+            rowKey="id"
+            dataSource={inquiries.rows}
+            loading={inquiries.loading}
+            onRefresh={inquiries.reload}
+            rowClassName={(row) => `buyer-inquiry-row${selectedInquiryId === row.id ? ' selected' : ''}`}
+            onRow={(row) => ({ onClick: (event) => {
+              if (event.target instanceof Element && event.target.closest('.ant-table-selection-column, button, a')) return
+              setSelectedInquiryId(selectedInquiryId === row.id ? null : row.id)
+            } })}
+            columns={[
+              { title: "询价单号", key: 'col-1', width: 160, render: (_, row) => (<span className="mc-mono">{row.inquiryNo}</span>) },
+              { title: "商品", key: 'col-2', width: 160, render: (_, row) => (<>{row.productName}</>) },
+              { title: "供应方", key: 'col-3', width: 160, render: (_, row) => (<>{row.sellerName}</>) },
+              { title: "数量", key: 'col-4', width: 108, render: (_, row) => (<span className="mc-mono">{row.quantity} {row.unit}</span>) },
+              { title: "报价数", key: 'col-5', width: 108, render: (_, row) => (<span className="mc-mono">{row.replyCount ?? 0}</span>) },
+              { title: "截止时间", key: 'col-6', width: 160, render: (_, row) => (<span className="mc-mono mc-xs">{shortDate(row.replyDeadline)}</span>) },
+              { title: "状态", key: 'col-7', width: 108, render: (_, row) => (<><span className={`mc-tag ${(INQUIRY_STATUS[row.inquiryStatus] ?? { tone: 'ghost' }).tone}`}>
                         {(INQUIRY_STATUS[row.inquiryStatus] ?? { text: row.inquiryStatus || '未知' }).text}
-                      </span>
-                    </td>
-                    <td>
-                      <button type="button" className="mc-link">
+                      </span></>) },
+              { title: "操作", key: 'action', width: 170, render: (_, row) => (<><button type="button" className="mc-link" onClick={(event) => { event.stopPropagation(); setSelectedInquiryId(selectedInquiryId === row.id ? null : row.id) }}>
                         {selectedInquiryId === row.id ? '收起报价' : '查看报价'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </button></>) },
+            ]}
+          />
         )}
       </Panel>
       <Panel
@@ -627,28 +582,24 @@ export default function BuyerCenter(): JSX.Element {
               ? '供应商提交报价后会自动显示在这张询价单下。'
               : '询价发起后，供应方提交的报价会在这里显示，可直接受理并生成采购订单。'} />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>报价单号</th><th>供应商</th><th>商品</th><th>单价</th><th>数量</th><th>运费</th><th>总价</th><th>状态</th><th>操作</th></tr></thead>
-              <tbody>
-                {quotes
-                  .filter((quote) => !selectedInquiryId || quote.inquiryId === selectedInquiryId)
-                  .map((quote) => (
-                  <tr key={quote.id}>
-                    <td className="mc-mono">{quote.quoteNo}</td>
-                    <td>{quote.sellerName ?? '—'}</td>
-                    <td>{quote.productName ?? '—'}</td>
-                    <td className="mc-price">{money(quote.unitPrice)}</td>
-                    <td className="mc-mono">{quote.quantity} {quote.unit ?? ''}</td>
-                    <td className="mc-price">{money(quote.freightAmount ?? 0)}</td>
-                    <td className="mc-price">{money(quote.totalAmount)}</td>
-                    <td>
-                      <span className={`mc-tag ${quote.quoteStatus === 'pending' ? 'amber' : quote.quoteStatus === 'rejected' ? 'red' : 'green'}`}>
+          <TradeList
+            key={selectedInquiryId ?? 'all'}
+            listId="buyer-quotes"
+            rowKey="id"
+            dataSource={quotes.filter((quote) => !selectedInquiryId || quote.inquiryId === selectedInquiryId)}
+            onRefresh={loadQuotes}
+            columns={[
+              { title: "报价单号", key: 'col-1', width: 160, render: (_, quote) => (<span className="mc-mono">{quote.quoteNo}</span>) },
+              { title: "供应商", key: 'col-2', width: 160, render: (_, quote) => (<>{quote.sellerName ?? '—'}</>) },
+              { title: "商品", key: 'col-3', width: 160, render: (_, quote) => (<>{quote.productName ?? '—'}</>) },
+              { title: "单价", key: 'col-4', width: 160, render: (_, quote) => (<span className="mc-price">{money(quote.unitPrice)}</span>) },
+              { title: "数量", key: 'col-5', width: 108, render: (_, quote) => (<span className="mc-mono">{quote.quantity} {quote.unit ?? ''}</span>) },
+              { title: "运费", key: 'col-6', width: 160, render: (_, quote) => (<span className="mc-price">{money(quote.freightAmount ?? 0)}</span>) },
+              { title: "总价", key: 'col-7', width: 160, render: (_, quote) => (<span className="mc-price">{money(quote.totalAmount)}</span>) },
+              { title: "状态", key: 'col-8', width: 108, render: (_, quote) => (<><span className={`mc-tag ${quote.quoteStatus === 'pending' ? 'amber' : quote.quoteStatus === 'rejected' ? 'red' : 'green'}`}>
                         {quote.quoteStatus === 'pending' ? '待受理' : quote.quoteStatus === 'accepted' ? '已受理' : quote.quoteStatus === 'rejected' ? '已拒绝' : quote.quoteStatus}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="buyer-quote-actions">
+                      </span></>) },
+              { title: "操作", key: 'action', width: 170, render: (_, quote) => (<><ListRowActions>
                         <button type="button" className="mc-link"
                           onClick={() => setChatTarget({
                             sellerId: String(quote.sellerId),
@@ -663,13 +614,9 @@ export default function BuyerCenter(): JSX.Element {
                         ) : quote.orderId ? (
                           <a className="mc-link" href={`/order/detail/${quote.orderId}`}>查看订单</a>
                         ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </ListRowActions></>) },
+            ]}
+          />
         )}
       </Panel>
     </>
@@ -686,51 +633,44 @@ export default function BuyerCenter(): JSX.Element {
         {myDisputes.length === 0 ? (
           <EmptyState title="没有进行中的售后工单" desc="从订单详情或纠纷管理发起售后，工单会在这里汇总。" />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>工单号</th><th>关联订单</th><th>类型</th><th>问题描述</th><th>状态</th><th>提交时间</th></tr></thead>
-              <tbody>
-                {myDisputes.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.disputeNo}</td>
-                    <td className="mc-mono">{row.orderId}</td>
-                    <td>{row.disputeType ?? '—'}</td>
-                    <td className="mc-wrap-text">{row.disputeDescription ?? row.disputeReason ?? '—'}</td>
-                    <td><span className="mc-tag amber">{row.disputeStatus ?? '处理中'}</span></td>
-                    <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TradeList
+            listId="buyer-disputes"
+            rowKey="id"
+            dataSource={myDisputes}
+            loading={disputes.loading}
+            onRefresh={disputes.reload}
+            columns={[
+              { title: "工单号", key: 'col-1', width: 160, render: (_, row) => (<span className="mc-mono">{row.disputeNo}</span>) },
+              { title: "关联订单", key: 'col-2', width: 160, render: (_, row) => (<span className="mc-mono">{row.orderId}</span>) },
+              { title: "类型", key: 'col-3', width: 160, render: (_, row) => (<>{row.disputeType ?? '—'}</>) },
+              { title: "问题描述", key: 'col-4', width: 220, render: (_, row) => (<span className="mc-wrap-text">{row.disputeDescription ?? row.disputeReason ?? '—'}</span>) },
+              { title: "状态", key: 'col-5', width: 108, render: (_, row) => (<><span className="mc-tag amber">{row.disputeStatus ?? '处理中'}</span></>) },
+              { title: "提交时间", key: 'col-6', width: 160, render: (_, row) => (<span className="mc-mono mc-xs">{shortDate(row.createTime)}</span>) },
+            ]}
+          />
         )}
       </Panel>
       <Panel title="退款与售后进度">
         {refunds.length === 0 ? (
           <EmptyState title="暂无退款记录" desc="收货后如遇质量问题，可从订单详情发起退货退款；审核进度会显示在这里。" />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>退款单号</th><th>订单号</th><th>类型</th><th>退款金额</th><th>原因</th><th>状态</th><th>审核意见</th><th>申请时间</th></tr></thead>
-              <tbody>
-                {refunds.map((row) => {
-                  const status = REFUND_STATUS[row.refundStatus] ?? { text: row.refundStatus, tone: 'ghost' }
-                  return (
-                    <tr key={row.id}>
-                      <td className="mc-mono">{row.refundNo}</td>
-                      <td className="mc-mono">{row.orderNo}</td>
-                      <td>{row.refundType === 'return_refund' ? '退货退款' : row.refundType === 'refund_only' ? '仅退款' : row.refundType}</td>
-                      <td className="mc-price">{money(row.refundAmount)}</td>
-                      <td className="mc-wrap-text">{row.refundReason ?? '—'}</td>
-                      <td><span className={`mc-tag ${status.tone}`}>{status.text}</span></td>
-                      <td className="mc-wrap-text">{row.reviewRemark ?? '—'}</td>
-                      <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <TradeList
+            listId="buyer-refunds"
+            rowKey="id"
+            dataSource={refunds}
+            onRefresh={loadRefunds}
+            columns={[
+              { title: "退款单号", key: 'col-1', width: 160, render: (_, row) => (<span className="mc-mono">{row.refundNo}</span>) },
+              { title: "订单号", key: 'col-2', width: 160, render: (_, row) => (<span className="mc-mono">{row.orderNo}</span>) },
+              { title: "类型", key: 'col-3', width: 160, render: (_, row) => (<>{row.refundType === 'return_refund' ? '退货退款' : row.refundType === 'refund_only' ? '仅退款' : row.refundType}</>) },
+              { title: "退款金额", key: 'col-4', width: 160, render: (_, row) => (<span className="mc-price">{money(row.refundAmount)}</span>) },
+              { title: "原因", key: 'col-5', width: 160, render: (_, row) => (<span className="mc-wrap-text">{row.refundReason ?? '—'}</span>) },
+              { title: "状态", key: 'col-6', width: 108, render: (_, row) => { const status = REFUND_STATUS[row.refundStatus] ?? { text: row.refundStatus, tone: 'ghost' }
+ return (<><span className={`mc-tag ${status.tone}`}>{status.text}</span></>) } },
+              { title: "审核意见", key: 'col-7', width: 220, render: (_, row) => (<span className="mc-wrap-text">{row.reviewRemark ?? '—'}</span>) },
+              { title: "申请时间", key: 'col-8', width: 160, render: (_, row) => (<span className="mc-mono mc-xs">{shortDate(row.createTime)}</span>) },
+            ]}
+          />
         )}
       </Panel>
       <div className="mc-embedded"><DisputeList /></div>
@@ -1008,23 +948,22 @@ export default function BuyerCenter(): JSX.Element {
               <EmptyState title="还没有收藏商品" desc="在商品详情点击“收藏商品”后会显示在这里。"
                 action={<a className="mc-btn" href="/hall">去交易大厅</a>} />
             ) : (
-              <div className="mc-table-wrap">
-                <table className="mc-table">
-                  <thead><tr><th>商品</th><th>供应商</th><th>品类</th><th>当前价格</th><th>状态</th><th>收藏时间</th><th>操作</th></tr></thead>
-                  <tbody>
-                    {favoriteProducts.map((product) => (
-                      <tr key={product.productId}>
-                        <td><strong>{product.productName}</strong></td>
-                        <td>{product.sellerName || '—'}</td>
-                        <td>{product.categoryName || '—'}</td>
-                        <td className="mc-price">{product.price == null
-                          ? '询价' : `${money(product.price)}/${product.unit || '单位'}`}</td>
-                        <td><span className={`mc-tag ${product.publishStatus === 'published' ? 'green' : 'ghost'}`}>
+              <TradeList
+            listId="buyer-favorites"
+            rowKey="productId"
+            dataSource={favoriteProducts}
+            onRefresh={loadFollowing}
+            columns={[
+              { title: "商品", key: 'col-1', width: 160, render: (_, product) => (<><strong>{product.productName}</strong></>) },
+              { title: "供应商", key: 'col-2', width: 160, render: (_, product) => (<>{product.sellerName || '—'}</>) },
+              { title: "品类", key: 'col-3', width: 160, render: (_, product) => (<>{product.categoryName || '—'}</>) },
+              { title: "当前价格", key: 'col-4', width: 160, render: (_, product) => (<span className="mc-price">{product.price == null
+                          ? '询价' : `${money(product.price)}/${product.unit || '单位'}`}</span>) },
+              { title: "状态", key: 'col-5', width: 108, render: (_, product) => (<><span className={`mc-tag ${product.publishStatus === 'published' ? 'green' : 'ghost'}`}>
                           {product.publishStatus === 'published' ? '在售' : '已下架'}
-                        </span></td>
-                        <td className="mc-mono mc-xs">{shortDate(product.favoritedAt)}</td>
-                        <td>
-                          <div className="buyer-quote-actions">
+                        </span></>) },
+              { title: "收藏时间", key: 'col-6', width: 160, render: (_, product) => (<span className="mc-mono mc-xs">{shortDate(product.favoritedAt)}</span>) },
+              { title: "操作", key: 'action', width: 170, render: (_, product) => (<><ListRowActions>
                             <a className="mc-link" href={`/product/detail/${product.productId}`}>查看</a>
                             {product.publishStatus === 'published' && (
                               <a className="mc-link" href={`/order/create?productId=${product.productId}`}>去下单</a>
@@ -1034,13 +973,9 @@ export default function BuyerCenter(): JSX.Element {
                               onClick={() => void removeFavoriteProduct(product)}>
                               {followingBusy === `product-${product.productId}` ? '处理中…' : '取消收藏'}
                             </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          </ListRowActions></>) },
+            ]}
+          />
             )}
           </Panel>
         )}
@@ -1048,39 +983,51 @@ export default function BuyerCenter(): JSX.Element {
     )
   }
 
-  const content = active === 'agent' ? <TradeAgentPanel role="BUYER" /> : active === 'publish'
-    ? <DemandCreate embedded returnPath="/member/buyer?tab=demand-list" />
-    : active === 'demand-list' ? renderDemandList()
-      : active === 'purchase' ? renderPurchase()
-        : active === 'inquiry' ? renderInquiry()
-        : active === 'chat' ? (
-          <div className="mc-embedded buyer-negotiation-inbox">
-            <ShopChat
-              open
-              embedded
-              inbox
-              inboxRole="buyer"
-              sellerId=""
-              sellerName={buyerMerchant?.merchantName ?? ''}
-              onClose={() => setActive('overview')}
-            />
-          </div>
-        )
-          : active === 'after' ? renderAfter()
-            : active === 'rate' ? renderRate()
-              : active === 'contract' ? renderContract()
-                : active === 'fund' ? renderFund()
-                  : active === 'favorite' ? renderFavorite()
-                    : renderOverview()
+  const renderTabContent = (tab: string): JSX.Element => (
+    tab === 'agent' ? <TradeAgentPanel role="BUYER" />
+      : tab === 'publish' ? <DemandCreate embedded returnPath="/member/buyer?tab=demand-list" />
+        : tab === 'demand-list' ? renderDemandList()
+          : tab === 'purchase' ? renderPurchase()
+            : tab === 'inquiry' ? renderInquiry()
+              : tab === 'chat' ? (
+                <div className="mc-embedded buyer-negotiation-inbox">
+                  <ShopChat
+                    open
+                    embedded
+                    inbox
+                    inboxRole="buyer"
+                    sellerId=""
+                    sellerName={buyerMerchant?.merchantName ?? ''}
+                    onClose={() => setActive('overview')}
+                  />
+                </div>
+              )
+                : tab === 'after' ? renderAfter()
+                  : tab === 'rate' ? renderRate()
+                    : tab === 'contract' ? renderContract()
+                      : tab === 'fund' ? renderFund()
+                        : tab === 'favorite' ? renderFavorite()
+                          : renderOverview()
+  )
 
   return (
     <>
-      <MemberCenterShell role="buyer" active={active === 'publish' ? 'demand-list' : active} navItems={NAV}
-        merchantName={buyerMerchant?.merchantName ?? ''} onNavigate={setActive}>
-        {base.loading && <div className="mc-loading">正在加载会员数据…</div>}
-        {base.error && <div className="mc-alert"><AlertOutlined />{base.error}</div>}
-        {content}
-      </MemberCenterShell>
+      <MemberCenterShell
+        role="buyer"
+        active={active === 'publish' ? 'demand-list' : active}
+        tabKey={active}
+        extraTabLabels={{ publish: '发布采购需求' }}
+        navItems={NAV}
+        merchantName={buyerMerchant?.merchantName ?? ''}
+        onNavigate={setActive}
+        notice={(
+          <>
+            {base.loading && <div className="mc-loading">正在加载会员数据…</div>}
+            {base.error && <div className="mc-alert"><AlertOutlined />{base.error}</div>}
+          </>
+        )}
+        renderTab={renderTabContent}
+      />
       <ShopChat
         open={Boolean(chatTarget)}
         sellerId={chatTarget?.sellerId ?? ''}
@@ -1097,33 +1044,32 @@ function renderOrdersTable(
   loading: boolean,
   error: string,
   actions: (order: OrderRow) => JSX.Element,
+  options?: { onRefresh: () => void; filterSlot: React.ReactNode; toolbarLeft: React.ReactNode; pagination: TablePaginationConfig },
 ): JSX.Element {
-  if (loading) return <div className="mc-loading">加载订单中…</div>
-  if (error) return <div className="mc-alert">{error}</div>
-  if (rows.length === 0) return <EmptyState title="还没有采购订单"
-    desc="在交易大厅选择货源下单，或在采购订单页点击“创建采购订单”，订单都会汇总到这里。" />
   return (
-    <div className="mc-table-wrap">
-      <table className="mc-table">
-        <thead>
-          <tr><th>订单号</th><th>商品</th><th>数量</th><th>金额</th><th>供应方</th><th>状态</th><th>下单时间</th><th>操作</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((order) => (
-            <tr key={order.id}>
-              <td className="mc-mono">{order.orderNo}</td>
-              <td>{order.productName || order.categoryName || '—'}</td>
-              <td className="mc-mono">{order.totalQuantity ?? '—'}</td>
-              <td className="mc-price">{money(order.totalAmount)}</td>
-              <td>{order.sellerName ?? '—'}</td>
-              <td><StatusTag status={order.orderStatus} side="buyer" /></td>
-              <td className="mc-mono mc-xs">{shortDate(order.createTime)}</td>
-              <td>{actions(order)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <TradeList
+            listId={options ? 'buyer-orders' : 'buyer-recent-orders'}
+            loading={loading}
+            locale={{ emptyText: <EmptyState title={error || '还没有采购订单'} /> }}
+            rowKey="id"
+            dataSource={rows}
+            onRefresh={options?.onRefresh}
+            filterSlot={options?.filterSlot}
+            toolbarLeft={options?.toolbarLeft}
+            pagination={options?.pagination ?? false}
+            showToolbar={Boolean(options)}
+            selectable={Boolean(options)}
+            columns={[
+              { title: "订单号", key: 'col-1', width: 160, render: (_, order) => (<span className="mc-mono">{order.orderNo}</span>) },
+              { title: "商品", key: 'col-2', width: 160, render: (_, order) => (<>{order.productName || order.categoryName || '—'}</>) },
+              { title: "数量", key: 'col-3', width: 108, render: (_, order) => (<span className="mc-mono">{order.totalQuantity ?? '—'}</span>) },
+              { title: "金额", key: 'col-4', width: 160, render: (_, order) => (<span className="mc-price">{money(order.totalAmount)}</span>) },
+              { title: "供应方", key: 'col-5', width: 160, render: (_, order) => (<>{order.sellerName ?? '—'}</>) },
+              { title: "状态", key: 'col-6', width: 108, render: (_, order) => (<><StatusTag status={order.orderStatus} side="buyer" /></>) },
+              { title: "下单时间", key: 'col-7', width: 160, render: (_, order) => (<span className="mc-mono mc-xs">{shortDate(order.createTime)}</span>) },
+              { title: "操作", key: 'action', width: 170, render: (_, order) => (<>{actions(order)}</>) },
+            ]}
+          />
   )
 }
 

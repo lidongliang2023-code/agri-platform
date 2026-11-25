@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react'
-import { Button, ConfigProvider, Layout, Menu, Result, Spin } from 'antd'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { logoutBrowser } from '../../../../../../packages/agri-shared/src/auth/logout'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { Button, ConfigProvider, Drawer, Dropdown, Layout, Menu, Result, Spin } from 'antd'
+import { UNSAFE_LocationContext, useLocation, useNavigate, useOutlet } from 'react-router-dom'
+import { WorkspaceHeader, WorkspaceTabs, isFormWorkspaceTab, type WorkspaceTabItem } from '@agri/shared'
 import { getMyPermissions, hasPermission, type MyPermission } from '@/api/permission'
+import { clearSession, getAccessToken, getCurrentUser } from '@/utils/session'
+import { ssoLogoutUrl } from '@/utils/sso'
 import { BrandMark } from '@/components/BrandMark'
 import {
   AppstoreOutlined, AuditOutlined, FileSearchOutlined, SwapOutlined, TeamOutlined, RollbackOutlined,
   SafetyCertificateOutlined, ApartmentOutlined, AccountBookOutlined, SafetyOutlined, AppstoreAddOutlined,
   SettingOutlined, AlertOutlined, BarChartOutlined, BankOutlined, FileTextOutlined,
-  CarOutlined
+  CarOutlined, LogoutOutlined, UserOutlined, UpOutlined
 } from '@ant-design/icons'
 import './admin-layout.css'
 
-const { Sider, Header, Content } = Layout
+const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
+
+const { Sider, Content } = Layout
 
 const MENU_LABELS: Record<string, string> = {
   '/admin/trade/dashboard': '交易大盘',
@@ -40,30 +46,87 @@ const MENU_LABELS: Record<string, string> = {
 
 const adminTheme = {
   token: {
-    colorPrimary: '#12764a',
-    colorLink: '#0e5233',
-    colorSuccess: '#159a5e',
-    colorBgLayout: '#f4f7f5',
-    borderRadius: 10
+    colorPrimary: '#2d8f4e',
+    colorLink: '#1b6332',
+    colorSuccess: '#2d8f4e',
+    colorBgLayout: '#f5f6fa',
+    borderRadius: 8
   },
   components: {
     Menu: {
-      darkItemBg: '#0a3a25',
-      darkSubMenuItemBg: '#06281a',
-      darkItemSelectedBg: '#12764a',
-      darkItemColor: 'rgba(255,255,255,.76)',
-      darkItemHoverBg: 'rgba(255,255,255,.08)',
-      darkItemSelectedColor: '#fff'
+      darkItemBg: '#001529',
+      darkSubMenuItemBg: '#000c17',
+      darkItemSelectedBg: 'rgba(45,143,78,.18)',
+      darkItemColor: '#a6a6a6',
+      darkItemHoverBg: '#0d2137',
+      darkItemHoverColor: '#fff',
+      darkItemSelectedColor: '#fff',
+      itemBorderRadius: 0,
+      itemMarginInline: 0,
+      itemMarginBlock: 0,
+      itemHeight: 40,
+      groupTitleColor: 'rgba(255,255,255,.45)',
+      groupTitleFontSize: 12,
     },
     Card: {
-      borderRadiusLG: 12
+      borderRadiusLG: 8
     },
     Table: {
-      headerBg: '#f4f7f5',
-      headerColor: '#4b5d53',
-      rowHoverBg: '#f1fbf5'
+      headerBg: '#fafafa',
+      headerColor: '#595959',
+      rowHoverBg: '#f0f9f1'
     }
   }
+}
+
+type LocationValue = React.ContextType<typeof UNSAFE_LocationContext>
+interface AdminWorkspaceTab extends WorkspaceTabItem {
+  content: ReactNode
+  location: LocationValue
+}
+
+function AdminWorkspaceTabs(): JSX.Element {
+  const location = useLocation()
+  const locationContext = useContext(UNSAFE_LocationContext)
+  const navigate = useNavigate()
+  const outlet = useOutlet()
+  const key = location.pathname + location.search
+  const label = MENU_LABELS[location.pathname] ?? '运营中心'
+  const current: AdminWorkspaceTab = {
+    key,
+    label,
+    content: outlet,
+    location: locationContext,
+    form: isFormWorkspaceTab(location.pathname, label),
+  }
+  const [tabs, setTabs] = useState<AdminWorkspaceTab[]>([current])
+
+  useEffect(() => {
+    setTabs(previous => (previous.some(tab => tab.key === key) ? previous : [...previous, current]))
+    // 仅在路由地址变化时追加页签快照，避免覆盖未激活页签的路由上下文。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  const visibleTabs = tabs.some(tab => tab.key === key) ? tabs : [...tabs, current]
+
+  return (
+    <WorkspaceTabs<AdminWorkspaceTab>
+      tabs={visibleTabs}
+      activeKey={key}
+      fallbackKey="/admin/trade/dashboard"
+      onSelect={next => navigate(next)}
+      onTabsChange={setTabs}
+      className="trade-admin-workspace"
+      tabBarClassName="trade-admin-workspace-tabbar"
+      paneClassName="trade-admin-workspace-pane"
+      renderMobile={() => outlet}
+      renderPane={(tab, isActive) => (
+        <UNSAFE_LocationContext.Provider value={isActive ? locationContext : tab.location}>
+          {isActive ? outlet : tab.content}
+        </UNSAFE_LocationContext.Provider>
+      )}
+    />
+  )
 }
 
 /**
@@ -85,6 +148,32 @@ export default function AdminLayout() {
    */
   const [perm, setPerm] = useState<MyPermission | null>(null)
   const [loading, setLoading] = useState(true)
+  const [collapsed, setCollapsed] = useState(() => window.matchMedia('(min-width: 1024px) and (max-width: 1279px)').matches)
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  useEffect(() => {
+    const compactMedia = window.matchMedia('(min-width: 1024px) and (max-width: 1279px)')
+    const mobileMedia = window.matchMedia('(max-width: 1023px)')
+    const syncViewport = () => {
+      setIsMobile(mobileMedia.matches)
+      if (!mobileMedia.matches) {
+        setDrawerOpen(false)
+        setCollapsed(compactMedia.matches)
+      }
+    }
+    syncViewport()
+    compactMedia.addEventListener('change', syncViewport)
+    mobileMedia.addEventListener('change', syncViewport)
+    return () => {
+      compactMedia.removeEventListener('change', syncViewport)
+      mobileMedia.removeEventListener('change', syncViewport)
+    }
+  }, [])
+
+  useEffect(() => {
+    setDrawerOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     getMyPermissions()
@@ -120,92 +209,159 @@ export default function AdminLayout() {
     )
   }
 
+  const flatMenuItems = [
+    { key: '/admin/trade/dashboard', icon: <AppstoreOutlined />, label: '交易大盘' },
+    {
+      key: 'audit-center',
+      icon: <AuditOutlined />,
+      label: '审核中心',
+      children: [
+        { key: '/admin/trade/product', icon: <AuditOutlined />, label: '货源审核' },
+        { key: '/admin/trade/refund', icon: <RollbackOutlined />, label: '退款审核' },
+        { key: '/admin/trade/invoice', icon: <FileTextOutlined />, label: '发票审核' },
+      ],
+    },
+    { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' },
+    {
+      // 产销对接：平台只看回写、对账、差异与规则。
+      // 「供给池审核」与「建品上架」已下线——那两步是对接双方的事，
+      // 由供应商主体在卖家中心（/member/seller?tab=p2t）自己承接。
+      key: 'p2t',
+      icon: <SwapOutlined />,
+      label: '产销对接',
+      children: [
+        { key: '/admin/trade/p2t/orders', icon: <FileTextOutlined />, label: '撮合订单与回写' },
+        { key: '/admin/trade/p2t/recon', icon: <AccountBookOutlined />, label: '产销对账' },
+        { key: '/admin/trade/p2t/rules', icon: <SettingOutlined />, label: '对接规则配置' },
+        { key: '/admin/trade/p2t/diffs', icon: <AlertOutlined />, label: '差异与异常处置' },
+        { key: '/admin/trade/p2t/trace', icon: <FileSearchOutlined />, label: '全链路追踪' },
+        { key: '/admin/trade/p2t/boundary', icon: <SafetyOutlined />, label: '边界与归位说明' },
+      ],
+    },
+    { key: '/admin/trade/settlement', icon: <AccountBookOutlined />, label: '结算与分账' },
+    { key: '/admin/trade/guarantee', icon: <BankOutlined />, label: '保证金管理' },
+    { key: '/admin/trade/contract-template', icon: <FileTextOutlined />, label: '合同模板' },
+    { key: '/admin/trade/carrier', icon: <CarOutlined />, label: '承运商管理' },
+    { key: 'external-catalog', icon: <AppstoreAddOutlined />, label: '商品与分类（主数据）' },
+    { key: '/admin/trade/dispute', icon: <TeamOutlined />, label: '纠纷仲裁' },
+    { key: '/admin/trade/credit', icon: <SafetyOutlined />, label: '信用管理' },
+    { key: '/admin/trade/compensation', icon: <SafetyCertificateOutlined />, label: '赔付执行' },
+    { key: '/admin/trade/risk', icon: <AlertOutlined />, label: '风控管理' },
+    // 平台级功能：数据与接口都归 core-platform（不在交易库里），
+    // 它决定"谁能看到哪些数据"，所以单独放在交易监管各项之后。
+    { key: '/admin/trade/bindings', icon: <ApartmentOutlined />, label: '用户-主体绑定' },
+    { key: '/admin/trade/config', icon: <SettingOutlined />, label: '系统配置' },
+    { key: '/admin/trade/report', icon: <BarChartOutlined />, label: '报表' },
+  ]
+
+
+  const sessionUser = getCurrentUser()
+  const displayName = sessionUser?.nickname || sessionUser?.username || '平台运营'
+  const logout = () => {
+    void logoutBrowser({ token: getAccessToken(), clientId: 'trade', ssoOrigin: new URL(ssoLogoutUrl()).origin, clear: clearSession })
+  }
+  const sideUserMenu = {
+    items: [
+      { key: 'personal', icon: <UserOutlined />, label: '个人中心', onClick: () => window.open(PERSONAL_CENTER, '_blank', 'noopener') },
+      { key: 'switch', icon: <SwapOutlined />, label: '切换身份（用户端）', onClick: () => { setDrawerOpen(false); navigate('/member/buyer') } },
+      { type: 'divider' as const },
+      { key: 'logout', icon: <LogoutOutlined />, danger: true, label: '退出登录', onClick: logout },
+    ],
+  }
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    setDrawerOpen(false)
+    if (key === 'external-catalog') {
+      window.location.href = `${window.location.protocol}//${window.location.hostname}:8080/product/catalog`
+      return
+    }
+    navigate(key)
+  }
+
+  const renderSidebarBody = (collapsedMode: boolean) => (
+    <>
+      <div className={`admin-brand${collapsedMode ? ' is-collapsed' : ''}`}>
+        <span className="admin-brand-logo"><BrandMark size={34} /></span>
+        {!collapsedMode && <span className="admin-brand-text">丰链云<small>FENGCHAIN · AGRI</small></span>}
+      </div>
+      <Menu
+        theme="dark"
+        mode="inline"
+        inlineCollapsed={collapsedMode}
+        selectedKeys={[location.pathname]}
+        defaultOpenKeys={collapsedMode ? [] : ['audit-center']}
+        className="admin-menu"
+        onClick={handleMenuClick}
+        items={flatMenuItems}
+      />
+      <div className="pc-side-user">
+        <Dropdown menu={sideUserMenu} trigger={['click']} placement={collapsedMode ? 'topRight' : 'topLeft'}>
+          <button
+            type="button"
+            className="pc-side-user-trigger"
+            title={`${displayName} · 平台运营`}
+            style={collapsedMode ? { justifyContent: 'center', padding: '6px 0', gap: 0 } : undefined}
+          >
+            <span className="pc-side-user-avatar">{displayName.slice(0, 1)}</span>
+            {!collapsedMode && (
+              <>
+                <span className="pc-side-user-meta">
+                  <strong>{displayName}</strong>
+                  <small>平台运营</small>
+                </span>
+                <span className="pc-side-user-caret"><UpOutlined /></span>
+              </>
+            )}
+          </button>
+        </Dropdown>
+      </div>
+    </>
+  )
+
   return (
     <ConfigProvider theme={adminTheme}>
     <Layout className="admin-shell">
-      <Sider width={224} className="admin-side">
-        <div className="admin-brand">
-          <span className="admin-brand-logo"><BrandMark size={34} /></span>
-          <span className="admin-brand-text">丰链云<small>FENGCHAIN · AGRI</small></span>
-        </div>
-        <div className="admin-side-title">平台运营中心</div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          defaultOpenKeys={['audit-center']}
-          className="admin-menu"
-          onClick={({ key }) => {
-            if (key === 'external-catalog') {
-              window.location.href = `${window.location.protocol}//${window.location.hostname}:8080/product/catalog`
-              return
-            }
-            navigate(key)
-          }}
-          items={[
-            { key: '/admin/trade/dashboard', icon: <AppstoreOutlined />, label: '交易大盘' },
-            {
-              key: 'audit-center',
-              icon: <AuditOutlined />,
-              label: '审核中心',
-              children: [
-                { key: '/admin/trade/product', icon: <AuditOutlined />, label: '货源审核' },
-                { key: '/admin/trade/refund', icon: <RollbackOutlined />, label: '退款审核' },
-                { key: '/admin/trade/invoice', icon: <FileTextOutlined />, label: '发票审核' },
-              ],
-            },
-            { key: '/admin/trade/order', icon: <FileSearchOutlined />, label: '订单监管' },
-            {
-              // 产销对接：平台只看回写、对账、差异与规则。
-              // 「供给池审核」与「建品上架」已下线——那两步是对接双方的事，
-              // 由供应商主体在卖家中心（/member/seller?tab=p2t）自己承接。
-              key: 'p2t',
-              icon: <SwapOutlined />,
-              label: '产销对接',
-              children: [
-                { key: '/admin/trade/p2t/orders', icon: <FileTextOutlined />, label: '撮合订单与回写' },
-                { key: '/admin/trade/p2t/recon', icon: <AccountBookOutlined />, label: '产销对账' },
-                { key: '/admin/trade/p2t/rules', icon: <SettingOutlined />, label: '对接规则配置' },
-                { key: '/admin/trade/p2t/diffs', icon: <AlertOutlined />, label: '差异与异常处置' },
-                { key: '/admin/trade/p2t/trace', icon: <FileSearchOutlined />, label: '全链路追踪' },
-                { key: '/admin/trade/p2t/boundary', icon: <SafetyOutlined />, label: '边界与归位说明' },
-              ],
-            },
-            { key: '/admin/trade/settlement', icon: <AccountBookOutlined />, label: '结算与分账' },
-            { key: 'external-catalog', icon: <AppstoreAddOutlined />, label: '商品与分类（主数据）' },
-            { key: '/admin/trade/dispute', icon: <TeamOutlined />, label: '纠纷仲裁' },
-            { key: '/admin/trade/credit', icon: <SafetyOutlined />, label: '信用管理' },
-            { key: '/admin/trade/compensation', icon: <SafetyCertificateOutlined />, label: '赔付执行' },
-            // 平台级功能：数据与接口都归 core-platform（不在交易库里），
-            // 它决定"谁能看到哪些数据"，所以单独放在交易监管各项之后。
-            // 将来若有独立的平台管理端，这一项整体迁过去即可。
-            { key: '/admin/trade/bindings', icon: <ApartmentOutlined />, label: '用户-主体绑定' },
-            { key: '/admin/trade/config', icon: <SettingOutlined />, label: '系统配置' },
-            { key: '/admin/trade/risk', icon: <AlertOutlined />, label: '风控管理' },
-            { key: '/admin/trade/report', icon: <BarChartOutlined />, label: '报表' },
-            { key: '/admin/trade/guarantee', icon: <BankOutlined />, label: '保证金管理' },
-            { key: '/admin/trade/contract-template', icon: <FileTextOutlined />, label: '合同模板' },
-            { key: '/admin/trade/carrier', icon: <CarOutlined />, label: '承运商管理' }
-          ]}
+      {!isMobile && (
+        <Sider width={240} collapsedWidth={80} collapsed={collapsed} className="admin-side">
+          {renderSidebarBody(collapsed)}
+        </Sider>
+      )}
+      {isMobile && (
+        <Drawer
+          placement="left"
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          width={240}
+          closable={false}
+          className="admin-nav-drawer"
+          styles={{ body: { padding: 0, background: '#001529', display: 'flex', flexDirection: 'column', height: '100%' } }}
+        >
+          {renderSidebarBody(false)}
+        </Drawer>
+      )}
+      <Layout className="admin-main">
+        <WorkspaceHeader
+          className="admin-header"
+          leftClassName="admin-header-left"
+          rightClassName="admin-header-right"
+          collapsed={collapsed}
+          mobile={isMobile}
+          mobileOpen={drawerOpen}
+          onToggleCollapse={() => (isMobile ? setDrawerOpen((prev) => !prev) : setCollapsed((prev) => !prev))}
+          breadcrumbs={['平台运营中心', MENU_LABELS[location.pathname] ?? '运营中心']}
+          right={
+            <>
+              <div className="admin-role-switch">
+                <span className="on">运营中心</span>
+                <a onClick={() => navigate('/')}><SwapOutlined /> 用户端</a>
+              </div>
+              <span className="admin-avatar">运</span>
+              <span className="admin-user">平台运营</span>
+            </>
+          }
         />
-        <div className="admin-side-foot">平台运营 · 审核与交易监管</div>
-      </Sider>
-      <Layout>
-        <Header className="admin-header">
-          <div className="admin-crumb">
-            <span>平台运营中心</span><b>/</b><strong>{MENU_LABELS[location.pathname] ?? '运营中心'}</strong>
-          </div>
-          <div className="admin-header-right">
-            <div className="admin-role-switch">
-              <span className="on">运营中心</span>
-              <a onClick={() => navigate('/')}><SwapOutlined /> 用户端</a>
-            </div>
-            <span className="admin-avatar">运</span>
-            <span className="admin-user">平台运营</span>
-          </div>
-        </Header>
         <Content className="admin-content">
-          <Outlet />
+          <AdminWorkspaceTabs />
         </Content>
       </Layout>
     </Layout>

@@ -80,13 +80,13 @@ public class OpsRepository {
         result.put("metrics", metrics);
         result.put("trend", jdbc.query("SELECT * FROM service_daily_metric ORDER BY metric_date", dailyMapper()));
         result.put("todos", List.of(
-                todo("service-provider", "服务商入驻待审核", metrics.get("pendingProviders"), "初审与复审"),
+                todo("providers", "服务商入驻待审核", metrics.get("pendingProviders"), "初审与复审"),
                 todo("catalog", "服务商品待审核", number("SELECT COUNT(*) FROM service_item WHERE audit_status='pending'"), "目录与资质"),
                 todo("disputes", "投诉纠纷待处理", metrics.get("openComplaints"), "质量仲裁与售后"),
                 todo("settlement", "结算复核待执行", number("SELECT COUNT(*) FROM service_settlement WHERE status='pending'"), "T+1 分账批次"),
                 todo("policies", "政策补贴申报待核", metrics.get("pendingPolicies"), "材料核验与兑付"),
-                todo("claims", "理赔案件待跟进", metrics.get("pendingClaims"), "查勘、定损与公示"),
-                todo("service-provider", "服务商未绑定平台主体", metrics.get("unboundProviders"), "工作台进不去，先补绑定")
+                todo("insurance", "理赔案件待跟进", metrics.get("pendingClaims"), "查勘、定损与公示"),
+                todo("providers", "服务商未绑定平台主体", metrics.get("unboundProviders"), "工作台进不去，先补绑定")
         ));
         result.put("alerts", jdbc.query(
                 "SELECT * FROM service_quality_alert WHERE status<>'closed' ORDER BY id", qualityAlertMapper()));

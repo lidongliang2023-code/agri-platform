@@ -1,5 +1,7 @@
+import { ListRowActions } from '@agri/shared'
+import { TradeList, TradeFilters } from '@/components/TradeList'
 import { useMemo, useState } from 'react'
-import { Form, Input, InputNumber, Select, Spin, message } from 'antd'
+import { Form, Input, InputNumber, Select, message } from 'antd'
 import {
   AlertOutlined,
   ArrowLeftOutlined,
@@ -23,7 +25,7 @@ import {
 } from '@/api/dispute'
 import { getMyMerchants } from '@/api/identity'
 import { getOrderList } from '@/api/order'
-import { EmptyState, Panel, money, shortDate } from '../../member-center/shared'
+import { Panel, money, shortDate } from '../../member-center/shared'
 import './after-sales.css'
 
 type DisputePageMode = 'list' | 'detail' | 'create' | 'resolve'
@@ -73,13 +75,13 @@ export default function DisputeList(): JSX.Element {
   const queryClient = useQueryClient()
   const [pageMode, setPageMode] = useState<DisputePageMode>('list')
   const [activeDispute, setActiveDispute] = useState<DisputeVO | null>(null)
-  const [query, setQuery] = useState<DisputeQuery>({ pageNum: 1, pageSize: 10 })
+  const [query, setQuery] = useState<DisputeQuery>({ pageNum: 1, pageSize: 20 })
   const [draft, setDraft] = useState<{ disputeNo?: string; disputeStatus?: string }>({})
   const [saving, setSaving] = useState(false)
   const [resolveForm] = Form.useForm()
   const [createForm] = Form.useForm()
 
-  const { data, isLoading } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     queryKey: ['disputes', query],
     queryFn: () => getDisputeList(query),
   })
@@ -95,8 +97,6 @@ export default function DisputeList(): JSX.Element {
   const myOrders = orderData?.code === 200 ? orderData.data?.records ?? [] : []
   const rows: DisputeVO[] = data?.data?.records ?? []
   const total = Number(data?.data?.total ?? 0)
-  const currentPage = Number(data?.data?.current ?? query.pageNum ?? 1)
-  const pageCount = Math.max(1, Math.ceil(total / Number(query.pageSize ?? 10)))
   const pageSummary = useMemo(() => ({
     open: rows.filter((row) => row.disputeStatus !== 'resolved' && row.disputeStatus !== 'closed').length,
     resolved: rows.filter((row) => row.disputeStatus === 'resolved' || row.disputeStatus === 'closed').length,
@@ -377,9 +377,13 @@ export default function DisputeList(): JSX.Element {
         </div>
       </section>
 
-      <Panel title="售后工单" extra={<span className="after-count">共 {total} 条</span>}>
-        <div className="after-toolbar">
-          <Input
+      <TradeList
+            listId="member-dispute"
+            rowKey="id"
+            dataSource={rows}
+            onRefresh={() => void refetch()}
+            loading={isFetching}
+            filterSlot={<TradeFilters fields={[{ label: '纠纷编号', control: (<Input
             prefix={<SearchOutlined />}
             allowClear
             placeholder="输入纠纷编号"
@@ -388,80 +392,40 @@ export default function DisputeList(): JSX.Element {
               ...previous,
               disputeNo: event.target.value || undefined,
             }))}
-          />
-          <Select
+          />) },
+                { label: '纠纷状态', control: (<Select
             allowClear
             placeholder="全部状态"
             value={draft.disputeStatus}
             onChange={(value) => setDraft((previous) => ({ ...previous, disputeStatus: value }))}
             options={Object.entries(DISPUTE_STATUS).map(([value, item]) => ({ value, label: item.text }))}
-          />
-          <button type="button" className="mc-btn" onClick={() => setQuery((previous) => ({
-            ...previous,
-            pageNum: 1,
-            ...draft,
-          }))}>搜索</button>
-          <button type="button" className="mc-btn ghost" onClick={() => {
-            setDraft({})
-            setQuery({ pageNum: 1, pageSize: 10 })
-          }}>重置</button>
-        </div>
-        {isLoading ? (
-          <div className="after-loading"><Spin /><span>正在读取售后工单…</span></div>
-        ) : rows.length === 0 ? (
-          <EmptyState title="暂无售后工单" desc="采购方发起售后后会显示在这里。" />
-        ) : (
-          <>
-            <div className="mc-table-wrap">
-              <table className="mc-table after-table">
-                <thead><tr><th>工单 / 类型</th><th>关联订单</th><th>争议双方</th><th>诉求</th><th>状态</th><th>提交时间</th><th>操作</th></tr></thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <button type="button" className="after-name-link" onClick={() => showDetail(row)}>
+          />) }]} onQuery={() => setQuery((prev) => ({ ...prev, pageNum: 1, disputeNo: draft.disputeNo, disputeStatus: draft.disputeStatus }))} onReset={() => { setDraft({}); setQuery((prev) => ({ pageNum: 1, pageSize: prev.pageSize })) }} />}
+            pagination={{ current: query.pageNum ?? 1, pageSize: query.pageSize ?? 20, total, onChange: (pageNum, pageSize) => setQuery((prev) => ({ ...prev, pageNum, pageSize })) }}
+            locale={{ emptyText: '暂无售后工单' }}
+            columns={[
+              { title: "工单 / 类型", key: 'col-1', width: 160, render: (_, row) => (<><button type="button" className="after-name-link" onClick={() => showDetail(row)}>
                           <strong>{DISPUTE_TYPE[row.disputeType] ?? row.disputeType}</strong>
                           <span className="mc-mono">{row.disputeNo}</span>
-                        </button>
-                      </td>
-                      <td className="mc-mono">{row.orderId}</td>
-                      <td>
-                        <div className="after-parties-cell">
+                        </button></>) },
+              { title: "关联订单", key: 'col-2', width: 160, render: (_, row) => (<span className="mc-mono">{row.orderId}</span>) },
+              { title: "争议双方", key: 'col-3', width: 160, render: (_, row) => (<><div className="after-parties-cell">
                           <div><PartyBadge side="buyer" />{row.complainantName || '—'}</div>
                           <div><PartyBadge side="seller" />{row.respondentName || '—'}</div>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="after-claim-cell">
+                        </div></>) },
+              { title: "诉求", key: 'col-4', width: 220, render: (_, row) => (<><div className="after-claim-cell">
                           <span>{row.claimAmount == null ? '未填写索赔金额' : money(row.claimAmount)}</span>
                           <small>{row.disputeReason || row.disputeDescription || '—'}</small>
-                        </div>
-                      </td>
-                      <td><StatusTag value={row.disputeStatus} /><small className="after-stage">{DISPUTE_STAGE[row.processStage] ?? row.processStage}</small></td>
-                      <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                      <td>
-                        <div className="mc-actions">
+                        </div></>) },
+              { title: "状态", key: 'col-5', width: 108, render: (_, row) => (<><StatusTag value={row.disputeStatus} /><small className="after-stage">{DISPUTE_STAGE[row.processStage] ?? row.processStage}</small></>) },
+              { title: "提交时间", key: 'col-6', width: 160, render: (_, row) => (<span className="mc-mono mc-xs">{shortDate(row.createTime)}</span>) },
+              { title: "操作", key: 'action', width: 170, render: (_, row) => (<><ListRowActions>
                           <button type="button" className="mc-link after-action" onClick={() => showDetail(row)}><EyeOutlined /> 查看</button>
                           {row.disputeStatus !== 'resolved' && row.disputeStatus !== 'closed' && (
                             <button type="button" className="mc-link after-action" onClick={() => showResolve(row)}><SettingOutlined /> 处理</button>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mc-pager">
-              <button type="button" disabled={currentPage <= 1}
-                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage - 1 }))}>上一页</button>
-              <span>第 {currentPage} / {pageCount} 页 · 共 {total} 条</span>
-              <button type="button" disabled={currentPage >= pageCount}
-                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage + 1 }))}>下一页</button>
-            </div>
-          </>
-        )}
-      </Panel>
+                        </ListRowActions></>) },
+            ]}
+          />
     </div>
   )
 }

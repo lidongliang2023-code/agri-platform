@@ -12,7 +12,7 @@
         :show-refresh="showRefresh"
         :refreshing="loading"
         @toggle-column="toggleColumn"
-        @reset-columns="resetColumns"
+        @reset-columns="handleResetColumns"
         @refresh="emit('refresh')"
       >
         <template #left>
@@ -28,17 +28,20 @@
         v-loading="loading"
         :data="tableData"
         :row-key="rowKey"
-        :border="border"
+        :border="border || resizable"
+        :class="{ 'is-borderless-resize': resizable && !border }"
         :row-class-name="resolveRowClassName"
         :empty-text="emptyText"
         style="width: 100%"
         @selection-change="handleSelectionChange"
         @sort-change="emit('sort-change', $event)"
+        @header-dragend="handleHeaderDragend"
       >
         <el-table-column
           v-if="selectable"
           type="selection"
           :width="selectionWidth"
+          :resizable="false"
           align="center"
           :reserve-selection="reserveSelection"
         />
@@ -46,10 +49,12 @@
         <el-table-column
           v-for="col in visibleColumns"
           :key="col.resolvedKey"
+          :column-key="col.resolvedKey"
           :prop="col.prop"
           :label="col.label"
-          :width="col.resolvedWidth"
+          :width="resolveColumnWidth(col)"
           :min-width="col.resolvedMinWidth"
+          :resizable="resizable && col.resizable !== false"
           :align="col.resolvedAlign"
           :fixed="col.resolvedFixed"
           :sortable="col.sortable"
@@ -91,14 +96,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import AgriVueToolbar from '../list/AgriVueToolbar.vue'
 import AgriVuePagination from '../list/AgriVuePagination.vue'
 import { useVueListColumns } from '../list/useVueListColumns'
+import { useVueColumnWidths } from '../list/useVueColumnWidths'
 import {
   DEFAULT_SELECTION_COLUMN_WIDTH,
   DEFAULT_VUE_PAGE_SIZE,
   DEFAULT_VUE_PAGE_SIZES,
+  MIN_RESIZABLE_COLUMN_WIDTH,
   readCellValue,
   type NormalizedVueColumn,
   type VueListColumn,
@@ -123,6 +130,10 @@ const props = withDefaults(
     showColumnSettings?: boolean
     showRefresh?: boolean
     columnSettingsStorageKey?: string | false
+    /** 列宽拖拽持久化键；省略时若已传 columnSettingsStorageKey 则自动派生；传 false 关闭列宽持久化。 */
+    columnWidthStorageKey?: string | false
+    /** 是否启用表头拖拽调整列宽，默认 true。 */
+    resizable?: boolean
     lockedColumnKeys?: string[]
     showPagination?: boolean
     page?: number
@@ -144,6 +155,8 @@ const props = withDefaults(
     showColumnSettings: true,
     showRefresh: true,
     columnSettingsStorageKey: false,
+    columnWidthStorageKey: undefined,
+    resizable: true,
     lockedColumnKeys: undefined,
     showPagination: true,
     page: 1,
@@ -162,9 +175,10 @@ const emit = defineEmits<{
   'update:page': [page: number]
   'update:pageSize': [size: number]
   'page-change': [page: number, pageSize: number]
+  'column-resize': [key: string, width: number]
 }>()
 
-const tableRef = ref<{ clearSelection?: () => void } | null>(null)
+const tableRef = ref<{ clearSelection?: () => void; doLayout?: () => void } | null>(null)
 const selectedRows = ref<RowRecord[]>([])
 
 const {
@@ -178,6 +192,41 @@ const {
   storageKey: props.columnSettingsStorageKey,
   lockedKeys: props.lockedColumnKeys,
 })
+
+const {
+  widths: customColumnWidths,
+  setColumnWidth,
+  resetAllWidths,
+} = useVueColumnWidths({
+  storageKey: () => props.columnWidthStorageKey,
+  fallbackSettingsKey: () => props.columnSettingsStorageKey,
+})
+
+function resolveColumnWidth(col: NormalizedVueColumn): number | undefined {
+  const custom = customColumnWidths.value[col.resolvedKey]
+  if (custom !== undefined) return custom
+  return col.resolvedWidth
+}
+
+function handleHeaderDragend(
+  newWidth: number,
+  _oldWidth: number,
+  column: { columnKey?: string; property?: string },
+) {
+  if (!props.resizable) return
+  const key = column?.columnKey || column?.property
+  if (!key) return
+  setColumnWidth(key, newWidth, MIN_RESIZABLE_COLUMN_WIDTH)
+  emit('column-resize', key, customColumnWidths.value[key] ?? newWidth)
+}
+
+function handleResetColumns() {
+  resetColumns()
+  resetAllWidths()
+  void nextTick(() => {
+    tableRef.value?.doLayout?.()
+  })
+}
 
 const tableData = computed(() => [...props.data])
 const resolvedTotal = computed(() => (props.total !== undefined ? props.total : props.data.length))
@@ -235,6 +284,7 @@ function clearSelection() {
 defineExpose({
   tableRef,
   clearSelection,
-  resetColumns,
+  resetColumns: handleResetColumns,
+  resetColumnWidths: resetAllWidths,
 })
 </script>

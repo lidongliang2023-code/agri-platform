@@ -2,14 +2,13 @@
  * 页面名称：撮合订单与回写
  * 路由路径：/admin/trade/p2t/orders
  * 所属模块：订单管理 / 生产直供
- *
- * 订单主数据归交易端。本页只关心与生产有关的字段回写：成交数量、需求等级、
- * 锁定时段、买家类型 —— 回写不含成交价格，也不反向修改订单。
  */
 import { useCallback, useEffect, useState } from 'react'
-import { Button, Card, Input, Select, Table, Tag, message } from 'antd'
+import { Button, Input, Select, Tag, message } from 'antd'
+import { ListRowActions } from '@agri/shared'
 import { getP2tOrders, retryP2tWriteback } from '@/api/p2t'
 import type { P2tOrder } from '@/api/p2t'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 const WB: Record<string, { text: string; color: string }> = {
   SUCCESS: { text: '成功', color: 'green' },
@@ -23,9 +22,11 @@ export default function P2tOrders(): JSX.Element {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [pageNum, setPageNum] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [keyword, setKeyword] = useState('')
   const [status, setStatus] = useState<string>('')
+  const [draftKeyword, setDraftKeyword] = useState('')
+  const [draftStatus, setDraftStatus] = useState<string>('')
 
   const load = useCallback(() => {
     setLoading(true)
@@ -44,6 +45,20 @@ export default function P2tOrders(): JSX.Element {
 
   useEffect(() => { load() }, [load])
 
+  const handleQuery = () => {
+    setPageNum(1)
+    setStatus(draftStatus)
+    setKeyword(draftKeyword.trim())
+  }
+
+  const handleReset = () => {
+    setDraftStatus('')
+    setDraftKeyword('')
+    setPageNum(1)
+    setStatus('')
+    setKeyword('')
+  }
+
   const retry = async (orderNo: string): Promise<void> => {
     const res = await retryP2tWriteback(orderNo)
     if (res?.code === 200) {
@@ -56,60 +71,98 @@ export default function P2tOrders(): JSX.Element {
 
   return (
     <div style={{ padding: 20 }}>
-      <Card title="生产直供订单" extra={
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Select style={{ width: 150 }} value={status} onChange={(v) => { setPageNum(1); setStatus(v) }}
-            options={[
-              { value: '', label: '全部回写状态' },
-              { value: 'SUCCESS', label: '成功' },
-              { value: 'FAILED', label: '失败待重试' },
-              { value: 'PENDING', label: '待回写' },
-            ]} />
-          <Input.Search placeholder="订单号 / 买家 / 供给单号" allowClear style={{ width: 280 }}
-            onSearch={(v) => { setPageNum(1); setKeyword(v) }} />
-        </div>
-      }>
-        <Table<P2tOrder>
-          rowKey="orderNo"
-          loading={loading}
-          dataSource={rows}
-          pagination={{
-            current: pageNum, pageSize, total, showSizeChanger: true,
-            showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, s) => { setPageNum(p); setPageSize(s) },
-          }}
-          columns={[
-            { title: '订单号', dataIndex: 'orderNo', width: 180 },
-            { title: '买家', dataIndex: 'buyerName' },
-            { title: '商品', dataIndex: 'productName' },
-            { title: '来源供给', dataIndex: 'sourceOfferNo', width: 165 },
-            { title: '数量', dataIndex: 'totalQuantity', align: 'right', width: 90 },
-            { title: '金额', dataIndex: 'totalAmount', align: 'right', width: 120, render: (v) => (v == null ? '—' : `¥${v}`) },
-            {
-              title: '订单状态',
-              dataIndex: 'paymentStatus',
-              width: 110,
-              render: (v: string) => <Tag color={v === 'paid' ? 'green' : 'default'}>{v}</Tag>,
-            },
-            {
-              title: '回写',
-              dataIndex: 'p2tWritebackStatus',
-              width: 120,
-              render: (v: string) => (v ? <Tag color={WB[v]?.color}>{WB[v]?.text ?? v}</Tag> : '—'),
-            },
-            {
-              title: '操作',
-              width: 110,
-              render: (_, r) => (
-                r.p2tWritebackStatus === 'FAILED' || r.p2tWritebackStatus === 'PENDING'
-                  ? <Button size="small" type="link" onClick={() => void retry(r.orderNo)}>重试回写</Button>
-                  : null
-              ),
-            },
-          ]}
-          locale={{ emptyText: '还没有生产直供订单：先在供给池「转商品」，买家下单支付后才会产生' }}
-        />
-      </Card>
+      <TradeList<P2tOrder>
+        listId="admin-p2t-orders"
+        rowKey="orderNo"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={<span style={{ fontWeight: 600 }}>生产直供订单（共 {total} 条）</span>}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={handleQuery}
+            onReset={handleReset}
+            fields={[
+              {
+                label: '回写状态',
+                control: (
+                  <Select
+                    value={draftStatus}
+                    onChange={(v) => {
+                      setDraftStatus(v)
+                      setPageNum(1)
+                      setStatus(v)
+                    }}
+                    options={[
+                      { value: '', label: '全部回写状态' },
+                      { value: 'SUCCESS', label: '成功' },
+                      { value: 'FAILED', label: '失败待重试' },
+                      { value: 'PENDING', label: '待回写' },
+                    ]}
+                  />
+                ),
+              },
+              {
+                label: '关键字',
+                control: (
+                  <Input
+                    allowClear
+                    value={draftKeyword}
+                    placeholder="订单号 / 买家 / 供给单号"
+                    onChange={(e) => setDraftKeyword(e.target.value)}
+                    onPressEnter={handleQuery}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        pagination={{
+          current: pageNum,
+          pageSize,
+          total,
+          onChange: (p, s) => {
+            setPageNum(p)
+            setPageSize(s)
+          },
+        }}
+        columns={[
+          { title: '订单号', dataIndex: 'orderNo', width: 180, ellipsis: true },
+          { title: '买家', dataIndex: 'buyerName', width: 160, ellipsis: true },
+          { title: '商品', dataIndex: 'productName', width: 180, ellipsis: true },
+          { title: '来源供给', dataIndex: 'sourceOfferNo', width: 165, ellipsis: true },
+          { title: '数量', dataIndex: 'totalQuantity', width: 96 },
+          { title: '金额', dataIndex: 'totalAmount', width: 120, render: (v) => (v == null ? '—' : `¥${v}`) },
+          {
+            title: '订单状态',
+            dataIndex: 'paymentStatus',
+            width: 110,
+            render: (v: string) => <Tag color={v === 'paid' ? 'green' : 'default'}>{v}</Tag>,
+          },
+          {
+            title: '回写',
+            dataIndex: 'p2tWritebackStatus',
+            width: 120,
+            render: (v: string) => (v ? <Tag color={WB[v]?.color}>{WB[v]?.text ?? v}</Tag> : '—'),
+          },
+          {
+            title: '操作',
+            key: 'action',
+            width: 110,
+            render: (_, r) => (
+              r.p2tWritebackStatus === 'FAILED' || r.p2tWritebackStatus === 'PENDING' ? (
+                <ListRowActions>
+                  <Button size="small" type="link" onClick={() => void retry(r.orderNo)}>重试回写</Button>
+                </ListRowActions>
+              ) : (
+                <span style={{ color: '#a0aec0' }}>—</span>
+              )
+            ),
+          },
+        ]}
+        locale={{ emptyText: '还没有生产直供订单：先在供给池「转商品」，买家下单支付后才会产生' }}
+      />
     </div>
   )
 }

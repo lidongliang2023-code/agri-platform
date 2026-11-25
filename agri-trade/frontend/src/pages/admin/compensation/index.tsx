@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Table, Tag, message } from 'antd'
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Alert, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Tag, message } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { ListRowActions } from '@agri/shared'
 import { createCompensation, executeCompensation, getAdminCompensationPage, getAdminDisputePage, reviewCompensation } from '@/api/admin'
 import { getOrderList } from '@/api/order'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 interface CompensationRow {
   id: number
@@ -29,7 +31,6 @@ const STATUS: Record<string, { text: string; color: string }> = {
   paid: { text: '已打款', color: 'success' }
 }
 
-/** 赔付类型（库里存的是英文枚举，建单时给一组对得上的取值）。 */
 const COMPENSATION_TYPE: Record<string, string> = {
   delay: '交付延误',
   quality: '质量不符',
@@ -41,30 +42,22 @@ const COMPENSATION_TYPE: Record<string, string> = {
 
 /**
  * 赔付执行（运营端）。
- *
- * <p><b>核准与打款是两个动作</b>：核准只把单据置为"已核准待打款"，
- * 打款走独立的 execute 接口（只在核准后才允许）。</p>
- *
- * <p>这曾经是不成立的：`reviewCompensation` 原先在核准通过后直接调用 executeCompensation，
- * 审核接口返回时单据已经是 paid —— 界面上再放一个"打款"按钮必然报"执行失败"，
- * 而钱其实早就出去了。后端已按财务口径拆开（审批是"该不该赔"，付款是"钱出没出"），
- * 这个页面才对得上。</p>
  */
 export default function AdminCompensation() {
   const [rows, setRows] = useState<CompensationRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [pageNum, setPageNum] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [status, setStatus] = useState('pending')
   const [keyword, setKeyword] = useState('')
+  const [draftStatus, setDraftStatus] = useState('pending')
+  const [draftKeyword, setDraftKeyword] = useState('')
   const [current, setCurrent] = useState<CompensationRow | null>(null)
   const [form] = Form.useForm()
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [createForm] = Form.useForm()
-  // 建单时可挂到一场纠纷上：挂了就以纠纷为准（订单、收款方、申请人由后端按纠纷推导），
-  // 同一场纠纷只允许赔一次。
   const [disputes, setDisputes] = useState<Array<{ id: number; disputeNo: string; claimAmount?: number; complainantName?: string }>>([])
   const [orders, setOrders] = useState<Array<{ id: number; orderNo?: string; productName?: string; totalAmount?: number }>>([])
 
@@ -87,8 +80,6 @@ export default function AdminCompensation() {
 
   const submitCreate = async () => {
     const values = await createForm.validateFields()
-    // 赔付必须能追溯：挂在纠纷上（推荐）或者至少挂到一笔订单上，
-    // 否则这笔出款事后查不到为什么赔，也进不了挂订单号的资金流水。
     if (!values.disputeId && !values.orderId) {
       message.warning('请至少关联一场纠纷或一张订单')
       return
@@ -135,8 +126,21 @@ export default function AdminCompensation() {
     load()
   }, [load])
 
+  const handleQuery = () => {
+    setPageNum(1)
+    setStatus(draftStatus)
+    setKeyword(draftKeyword.trim())
+  }
+
+  const handleReset = () => {
+    setDraftStatus('pending')
+    setDraftKeyword('')
+    setPageNum(1)
+    setStatus('pending')
+    setKeyword('')
+  }
+
   const review = async (row: CompensationRow, approved: boolean, remark?: string) => {
-    // 审核人由后端从访问令牌取（原先这里拼当前昵称、取不到就写"运营"再传上去）。
     const res = await reviewCompensation(row.id, approved ? 'approved' : 'rejected', remark)
     if (res?.code === 200) {
       message.success(approved ? '已核准，待打款' : '已驳回')
@@ -148,7 +152,6 @@ export default function AdminCompensation() {
     }
   }
 
-  /** 打款：仅对"已核准待打款"的单据可用；执行后置 paid 并生成打款流水号 */
   const execute = async (row: CompensationRow) => {
     const res = await executeCompensation(row.id)
     if (res?.code === 200) {
@@ -161,136 +164,136 @@ export default function AdminCompensation() {
 
   return (
     <div style={{ padding: 20 }}>
-      <Card style={{ marginBottom: 16 }}>
-        <Row gutter={[12, 12]} align="middle">
-          <Col flex="200px">
-            <Select
-              value={status}
-              style={{ width: '100%' }}
-              onChange={(value) => {
-                setPageNum(1)
-                setStatus(value)
-              }}
-              options={[
-                { value: 'pending', label: '待审核' },
-                { value: 'approved', label: '已核准待打款' },
-                { value: 'paid', label: '已打款' },
-                { value: 'rejected', label: '已驳回' },
-                { value: '', label: '全部状态' }
-              ]}
-            />
-          </Col>
-          <Col flex="280px">
-            <Input.Search
-              allowClear
-              placeholder="赔付单号 / 订单号 / 收款方"
-              onSearch={(value) => {
-                setPageNum(1)
-                setKeyword(value)
-              }}
-            />
-          </Col>
-          <Col flex="auto">
-            <Space>
-            <Button icon={<ReloadOutlined />} onClick={load}>
-              刷新
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-              新建赔付单
-            </Button>
-            </Space>
-          </Col>
-        </Row>
-      </Card>
-
-      <Card title={`赔付单 ${total} 条`}>
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={rows}
-          scroll={{ x: 1250 }}
-          pagination={{
-            current: pageNum,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            onChange: (page, size) => {
-              setPageNum(page)
-              setPageSize(size)
+      <TradeList<CompensationRow>
+        listId="admin-compensation"
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={(
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            新建赔付单
+          </Button>
+        )}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={handleQuery}
+            onReset={handleReset}
+            fields={[
+              {
+                label: '赔付状态',
+                control: (
+                  <Select
+                    value={draftStatus}
+                    onChange={(value) => {
+                      setDraftStatus(value)
+                      setPageNum(1)
+                      setStatus(value)
+                    }}
+                    options={[
+                      { value: 'pending', label: '待审核' },
+                      { value: 'approved', label: '已核准待打款' },
+                      { value: 'paid', label: '已打款' },
+                      { value: 'rejected', label: '已驳回' },
+                      { value: '', label: '全部状态' }
+                    ]}
+                  />
+                ),
+              },
+              {
+                label: '关键字',
+                control: (
+                  <Input
+                    allowClear
+                    value={draftKeyword}
+                    placeholder="赔付单号 / 订单号 / 收款方"
+                    onChange={(e) => setDraftKeyword(e.target.value)}
+                    onPressEnter={handleQuery}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        pagination={{
+          current: pageNum,
+          pageSize,
+          total,
+          onChange: (page, size) => {
+            setPageNum(page)
+            setPageSize(size)
+          },
+        }}
+        columns={[
+          { title: '赔付单号', dataIndex: 'compensationNo', width: 160, ellipsis: true },
+          { title: '关联订单', dataIndex: 'orderNo', width: 160, ellipsis: true },
+          { title: '申请人', dataIndex: 'applicantName', width: 150, ellipsis: true },
+          { title: '收款方', dataIndex: 'recipientName', width: 150, ellipsis: true },
+          { title: '赔付金额', dataIndex: 'compensationAmount', width: 120, render: (val: number) => `¥${val}` },
+          {
+            title: '赔付事由',
+            dataIndex: 'compensationReason',
+            width: 220,
+            ellipsis: true,
+            render: (val: string) => val || '—'
+          },
+          {
+            title: '状态',
+            dataIndex: 'compensationStatus',
+            width: 130,
+            render: (val: string) => {
+              const tag = STATUS[val] ?? { text: val, color: 'default' }
+              return <Tag color={tag.color}>{tag.text}</Tag>
             }
-          }}
-          columns={[
-            { title: '赔付单号', dataIndex: 'compensationNo', width: 160 },
-            { title: '关联订单', dataIndex: 'orderNo', width: 160 },
-            { title: '申请人', dataIndex: 'applicantName', width: 150 },
-            { title: '收款方', dataIndex: 'recipientName', width: 150 },
-            { title: '赔付金额', dataIndex: 'compensationAmount', width: 120, render: (val: number) => `¥${val}` },
-            {
-              title: '赔付事由',
-              dataIndex: 'compensationReason',
-              width: 220,
-              ellipsis: true,
-              render: (val: string) => val || '—'
-            },
-            {
-              title: '状态',
-              dataIndex: 'compensationStatus',
-              width: 130,
-              render: (val: string) => {
-                const tag = STATUS[val] ?? { text: val, color: 'default' }
-                return <Tag color={tag.color}>{tag.text}</Tag>
+          },
+          {
+            title: '审核 / 打款',
+            key: 'auditPay',
+            width: 260,
+            ellipsis: true,
+            render: (_: unknown, row: CompensationRow) =>
+              [
+                row.reviewer && `审核:${row.reviewer}/${row.reviewResult ?? ''}`,
+                row.payTime && `打款:${row.payTime}`,
+                row.transactionId && `流水:${row.transactionId}`
+              ]
+                .filter(Boolean)
+                .join('　') || '—'
+          },
+          { title: '申请时间', dataIndex: 'createTime', width: 170 },
+          {
+            title: '操作',
+            key: 'action',
+            width: 140,
+            render: (_: unknown, row: CompensationRow) => {
+              if (row.compensationStatus === 'pending') {
+                return (
+                  <ListRowActions>
+                    <Popconfirm title="核准后进入「待打款」，确认？" onConfirm={() => review(row, true, '审核通过')}>
+                      <Button type="link" size="small">核准</Button>
+                    </Popconfirm>
+                    <Button type="link" size="small" danger onClick={() => setCurrent(row)}>驳回</Button>
+                  </ListRowActions>
+                )
               }
-            },
-            {
-              title: '审核 / 打款',
-              width: 280,
-              render: (_: unknown, row: CompensationRow) =>
-                [
-                  row.reviewer && `审核:${row.reviewer}/${row.reviewResult ?? ''}`,
-                  row.payTime && `打款:${row.payTime}`,
-                  row.transactionId && `流水:${row.transactionId}`
-                ]
-                  .filter(Boolean)
-                  .join('　') || '—'
-            },
-            { title: '申请时间', dataIndex: 'createTime', width: 170 },
-            {
-              title: '操作',
-              width: 170,
-              fixed: 'right',
-              render: (_: unknown, row: CompensationRow) => {
-                if (row.compensationStatus === 'pending') {
-                  return (
-                    <Space size="small">
-                      <Popconfirm title="核准后进入「待打款」，确认？" onConfirm={() => review(row, true, '审核通过')}>
-                        <Button type="link" size="small">
-                          核准
-                        </Button>
-                      </Popconfirm>
-                      <Button type="link" size="small" danger onClick={() => setCurrent(row)}>
-                        驳回
-                      </Button>
-                    </Space>
-                  )
-                }
-                if (row.compensationStatus === 'approved') {
-                  return (
+              if (row.compensationStatus === 'approved') {
+                return (
+                  <ListRowActions>
                     <Popconfirm
                       title={`确认打款 ¥${row.compensationAmount} 给「${row.recipientName}」？`}
                       onConfirm={() => execute(row)}
                     >
-                      <Button type="link" size="small">
-                        打款
-                      </Button>
+                      <Button type="link" size="small">打款</Button>
                     </Popconfirm>
-                  )
-                }
-                return <span style={{ color: '#a0aec0' }}>已完结</span>
+                  </ListRowActions>
+                )
               }
+              return <span style={{ color: '#a0aec0' }}>已完结</span>
             }
-          ]}
-        />
-      </Card>
+          }
+        ]}
+      />
 
       <Modal
         open={Boolean(current)}

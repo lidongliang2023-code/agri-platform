@@ -221,23 +221,27 @@
 }
 
 /* 表格规范：表头可拖拽列宽、复选框列防裁切省略号、选中行 #e8f5e9、绿色复选框、状态圆点胶囊 */
-.agri-list-table .ant-table-thead > tr > th {
+.agri-list-table .ant-table-thead > tr > th,
+.agri-resizable-table .ant-table-thead > tr > th {
   position: relative;
 }
 
 .agri-list-table .ant-table-thead > tr > th.ant-table-selection-column,
-.agri-list-table .ant-table-tbody > tr > td.ant-table-selection-column {
+.agri-list-table .ant-table-tbody > tr > td.ant-table-selection-column,
+.agri-resizable-table .ant-table-thead > tr > th.ant-table-selection-column,
+.agri-resizable-table .ant-table-tbody > tr > td.ant-table-selection-column {
   padding-inline: 8px !important;
   overflow: visible !important;
   text-overflow: clip !important;
   text-align: center !important;
 }
 
-.agri-list-table .agri-column-resize-handle {
+.agri-list-table .agri-column-resize-handle,
+.agri-resizable-table .agri-column-resize-handle {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   top: 0;
-  right: -5px;
+  right: 0;
   bottom: 0;
   width: 10px;
   cursor: col-resize;
@@ -245,33 +249,42 @@
   user-select: none;
 }
 
-.agri-list-table .ant-table-thead > tr > .ant-table-cell-fix-right {
+.agri-list-table .ant-table-thead > tr > .ant-table-cell-fix-right,
+.agri-resizable-table .ant-table-thead > tr > .ant-table-cell-fix-right {
   z-index: 3;
   background: var(--ant-table-header-bg, #fafafa);
 }
 
-.agri-list-table .ant-table-tbody > tr > .ant-table-cell-fix-right {
+.agri-list-table .ant-table-tbody > tr > .ant-table-cell-fix-right,
+.agri-resizable-table .ant-table-tbody > tr > .ant-table-cell-fix-right {
   z-index: 3;
   background: var(--ant-table-bg, #fff);
 }
 
-.agri-list-table .agri-column-resize-handle::after {
+.agri-list-table .agri-column-resize-handle::after,
+.agri-resizable-table .agri-column-resize-handle::after {
   content: '';
   position: absolute;
   top: 20%;
   bottom: 20%;
-  left: 4px;
+  right: 1px;
   width: 2px;
   border-radius: 2px;
   background: #cbdcd1;
+  transition: background-color 0.12s ease;
 }
 
 .agri-list-table .agri-column-resize-handle:hover::after,
-.agri-list-table .agri-column-resize-handle:focus-visible::after {
+.agri-list-table .agri-column-resize-handle:focus-visible::after,
+.agri-list-table .agri-column-resize-handle.is-dragging::after,
+.agri-resizable-table .agri-column-resize-handle:hover::after,
+.agri-resizable-table .agri-column-resize-handle:focus-visible::after,
+.agri-resizable-table .agri-column-resize-handle.is-dragging::after {
   background: #23744c;
 }
 
-.agri-list-table .agri-column-resize-handle:focus-visible {
+.agri-list-table .agri-column-resize-handle:focus-visible,
+.agri-resizable-table .agri-column-resize-handle:focus-visible {
   outline: 2px solid #23744c;
   outline-offset: -2px;
 }

@@ -9,8 +9,6 @@ import {
   IdcardOutlined,
   KeyOutlined,
   LockOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   MessageOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
@@ -24,6 +22,8 @@ import { useApp } from '../app-context'
 import type { OpsPageKey } from '../types'
 import { ucApi } from '../api'
 import { logoutUnified, useUnifiedUser } from '../sso'
+import { SidebarUserCard } from './SidebarUserCard'
+import { RouteWorkspaceTabs, WorkspaceHeader } from '@agri/shared'
 
 type MenuItem = { key: OpsPageKey; label: string; icon: ReactNode }
 type MenuGroup = { title: string; items: MenuItem[] }
@@ -138,10 +138,24 @@ const PARENT_OF: Partial<Record<OpsPageKey, OpsPageKey>> = {
 
 export function AppShell({ children }: { children: ReactNode }): JSX.Element {
   const { user } = useUnifiedUser()
-  const { page, navigate } = useApp()
-  const [collapsed, setCollapsed] = useState(false)
+  const { page, id, navigate } = useApp()
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1280)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [pending, setPending] = useState(0)
+  const showSidebarCopy = !collapsed || mobileOpen
+
+  useEffect(() => {
+    const syncLayout = (): void => {
+      const w = window.innerWidth
+      setIsMobile(w < 1024)
+      if (w >= 1024 && w < 1280) setCollapsed(true)
+      else if (w >= 1280) setCollapsed(false)
+      if (w >= 1024) setMobileOpen(false)
+    }
+    window.addEventListener('resize', syncLayout)
+    return () => window.removeEventListener('resize', syncLayout)
+  }, [])
 
   const displayName = user.nickname || user.username
   const highlight = PARENT_OF[page] ?? page
@@ -166,7 +180,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
       <aside className={`app-sidebar${mobileOpen ? ' mobile-open' : ''}`}>
         <button className="app-brand" type="button" onClick={() => navigate('dashboard')}>
           <img className="app-brand-mark" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
-          {!collapsed && (
+          {showSidebarCopy && (
             <span className="app-brand-copy">
               <b>丰链云</b>
               <small>FENGCHAIN · AGRI</small>
@@ -176,7 +190,6 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
         <div className="sidebar-groups">
           {MENU.map((group) => (
             <section className="sidebar-group" key={group.title}>
-              {!collapsed && <h3>{group.title}</h3>}
               {group.items.map((item) => (
                 <button
                   key={item.key}
@@ -186,24 +199,16 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
                   onClick={() => navigate(item.key)}
                 >
                   <span className="sidebar-icon">{item.icon}</span>
-                  {!collapsed && <span>{item.label}</span>}
-                  {!collapsed && item.key === 'dashboard' && pending > 0 && <i>{pending}</i>}
+                  {showSidebarCopy && <span>{item.label}</span>}
+                  {showSidebarCopy && item.key === 'dashboard' && pending > 0 && <i>{pending}</i>}
                 </button>
               ))}
             </section>
           ))}
         </div>
-        <div className="sidebar-bottom">
-          {!collapsed && (
-            <div className="sidebar-aid">
-              <span><AuditOutlined /></span>
-              <div><b>操作留痕</b><small>审核/冻结/改配置均落审计</small></div>
-            </div>
-          )}
-          <button type="button" className="sidebar-toggle" onClick={() => setCollapsed(!collapsed)}>
-            {collapsed ? <MenuUnfoldOutlined /> : <><MenuFoldOutlined /> 收起导航</>}
-          </button>
-        </div>
+        <SidebarUserCard name={displayName} role="用户中心运营" collapsed={!showSidebarCopy}
+          switchLabel="切换身份（主数据运营）" switchUrl={`${window.location.protocol}//${window.location.hostname}:8080/`}
+          onLogout={() => void logoutUnified('user-center-ops')} />
       </aside>
 
       {mobileOpen && (
@@ -216,41 +221,52 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
       )}
 
       <div className="app-main">
-        <header className="app-header">
-          <div className="header-left">
-            <button type="button" className="mobile-menu-button" onClick={() => setMobileOpen(true)}>
-              <MenuUnfoldOutlined />
-            </button>
-            <div className="header-crumb">
-              <span>用户中心 · 运营端</span><b>/</b><strong>{activeLabel}</strong>
-            </div>
-          </div>
-          <div className="header-right">
-            <button type="button" className="header-link" onClick={() => navigate('dashboard')}>
-              待办 {pending}
-            </button>
-            <button type="button" className="header-link" onClick={() => navigate('audit-log')}>
-              审计日志
-            </button>
-            <Dropdown
-              menu={{
-                items: [
-                  { key: 'config', label: '参数配置', onClick: () => navigate('config') },
-                  { key: 'stats', label: '用户统计', onClick: () => navigate('stats') },
-                  { key: 'logout', label: '退出统一登录', onClick: () => void logoutUnified('user-center-ops') },
-                ],
-              }}
-              placement="bottomRight"
-            >
-              <button type="button" className="user-chip">
-                <Avatar size={32} icon={<UserOutlined />} className="user-avatar">
-                  {displayName.slice(0, 1)}
-                </Avatar>
-                <span><b>{displayName}</b><small>统一账号 · 运营权限</small></span>
+        <WorkspaceHeader
+          className="app-header"
+          leftClassName="header-left"
+          rightClassName="header-right"
+          collapsed={collapsed}
+          mobile={isMobile}
+          mobileOpen={mobileOpen}
+          onToggleCollapse={() => (isMobile ? setMobileOpen((prev) => !prev) : setCollapsed((prev) => !prev))}
+          breadcrumbs={['用户中心 · 运营端', activeLabel]}
+          right={
+            <>
+              <button type="button" className="header-link" onClick={() => navigate('dashboard')}>
+                待办 {pending}
               </button>
-            </Dropdown>
-          </div>
-        </header>
+              <button type="button" className="header-link" onClick={() => navigate('audit-log')}>
+                审计日志
+              </button>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'config', label: '参数配置', onClick: () => navigate('config') },
+                    { key: 'stats', label: '用户统计', onClick: () => navigate('stats') },
+                    { key: 'logout', label: '退出统一登录', onClick: () => void logoutUnified('user-center-ops') },
+                  ],
+                }}
+                placement="bottomRight"
+              >
+                <button type="button" className="user-chip">
+                  <Avatar size={32} icon={<UserOutlined />} className="user-avatar">
+                    {displayName.slice(0, 1)}
+                  </Avatar>
+                  <span><b>{displayName}</b><small>统一账号 · 运营权限</small></span>
+                </button>
+              </Dropdown>
+            </>
+          }
+        />
+        <RouteWorkspaceTabs
+          activeKey={id === undefined ? page : `${page}/${encodeURIComponent(id)}`}
+          activeLabel={id === undefined ? activeLabel : `${activeLabel} · ${id.slice(-6)}`}
+          activePath={window.location.hash.replace(/^#\/?/, '')}
+          homeKey="dashboard"
+          homeLabel={TITLES.dashboard}
+          onNavigate={(path) => { window.location.hash = `/${path}` }}
+          storageKey="agri-sso-ops:workspace-tabs"
+        />
 
         <main className="app-content">{children}</main>
         <footer className="app-footer">© 2026 农业产业互联网平台 · 丰链云用户中心运营端</footer>

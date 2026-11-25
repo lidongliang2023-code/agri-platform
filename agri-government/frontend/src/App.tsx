@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   AuditOutlined, BankOutlined, BellOutlined, CheckCircleFilled, CreditCardOutlined,
-  FileProtectOutlined, FileSearchOutlined, HomeOutlined, IdcardOutlined, MenuFoldOutlined,
-  MenuUnfoldOutlined, MessageOutlined, SafetyCertificateOutlined, SearchOutlined, SolutionOutlined,
+  FileProtectOutlined, FileSearchOutlined, HomeOutlined, IdcardOutlined,
+  MessageOutlined, SafetyCertificateOutlined, SearchOutlined, SolutionOutlined,
   TeamOutlined, WarningOutlined,
 } from '@ant-design/icons'
 import { App as AntApp, Button, Form, Input, InputNumber, Modal, Progress, Select, Tabs, Tag } from 'antd'
@@ -12,6 +12,8 @@ import {
   type Subject, type Subsidy,
 } from './api'
 import { logoutUnified, useUnifiedUser } from './sso'
+import { SidebarUserCard } from './SidebarUserCard'
+import { RouteWorkspaceTabs, WorkspaceHeader } from '@agri/shared'
 
 type Page = 'home' | 'workbench' | 'subject' | 'reports' | 'self-check' | 'credit' | 'enforcement'
   | 'policies' | 'public' | 'interaction' | 'messages' | 'logs'
@@ -229,8 +231,9 @@ export default function App(): JSX.Element {
   const { user } = useUnifiedUser()
   const displayName = user.nickname || user.username
   const [page,setPage]=useState<Page>(parsePage)
-  const [collapsed,setCollapsed]=useState(false)
+  const [collapsed,setCollapsed]=useState(() => window.innerWidth < 1280)
   const [keyword,setKeyword]=useState('')
+  useEffect(()=>{const syncLayout=()=>{setCollapsed(window.innerWidth<1280)};window.addEventListener('resize',syncLayout);return()=>window.removeEventListener('resize',syncLayout)},[])
   const [identity,setIdentity]=useState<IdentityCard|null>(null)
   const [unread,setUnread]=useState(0)
   useEffect(()=>{const onChange=()=>{setPage(parsePage());window.scrollTo({top:0})};window.addEventListener('hashchange',onChange);return()=>window.removeEventListener('hashchange',onChange)},[])
@@ -241,5 +244,5 @@ export default function App(): JSX.Element {
   },[page])
   let content: JSX.Element
   switch(page){case 'workbench':content=<WorkbenchPage/>;break;case 'subject':content=<SubjectPage/>;break;case 'reports':content=<ReportsPage/>;break;case 'self-check':content=<SelfCheckPage/>;break;case 'credit':content=<CreditPage/>;break;case 'enforcement':content=<EnforcementPage/>;break;case 'policies':content=<PoliciesPage/>;break;case 'public':content=<PublicPage/>;break;case 'interaction':content=<InteractionPage/>;break;case 'messages':content=<MessagesPage/>;break;case 'logs':content=<LogsPage/>;break;default:content=<HomePage/>}
-  return <div className={`g-shell${collapsed?' collapsed':''}`}><aside className="g-sidebar"><button type="button" className="g-brand" onClick={()=>go('home')}><img className="g-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云"/>{!collapsed&&<div><b>丰链云</b><small>FENGCHAIN · AGRI</small></div>}</button><nav>{NAV.map(group=><section key={group.group}>{!collapsed&&<h3>{group.group}</h3>}{group.items.map(item=><button type="button" key={item.page} className={page===item.page?'on':''} onClick={()=>go(item.page)} title={item.label}>{item.icon}{!collapsed&&<span>{item.label}</span>}</button>)}</section>)}</nav><div className="g-side-foot">{!collapsed&&<div><b>监管服务在线</b><small>工作日 09:00-18:00</small></div>}<button type="button" onClick={()=>setCollapsed(!collapsed)}>{collapsed?<MenuUnfoldOutlined/>:<><MenuFoldOutlined/>收起导航</>}</button></div></aside><div className="g-main"><header className="g-header"><div><span>政府监管服务</span><b>/</b><strong>{TITLES[page]}</strong></div><form onSubmit={e=>{e.preventDefault();if(!keyword.trim()){message.warning('请输入企业名称、统一社会信用代码或溯源码');return}transfer.keyword=keyword.trim();go('public')}}><SearchOutlined/><input value={keyword} onChange={e=>setKeyword(e.target.value)} placeholder="搜索主体信用代码（溯源码请在公众查询页核验）"/></form><div className="g-header-right"><span title="当前登录主体">{identity ? (identity.subjectName ?? '监管档案未绑定') : '身份解析中'}</span><button type="button" onClick={()=>go('messages')} title={`未读消息 ${unread} 条`}><BellOutlined/>{unread>0&&<i>{unread}</i>}</button><button type="button" className="g-user" onClick={() => void logoutUnified('gov')} title="退出统一登录"><span>{displayName.slice(0,1)}</span><div><b>{displayName}</b><small>统一账号 · 政府监管</small></div></button></div></header><main><div className="g-crumb"><HomeOutlined/><button type="button" onClick={()=>go('home')}>监管服务</button><span>/</span><b>{TITLES[page]}</b></div>{content}</main><footer>© 2026 农业产业互联网平台 · 政府监管服务</footer></div></div>
+  return <div className={`g-shell${collapsed?' collapsed':''}`}><aside className="g-sidebar"><button type="button" className="g-brand" onClick={()=>go('home')}><img className="g-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云"/>{!collapsed&&<div><b>丰链云</b><small>FENGCHAIN · AGRI</small></div>}</button><nav>{NAV.map(group=><section key={group.group}>{group.items.map(item=><button type="button" key={item.page} className={page===item.page?'on':''} onClick={()=>go(item.page)} title={item.label}>{item.icon}{!collapsed&&<span>{item.label}</span>}</button>)}</section>)}</nav><SidebarUserCard name={displayName} role={identity?.subjectName ?? '经营主体'} collapsed={collapsed} switchLabel="切换身份（移动执法端）" switchUrl={`${window.location.protocol}//${window.location.hostname}:8109/`} onLogout={() => void logoutUnified('gov')}/></aside><div className="g-main"><WorkspaceHeader className="g-header" rightClassName="g-header-right" collapsed={collapsed} onToggleCollapse={()=>setCollapsed(prev=>!prev)} breadcrumbs={['政府监管服务',TITLES[page]]} center={<form onSubmit={e=>{e.preventDefault();if(!keyword.trim()){message.warning('请输入企业名称、统一社会信用代码或溯源码');return}transfer.keyword=keyword.trim();go('public')}}><SearchOutlined/><input value={keyword} onChange={e=>setKeyword(e.target.value)} placeholder="搜索主体信用代码（溯源码请在公众查询页核验）"/></form>} right={<><span title="当前登录主体">{identity ? (identity.subjectName ?? '监管档案未绑定') : '身份解析中'}</span><button type="button" onClick={()=>go('messages')} title={`未读消息 ${unread} 条`}><BellOutlined/>{unread>0&&<i>{unread}</i>}</button><button type="button" className="g-user" onClick={() => void logoutUnified('gov')} title="退出统一登录"><span>{displayName.slice(0,1)}</span><div><b>{displayName}</b><small>统一账号 · 政府监管</small></div></button></>} /><RouteWorkspaceTabs activeKey={page} activeLabel={TITLES[page]} homeKey="home" homeLabel={TITLES.home} onNavigate={path => { window.location.hash = `/${path}` }} storageKey="agri-gov:workspace-tabs" /><main><div className="g-crumb"><HomeOutlined/><button type="button" onClick={()=>go('home')}>监管服务</button><span>/</span><b>{TITLES[page]}</b></div>{content}</main><footer>© 2026 农业产业互联网平台 · 政府监管服务</footer></div></div>
 }

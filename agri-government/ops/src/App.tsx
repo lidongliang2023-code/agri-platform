@@ -5,7 +5,7 @@ import PersonnelGrants from './PersonnelGrants'
 import { useEffect,useMemo,useState,type ReactNode } from 'react'
 import {
   AlertOutlined,AuditOutlined,BarChartOutlined,BellOutlined,CheckCircleFilled,CreditCardOutlined,
-  DatabaseOutlined,FileProtectOutlined,FundOutlined,HomeOutlined,MenuFoldOutlined,MenuUnfoldOutlined,
+  DatabaseOutlined,FileProtectOutlined,FundOutlined,HomeOutlined,
   SafetyCertificateOutlined,SearchOutlined,ShareAltOutlined,TeamOutlined,WarningOutlined,
 } from '@ant-design/icons'
 import { App as AntApp,Avatar,Button,Dropdown,Form,Input,Modal,Progress,Select,Switch,Table,Tag } from 'antd'
@@ -15,6 +15,8 @@ import {
   type Overview,type Rectification,type Repair,type Sampling,type Subject,type Subsidy,type Task,type Warning,
 } from './api'
 import { logoutUnified,useUnifiedUser } from '../../frontend/src/sso'
+import { SidebarUserCard } from './SidebarUserCard'
+import { RouteWorkspaceTabs, WorkspaceHeader } from '@agri/shared'
 
 interface StaffRow{id:number;name:string;role:string;organization:string;grid:string;status:string;certificateNo?:string;platformUserId?:string}
 type Page='region-registry'|'personnel-grants'|'scopes'|'dashboard'|'subjects'|'warnings'|'tasks'|'items'|'cases'|'repairs'|'subsidies'|'complaints'|'samplings'|'sharing'|'statistics'|'users'|'logs'
@@ -98,7 +100,7 @@ function Subjects(){
   ]
   return <div className="o-page"><Title title="市场主体监管" desc="辖区农业生产经营主体全量档案、风险等级与分级分类监管。" actions={<Button onClick={exportRows}>导出台账</Button>}/>
     <section className="o-card o-filter"><div className="o-tabs">{['all','low','medium','high'].map(k=><button type="button" key={k} className={risk===k?'on':''} onClick={()=>setRisk(k)}>{k==='all'?'全部':k==='high'?'高风险':k==='medium'?'中风险':'低风险'}</button>)}</div><Input prefix={<SearchOutlined/>} value={keyword} onChange={e=>setKeyword(e.target.value)} onPressEnter={()=>load(keyword)} placeholder="主体名称 / 信用代码"/><Button type="primary" onClick={()=>load(keyword)}>查询</Button></section>
-    <section className="o-card o-table"><Table rowKey="id" dataSource={items} columns={columns} scroll={{x:1120}}/></section>
+    <section className="o-card o-table"><Table rowKey="id" dataSource={items} columns={columns} scroll={{x:1120}} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
     <Modal title={'绑定平台经营主体 · '+(target?.subjectName ?? '')} open={Boolean(target)} onCancel={()=>setTarget(null)} onOk={()=>void applyBinding(target as Subject,merchantId.trim())} okText="确认绑定">
       <p className="muted">监管档案与平台经营主体是两条业务线各自的数据，绑定关系由运营显式建立：绑定后该主体下的账号才能在主体端看到自己的证照、整改、处罚与通知；不按名字猜同一家（同名不等于同一家）。</p>
       <Input value={merchantId} onChange={e=>setMerchantId(e.target.value)} placeholder="平台经营主体号（例如 2001）"/>
@@ -202,7 +204,7 @@ function CheckItems(){
     catch(e){message.error(e instanceof Error?e.message:'操作失败')}
   }
   return <div className="o-page"><Title title="执法事项清单" desc="现场检查看勾选项来自这张模板表；停用只影响新建任务，不改写历史结论。" actions={<Button type="primary" onClick={add}>+ 新增检查项</Button>}/>
-    <section className="o-card o-table"><Table rowKey="id" dataSource={items} pagination={false} scroll={{x:760}} columns={[
+    <section className="o-card o-table"><Table rowKey="id" dataSource={items} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} scroll={{x:760}} columns={[
       {title:'顺序',dataIndex:'sortOrder',width:70},
       {title:'检查项',render:(_,r)=><div className="o-entity"><b>{r.itemName}</b><small>{r.note||'无说明'}</small></div>},
       {title:'状态',dataIndex:'status',render:v=><Tag color={v==='active'?'green':'default'}>{v==='active'?'启用':'停用'}</Tag>},
@@ -238,7 +240,7 @@ function Cases(){
       {title:'进度',render:(_,r)=><Progress percent={r.progress} size="small" strokeColor="#159a5e"/>},
       {title:'承办',dataIndex:'handler'},
       {title:'操作',render:(_,r)=>r.status!=='closed'?<Button type="link" onClick={()=>void advance(r)}>推进到{STATUS[next(r)]?.label??next(r)}</Button>:<span className="muted">已归档</span>},
-    ]}/></section>
+    ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
   </div>
 }
 
@@ -279,7 +281,7 @@ function Subsidies(){
       {title:'进度',render:(_,r)=><Progress percent={r.progress} size="small" strokeColor="#159a5e"/>},
       {title:'状态',dataIndex:'status',render:v=><Status value={v}/>},
       {title:'操作',render:(_,r)=>r.status!=='paid'?<><Button type="link" onClick={()=>void review(r,'county_review')}>通过复核</Button><Button type="link" onClick={()=>void review(r,'paid')}>标记兑付</Button></>:<span className="muted">已兑付</span>},
-    ]}/></section>
+    ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
   </div>
 }
 
@@ -324,7 +326,7 @@ function Samplings(){
       {title:'结果',dataIndex:'result',render:v=><Tag color={v==='合格'?'green':v==='不合格'?'red':'default'}>{v}</Tag>},
       {title:'处置',dataIndex:'disposition'},
       {title:'抽样日期',dataIndex:'sampleDate'},
-    ]}/></section>
+    ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
     <Modal title="新建抽样任务" open={open} onCancel={()=>setOpen(false)} onOk={()=>void create()} okText="创建"><Form form={form} layout="vertical">
       <Form.Item label="监管主体" name="subjectId" rules={[{required:true,message:'抽检必须落到具体主体'}]}><Select showSearch optionFilterProp="label" placeholder="从监管台账选择" options={subjects.map(s=>({value:s.id,label:`${s.subjectName}（${s.region}）`}))}/></Form.Item>
       <Form.Item label="产品名称" name="productName" rules={[{required:true,message:'请填写产品名称'}]}><Input/></Form.Item>
@@ -353,7 +355,7 @@ function Sharing(){
       {title:'状态',dataIndex:'status',render:v=><Status value={v}/>},
       {title:'更新时间',dataIndex:'updatedAt'},
       {title:'操作',render:(_,r)=>r.status==='pending'?<><Button type="link" onClick={()=>void review(r,'approved')}>授权</Button><Button type="link" danger onClick={()=>void review(r,'rejected')}>驳回</Button></>:<span className="muted">已配置</span>},
-    ]}/></section>
+    ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
   </div>
 }
 
@@ -372,7 +374,7 @@ function Statistics(){
     <section className="o-card o-table"><Table rowKey="id" dataSource={data.cases} columns={[
       {title:'案件编号',dataIndex:'caseNo'},{title:'主体',dataIndex:'subjectName'},{title:'类型',dataIndex:'caseType'},
       {title:'状态',dataIndex:'status',render:v=><Status value={v}/>},{title:'承办人',dataIndex:'handler'},{title:'立案时间',dataIndex:'filedAt'},
-    ]}/></section>
+    ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
     <section className="o-card o-table" style={{marginTop:14}}><Head title="抽检结果" sub="已出结果的抽样"/><Table rowKey="id" dataSource={data.samplings.filter(s=>s.result!=='待检')} pagination={false} columns={[
       {title:'抽样编号',dataIndex:'samplingNo'},{title:'产品',dataIndex:'productName'},{title:'主体',dataIndex:'subjectName'},
       {title:'结果',dataIndex:'result',render:v=><Tag color={v==='合格'?'green':'red'}>{v}</Tag>},{title:'处置',dataIndex:'disposition'},
@@ -405,7 +407,7 @@ function Users(){
     {title:'操作',render:(_,r)=><><Button type="link" onClick={()=>{setTarget(r);setPlatformUserId(r.platformUserId??'')}}>{r.platformUserId?'变更绑定':'绑定平台账号'}</Button>{r.platformUserId&&<Button type="link" danger onClick={()=>void bind(r,'')}>解除</Button>}</>},
   ]
   return <div className="o-page"><Title title="组织与权限" desc="跨部门组织、监管角色、辖区网格与统一账号绑定关系。"/>
-    <section className="o-card o-table"><Table rowKey="id" dataSource={items} columns={columns} scroll={{x:1020}}/></section>
+    <section className="o-card o-table"><Table rowKey="id" dataSource={items} columns={columns} scroll={{x:1020}} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
     <Modal title={'绑定平台账号 · '+(target?.name ?? '')} open={Boolean(target)} onCancel={()=>setTarget(null)} onOk={()=>void bind(target as StaffRow,platformUserId.trim())} okText="确认绑定">
       <p className="muted">移动执法端用统一账号登录后，要靠这条绑定确认"当前登录人是哪份执法档案"；没绑定的账号只会看到"未绑定执法档案"，任务与取证不会落到某个写死的人身上。权限点（gov:read / gov:write / gov:inspector / gov:admin）由平台运营端在角色权限矩阵里维护。</p>
       <Input value={platformUserId} onChange={e=>setPlatformUserId(e.target.value)} placeholder="平台用户 ID（例如 1007）"/>
@@ -426,13 +428,14 @@ function Logs(){
       {title:'对象',dataIndex:'target'},
       {title:'说明',dataIndex:'detail',ellipsis:true},
       {title:'IP',dataIndex:'ip'},
-    ]}/></section>
+    ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} /></section>
   </div>
 }
 
 export default function App(){
   const {user}=useUnifiedUser();const displayName=user.nickname||user.username
-  const [page,setPage]=useState<Page>(parse),[collapsed,setCollapsed]=useState(false),[keyword,setKeyword]=useState('')
+  const [page,setPage]=useState<Page>(parse),[collapsed,setCollapsed]=useState(() => window.innerWidth < 1280),[keyword,setKeyword]=useState('')
+  useEffect(()=>{const syncLayout=()=>{setCollapsed(window.innerWidth<1280)};addEventListener('resize',syncLayout);return()=>removeEventListener('resize',syncLayout)},[])
   const [overview,setOverview]=useState<Overview|null>(null)
   const [identity,setIdentity]=useState<IdentityCard|null>(null)
   useEffect(()=>{const h=()=>{setPage(parse());scrollTo({top:0})};addEventListener('hashchange',h);return()=>removeEventListener('hashchange',h)},[])
@@ -448,11 +451,6 @@ export default function App(){
     case'region-registry':return <RegionRegistry/>;case'personnel-grants':return <PersonnelGrants/>;case'scopes':return <ScopeConfig/>;case'logs':return <Logs/>;default:return <Dashboard data={overview}/>}
   },[page,overview])
   const pending=overview?.metrics.pendingWarnings??0
-  return <div className={`o-shell${collapsed?' collapsed':''}`}><aside className="o-sidebar"><button type="button" className="o-brand" onClick={()=>go('dashboard')}><img className="o-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云"/>{!collapsed&&<div><b>丰链云</b><small>FENGCHAIN · AGRI</small></div>}</button><nav>{NAV.map(g=><section key={g.group}>{!collapsed&&<h3>{g.group}</h3>}{g.items.map(i=><button type="button" key={i.page} className={page===i.page?'on':''} onClick={()=>go(i.page)} title={i.label}>{i.icon}{!collapsed&&<span>{i.label}</span>}</button>)}</section>)}</nav><div className="o-side-foot">{!collapsed&&<div><b>监管指挥中心</b><small>值班 09:00-21:00</small></div>}<button type="button" onClick={()=>setCollapsed(!collapsed)}>{collapsed?<MenuUnfoldOutlined/>:<><MenuFoldOutlined/>收起导航</>}</button></div></aside>
-    <div className="o-main"><header className="o-header"><div><span>政府监管</span><b>/</b><strong>{TITLES[page]}</strong></div>
-      <form onSubmit={e=>{e.preventDefault();if(!keyword.trim()){return}transfer.keyword=keyword.trim();go('subjects')}}><SearchOutlined/><input value={keyword} onChange={e=>setKeyword(e.target.value)} placeholder="按主体名称或信用代码查台账"/></form>
-      <div className="o-header-right"><span>{todayText()}</span>
-        <button type="button" title={`待处置预警 ${pending} 条`} onClick={()=>go('warnings')}><BellOutlined/>{pending>0&&<i>{pending}</i>}</button>
-        <Dropdown menu={{items:[{key:'users',label:'组织与权限',onClick:()=>go('users')},{key:'logs',label:'操作审计',onClick:()=>go('logs')},{key:'logout',label:'退出统一登录',onClick:()=>void logoutUnified('gov-ops')}]}}><button type="button" className="o-user-chip"><Avatar size={30} className="o-avatar">{displayName.slice(0,1)}</Avatar><span><b>{displayName}</b><small>{identity?.operatorName?`${identity.roles?.admin?'监管运营':'执法人员'} · ${identity.operatorName}`:'统一账号 · 监管运营'}</small></span></button></Dropdown>
-      </div></header><main><AuthorizationNotice page={page}/>{content}</main></div></div>
+  return <div className={`o-shell${collapsed?' collapsed':''}`}><aside className="o-sidebar"><button type="button" className="o-brand" onClick={()=>go('dashboard')}><img className="o-brand-logo" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云"/>{!collapsed&&<div><b>丰链云</b><small>FENGCHAIN · AGRI</small></div>}</button><nav>{NAV.map(g=><section key={g.group}>{g.items.map(i=><button type="button" key={i.page} className={page===i.page?'on':''} onClick={()=>go(i.page)} title={i.label}>{i.icon}{!collapsed&&<span>{i.label}</span>}</button>)}</section>)}</nav><SidebarUserCard name={displayName} role="政府监管运营" collapsed={collapsed} switchLabel="切换身份（监管用户端）" switchUrl={`${window.location.protocol}//${window.location.hostname}:8108/`} onLogout={()=>void logoutUnified('gov-ops')}/></aside>
+    <div className="o-main"><WorkspaceHeader className="o-header" rightClassName="o-header-right" collapsed={collapsed} onToggleCollapse={()=>setCollapsed(prev=>!prev)} breadcrumbs={['政府监管',TITLES[page]]} center={<form onSubmit={e=>{e.preventDefault();if(!keyword.trim()){return}transfer.keyword=keyword.trim();go('subjects')}}><SearchOutlined/><input value={keyword} onChange={e=>setKeyword(e.target.value)} placeholder="按主体名称或信用代码查台账"/></form>} right={<><span>{todayText()}</span><button type="button" title={`待处置预警 ${pending} 条`} onClick={()=>go('warnings')}><BellOutlined/>{pending>0&&<i>{pending}</i>}</button><Dropdown menu={{items:[{key:'users',label:'组织与权限',onClick:()=>go('users')},{key:'logs',label:'操作审计',onClick:()=>go('logs')},{key:'logout',label:'退出统一登录',onClick:()=>void logoutUnified('gov-ops')}]}}><button type="button" className="o-user-chip"><Avatar size={30} className="o-avatar">{displayName.slice(0,1)}</Avatar><span><b>{displayName}</b><small>{identity?.operatorName?`${identity.roles?.admin?'监管运营':'执法人员'} · ${identity.operatorName}`:'统一账号 · 监管运营'}</small></span></button></Dropdown></>} /><RouteWorkspaceTabs activeKey={page} activeLabel={TITLES[page]} homeKey="dashboard" homeLabel={TITLES.dashboard} onNavigate={path => { location.hash = `/${path}` }} storageKey="agri-gov-ops:workspace-tabs" /><main><AuthorizationNotice page={page}/>{content}</main></div></div>
 }

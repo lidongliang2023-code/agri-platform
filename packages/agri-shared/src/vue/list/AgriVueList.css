@@ -332,6 +332,7 @@
 }
 
 .agri-vue-table thead th {
+  position: relative;
   box-sizing: border-box;
   height: 44px;
   padding: 10px 12px;
@@ -343,8 +344,55 @@
   border-bottom: 1px solid var(--pc-border, #e8e8e8);
   text-align: left;
   white-space: nowrap;
+  overflow: visible;
+}
+
+.agri-vue-th-label {
+  display: block;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agri-vue-col-resize-handle {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.agri-vue-col-resize-handle::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  bottom: 20%;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: #cbdcd1;
+  transition: background-color 0.12s ease;
+}
+
+.agri-vue-col-resize-handle:hover::after,
+.agri-vue-col-resize-handle:focus-visible::after,
+.agri-vue-col-resize-handle.is-dragging::after {
+  background: #23744c;
+}
+
+.agri-vue-col-resize-handle:focus-visible {
+  outline: 2px solid #23744c;
+  outline-offset: -2px;
+}
+
+.agri-vue-table thead th:last-child .agri-vue-col-resize-handle {
+  right: 0;
+  width: 8px;
 }
 
 .agri-vue-table tbody td {
@@ -428,6 +476,29 @@
   --el-table-border-color: #f0f0f0;
   --el-table-header-bg-color: #fafafa;
   --el-table-row-hover-bg-color: #f0f9f1;
+}
+
+/* 启用拖拽列宽但默认不显示表体竖线时，保留表头优雅分隔线并隐藏表体右边框 */
+.agri-vue-list-page .el-table.is-borderless-resize::before,
+.agri-vue-list-page .el-table.is-borderless-resize .el-table__inner-wrapper::after,
+.agri-vue-list-page .el-table.is-borderless-resize .el-table__border-left-patch {
+  display: none;
+}
+
+.agri-vue-list-page .el-table.is-borderless-resize td.el-table__cell {
+  border-right: 0 !important;
+}
+
+.agri-vue-list-page .el-table.is-borderless-resize th.el-table__cell {
+  border-right: 1px solid #e6efe9;
+}
+
+.agri-vue-list-page .el-table.is-borderless-resize th.el-table__cell:hover {
+  border-right-color: #23744c;
+}
+
+.agri-vue-list-page .el-table .el-table__column-resize-proxy {
+  border-left: 2px solid #23744c;
 }
 
 .agri-vue-list-page .el-table__header,

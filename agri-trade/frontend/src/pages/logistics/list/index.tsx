@@ -1,3 +1,5 @@
+import { ListRowActions } from '@agri/shared'
+import { TradeList, TradeFilters } from '@/components/TradeList'
 import { useEffect, useMemo, useState } from 'react'
 import { Form, Input, InputNumber, Select, Spin, Modal, Alert, message } from 'antd'
 import {
@@ -62,7 +64,7 @@ export default function LogisticsList(): JSX.Element {
   const queryClient = useQueryClient()
   const [pageMode, setPageMode] = useState<LogisticsPageMode>('list')
   const [active, setActive] = useState<LogisticsVO | null>(null)
-  const [query, setQuery] = useState<LogisticsQuery>({ pageNum: 1, pageSize: 10 })
+  const [query, setQuery] = useState<LogisticsQuery>({ pageNum: 1, pageSize: 20 })
   const [draft, setDraft] = useState<{ logisticsNo?: string; logisticsStatus?: string }>({})
   const [form] = Form.useForm()
   const [saving, setSaving] = useState(false)
@@ -86,14 +88,12 @@ export default function LogisticsList(): JSX.Element {
   }
 
 
-  const { data, isLoading } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     queryKey: ['logistics', query],
     queryFn: () => getLogisticsList(query),
   })
   const rows: LogisticsVO[] = data?.data?.records ?? []
   const total = Number(data?.data?.total ?? 0)
-  const currentPage = Number(data?.data?.current ?? query.pageNum ?? 1)
-  const pageCount = Math.max(1, Math.ceil(total / Number(query.pageSize ?? 10)))
   const summary = useMemo(() => ({
     transit: rows.filter((row) => ['picked', 'in_transit', 'delivering'].includes(row.logisticsStatus)).length,
     delivered: rows.filter((row) => row.logisticsStatus === 'delivered').length,
@@ -387,9 +387,13 @@ export default function LogisticsList(): JSX.Element {
         <Alert type="info" showIcon message="卖方登记补发，买方确认签收" description="先将生产短装工单登记为处理中、方式为补发。系统核对原供给和订单，按差异量生成一张足额补发单。补发单不可删除、不可重复登记；此操作仅安排物流，不自动扣减库存。" />
         <Input style={{ marginTop: 16 }} value={ticketNo} maxLength={64} onChange={e => setTicketNo(e.target.value)} placeholder="生产短装工单号" />
       </Modal>
-      <Panel title="物流单" extra={<span className="after-count">共 {total} 条</span>}>
-        <div className="after-toolbar">
-          <Input
+      <TradeList
+            listId="member-logistics"
+            rowKey="id"
+            dataSource={rows}
+            onRefresh={() => void refetch()}
+            loading={isFetching}
+            filterSlot={<TradeFilters fields={[{ label: '物流单号', control: (<Input
             prefix={<SearchOutlined />}
             allowClear
             placeholder="输入物流单号"
@@ -398,70 +402,34 @@ export default function LogisticsList(): JSX.Element {
               ...previous,
               logisticsNo: event.target.value || undefined,
             }))}
-          />
-          <Select
+          />) },
+                { label: '物流状态', control: (<Select
             allowClear
             placeholder="全部物流状态"
             value={draft.logisticsStatus}
             onChange={(value) => setDraft((previous) => ({ ...previous, logisticsStatus: value }))}
             options={Object.entries(LOGISTICS_STATUS).map(([value, item]) => ({ value, label: item.text }))}
-          />
-          <button type="button" className="mc-btn" onClick={() => setQuery((previous) => ({
-            ...previous,
-            pageNum: 1,
-            ...draft,
-          }))}>搜索</button>
-          <button type="button" className="mc-btn ghost" onClick={() => {
-            setDraft({})
-            setQuery({ pageNum: 1, pageSize: 10 })
-          }}>重置</button>
-        </div>
-        {isLoading ? (
-          <div className="after-loading"><Spin /><span>正在读取物流单…</span></div>
-        ) : rows.length === 0 ? (
-          <EmptyState title="暂无物流单" desc="卖家发货后会自动生成物流单和运输轨迹。" />
-        ) : (
-          <>
-            <div className="mc-table-wrap">
-              <table className="mc-table logistics-table">
-                <thead><tr><th>物流单号</th><th>关联订单</th><th>承运信息</th><th>收货信息</th><th>状态</th><th>当前位置</th><th>操作</th></tr></thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <button type="button" className="after-name-link" onClick={() => showDetail(row)}>
+          />) }]} onQuery={() => setQuery((prev) => ({ ...prev, pageNum: 1, logisticsNo: draft.logisticsNo, logisticsStatus: draft.logisticsStatus }))} onReset={() => { setDraft({}); setQuery((prev) => ({ pageNum: 1, pageSize: prev.pageSize })) }} />}
+            pagination={{ current: query.pageNum ?? 1, pageSize: query.pageSize ?? 20, total, onChange: (pageNum, pageSize) => setQuery((prev) => ({ ...prev, pageNum, pageSize })) }}
+            locale={{ emptyText: '暂无物流单' }}
+            columns={[
+              { title: "物流单号", key: 'col-1', width: 160, render: (_, row) => (<><button type="button" className="after-name-link" onClick={() => showDetail(row)}>
                           <strong className="mc-mono">{row.logisticsNo}</strong>
                           <span>{shortDate(row.createTime)}</span>
-                        </button>
-                      </td>
-                      <td className="mc-mono">{row.orderId}{row.diffTicketNo && <><br />工单：{row.diffTicketNo}<br />补发：{row.reshipQty} {row.reshipUnit}</>}</td>
-                      <td><div className="logistics-carrier-cell"><TruckOutlined /><span>{row.carrierName || '承运商待补充'}</span><small>{LOGISTICS_TYPE[row.logisticsType] ?? row.logisticsType}</small></div></td>
-                      <td><div className="logistics-receiver-cell"><strong>{row.receiverContact || '—'}</strong><small>{row.receiverAddress || '地址待补充'}</small></div></td>
-                      <td><LogisticsTag value={row.logisticsStatus} /></td>
-                      <td className="logistics-location-cell">{row.currentLocation || '—'}</td>
-                      <td>
-                        <div className="mc-actions">
+                        </button></>) },
+              { title: "关联订单", key: 'col-2', width: 160, render: (_, row) => (<span className="mc-mono">{row.orderId}{row.diffTicketNo && <><br />工单：{row.diffTicketNo}<br />补发：{row.reshipQty} {row.reshipUnit}</>}</span>) },
+              { title: "承运信息", key: 'col-3', width: 160, render: (_, row) => (<><div className="logistics-carrier-cell"><TruckOutlined /><span>{row.carrierName || '承运商待补充'}</span><small>{LOGISTICS_TYPE[row.logisticsType] ?? row.logisticsType}</small></div></>) },
+              { title: "收货信息", key: 'col-4', width: 220, render: (_, row) => (<><div className="logistics-receiver-cell"><strong>{row.receiverContact || '—'}</strong><small>{row.receiverAddress || '地址待补充'}</small></div></>) },
+              { title: "状态", key: 'col-5', width: 108, render: (_, row) => (<><LogisticsTag value={row.logisticsStatus} /></>) },
+              { title: "当前位置", key: 'col-6', width: 160, render: (_, row) => (<span className="logistics-location-cell">{row.currentLocation || '—'}</span>) },
+              { title: "操作", key: 'action', width: 170, render: (_, row) => (<><ListRowActions>
                           <button type="button" className="mc-link after-action" onClick={() => void openTrace(row)}><TruckOutlined /> 跟踪</button>
                           <button type="button" className="mc-link after-action" onClick={() => showDetail(row)}><EyeOutlined /> 查看</button>
                           {!row.diffTicketNo && <button type="button" className="mc-link after-action" onClick={() => { setTicketNo(''); setReshipSource(row) }}>登记补发</button>}
                           <button type="button" className="mc-link after-action" onClick={() => openEdit(row)}><EditOutlined /> 编辑</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mc-pager">
-              <button type="button" disabled={currentPage <= 1}
-                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage - 1 }))}>上一页</button>
-              <span>第 {currentPage} / {pageCount} 页 · 共 {total} 条</span>
-              <button type="button" disabled={currentPage >= pageCount}
-                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage + 1 }))}>下一页</button>
-            </div>
-          </>
-        )}
-      </Panel>
+                        </ListRowActions></>) },
+            ]}
+          />
     </div>
   )
 }

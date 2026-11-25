@@ -6,7 +6,10 @@
 
 import {
   DEFAULT_SELECTION_COLUMN_WIDTH,
+  MAX_RESIZABLE_COLUMN_WIDTH,
   MIN_RESIZABLE_COLUMN_WIDTH,
+  clampColumnWidth,
+  deriveColumnWidthStorageKey,
   isActionColumnMeta,
   isNumericColumnMeta,
   isStatusColumnMeta,
@@ -20,7 +23,10 @@ import {
 
 export {
   DEFAULT_SELECTION_COLUMN_WIDTH,
+  MAX_RESIZABLE_COLUMN_WIDTH,
   MIN_RESIZABLE_COLUMN_WIDTH,
+  clampColumnWidth,
+  deriveColumnWidthStorageKey,
   isActionColumnMeta,
   isNumericColumnMeta,
   isStatusColumnMeta,
@@ -59,6 +65,8 @@ export interface VueListColumn {
   locked?: boolean
   /** 默认隐藏。 */
   defaultHidden?: boolean
+  /** 是否允许拖拽调整该列宽度（默认 true）。 */
+  resizable?: boolean
   /** 透传额外单元格类名。 */
   className?: string
   /** 支持排序（Element Plus 透传）。 */
@@ -96,6 +104,7 @@ export type PageToken = number | 'ellipsis-left' | 'ellipsis-right'
 export interface StorageLike {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
+  removeItem?: (key: string) => void
 }
 
 /** 标准化单列定义：自动识别操作/数值/状态列，并统一对齐、锁定与宽度。 */
@@ -201,6 +210,80 @@ export function saveStoredHiddenKeys(
     }
   }
   return sanitized
+}
+
+/** 读取安全存储的自定义列宽映射（存储异常或格式错误时返回空对象）。 */
+export function loadStoredColumnWidths(
+  storage: StorageLike | null | undefined,
+  storageKey: string | false | null | undefined,
+): ColumnWidths {
+  if (!storage || !storageKey) return {}
+  try {
+    return parseStoredWidths(storage.getItem(storageKey))
+  } catch {
+    return {}
+  }
+}
+
+/** 写入自定义列宽映射到本地存储（空映射优先 removeItem 清理）。 */
+export function saveStoredColumnWidths(
+  storage: StorageLike | null | undefined,
+  storageKey: string | false | null | undefined,
+  widths: ColumnWidths,
+): ColumnWidths {
+  const sanitized = parseStoredWidths(JSON.stringify(widths))
+  if (storage && storageKey) {
+    try {
+      if (Object.keys(sanitized).length === 0 && typeof storage.removeItem === 'function') {
+        storage.removeItem(storageKey)
+      } else {
+        storage.setItem(storageKey, JSON.stringify(sanitized))
+      }
+    } catch {
+      // 隐私模式或存储配额受限时忽略
+    }
+  }
+  return sanitized
+}
+
+/** 解析单列默认基础宽度（优先显式 width，其次 minWidth，最后按列语义兜底）。 */
+export function resolveDefaultVueColumnWidth(col: NormalizedVueColumn): number {
+  if (col.resolvedWidth !== undefined) return col.resolvedWidth
+  if (col.resolvedMinWidth !== undefined) return col.resolvedMinWidth
+  if (col.resolvedKind === 'action') return 150
+  if (col.resolvedKind === 'number') return 120
+  if (col.resolvedKind === 'status') return 104
+  return 140
+}
+
+/** 解析单列生效宽度：优先用户自定义拖拽宽度，否则回退列默认宽度。 */
+export function resolveEffectiveVueColumnWidth(col: NormalizedVueColumn, customWidths: ColumnWidths): number {
+  const custom = customWidths[col.resolvedKey]
+  if (typeof custom === 'number' && Number.isFinite(custom) && custom >= MIN_RESIZABLE_COLUMN_WIDTH) {
+    return clampColumnWidth(custom, MIN_RESIZABLE_COLUMN_WIDTH)
+  }
+  return resolveDefaultVueColumnWidth(col)
+}
+
+/** 生成更新单列宽后的新列宽映射（自动裁剪至有效区间）。 */
+export function setColumnWidthEntry(
+  current: ColumnWidths,
+  key: string,
+  width: number,
+  minWidth = MIN_RESIZABLE_COLUMN_WIDTH,
+): ColumnWidths {
+  return {
+    ...current,
+    [key]: clampColumnWidth(width, minWidth),
+  }
+}
+
+/** 移除单列自定义宽度（恢复该列默认宽度）。 */
+export function removeColumnWidthEntry(current: ColumnWidths, key: string): ColumnWidths {
+  if (!(key in current)) return current
+  const next = { ...current }
+  delete next[key]
+  return next
 }
 
 /** 根据「操作列最多平铺 2 个文字链接，超出收进更多」拆分操作项。 */

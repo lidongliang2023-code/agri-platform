@@ -26,12 +26,13 @@ import {
 import {
   BellOutlined,
   LogoutOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   SettingOutlined,
+  SwapOutlined,
+  UpOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { WorkspaceHeader } from '@agri/shared'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import ProductionWorkspaceTabs from '@/components/ProductionWorkspaceTabs'
 import { BrandMark } from '@/components/BrandMark'
@@ -43,10 +44,12 @@ import { redirectToSso, SSO_CLIENT_ID } from '@/api/sso'
 import useFarmStore from '@/store/farm'
 import { ADMIN_MENU, USER_MENU, buildBreadcrumb, matchMenu } from '@/config/menu'
 import './BasicLayout.css'
+import './EmbeddedWorkspace.css'
+import { mobileWorkspace, workspaceEndedPath } from '@/utils/mobile-workspace'
 
 const { Header, Sider, Content, Footer: LayoutFooter } = Layout
-const SIDER_WIDTH = 224
-const SIDER_COLLAPSED_WIDTH = 72
+const SIDER_WIDTH = 240
+const SIDER_COLLAPSED_WIDTH = 80
 
 /** 布局变体 */
 export type LayoutVariant = 'user' | 'admin'
@@ -65,14 +68,28 @@ export interface BasicLayoutProps {
  * @returns 布局结构（含 <Outlet /> 子路由出口）
  */
 export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.Element {
-  const [collapsed, setCollapsed] = useState<boolean>(false)
-  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 767px)').matches)
+  const queryClient = useQueryClient()
+  const [collapsed, setCollapsed] = useState<boolean>(() => window.innerWidth >= 1024 && window.innerWidth < 1280)
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const [navigationOpen, setNavigationOpen] = useState(false)
+  /** uni-app 客户端 web-view 内嵌：导航、账号、消息由客户端负责，这里只渲染业务内容。 */
+  const [embedded] = useState(() => mobileWorkspace())
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)')
-    const update = () => { setMobile(media.matches); setNavigationOpen(false) }
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
+    const mobileMedia = window.matchMedia('(max-width: 1023px)')
+    const compactMedia = window.matchMedia('(min-width: 1024px) and (max-width: 1279px)')
+    const syncViewport = () => {
+      setMobile(mobileMedia.matches)
+      setNavigationOpen(false)
+      if (!mobileMedia.matches) {
+        setCollapsed(compactMedia.matches)
+      }
+    }
+    mobileMedia.addEventListener('change', syncViewport)
+    compactMedia.addEventListener('change', syncViewport)
+    return () => {
+      mobileMedia.removeEventListener('change', syncViewport)
+      compactMedia.removeEventListener('change', syncViewport)
+    }
   }, [])
   const location = useLocation()
   const navigate = useNavigate()
@@ -115,6 +132,7 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
   ) : ''
   const subjectReady = !subjectError && !!activeSubject && String(userInfo?.tenantId) === String(activeSubject.merchantId)
   const reauthenticate = (): void => {
+    if (embedded) { navigate(workspaceEndedPath('expired'), { replace: true }); return }
     void redirectToSso(SSO_CLIENT_ID, location.pathname + location.search).catch((error: unknown) => {
       message.error(error instanceof Error ? error.message : '无法前往统一登录')
     })
@@ -141,12 +159,18 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
       const activated = await accountRequest<{ activeMerchantId: string; merchantName?: string }>({
         url: `/businesses/${encodeURIComponent(merchantId)}/activate`, method: 'post', data: {}, timeout: 15000,
       })
+      await queryClient.cancelQueries()
+      queryClient.removeQueries({ predicate: query => query.queryKey[0] !== 'operating-subjects' })
       const current = useAuthStore.getState().userInfo
       if (current) useAuthStore.getState().setUserInfo({ ...current, tenantId: String(activated.activeMerchantId), tenantName: activated.merchantName })
       useFarmStore.getState().setCurrentFarm(null)
       useFarmStore.getState().setFarmOptions([])
       // 整页重建，卸载旧主体页签与表单，丢弃原主体查询缓存和在途请求。
-      window.location.replace(isAdmin ? '/admin/production/dashboard' : '/production/dashboard')
+      if (sessionStorage.getItem('agri_native_workspace') === '1') {
+        await reloadSubjects()
+        navigate(isAdmin ? '/admin/production/dashboard' : '/production/dashboard', { replace: true })
+        setSwitchingSubject(false)
+      } else window.location.replace(isAdmin ? '/admin/production/dashboard' : '/production/dashboard')
     } catch (error) {
       message.error(axios.isAxiosError(error) ? error.response?.data?.message || error.message : error instanceof Error ? error.message : '经营主体切换失败')
       setSwitchingSubject(false)
@@ -200,40 +224,55 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
   )
 
   const menuItems = useMemo(
-    () =>
-      menuGroups.map((group) => ({
+    () => {
+      const subMenus = menuGroups.map((group) => ({
         key: group.key,
         icon: group.icon,
         label: group.label,
         children: group.children.map((leaf) => ({ key: leaf.key, label: leaf.label })),
-      })),
+      }))
+      // 侧栏不再插入分组标题：一级模块直接平铺，展开/收起共用同一份菜单。
+      return subMenus
+    },
     [menuGroups],
   )
 
+  const personalCenterUrl = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
+  const displayName = userInfo?.realName || userInfo?.username || (isAdmin ? '平台运营' : '农场用户')
+  const displayRole = isAdmin ? '生产运营管理' : (activeSubject?.merchantName || '经营主体用户')
+
   const userMenuItems = [
     {
-      key: 'profile',
+      key: 'personal',
       icon: <UserOutlined />,
-      label: userInfo?.realName ?? '未登录用户',
-      disabled: true,
+      label: '个人中心',
+      onClick: () => window.open(personalCenterUrl, '_blank', 'noopener'),
     },
-    { type: 'divider' as const },
     ...(!isAdmin ? [{
       key: 'settings',
       icon: <SettingOutlined />,
       label: '系统设置',
-      onClick: () => navigate('/production/settings'),
+      onClick: () => { setNavigationOpen(false); navigate('/production/settings') },
     }] : []),
+    {
+      key: 'switch-role',
+      icon: <SwapOutlined />,
+      label: isAdmin ? '切换身份（用户端）' : '切换身份（运营端）',
+      onClick: () => { setNavigationOpen(false); navigate(isAdmin ? '/production/dashboard' : '/admin/production/dashboard') },
+    },
+    { type: 'divider' as const },
     {
       key: 'logout',
       icon: <LogoutOutlined />,
+      danger: true,
       label: '退出登录',
       onClick: () => logout(),
     },
   ]
 
+  const isSidebarCollapsed = !mobile && collapsed
   const navigation = <>
-        <div className={`agri-brand${!mobile && collapsed ? ' is-collapsed' : ''}`}>
+        <div className={`agri-brand${isSidebarCollapsed ? ' is-collapsed' : ''}`}>
           <span className="agri-brand-logo"><BrandMark size={34} /></span>
           {(mobile || !collapsed) && (
             <span className="agri-brand-text">
@@ -248,8 +287,9 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
             theme="dark"
             items={menuItems}
             selectedKeys={matched ? [matched.leaf.key] : []}
-            inlineCollapsed={!mobile && collapsed}
-            openKeys={!mobile && collapsed ? undefined : openGroupKeys}
+            inlineIndent={isAdmin ? undefined : 20}
+            inlineCollapsed={isSidebarCollapsed}
+            openKeys={isSidebarCollapsed ? undefined : openGroupKeys}
             onOpenChange={(keys) => {
               const newlyOpened = keys.find((key) => !openGroupKeys.includes(key))
               setOpenGroupKeys(isAdmin ? keys : newlyOpened ? [newlyOpened] : keys.slice(-1))
@@ -257,109 +297,131 @@ export default function BasicLayout({ variant, title }: BasicLayoutProps): JSX.E
             onClick={({ key }) => { navigate(key); setNavigationOpen(false) }}
           />
         </div>
+        <div className="pc-side-user">
+          <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement={isSidebarCollapsed ? 'topRight' : 'topLeft'}>
+            <button
+              type="button"
+              className="pc-side-user-trigger"
+              title={`${displayName} · ${displayRole}`}
+              style={isSidebarCollapsed ? { justifyContent: 'center', padding: '6px 0', gap: 0 } : undefined}
+            >
+              <span className="pc-side-user-avatar">{displayName.slice(0, 1)}</span>
+              {!isSidebarCollapsed && (
+                <>
+                  <span className="pc-side-user-meta">
+                    <strong>{displayName}</strong>
+                    <small>{displayRole}</small>
+                  </span>
+                  <span className="pc-side-user-caret"><UpOutlined /></span>
+                </>
+              )}
+            </button>
+          </Dropdown>
+        </div>
+  </>
+  const subjectSelect = (
+    <Select
+      aria-label="当前经营主体"
+      className="agri-subject-select"
+      style={embedded ? undefined : { width: 240, maxWidth: '35vw' }}
+      showSearch optionFilterProp="label"
+      loading={loadingSubjects || switchingSubject}
+      disabled={loadingSubjects || switchingSubject || !!subjectError}
+      value={activeSubject ? String(activeSubject.merchantId) : undefined}
+      placeholder={subjectError ? '主体加载失败' : subjects.length ? '请选择经营主体' : '暂无关联主体'}
+      options={subjects.map(item => ({ value: String(item.merchantId), label: item.merchantName || `主体 ${item.merchantId}` }))}
+      onChange={value => { void switchSubject(value) }}
+      title="切换经营主体后将关闭已打开的页签，未提交内容不会保留"
+    />
+  )
+  const farmSelect = (
+    <Select
+      aria-label="当前农场"
+      className="agri-farm-select"
+      style={embedded ? undefined : { width: 180 }}
+      disabled={!subjectReady || switchingSubject}
+      value={subjectReady ? currentFarm?.farmId : undefined}
+      placeholder="请选择当前农场"
+      allowClear={false}
+      onChange={(farmId) => {
+        const next = farmOptions.find((item) => item.farmId === farmId)
+        if (next) setCurrentFarm(next)
+      }}
+      options={farmOptions.map((item) => ({ value: item.farmId, label: item.farmName }))}
+    />
+  )
+  const subjectErrorActions = !!subjectError && <>
+    <Button size="small" onClick={() => { void reloadSubjects() }}>重试</Button>
+    <Button size="small" onClick={reauthenticate}>{embedded ? '返回客户端' : '统一登录'}</Button>
   </>
 
   return (
-    <Layout className="agri-layout">
-      {!mobile && <Sider
+    <Layout className={`agri-layout${isAdmin ? '' : ' production-member-shell'}${embedded ? ' is-embedded' : ''}`}>
+      {!mobile && !embedded && <Sider
         className="agri-sider"
         collapsible collapsed={collapsed} trigger={null} theme="dark"
         width={SIDER_WIDTH} collapsedWidth={SIDER_COLLAPSED_WIDTH}
       >{navigation}</Sider>}
-      <Drawer title="生产管理导航" placement="left" width="min(288px, 86vw)"
+      {!embedded && <Drawer title="生产管理导航" placement="left" width={240}
         rootClassName="production-mobile-nav" open={mobile && navigationOpen}
         onClose={() => setNavigationOpen(false)}>
         {navigation}
-      </Drawer>
+      </Drawer>}
 
-      <Layout className="agri-main" style={{ marginLeft: mobile ? 0 : collapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH }}>
-        <Header className="agri-header">
-          <div className="agri-header-left">
-            <Button
-              type="text"
-              aria-label={mobile ? '打开导航菜单' : collapsed ? '展开侧边栏' : '收起侧边栏'}
-              aria-expanded={mobile ? navigationOpen : !collapsed}
-              icon={mobile || collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => mobile ? setNavigationOpen(true) : setCollapsed(!collapsed)}
-            />
-            {mobile ? <Typography.Text className="agri-mobile-page-title" ellipsis>{breadcrumb[breadcrumb.length - 1] || title}</Typography.Text>
-              : <Breadcrumb items={breadcrumb.map((text) => ({ title: text }))} />}
+      <Layout className="agri-main" style={{ marginLeft: mobile || embedded ? 0 : collapsed ? SIDER_COLLAPSED_WIDTH : SIDER_WIDTH }}>
+        {embedded ? (!isAdmin && <Header className="agri-embedded-header">
+          <div className="agri-embedded-context">
+            {subjectSelect}
+            {farmSelect}
+            {!!subjectError && <div className="agri-embedded-context-actions">{subjectErrorActions}</div>}
           </div>
-
-          <div className="agri-header-right">
+        </Header>) : <WorkspaceHeader
+          className="agri-header"
+          leftClassName="agri-header-left"
+          rightClassName="agri-header-right"
+          collapsed={collapsed}
+          mobile={mobile}
+          mobileOpen={navigationOpen}
+          onToggleCollapse={() => mobile ? setNavigationOpen(true) : setCollapsed(!collapsed)}
+          left={mobile
+            ? <Typography.Text className="agri-mobile-page-title" ellipsis>{breadcrumb[breadcrumb.length - 1] || title}</Typography.Text>
+            : <Breadcrumb items={breadcrumb.map((text) => ({ title: text }))} />}
+          right={<>
             {!isAdmin && <div className="agri-header-context">
-            <Space size={8} className="agri-subject-control">
-              <Typography.Text style={{ whiteSpace: 'nowrap' }}>经营主体</Typography.Text>
-              <Select
-                aria-label="当前经营主体"
-                className="agri-subject-select"
-                style={{ width: 240, maxWidth: '35vw' }}
-                showSearch optionFilterProp="label"
-                loading={loadingSubjects || switchingSubject}
-                disabled={loadingSubjects || switchingSubject || !!subjectError}
-                value={activeSubject ? String(activeSubject.merchantId) : undefined}
-                placeholder={subjectError ? '主体加载失败' : subjects.length ? '请选择经营主体' : '暂无关联主体'}
-                options={subjects.map(item => ({ value: String(item.merchantId), label: item.merchantName || `主体 ${item.merchantId}` }))}
-                onChange={value => { void switchSubject(value) }}
-                title="切换经营主体后将关闭已打开的页签，未提交内容不会保留"
-              />
-              {!!subjectError && <><Button size="small" onClick={() => { void reloadSubjects() }}>重试</Button><Button size="small" onClick={reauthenticate}>统一登录</Button></>}
-            </Space>
-            {!isAdmin && (
-              <Select
-                aria-label="当前农场"
-                className="agri-farm-select"
-                style={{ width: 180 }}
-                disabled={!subjectReady || switchingSubject}
-                value={subjectReady ? currentFarm?.farmId : undefined}
-                placeholder="请选择当前农场"
-                allowClear={false}
-                onChange={(farmId) => {
-                  const next = farmOptions.find((item) => item.farmId === farmId)
-                  if (next) setCurrentFarm(next)
-                }}
-                options={farmOptions.map((item) => ({
-                  value: item.farmId,
-                  label: item.farmName,
-                }))}
-              />
-            )}
-
+              <Space size={8} className="agri-subject-control">
+                <Typography.Text style={{ whiteSpace: 'nowrap' }}>经营主体</Typography.Text>
+                {subjectSelect}
+                {subjectErrorActions}
+              </Space>
+              {farmSelect}
             </div>}
             <Badge className="agri-header-notifications" count={isAdmin ? 0 : (unreadCount ?? 0)} size="small">
               <Button
                 type="text"
-                aria-label="消息中心"
+                aria-label={isAdmin ? '告警中心' : '消息中心'}
                 icon={<BellOutlined />}
-                onClick={() =>
-                  navigate(isAdmin ? '/admin/production/alerts' : '/production/messages')
-                }
+                onClick={() => navigate(isAdmin ? '/admin/production/alerts' : '/production/messages')}
               />
             </Badge>
 
             <Dropdown menu={{ items: userMenuItems }} trigger={['click']} placement="bottomRight">
               <Space className="agri-user-trigger" tabIndex={0} role="button" aria-label="账号菜单" style={{ cursor: 'pointer' }}>
-                <Avatar
-                  className="agri-avatar"
-                  size="small"
-                  icon={<UserOutlined />}
-                  src={userInfo?.avatar}
-                />
+                <Avatar className="agri-avatar" size="small" icon={<UserOutlined />} src={userInfo?.avatar} />
                 <Typography.Text>{userInfo?.realName ?? '未登录'}</Typography.Text>
               </Space>
             </Dropdown>
-          </div>
-        </Header>
+          </>}
+        />}
 
         <Content className="agri-content">
           {!isAdmin && (!subjectReady || switchingSubject) ? (
             loadingSubjects || switchingSubject ? <Spin tip="正在加载经营主体"><div style={{ minHeight: 200 }} /></Spin> :
-            <Alert type={subjectError ? 'error' : 'info'} showIcon message={subjectError ? '经营主体加载失败' : subjects.length ? '请在顶部选择当前经营主体' : '当前账号暂无关联经营主体'} description={subjectErrorMessage || undefined} action={subjectError ? <Space><Button onClick={() => { void reloadSubjects() }}>重新加载</Button><Button onClick={reauthenticate}>前往统一登录</Button></Space> : undefined} />
+            <Alert type={subjectError ? 'error' : 'info'} showIcon message={subjectError ? '经营主体加载失败' : subjects.length ? (embedded ? '请在上方选择当前经营主体' : '请在顶部选择当前经营主体') : '当前账号暂无关联经营主体'} description={subjectErrorMessage || undefined} action={subjectError ? <Space><Button onClick={() => { void reloadSubjects() }}>重新加载</Button><Button onClick={reauthenticate}>{embedded ? '返回客户端' : '前往统一登录'}</Button></Space> : undefined} />
           ) : <ProductionWorkspaceTabs key={`${variant}:${userInfo?.userId}:${userInfo?.tenantId}:${currentFarm?.farmId ?? ""}`} admin={isAdmin} />}
         </Content>
-        <LayoutFooter className="agri-footer">
+        {!embedded && <LayoutFooter className="agri-footer">
           © 2026 农业产业互联网平台 · {title}
-        </LayoutFooter>
+        </LayoutFooter>}
       </Layout>
     </Layout>
   )

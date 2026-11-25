@@ -9,6 +9,8 @@ import { useListColumnSettings } from './useListColumnSettings'
 import {
   DEFAULT_SELECTION_COLUMN_WIDTH,
   MIN_RESIZABLE_COLUMN_WIDTH,
+  clampColumnWidth,
+  deriveColumnWidthStorageKey,
   isActionColumnMeta,
   isNumericColumnMeta,
   isStatusColumnMeta,
@@ -33,7 +35,7 @@ export interface AgriListTableProps<T extends object> extends TableProps<T> {
   columnSettingsStorageKey?: string | false
   /** 不允许隐藏的列 key 列表，默认锁定操作列。 */
   lockedColumnKeys?: string[]
-  /** 列宽拖拽持久化键；传 false 关闭列宽拖拽保存。 */
+  /** 列宽拖拽持久化键；省略时若已传 columnSettingsStorageKey 则自动派生；传 false 关闭列宽持久化。 */
   columnWidthStorageKey?: string | false
   /** 是否启用表头拖拽调整列宽，默认 true。 */
   resizable?: boolean
@@ -54,7 +56,7 @@ export default function AgriListTable<T extends object>({
   refreshing,
   columnSettingsStorageKey = false,
   lockedColumnKeys,
-  columnWidthStorageKey = false,
+  columnWidthStorageKey,
   resizable = true,
   wrapperClassName = '',
   className = '',
@@ -70,17 +72,7 @@ export default function AgriListTable<T extends object>({
   const mobile = screens.md === false
   const [uncontrolledSelectedCount, setUncontrolledSelectedCount] = useState(0)
 
-  const resolvedLockedKeys = useMemo(
-    () => lockedColumnKeys ?? ['actions', 'action', 'option'],
-    [lockedColumnKeys],
-  )
-  const { visibleColumns, columnSettings } = useListColumnSettings(
-    columnSettingsStorageKey,
-    columns,
-    resolvedLockedKeys,
-  )
-
-  const widthKey = columnWidthStorageKey === false ? null : columnWidthStorageKey
+  const widthKey = deriveColumnWidthStorageKey(columnWidthStorageKey, columnSettingsStorageKey)
   const restoredWidths = useMemo(() => {
     if (!widthKey) return {}
     try {
@@ -96,22 +88,45 @@ export default function AgriListTable<T extends object>({
   }))
   const widths = widthState.key === widthKey ? widthState.values : restoredWidths
 
-  useEffect(() => {
-    if (!widthKey || widthState.key !== widthKey) return
-    const timer = window.setTimeout(() => {
+  const resetAllWidths = () => {
+    setWidthState({ key: widthKey, values: {} })
+    if (widthKey) {
       try {
-        localStorage.setItem(widthKey, JSON.stringify(widthState.values))
+        localStorage.removeItem(widthKey)
       } catch {
         // 存储受限时忽略
       }
-    }, 150)
+    }
+  }
+
+  const resolvedLockedKeys = useMemo(
+    () => lockedColumnKeys ?? ['actions', 'action', 'option'],
+    [lockedColumnKeys],
+  )
+  const { visibleColumns, columnSettings } = useListColumnSettings(
+    columnSettingsStorageKey,
+    columns,
+    resolvedLockedKeys,
+    { onReset: resetAllWidths },
+  )
+
+  useEffect(() => {
+    if (!widthKey || widthState.key !== widthKey) return
+    const persist = () => {
+      try {
+        if (Object.keys(widthState.values).length === 0) {
+          localStorage.removeItem(widthKey)
+        } else {
+          localStorage.setItem(widthKey, JSON.stringify(widthState.values))
+        }
+      } catch {
+        // 存储受限时忽略
+      }
+    }
+    const timer = window.setTimeout(persist, 150)
     return () => {
       window.clearTimeout(timer)
-      try {
-        localStorage.setItem(widthKey, JSON.stringify(widthState.values))
-      } catch {
-        // 同上
-      }
+      persist()
     }
   }, [widthKey, widthState])
 
@@ -147,9 +162,17 @@ export default function AgriListTable<T extends object>({
                       key: widthKey,
                       values: {
                         ...(previous.key === widthKey ? previous.values : restoredWidths),
-                        [key]: Math.max(MIN_RESIZABLE_COLUMN_WIDTH, next),
+                        [key]: clampColumnWidth(next, MIN_RESIZABLE_COLUMN_WIDTH),
                       },
                     })),
+                  onColumnReset: () =>
+                    setWidthState((previous) => {
+                      const currentWidths = previous.key === widthKey ? previous.values : restoredWidths
+                      if (!(key in currentWidths)) return previous
+                      const next = { ...currentWidths }
+                      delete next[key]
+                      return { key: widthKey, values: next }
+                    }),
                 }),
               }
             : {}),

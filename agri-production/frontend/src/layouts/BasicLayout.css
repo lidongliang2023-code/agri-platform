@@ -10,17 +10,20 @@
 .production-mobile-nav .ant-drawer-body {
   display: flex; flex-direction: column; min-height: 0; padding: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: linear-gradient(180deg, #06281a, #05301f); color: #fff;
+  background: #001529; color: #fff;
 }
 .production-mobile-nav .agri-brand { flex-shrink: 0; }
 .production-mobile-nav .ant-menu-dark,
 .production-mobile-nav .ant-menu-dark .ant-menu-sub { background: transparent !important; }
 .production-mobile-nav .ant-menu-item,
-.production-mobile-nav .ant-menu-submenu-title { min-height: 42px; line-height: 42px; font-size: 14px; }
-.production-mobile-nav .ant-menu-dark .ant-menu-item-selected { background: #12764a; }
+.production-mobile-nav .ant-menu-submenu-title { height: 40px; line-height: 40px; font-size: 14px; border-radius: 0; margin: 0; color: #a6a6a6; border-left: 3px solid transparent; }
+.production-mobile-nav .ant-menu-dark .ant-menu-item:hover,
+.production-mobile-nav .ant-menu-dark .ant-menu-submenu-title:hover { background: #0d2137 !important; color: #fff !important; }
+.production-mobile-nav .ant-menu-dark .ant-menu-item-selected { background: rgba(45, 143, 78, 0.18) !important; border-left: 3px solid #2d8f4e !important; color: #fff !important; }
 
 @media (min-width: 768px) and (max-width: 1199px) {
-  .agri-header.ant-layout-header { padding-inline: 12px; gap: 8px; }
+  .agri-header.ant-layout-header,
+  .agri-header.agri-workspace-header { padding-inline: 12px; gap: 8px; }
   .agri-header-left, .agri-header-right, .agri-header-context { gap: 8px; }
   .agri-subject-control > .ant-space-item:first-child { display: none; }
   .agri-header-context .agri-subject-select.ant-select { width: 170px !important; }
@@ -30,13 +33,15 @@
 
 @media (max-width: 767px) {
   .agri-main.ant-layout { width: 100%; margin-left: 0 !important; }
-  .agri-header.ant-layout-header {
+  .agri-header.ant-layout-header,
+  .agri-header.agri-workspace-header {
     display: grid; grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
     align-items: center; gap: 6px; height: auto; min-height: 0;
     padding: calc(6px + env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) 8px max(10px, env(safe-area-inset-left, 0px));
   }
   .agri-header-left, .agri-header-right { display: contents; }
-  .agri-header-left > .ant-btn { grid-area: 1 / 1; width: 36px; height: 36px; }
+  .agri-header-left > .ant-btn,
+  .agri-header-left > .agri-sidebar-toggle-btn { grid-area: 1 / 1; width: 36px; height: 36px; }
   .agri-mobile-page-title { grid-area: 1 / 2; }
   .agri-header-notifications { grid-area: 1 / 3; justify-self: center; }
   .agri-header-notifications .ant-btn { width: 36px; height: 36px; }

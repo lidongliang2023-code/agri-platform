@@ -1,4 +1,4 @@
-import { isValidElement, useContext, useEffect, useMemo, useState } from 'react'
+import { isValidElement, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Key } from 'react'
 import { createPortal } from 'react-dom'
 import { SectionToolbarContext } from './SectionToolbarContext'
@@ -10,6 +10,7 @@ import MemberListToolbar, { columnSettingsTrigger } from '@agri/shared/component
 import {
   DEFAULT_SELECTION_COLUMN_WIDTH,
   MIN_RESIZABLE_COLUMN_WIDTH,
+  clampColumnWidth,
   isActionColumnMeta,
   isNumericColumnMeta,
   isStatusColumnMeta,
@@ -29,6 +30,8 @@ type ProductionTableProps<T extends Record<string, any>, P extends Record<string
   columnWidthStorageKey?: string | false
   memberListToolbar?: boolean
 }
+
+let activeSettingReset: (() => void) | null = null
 
 function readWidths(key: string | null): ColumnWidths {
   if (!key) return {}
@@ -56,15 +59,39 @@ export default function ProductionTable<T extends Record<string, any>, P extends
   const restored = useMemo(() => readWidths(storageKey), [storageKey])
   const [widthState, setWidthState] = useState<{ key: string | null; values: ColumnWidths }>(() => ({ key: storageKey, values: restored }))
   const widths = widthState.key === storageKey ? widthState.values : restored
+  const resetWidths = useCallback(() => {
+    setWidthState({ key: storageKey, values: {} })
+    if (storageKey) {
+      try { localStorage.removeItem(storageKey) } catch { /* 存储不可用不阻断列表操作。 */ }
+    }
+  }, [storageKey])
+  useEffect(() => {
+    const onDocClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('.ant-pro-table-column-setting-action-rest-button') && activeSettingReset === resetWidths) {
+        resetWidths()
+      }
+    }
+    document.addEventListener('click', onDocClick, true)
+    return () => {
+      document.removeEventListener('click', onDocClick, true)
+      if (activeSettingReset === resetWidths) activeSettingReset = null
+    }
+  }, [resetWidths])
   useEffect(() => {
     if (!storageKey || widthState.key !== storageKey) return
-    const timer = window.setTimeout(() => {
-      try { localStorage.setItem(storageKey, JSON.stringify(widthState.values)) } catch { /* 存储不可用不阻断列表操作。 */ }
-    }, 150)
+    const persist = () => {
+      try {
+        if (Object.keys(widthState.values).length === 0) localStorage.removeItem(storageKey)
+        else localStorage.setItem(storageKey, JSON.stringify(widthState.values))
+      } catch { /* 存储不可用不阻断列表操作。 */ }
+    }
+    const timer = window.setTimeout(persist, 150)
     return () => {
       window.clearTimeout(timer)
       // 切换页面或卸载时也保存最后一次拖动结果。
-      try { localStorage.setItem(storageKey, JSON.stringify(widthState.values)) } catch { /* 同上。 */ }
+      persist()
     }
   }, [storageKey, widthState])
   const supplied = options && typeof options === 'object' ? options : {}
@@ -89,7 +116,22 @@ export default function ProductionTable<T extends Record<string, any>, P extends
         onHeaderCell: (current) => ({
           ...column.onHeaderCell?.(current),
           resizeWidth: width,
-          onColumnResize: (next: number) => setWidthState((previous) => ({ key: storageKey, values: { ...(previous.key === storageKey ? previous.values : restored), [key]: Math.max(MIN_RESIZABLE_COLUMN_WIDTH, next) } })),
+          onColumnResize: (next: number) =>
+            setWidthState((previous) => ({
+              key: storageKey,
+              values: {
+                ...(previous.key === storageKey ? previous.values : restored),
+                [key]: clampColumnWidth(next, MIN_RESIZABLE_COLUMN_WIDTH),
+              },
+            })),
+          onColumnReset: () =>
+            setWidthState((previous) => {
+              const currentWidths = previous.key === storageKey ? previous.values : restored
+              if (!(key in currentWidths)) return previous
+              const next = { ...currentWidths }
+              delete next[key]
+              return { key: storageKey, values: next }
+            }),
         }),
       }
     })
@@ -161,9 +203,19 @@ export default function ProductionTable<T extends Record<string, any>, P extends
     optionsRender={memberListToolbar ? ({ action }, controls) => {
       const isSettings = (node: React.ReactNode) => isValidElement(node) && node.key === 'setting'
       const reload = supplied.reload
+      const rawSettings = controls.find(isSettings)
+      const wrappedSettings = rawSettings ? (
+        <span
+          key="setting-wrap"
+          onClickCapture={() => { activeSettingReset = resetWidths }}
+          onPointerDownCapture={() => { activeSettingReset = resetWidths }}
+        >
+          {rawSettings}
+        </span>
+      ) : undefined
       return [
         ...controls.filter((node) => !isSettings(node)),
-        <MemberListToolbar key="member-tools" columnSettings={controls.find(isSettings)}
+        <MemberListToolbar key="member-tools" columnSettings={wrappedSettings}
           onRefresh={reload === false ? undefined : (event) => {
             if (typeof reload === 'function') reload(event, action.current)
             else if (props.request || reload === true) void action.current?.reload()

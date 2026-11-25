@@ -2,9 +2,12 @@ import {
   DEFAULT_SELECTION_COLUMN_WIDTH,
   ListRowActions,
   MemberListToolbar,
+  ResizableTableHeader,
   memberListPagination,
   useListColumnSettings,
+  useResizableColumns,
 } from '@agri/shared/components/list';
+import '@agri/shared/components/list/AgriList.css';
 import DeviceSampling from "../../shared-ui/DeviceSampling";
 import CommandReceipts from '../../shared-ui/CommandReceipts'
 import DeviceRemoteControl from "./components/DeviceRemoteControl";
@@ -21,8 +24,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   EnvironmentOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   MessageOutlined,
   PlayCircleOutlined,
   PlusOutlined,
@@ -77,8 +78,8 @@ import { downloadCsv, stampFilename } from "../../shared-ui/exportCsv";
 import { useClock } from "../../shared-ui/clock";
 import "./iot-app.css";
 import UnifiedSsoGate from "../../shared-ui/sso";
-import { TiandituMap, type TiandituMapPoint } from "@agri/shared";
-import { WorkspaceNavigation, MobileNavigationButton, AccountMenu, SidebarUserCard } from "../../shared-ui/WorkspaceNavigation";
+import { TiandituMap, type TiandituMapPoint, RouteWorkspaceTabs, WorkspaceHeader } from "@agri/shared";
+import { WorkspaceNavigation, AccountMenu, SidebarUserCard } from "../../shared-ui/WorkspaceNavigation";
 import { useBusinessSubject } from "../../shared-ui/BusinessSubject";
 
 type Page =
@@ -924,10 +925,17 @@ function Devices() {
       ),
     },
   ];
+  const deviceWidthKey = `${DEVICE_HIDDEN_COLUMNS}:widths`;
+  const {
+    columns: resizableDeviceColumns,
+    totalWidth: deviceScrollX,
+    resetWidths: resetDeviceWidths,
+  } = useResizableColumns(deviceWidthKey, columns, { extraWidth: DEFAULT_SELECTION_COLUMN_WIDTH });
   const { visibleColumns, columnSettings: deviceColumnSettings } = useListColumnSettings(
     DEVICE_HIDDEN_COLUMNS,
-    columns,
+    resizableDeviceColumns,
     ["device", "actions"],
+    { onReset: resetDeviceWidths },
   );
   return (
     <div className="iot-page device-member-list" aria-label="设备管理">
@@ -1005,13 +1013,15 @@ function Devices() {
           <MemberListToolbar refreshing={loading} onRefresh={loadDevices} columnSettings={deviceColumnSettings} />
         </div>
         <Table
+          className="agri-resizable-table"
           rowKey="id"
           tableLayout="fixed"
+          components={{ header: { cell: ResizableTableHeader } }}
           rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
           columns={visibleColumns}
           dataSource={items}
           loading={loading}
-          scroll={{ x: visibleColumns.reduce((width, column) => width + Number(column.width), DEFAULT_SELECTION_COLUMN_WIDTH) }}
+          scroll={{ x: Math.max(deviceScrollX, visibleColumns.reduce((width, column) => width + Number(column.width || 140), DEFAULT_SELECTION_COLUMN_WIDTH)) }}
           locale={{ emptyText: <EmptyHint icon="📡" title="暂无设备" desc="当前经营主体还没有登记设备，或筛选条件没有匹配结果。" /> }}
           pagination={memberListPagination({}, selectedKeys.length)}
         />
@@ -1940,7 +1950,12 @@ function Plots() {
       ),
     },
   ];
-  const plotCols = useListColumnSettings("iot_plot_hidden_columns_v1", columns, ["plot", "actions"]);
+  const plotResizable = useResizableColumns("iot_plot_column_widths_v1", columns, {
+    extraWidth: DEFAULT_SELECTION_COLUMN_WIDTH,
+  });
+  const plotCols = useListColumnSettings("iot_plot_hidden_columns_v1", plotResizable.columns, ["plot", "actions"], {
+    onReset: plotResizable.resetWidths,
+  });
   return (
     <div className="iot-page device-member-list">
       <PageTitle
@@ -2088,13 +2103,15 @@ function Plots() {
             <MemberListToolbar refreshing={loading} onRefresh={() => void load()} columnSettings={plotCols.columnSettings} />
           </div>
           <Table
+            className="agri-resizable-table"
             rowKey="id"
             tableLayout="fixed"
+            components={{ header: { cell: ResizableTableHeader } }}
             loading={loading}
             dataSource={filteredItems}
             columns={plotCols.visibleColumns}
             rowSelection={{ selectedRowKeys: selectedKeys, onChange: setSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
-            scroll={{ x: plotCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
+            scroll={{ x: Math.max(plotResizable.totalWidth, plotCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), DEFAULT_SELECTION_COLUMN_WIDTH)) }}
             locale={{ emptyText: <EmptyHint icon="🌾" title="暂无地块" desc="当前经营主体还没有同步生产地块，或筛选条件没有匹配结果。" /> }}
             pagination={memberListPagination({}, selectedKeys.length)}
           />
@@ -2400,8 +2417,18 @@ function AlertRuleWorkbench() {
         ),
     },
   ];
-  const tenantCols = useListColumnSettings("iot_alert_tenant_rules_hidden_v1", tenantColumns, ["ruleName", "actions"]);
-  const platformCols = useListColumnSettings("iot_alert_platform_rules_hidden_v1", platformColumns, ["ruleName"]);
+  const tenantResizable = useResizableColumns("iot_alert_tenant_rules_widths_v1", tenantColumns, {
+    extraWidth: DEFAULT_SELECTION_COLUMN_WIDTH,
+  });
+  const platformResizable = useResizableColumns("iot_alert_platform_rules_widths_v1", platformColumns, {
+    extraWidth: DEFAULT_SELECTION_COLUMN_WIDTH,
+  });
+  const tenantCols = useListColumnSettings("iot_alert_tenant_rules_hidden_v1", tenantResizable.columns, ["ruleName", "actions"], {
+    onReset: tenantResizable.resetWidths,
+  });
+  const platformCols = useListColumnSettings("iot_alert_platform_rules_hidden_v1", platformResizable.columns, ["ruleName"], {
+    onReset: platformResizable.resetWidths,
+  });
   if (!view || !options) return <Loading />;
   const matchRule = (rule: AlertRule) => {
     if (levelFilter && rule.level !== levelFilter) return false;
@@ -2483,13 +2510,15 @@ function AlertRuleWorkbench() {
             />
           ) : (
             <Table
+              className="agri-resizable-table"
               rowKey="id"
               tableLayout="fixed"
+              components={{ header: { cell: ResizableTableHeader } }}
               loading={loading}
               dataSource={filteredTenant}
               columns={tenantCols.visibleColumns}
               rowSelection={{ selectedRowKeys: tenantSelectedKeys, onChange: setTenantSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
-              scroll={{ x: tenantCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
+              scroll={{ x: Math.max(tenantResizable.totalWidth, tenantCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), DEFAULT_SELECTION_COLUMN_WIDTH)) }}
               pagination={memberListPagination({}, tenantSelectedKeys.length)}
             />
           )}
@@ -2502,13 +2531,15 @@ function AlertRuleWorkbench() {
             <MemberListToolbar refreshing={loading} onRefresh={load} columnSettings={platformCols.columnSettings} />
           </div>
           <Table
+            className="agri-resizable-table"
             rowKey="id"
             tableLayout="fixed"
+            components={{ header: { cell: ResizableTableHeader } }}
             loading={loading}
             dataSource={filteredPlatform}
             columns={platformCols.visibleColumns}
             rowSelection={{ selectedRowKeys: platformSelectedKeys, onChange: setPlatformSelectedKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
-            scroll={{ x: platformCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
+            scroll={{ x: Math.max(platformResizable.totalWidth, platformCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), DEFAULT_SELECTION_COLUMN_WIDTH)) }}
             pagination={memberListPagination({}, platformSelectedKeys.length)}
           />
         </section>
@@ -3146,7 +3177,12 @@ function Automation() {
       ),
     },
   ];
-  const ruleCols = useListColumnSettings("iot_automation_rules_hidden_v1", ruleColumns, ["rule", "actions"]);
+  const ruleResizable = useResizableColumns("iot_automation_rules_widths_v1", ruleColumns, {
+    extraWidth: DEFAULT_SELECTION_COLUMN_WIDTH,
+  });
+  const ruleCols = useListColumnSettings("iot_automation_rules_hidden_v1", ruleResizable.columns, ["rule", "actions"], {
+    onReset: ruleResizable.resetWidths,
+  });
   return (
     <div className="iot-page device-member-list">
       <PageTitle
@@ -3253,13 +3289,15 @@ function Automation() {
           <MemberListToolbar refreshing={loading} onRefresh={load} columnSettings={ruleCols.columnSettings} />
         </div>
         <Table
+          className="agri-resizable-table"
           rowKey="id"
           tableLayout="fixed"
+          components={{ header: { cell: ResizableTableHeader } }}
           loading={loading}
           dataSource={filteredRules}
           columns={ruleCols.visibleColumns}
           rowSelection={{ selectedRowKeys: selectedRuleKeys, onChange: setSelectedRuleKeys, columnWidth: DEFAULT_SELECTION_COLUMN_WIDTH }}
-          scroll={{ x: ruleCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), 44) }}
+          scroll={{ x: Math.max(ruleResizable.totalWidth, ruleCols.visibleColumns.reduce((w, col) => w + Number(col.width || 140), DEFAULT_SELECTION_COLUMN_WIDTH)) }}
           locale={{ emptyText: <EmptyHint icon="⚡" title="暂无自动化规则" desc="请调整筛选条件或点击「新建规则」配置联动策略。" /> }}
           pagination={memberListPagination({}, selectedRuleKeys.length)}
         />
@@ -3847,12 +3885,14 @@ function IotShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1280);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
   const clock = useClock();
   const subject = useBusinessSubject();
   const [mobileOpen, setMobileOpen] = useState(false);
   useEffect(() => {
     const syncLayout = () => {
       const w = window.innerWidth;
+      setIsMobile(w < 1024);
       if (w >= 1024 && w < 1280) setCollapsed(true);
       else if (w >= 1280) setCollapsed(false);
       if (w >= 1024) setMobileOpen(false);
@@ -3912,34 +3952,34 @@ function IotShell() {
               <SidebarUserCard clientId="iot" roleLabel="物联网用户" collapsed={collapsed}
                 switchUrl={`${window.location.protocol}//${window.location.hostname}:8102/`} switchLabel="切换身份（运营端）" />
             </div>
-            <div className="iot-side-foot">
-              <button type="button" onClick={() => setCollapsed(!collapsed)}>
-                {collapsed ? (
-                  <MenuUnfoldOutlined />
-                ) : (
-                  <>
-                    <MenuFoldOutlined />
-                    收起导航
-                  </>
-                )}
-              </button>
-            </div>
           </aside>
           <div className="iot-main">
-            <header className="iot-header">
-              <MobileNavigationButton onClick={() => setMobileOpen(true)} />
-              <div>
-                <span>物联网管理</span>
-                <b>/</b>
-                <strong>{TITLES[page]}</strong>
-              </div>
-              {subject.selector}
-              <div className="iot-header-right">
-                <span>{clock.date}</span>
-                {subject.ready && !subject.busy && <MessageBadge onOpen={() => navigate("/messages")} />}
-                <AccountMenu clientId="iot" />
-              </div>
-            </header>
+            <WorkspaceHeader
+              className="iot-header"
+              rightClassName="iot-header-right"
+              collapsed={collapsed}
+              mobile={isMobile}
+              mobileOpen={mobileOpen}
+              onToggleCollapse={() => (isMobile ? setMobileOpen((prev) => !prev) : setCollapsed((prev) => !prev))}
+              breadcrumbs={["物联网管理", TITLES[page]]}
+              center={subject.selector}
+              right={
+                <>
+                  <span>{clock.date}</span>
+                  {subject.ready && !subject.busy && <MessageBadge onOpen={() => navigate("/messages")} />}
+                  <AccountMenu clientId="iot" />
+                </>
+              }
+            />
+            <RouteWorkspaceTabs
+              activeKey={page}
+              activeLabel={TITLES[page]}
+              activePath={`${location.pathname.replace(/^\/+/, "")}${location.search}`}
+              homeKey="dashboard"
+              homeLabel={TITLES.dashboard}
+              onNavigate={path => navigate("/" + path)}
+              storageKey="agri-iot-web:workspace-tabs"
+            />
             <main>
               {subject.ready ? <div style={{ position: "relative", minHeight: 200 }} aria-busy={subject.busy}>
                 <div ref={node => { node?.toggleAttribute("inert", subject.busy) }} style={subject.busy ? { opacity: 0.35, pointerEvents: "none" } : undefined}>

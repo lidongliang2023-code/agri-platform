@@ -1,52 +1,53 @@
 <template>
-  <div class="user-layout">
+  <div class="user-layout" :class="{ 'is-collapsed': effectiveCollapsed, 'is-mobile': isMobile, 'is-drawer-open': drawerOpen }">
+    <div v-if="isMobile && drawerOpen" class="mobile-backdrop" @click="drawerOpen = false" />
     <aside class="user-sidebar">
       <div class="logo-section">
         <BrandMark :size="34" />
-        <div class="logo-text">
+        <div v-if="!effectiveCollapsed" class="logo-text">
           <h1>丰链云</h1>
           <p>FENGCHAIN · AGRI</p>
         </div>
       </div>
 
-      <div class="tenant-box">
-        <span class="tenant-label">当前主体</span>
-        <strong>{{ me.current?.merchantName || '未绑定经营主体' }}</strong>
-        <small v-if="me.current">
-          {{ me.current.merchantId }} · {{ roleText(me.current.roleInMerchant) }} ·
-          {{ verifyText(me.current.verifyStatus) }}
-        </small>
-        <small v-else>账号尚未加入任何经营主体</small>
-      </div>
-
       <nav class="user-nav">
         <div v-for="group in menuGroups" :key="group.key" class="nav-group">
-          <div class="group-title">
+          <div class="group-title" :title="group.label">
             <span class="group-icon"><MenuIcon :name="group.icon" /></span>
-            {{ group.label }}
+            <span v-if="!effectiveCollapsed">{{ group.label }}</span>
           </div>
-          <ul>
+          <ul v-if="!effectiveCollapsed">
             <li v-for="item in group.items" :key="item.path" :class="{ active: isActive(item.path) }">
-              <router-link :to="item.path" :title="item.label">
+              <router-link :to="item.path" :title="item.label" @click="drawerOpen = false">
                 {{ item.label }}
                 <span v-if="item.pending" class="pending-mark">待接入</span>
+              </router-link>
+            </li>
+          </ul>
+          <ul v-else class="collapsed-group-links">
+            <li v-for="item in group.items" :key="item.path" :class="{ active: isActive(item.path) }">
+              <router-link :to="item.path" :title="item.label" @click="drawerOpen = false">
+                <span>{{ item.label.slice(0, 2) }}</span>
               </router-link>
             </li>
           </ul>
         </div>
       </nav>
 
-      <div class="sidebar-foot">企业端 · V1.0</div>
     </aside>
 
     <main class="user-main">
-      <header class="user-topbar">
-        <div class="topbar-left">
-          <div class="breadcrumb">
-            <span>{{ currentGroup }}</span><b>/</b><strong>{{ currentLabel }}</strong>
-          </div>
-        </div>
-        <div class="topbar-right">
+      <AgriVueTopHeader
+        header-class="user-topbar"
+        left-class="topbar-left"
+        right-class="topbar-right"
+        :collapsed="collapsed"
+        :mobile="isMobile"
+        :mobile-open="drawerOpen"
+        :breadcrumbs="[currentGroup, currentLabel]"
+        @toggle-collapse="toggleCollapse"
+      >
+        <template #right>
           <a class="ops-link" :href="opsEntry">运营端</a>
           <button class="icon-btn" :title="`未读消息 ${me.unread} 条`" @click="router.push('/user/messages')">
             🔔<span v-if="me.unread > 0" class="badge">{{ me.unread > 99 ? '99+' : me.unread }}</span>
@@ -61,8 +62,8 @@
           <button class="logout-btn" :disabled="loggingOut" @click="handleLogout">
             {{ loggingOut ? '退出中…' : '退出登录' }}
           </button>
-        </div>
-      </header>
+        </template>
+      </AgriVueTopHeader>
 
       <div class="user-content">
         <PointHiddenNotice />
@@ -73,8 +74,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { AgriVueTopHeader, readSidebarCollapsed, writeSidebarCollapsed } from '@agri/shared/vue/workspace'
 import BrandMark from '@/components/BrandMark.vue'
 import MenuIcon from '@/components/MenuIcon.vue'
 import PointHiddenNotice from '@/components/ui/PointHiddenNotice.vue'
@@ -161,17 +163,6 @@ const userInfo = computed(() => session.user ?? { username: '', nickname: '', ro
 const initial = computed(() => (userInfo.value.nickname || userInfo.value.username || '用').slice(0, 1))
 const opsEntry = `${window.location.protocol}//${window.location.hostname}:8080/dashboard`
 
-const ROLE_TEXT: Record<string, string> = { owner: '负责人', admin: '管理员', member: '成员', finance: '财务' }
-const roleText = (code?: string) => ROLE_TEXT[code ?? ''] ?? code ?? '成员'
-const VERIFY_TEXT: Record<string, string> = {
-  approved: '已认证',
-  verified: '已认证',
-  pending: '认证中',
-  rejected: '已驳回',
-  unverified: '未认证',
-}
-const verifyText = (status?: string) => VERIFY_TEXT[status ?? ''] ?? status ?? '未认证'
-
 function isActive(path: string) {
   return route.path === path
 }
@@ -202,8 +193,43 @@ watch(
   },
 )
 
+const USER_COLLAPSE_KEY = 'mds.user.sidebar.collapsed'
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 1024)
+const drawerOpen = ref(false)
+const collapsed = ref(
+  readSidebarCollapsed(
+    USER_COLLAPSE_KEY,
+    typeof window !== 'undefined' && window.innerWidth >= 1024 && window.innerWidth < 1280,
+  ),
+)
+const effectiveCollapsed = computed(() => !isMobile.value && collapsed.value)
+
+function toggleCollapse() {
+  if (isMobile.value) {
+    drawerOpen.value = !drawerOpen.value
+    return
+  }
+  collapsed.value = !collapsed.value
+  writeSidebarCollapsed(USER_COLLAPSE_KEY, collapsed.value)
+}
+
+function handleResize() {
+  const w = window.innerWidth
+  isMobile.value = w < 1024
+  if (w >= 1024) {
+    drawerOpen.value = false
+    if (w < 1280) collapsed.value = true
+    else collapsed.value = readSidebarCollapsed(USER_COLLAPSE_KEY, false)
+  }
+}
+
 onMounted(() => {
+  window.addEventListener('resize', handleResize)
   void me.load()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
 })
 </script>
 
@@ -224,6 +250,48 @@ onMounted(() => {
   background: #062b1c;
   color: #fff;
   overflow: hidden;
+  z-index: 40;
+  transition: width 200ms ease, transform 200ms ease;
+}
+
+.user-layout.is-collapsed .user-sidebar {
+  width: 80px;
+}
+
+.user-layout.is-collapsed .logo-section {
+  justify-content: center;
+  padding: 14px 0;
+  gap: 0;
+}
+
+.user-layout.is-collapsed .group-title {
+  justify-content: center;
+  padding: 10px 0 4px;
+}
+
+.user-layout.is-collapsed .collapsed-group-links li a {
+  justify-content: center;
+  padding: 8px 4px;
+  font-size: 12px;
+}
+
+.mobile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(0, 21, 41, 0.45);
+}
+
+.user-layout.is-mobile .user-sidebar {
+  transform: translateX(-100%);
+}
+
+.user-layout.is-mobile.is-drawer-open .user-sidebar {
+  transform: translateX(0);
+}
+
+.user-layout.is-mobile .user-main {
+  margin-left: 0;
 }
 
 .logo-section {
@@ -237,7 +305,7 @@ onMounted(() => {
 .logo-text h1 {
   margin: 0;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.3px;
 }
 
@@ -367,6 +435,11 @@ onMounted(() => {
   margin-left: 232px;
   display: flex;
   flex-direction: column;
+  transition: margin-left 200ms ease;
+}
+
+.user-layout.is-collapsed .user-main {
+  margin-left: 80px;
 }
 
 .user-topbar {
@@ -462,7 +535,7 @@ onMounted(() => {
   background: linear-gradient(135deg, #159a5e, #0ea5e9);
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .user-chip strong {

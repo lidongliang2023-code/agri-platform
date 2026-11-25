@@ -22,10 +22,13 @@ html.pc-ui-v1 {
 }
 .pc-ui-v1 :is(.app-sidebar,.iot-sidebar,.o-sidebar,.g-sidebar,.ops-sidebar,.finance-sidebar,.layout-container>.sidebar,.s2b2c-layout>.sidebar) { width:240px; }
 .pc-ui-v1 :is(.app-main,.iot-main,.o-main,.g-main,.ops-main,.finance-workspace,.layout-container>.main-content,.s2b2c-layout>.main) { margin-left:240px; min-width:0; transition:margin-left 200ms ease; }
-.pc-ui-v1 :is(.sidebar-collapsed,.collapsed,.is-collapsed) :is(.app-sidebar,.iot-sidebar,.o-sidebar,.g-sidebar,.ops-sidebar,.layout-container>.sidebar) { width:80px; }
-.pc-ui-v1 .layout-container.is-collapsed>.sidebar { width:80px; }
-.pc-ui-v1 :is(.sidebar-collapsed,.collapsed,.is-collapsed) :is(.app-main,.iot-main,.o-main,.g-main,.ops-main,.main-content) { margin-left:80px; }
-.pc-ui-v1 :is(.agri-header,.admin-header,.app-header,.iot-header,.o-header,.g-header,.ops-header,.finance-topbar,.top-header,.s2b2c-layout>.main>.header) {
+.pc-ui-v1 :is(.sidebar-collapsed,.collapsed,.is-collapsed) :is(.app-sidebar,.iot-sidebar,.o-sidebar,.g-sidebar,.ops-sidebar,.finance-sidebar,.layout-container>.sidebar,.s2b2c-layout>.sidebar) { width:80px; }
+.pc-ui-v1 .layout-container.is-collapsed>.sidebar,
+.pc-ui-v1 .finance-shell.is-collapsed>.finance-sidebar,
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar { width:80px; }
+.pc-ui-v1 :is(.sidebar-collapsed,.collapsed,.is-collapsed) :is(.app-main,.iot-main,.o-main,.g-main,.ops-main,.finance-workspace,.main-content,.s2b2c-layout>.main) { margin-left:80px; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.main { margin-left:80px; }
+.pc-ui-v1 :is(.agri-header,.admin-header,.app-header,.iot-header,.o-header,.g-header,.ops-header,.finance-topbar,.top-header,.user-topbar,.s2b2c-layout>.main>.header) {
   box-sizing:border-box; height:64px; min-height:64px; padding:0 24px; background:#fff; border-bottom:1px solid var(--pc-border); box-shadow:none; backdrop-filter:none;
   position:sticky; top:0; z-index:30;
 }
@@ -234,7 +237,26 @@ html.pc-ui-v1 small { font-size:max(12px, 0.85em); }
 
 /* S2B2C 侧栏参与 flex 排版，不再给内容重复预留左边距。 */
 .pc-ui-v1 .s2b2c-layout>.sidebar { width:240px !important; flex:0 0 240px !important; }
-.pc-ui-v1 .s2b2c-layout>.main { margin-left:0; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar { width:80px !important; flex:0 0 80px !important; overflow-x:hidden; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .brand { justify-content:center; padding:0 !important; gap:0; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .brand-copy,
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .workspace-badge,
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-role { display:none !important; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-menu.el-menu--collapse { width:80px !important; padding:6px 0; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-menu.el-menu--collapse :is(.el-menu-item,.el-sub-menu__title) {
+  width:100% !important; margin:2px 0 !important; padding:0 !important; justify-content:center !important;
+}
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-menu.el-menu--collapse .el-sub-menu__title > span,
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-menu.el-menu--collapse .el-sub-menu__icon-arrow { display:none !important; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-menu.el-menu--collapse .el-menu-tooltip__trigger {
+  display:inline-flex !important; align-items:center; justify-content:center; padding:0 !important; width:100% !important;
+}
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-menu.el-menu--collapse .el-icon { margin-right:0 !important; font-size:16px; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .sidebar-footer { padding:12px 0; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .logout-btn .el-button { justify-content:center; font-size:0; gap:0; }
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.sidebar .logout-btn .el-button .el-icon { font-size:16px; margin:0; }
+.pc-ui-v1 .s2b2c-layout>.main,
+.pc-ui-v1 .s2b2c-layout.is-collapsed>.main { margin-left:0 !important; }
 .pc-ui-v1 .s2b2c-layout .sidebar-menu :is(.el-menu-item,.el-sub-menu__title) { height:40px; margin-block:0; border-radius:0; color:#a6a6a6 !important; }
 .pc-ui-v1 .s2b2c-layout .sidebar-menu .el-menu-item.is-active { background:rgba(45,143,78,.18) !important; color:#fff !important; border-left:3px solid #2d8f4e; }
 .pc-ui-v1 body { --s2-bg:#f5f6fa; --s2-ink-900:#1a1a1a; --s2-ink-500:#595959; }
@@ -379,14 +401,12 @@ html.pc-ui-v1 .el-button.is-link, html.pc-ui-v1 .el-button--primary.is-link { co
 html.pc-ui-v1 .el-button--danger.is-link { color:#b71c1c !important; }
 html.pc-ui-v1 .s2b2c-layout .logout-btn .el-button.is-link { color:rgba(255,255,255,.72) !important; }
 
-@media(min-width:1024px) and (max-width:1279px) {
- html.pc-ui-v1 .finance-sidebar { width:80px; transform:none; }
- html.pc-ui-v1 .finance-workspace { margin-left:80px; }
- html.pc-ui-v1 .finance-brand { padding:0 18px; }
- html.pc-ui-v1 .finance-brand>span,html.pc-ui-v1 .finance-sidebar :is(.finance-workspace-label,.finance-role-badge,.finance-role,.finance-nav-title,.finance-nav-label),html.pc-ui-v1 .finance-nav a>span { display:none; }
- html.pc-ui-v1 .finance-nav a { justify-content:center; padding-inline:0; }
- html.pc-ui-v1 .finance-sidebar .pc-side-user-menu { left:calc(100% + 6px); right:auto; bottom:8px; }
-}
+html.pc-ui-v1 .finance-shell.is-collapsed .finance-sidebar { width:80px; transform:none; }
+html.pc-ui-v1 .finance-shell.is-collapsed .finance-workspace { margin-left:80px; }
+html.pc-ui-v1 .finance-shell.is-collapsed .finance-brand { padding:0 18px; justify-content:center; }
+html.pc-ui-v1 .finance-shell.is-collapsed .finance-brand>span,html.pc-ui-v1 .finance-shell.is-collapsed .finance-sidebar :is(.finance-workspace-label,.finance-role-badge,.finance-role,.finance-nav-title,.finance-nav-label),html.pc-ui-v1 .finance-shell.is-collapsed .finance-nav a>span { display:none; }
+html.pc-ui-v1 .finance-shell.is-collapsed .finance-nav a { justify-content:center; padding-inline:0; }
+html.pc-ui-v1 .finance-shell.is-collapsed .finance-sidebar .pc-side-user-menu { left:calc(100% + 6px); right:auto; bottom:8px; }
 
 /* 表格行内操作列统一为文字链接形态（无底色无边框，#1b6332，危险操作 #b71c1c，hover 下划线，间距 10px）。 */
 html.pc-ui-v1 :is(.ant-table,.el-table,.data-table,.mds-table,.uc-table,.log-table,.mc-table,.table-card table,.ranking-card table,.g-table-wrap table,.o-table table,.ops-table table,.iot-table table) .pc-cell-actions :is(.ant-btn,.el-button,button:not(.pc-more-item),a) {

@@ -1,21 +1,14 @@
 /**
  * 卖家中心 · 产销对接（承接侧）
- *
- * 这里做的是**两个主体之间**的事：农业生产域的农场发布供给意向，我作为供应商决定接不接。
- * 平台运营不再代做这件事（原来在 `/admin/trade/p2t` 的供给池审核与建品已下线）。
- *
- * 三条不妥协的口径：
- * 1. 建出来的商品 `seller_id` 是**我点选的那个主体**，不再是农场主体号；
- * 2. 承接状态由交易域商品表实查（`source_offer_no` 就是认领凭证），不信生产端回写的 tradeStatus——
- *    回写失败时若只信它，会出现"商品已经建好但池子还显示可承接"，再点一次就是重复商品；
- * 3. 主体没绑定 / 身份解析失败时明确说原因，不出一片看起来"没有货"的空列表。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Card, Col, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, message } from 'antd'
+import { Alert, Button, Input, InputNumber, Modal, Select, Space, Tag, message } from 'antd'
+import { ListRowActions } from '@agri/shared'
 import {
   claimOffer, getClaimablePool, getMyClaimedProducts, updateClaimedPrice,
 } from '@/api/seller-p2t'
 import type { ClaimableOffer, MyClaimedProduct, SellerBinding } from '@/api/seller-p2t'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 interface Props {
   merchants: SellerBinding[]
@@ -34,8 +27,9 @@ export default function SellerP2tPanel({ merchants, preferredMerchantId }: Props
   const [loading, setLoading] = useState(false)
   const [notice, setNotice] = useState('')
   const [pageNum, setPageNum] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [keyword, setKeyword] = useState('')
+  const [draftKeyword, setDraftKeyword] = useState('')
 
   const [mine, setMine] = useState<MyClaimedProduct[]>([])
   const [mineTotal, setMineTotal] = useState(0)
@@ -59,7 +53,6 @@ export default function SellerP2tPanel({ merchants, preferredMerchantId }: Props
         } else {
           setRows([])
           setTotal(0)
-          // 身份解析失败与"今天没人挂货"是两件事，必须说清是哪一件
           setNotice(res?.message ?? '供给意向取不到，请稍后重试')
         }
       })
@@ -132,94 +125,145 @@ export default function SellerP2tPanel({ merchants, preferredMerchantId }: Props
   }
 
   return (
-    <>
-      {notice && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={notice} />}
-      <Card title="可承接的供给意向" style={{ marginBottom: 16 }}>
-        <Space style={{ marginBottom: 12 }} wrap>
-          <Input.Search allowClear placeholder="供给单号 / 批次 / 作物" style={{ width: 260 }}
-            onSearch={(v) => { setKeyword(v.trim()); setPageNum(1) }} />
-          <Button onClick={() => { load(); loadMine() }}>刷新</Button>
-        </Space>
-        <Table<ClaimableOffer>
-          rowKey="offerNo"
-          loading={loading}
-          dataSource={rows}
-          pagination={{
-            current: pageNum, pageSize, total, showSizeChanger: true,
-            onChange: (page, size) => { setPageNum(page); setPageSize(size ?? 10) },
-          }}
-          columns={[
-            { title: '供给单号', dataIndex: 'offerNo', width: 165 },
-            {
-              title: '作物 / 品种',
-              render: (_, row) => `${row.cropName ?? '未填作物'}${row.varietyName ? ` · ${row.varietyName}` : ''}`,
-            },
-            { title: '采收批次', dataIndex: 'batchNo', width: 130 },
-            { title: '货源主体 / 产区', render: (_, row) => `${row.farmName ?? '农场名未填'}${row.origin ? ` · ${row.origin}` : ''}` },
-            {
-              title: '可供 / 已认购 / 剩余',
-              align: 'right',
-              width: 170,
-              render: (_, row) => `${row.availableQty ?? 0} / ${row.reservedQty ?? 0} / ${remainingOf(row)} ${row.unit ?? ''}`,
-            },
-            {
-              title: '上市窗口',
-              width: 175,
-              render: (_, row) => (row.windowStart ? `${row.windowStart} ~ ${row.windowEnd ?? ''}` : '未限定'),
-            },
-            {
-              title: '承接状态',
-              width: 150,
-              render: (_, row) => (row.claimedByMe
-                ? <Tag color="green">已由我承接 {row.claimedProductCode ?? ''}</Tag>
-                : (row.claimed ? <Tag>他方已承接</Tag> : <Tag color="blue">可承接</Tag>)),
-            },
-            {
-              title: '操作',
-              width: 110,
-              render: (_, row) => (
-                <Button type="link" size="small" disabled={Boolean(row.claimedByMe || row.claimed)}
-                  onClick={() => openClaim(row)}>
+    <div style={{ display: 'grid', gap: 16 }}>
+      {notice && <Alert type="warning" showIcon message={notice} />}
+
+      <TradeList<ClaimableOffer>
+        listId="seller-p2t-pool"
+        rowKey="offerNo"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={() => { load(); loadMine() }}
+        toolbarLeft={<span style={{ fontWeight: 600 }}>可承接的供给意向（共 {total} 条）</span>}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={() => {
+              setPageNum(1)
+              setKeyword(draftKeyword.trim())
+            }}
+            onReset={() => {
+              setDraftKeyword('')
+              setKeyword('')
+              setPageNum(1)
+            }}
+            fields={[
+              {
+                label: '关键字',
+                wide: true,
+                control: (
+                  <Input
+                    allowClear
+                    value={draftKeyword}
+                    placeholder="供给单号 / 批次 / 作物"
+                    onChange={(e) => setDraftKeyword(e.target.value)}
+                    onPressEnter={() => {
+                      setPageNum(1)
+                      setKeyword(draftKeyword.trim())
+                    }}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        pagination={{
+          current: pageNum,
+          pageSize,
+          total,
+          onChange: (page, size) => {
+            setPageNum(page)
+            setPageSize(size ?? 20)
+          },
+        }}
+        columns={[
+          { title: '供给单号', dataIndex: 'offerNo', width: 165, ellipsis: true },
+          {
+            title: '作物 / 品种',
+            key: 'cropVariety',
+            width: 160,
+            ellipsis: true,
+            render: (_, row) => `${row.cropName ?? '未填作物'}${row.varietyName ? ` · ${row.varietyName}` : ''}`,
+          },
+          { title: '采收批次', dataIndex: 'batchNo', width: 130, ellipsis: true },
+          {
+            title: '货源主体 / 产区',
+            key: 'origin',
+            width: 190,
+            ellipsis: true,
+            render: (_, row) => `${row.farmName ?? '农场名未填'}${row.origin ? ` · ${row.origin}` : ''}`
+          },
+          {
+            title: '可供 / 已认购 / 剩余',
+            key: 'qtyTriple',
+            align: 'right',
+            width: 175,
+            render: (_, row) => `${row.availableQty ?? 0} / ${row.reservedQty ?? 0} / ${remainingOf(row)} ${row.unit ?? ''}`,
+          },
+          {
+            title: '上市窗口',
+            key: 'window',
+            width: 175,
+            render: (_, row) => (row.windowStart ? `${row.windowStart} ~ ${row.windowEnd ?? ''}` : '未限定'),
+          },
+          {
+            title: '承接状态',
+            key: 'claimStatus',
+            width: 150,
+            render: (_, row) => (row.claimedByMe
+              ? <Tag color="green">已由我承接 {row.claimedProductCode ?? ''}</Tag>
+              : (row.claimed ? <Tag>他方已承接</Tag> : <Tag color="blue">可承接</Tag>)),
+          },
+          {
+            title: '操作',
+            key: 'action',
+            width: 104,
+            render: (_, row) => (
+              <ListRowActions>
+                <Button type="link" size="small" disabled={Boolean(row.claimedByMe || row.claimed)} onClick={() => openClaim(row)}>
                   {row.claimedByMe ? '已承接' : '承接'}
                 </Button>
-              ),
-            },
-          ]}
-        />
-      </Card>
+              </ListRowActions>
+            ),
+          },
+        ]}
+      />
 
-      <Card title={`我承接出来的商品（${mineTotal}）`}>
-        <Row gutter={12} align="middle" style={{ marginBottom: 8 }}>
-          <Col flex="auto">商品由承接方主体持有，改价只影响之后的新订单。</Col>
-        </Row>
-        <Table<MyClaimedProduct>
-          rowKey="id"
-          size="small"
-          loading={mineLoading}
-          dataSource={mine}
-          pagination={false}
-          columns={[
-            { title: '商品编号', dataIndex: 'productCode', width: 150 },
-            { title: '商品名', dataIndex: 'productName' },
-            { title: '来源供给', dataIndex: 'sourceOfferNo', width: 150 },
-            { title: '持有主体', dataIndex: 'sellerName', width: 160 },
-            { title: '库存', dataIndex: 'stockQuantity', align: 'right', width: 90 },
-            { title: '挂牌价', dataIndex: 'price', align: 'right', width: 100, render: (v) => `¥${v ?? 0}` },
-            {
-              title: '改价',
-              width: 210,
-              render: (_, row) => (
-                <Space.Compact>
-                  <InputNumber min={0.01} step={0.1} placeholder="新挂牌价" style={{ width: 120 }}
-                    value={editingPrice[row.id]}
-                    onChange={(v) => setEditingPrice((prev) => ({ ...prev, [row.id]: Number(v ?? 0) }))} />
-                  <Button onClick={() => savePrice(row)}>保存</Button>
-                </Space.Compact>
-              ),
-            },
-          ]}
-        />
-      </Card>
+      <TradeList<MyClaimedProduct>
+        listId="seller-p2t-claimed"
+        rowKey="id"
+        size="small"
+        loading={mineLoading}
+        dataSource={mine}
+        onRefresh={loadMine}
+        toolbarLeft={(
+          <>
+            <span style={{ fontWeight: 600 }}>我承接出来的商品（{mineTotal}）</span>
+            <span style={{ color: '#6b7c72', fontSize: 12 }}>商品由承接方主体持有，改价只影响之后的新订单</span>
+          </>
+        )}
+        columns={[
+          { title: '商品编号', dataIndex: 'productCode', width: 150, ellipsis: true },
+          { title: '商品名', dataIndex: 'productName', width: 180, ellipsis: true },
+          { title: '来源供给', dataIndex: 'sourceOfferNo', width: 150, ellipsis: true },
+          { title: '持有主体', dataIndex: 'sellerName', width: 160, ellipsis: true },
+          { title: '库存', dataIndex: 'stockQuantity', width: 96 },
+          { title: '挂牌价', dataIndex: 'price', width: 104, render: (v) => `¥${v ?? 0}` },
+          {
+            title: '改价',
+            key: 'editPrice',
+            width: 210,
+            render: (_, row) => (
+              <Space.Compact>
+                <InputNumber min={0.01} step={0.1} placeholder="新挂牌价" style={{ width: 120 }}
+                  value={editingPrice[row.id]}
+                  onChange={(v) => setEditingPrice((prev) => ({ ...prev, [row.id]: Number(v ?? 0) }))} />
+                <Button onClick={() => savePrice(row)}>保存</Button>
+              </Space.Compact>
+            ),
+          },
+        ]}
+      />
 
       <Modal
         open={Boolean(claiming)}
@@ -255,6 +299,6 @@ export default function SellerP2tPanel({ merchants, preferredMerchantId }: Props
           </Space>
         )}
       </Modal>
-    </>
+    </div>
   )
 }

@@ -12,7 +12,7 @@
         :show-refresh="showRefresh"
         :refreshing="loading"
         @toggle-column="toggleColumn"
-        @reset-columns="resetColumns"
+        @reset-columns="handleResetColumns"
         @refresh="emit('refresh')"
       >
         <template #left>
@@ -51,7 +51,27 @@
                 :class="headerCellClass(col)"
                 :title="col.label"
               >
-                {{ col.label }}
+                <span class="agri-vue-th-label">{{ col.label }}</span>
+                <span
+                  v-if="isColumnResizable(col)"
+                  class="agri-vue-col-resize-handle"
+                  :class="{ 'is-dragging': draggingKey === col.resolvedKey }"
+                  role="separator"
+                  aria-orientation="vertical"
+                  :aria-label="`调整「${col.label}」列宽`"
+                  :aria-valuenow="Math.round(getColumnWidth(col))"
+                  :aria-valuemin="MIN_RESIZABLE_COLUMN_WIDTH"
+                  tabindex="0"
+                  title="拖动调整列宽，双击恢复默认宽度"
+                  @click.stop.prevent
+                  @dblclick.stop.prevent="handleResetSingleWidth(col)"
+                  @pointerdown="handleResizePointerDown($event, col)"
+                  @pointermove="handleResizePointerMove"
+                  @pointerup="handleResizePointerEnd"
+                  @pointercancel="handleResizePointerEnd"
+                  @lostpointercapture="handleResizeLostCapture"
+                  @keydown="handleResizeKeydown($event, col)"
+                />
               </th>
             </tr>
           </thead>
@@ -122,10 +142,12 @@ import { computed, ref, watch } from 'vue'
 import AgriVueToolbar from './AgriVueToolbar.vue'
 import AgriVuePagination from './AgriVuePagination.vue'
 import { useVueListColumns } from './useVueListColumns'
+import { useVueColumnWidths } from './useVueColumnWidths'
 import {
   DEFAULT_SELECTION_COLUMN_WIDTH,
   DEFAULT_VUE_PAGE_SIZE,
   DEFAULT_VUE_PAGE_SIZES,
+  MIN_RESIZABLE_COLUMN_WIDTH,
   clampPage,
   readCellValue,
   type NormalizedVueColumn,
@@ -150,6 +172,10 @@ const props = withDefaults(
     showColumnSettings?: boolean
     showRefresh?: boolean
     columnSettingsStorageKey?: string | false
+    /** 列宽拖拽持久化键；省略时若已传 columnSettingsStorageKey 则自动派生；传 false 关闭列宽持久化。 */
+    columnWidthStorageKey?: string | false
+    /** 是否启用表头拖拽调整列宽，默认 true。 */
+    resizable?: boolean
     lockedColumnKeys?: string[]
     minTableWidth?: number | string
     showPagination?: boolean
@@ -173,6 +199,8 @@ const props = withDefaults(
     showColumnSettings: true,
     showRefresh: true,
     columnSettingsStorageKey: false,
+    columnWidthStorageKey: undefined,
+    resizable: true,
     lockedColumnKeys: undefined,
     minTableWidth: undefined,
     showPagination: true,
@@ -192,6 +220,7 @@ const emit = defineEmits<{
   'update:page': [page: number]
   'update:pageSize': [size: number]
   'page-change': [page: number, pageSize: number]
+  'column-resize': [key: string, width: number]
 }>()
 
 const {
@@ -205,6 +234,75 @@ const {
   storageKey: props.columnSettingsStorageKey,
   lockedKeys: props.lockedColumnKeys,
 })
+
+const {
+  widths: customColumnWidths,
+  getColumnWidth,
+  setColumnWidth,
+  resetColumnWidth,
+  resetAllWidths,
+} = useVueColumnWidths({
+  storageKey: () => props.columnWidthStorageKey,
+  fallbackSettingsKey: () => props.columnSettingsStorageKey,
+})
+
+const draggingKey = ref<string | null>(null)
+let activeDrag: { key: string; startX: number; startWidth: number } | null = null
+
+function isColumnResizable(col: NormalizedVueColumn): boolean {
+  return props.resizable && col.resizable !== false
+}
+
+function handleResizePointerDown(event: PointerEvent, col: NormalizedVueColumn) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  event.stopPropagation()
+  const handle = event.currentTarget as HTMLElement | null
+  const thRectWidth = handle?.parentElement?.getBoundingClientRect().width
+  const startWidth = thRectWidth && thRectWidth > 0 ? thRectWidth : getColumnWidth(col)
+  activeDrag = { key: col.resolvedKey, startX: event.clientX, startWidth }
+  draggingKey.value = col.resolvedKey
+  handle?.setPointerCapture?.(event.pointerId)
+}
+
+function handleResizePointerMove(event: PointerEvent) {
+  if (!activeDrag) return
+  event.preventDefault()
+  event.stopPropagation()
+  const nextWidth = Math.round(activeDrag.startWidth + event.clientX - activeDrag.startX)
+  setColumnWidth(activeDrag.key, nextWidth, MIN_RESIZABLE_COLUMN_WIDTH)
+  emit('column-resize', activeDrag.key, customColumnWidths.value[activeDrag.key] ?? nextWidth)
+}
+
+function handleResizePointerEnd(event: PointerEvent) {
+  event.stopPropagation()
+  activeDrag = null
+  draggingKey.value = null
+}
+
+function handleResizeLostCapture() {
+  activeDrag = null
+  draggingKey.value = null
+}
+
+function handleResizeKeydown(event: KeyboardEvent, col: NormalizedVueColumn) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  event.stopPropagation()
+  const nextWidth = getColumnWidth(col) + (event.key === 'ArrowRight' ? 16 : -16)
+  setColumnWidth(col.resolvedKey, nextWidth, MIN_RESIZABLE_COLUMN_WIDTH)
+  emit('column-resize', col.resolvedKey, customColumnWidths.value[col.resolvedKey] ?? nextWidth)
+}
+
+function handleResetSingleWidth(col: NormalizedVueColumn) {
+  resetColumnWidth(col.resolvedKey)
+  emit('column-resize', col.resolvedKey, getColumnWidth(col))
+}
+
+function handleResetColumns() {
+  resetColumns()
+  resetAllWidths()
+}
 
 const internalPage = ref<number>(props.page ?? 1)
 const internalPageSize = ref<number>(props.pageSize ?? DEFAULT_VUE_PAGE_SIZE)
@@ -333,13 +431,16 @@ function toggleAllCurrentPage() {
 const totalColSpan = computed(() => visibleColumns.value.length + (props.selectable ? 1 : 0))
 
 const computedMinWidth = computed(() => {
-  if (props.minTableWidth != null) {
-    return typeof props.minTableWidth === 'number' ? `${props.minTableWidth}px` : props.minTableWidth
-  }
   const sum = visibleColumns.value.reduce(
-    (acc, col) => acc + (col.resolvedWidth ?? col.resolvedMinWidth ?? 120),
+    (acc, col) => acc + getColumnWidth(col),
     props.selectable ? props.selectionWidth : 0,
   )
+  if (props.minTableWidth != null) {
+    if (typeof props.minTableWidth === 'number') {
+      return `${Math.max(props.minTableWidth, sum)}px`
+    }
+    return Object.keys(customColumnWidths.value).length > 0 && sum > 0 ? `${sum}px` : props.minTableWidth
+  }
   return sum > 0 ? `${sum}px` : undefined
 })
 
@@ -349,9 +450,11 @@ const tableStyle = computed(() => {
 })
 
 function colStyle(col: NormalizedVueColumn) {
+  const custom = customColumnWidths.value[col.resolvedKey]
+  if (custom !== undefined) return { width: `${custom}px` }
   if (col.resolvedWidth) return { width: `${col.resolvedWidth}px` }
   if (col.resolvedMinWidth) return { width: `${col.resolvedMinWidth}px` }
-  return undefined
+  return { width: `${getColumnWidth(col)}px` }
 }
 
 function headerCellClass(col: NormalizedVueColumn) {
@@ -385,6 +488,7 @@ function clearSelection() {
 
 defineExpose({
   clearSelection,
-  resetColumns,
+  resetColumns: handleResetColumns,
+  resetColumnWidths: resetAllWidths,
 })
 </script>

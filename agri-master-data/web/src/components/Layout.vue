@@ -1,6 +1,13 @@
 <template>
-  <div class="layout-container" :class="{ 'is-collapsed': collapsed }">
-    <aside class="sidebar">
+  <div class="layout-container" :class="{ 'is-collapsed': effectiveCollapsed, 'is-mobile': isMobile, 'is-drawer-open': drawerOpen }">
+    <button
+      v-if="isMobile && drawerOpen"
+      type="button"
+      class="sidebar-overlay"
+      aria-label="关闭导航菜单"
+      @click="drawerOpen = false"
+    />
+    <aside class="sidebar" :class="{ 'is-open': drawerOpen }" @mouseleave="scheduleCloseFlyout">
       <div class="logo-section">
         <BrandMark :size="36" />
         <div class="logo-text">
@@ -9,44 +16,108 @@
         </div>
       </div>
 
-      <nav class="nav-menu">
-        <div v-for="group in menuGroups" :key="group.key" class="nav-group">
-          <button
-            type="button"
-            class="group-head"
-            :class="{ 'is-open': isGroupOpen(group) }"
-            :aria-expanded="isGroupOpen(group)"
-            @click="toggleGroup(group)"
+      <nav class="nav-menu" aria-label="主数据导航">
+        <template v-for="section in menuSections" :key="section.title">
+          <div
+            v-for="group in section.groups"
+            :key="group.key"
+            class="nav-group"
+            @mouseenter="openFlyout(group, $event)"
           >
-            <span class="group-icon"><MenuIcon :name="group.icon" /></span>
-            <span class="group-label">{{ group.label }}</span>
-            <span class="group-arrow">▶</span>
-          </button>
-          <ul v-show="isGroupOpen(group)" class="sub-menu">
-            <li v-for="item in group.items" :key="item.path" :class="{ active: isActive(item.path) }">
-              <router-link :to="item.path" :title="item.label">
-                {{ item.label }}
-                <span v-if="item.readonly" class="readonly-mark">只读</span>
-              </router-link>
-            </li>
-          </ul>
-        </div>
+            <button
+              type="button"
+              class="group-head"
+              :class="{ 'is-open': isGroupOpen(group), 'is-current': currentGroup?.key === group.key }"
+              :title="group.label"
+              :aria-label="group.label"
+              :aria-expanded="effectiveCollapsed ? flyoutGroup?.key === group.key : isGroupOpen(group)"
+              @click="handleGroupClick(group, $event)"
+              @keydown.down.prevent="focusFlyout(group, $event)"
+            >
+              <span class="group-icon"><MenuIcon :name="group.icon" /></span>
+              <span class="group-label">{{ group.label }}</span>
+              <span class="group-arrow" aria-hidden="true">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M4.5 2.5L8 6L4.5 9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+            </button>
+            <ul v-show="!effectiveCollapsed && isGroupOpen(group)" class="sub-menu">
+              <li v-for="item in group.items" :key="item.path" :class="{ active: isActive(item.path) }">
+                <router-link :to="item.path" :title="item.label" @click="drawerOpen = false">
+                  {{ item.label }}
+                  <span v-if="item.readonly" class="readonly-mark">只读</span>
+                </router-link>
+              </li>
+            </ul>
+          </div>
+        </template>
       </nav>
 
-      <div class="sidebar-foot">主数据运营端 · V1.0</div>
+      <div class="pc-side-user" ref="userMenuRef">
+        <button
+          type="button"
+          class="pc-side-user-trigger"
+          :title="`${userDisplayName} · ${userRoleSummary}`"
+          :aria-expanded="userMenuOpen"
+          aria-haspopup="menu"
+          @click.stop="userMenuOpen = !userMenuOpen"
+        >
+          <span class="pc-side-user-avatar">{{ userInitial }}</span>
+          <span class="pc-side-user-meta">
+            <strong>{{ userDisplayName }}</strong>
+            <small>{{ userRoleSummary }}</small>
+          </span>
+          <span class="pc-side-user-caret" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M3 7.5L6 4.5L9 7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+        </button>
+        <div v-if="userMenuOpen" class="pc-side-user-menu" role="menu">
+          <a :href="personalCenter" target="_blank" rel="noreferrer" role="menuitem" @click="userMenuOpen = false">个人中心</a>
+          <a :href="userEntry" role="menuitem" @click="userMenuOpen = false">切换身份（会员中心）</a>
+          <div class="pc-side-user-divider" />
+          <button type="button" class="is-danger" role="menuitem" :disabled="loggingOut" @click="handleLogout">
+            {{ loggingOut ? '退出中…' : '退出登录' }}
+          </button>
+        </div>
+      </div>
     </aside>
 
+    <!-- 80px 图标侧栏收起态：悬停或点击分组图标时在右侧弹出子菜单 -->
+    <div
+      v-if="effectiveCollapsed && flyoutGroup"
+      class="nav-flyout"
+      :style="{ top: `${flyoutTop}px` }"
+      role="menu"
+      @mouseenter="cancelCloseFlyout"
+      @mouseleave="scheduleCloseFlyout"
+    >
+      <div class="nav-flyout-title">{{ flyoutGroup.label }}</div>
+      <ul class="nav-flyout-list">
+        <li v-for="item in flyoutGroup.items" :key="item.path" :class="{ active: isActive(item.path) }">
+          <router-link :to="item.path" :title="item.label" @click="closeFlyout">
+            <span>{{ item.label }}</span>
+            <span v-if="item.readonly" class="readonly-mark">只读</span>
+          </router-link>
+        </li>
+      </ul>
+    </div>
+
     <main class="main-content">
-      <header class="top-header">
-        <div class="header-left">
-          <button type="button" class="collapse-btn" :title="collapsed ? '展开菜单' : '收起菜单'" @click="toggleCollapse">
-            ☰
-          </button>
-          <div class="breadcrumb">
-            <span>{{ currentGroupLabel }}</span><b>/</b><strong>{{ currentPageLabel }}</strong>
-          </div>
-        </div>
-        <div class="header-right">
+      <AgriVueTopHeader
+        header-class="top-header"
+        left-class="header-left"
+        right-class="header-right"
+        toggle-button-class="collapse-btn"
+        :collapsed="collapsed"
+        :mobile="isMobile"
+        :mobile-open="drawerOpen"
+        :breadcrumbs="[currentGroupLabel, currentPageLabel]"
+        @toggle-collapse="toggleCollapse"
+      >
+        <template #right>
           <form class="global-search" @submit.prevent="submitSearch">
             <input
               v-model="searchKeyword"
@@ -67,7 +138,7 @@
           >🔔</button>
           <div class="user-info">
             <div class="user-avatar">{{ userInitial }}</div>
-            <div class="user-detail">
+            <div class="header-user-detail">
               <span class="user-name">{{ userInfo.nickname || userInfo.username || '管理员' }}</span>
               <span class="user-roles">{{ userInfo.roles?.length ? userInfo.roles.join(' / ') : '未分配角色' }}</span>
             </div>
@@ -75,8 +146,8 @@
           <button class="logout-btn" :disabled="loggingOut" @click="handleLogout">
             {{ loggingOut ? '退出中…' : '退出登录' }}
           </button>
-        </div>
-      </header>
+        </template>
+      </AgriVueTopHeader>
       <div class="content-wrapper">
         <PointHiddenNotice />
         <router-view />
@@ -86,10 +157,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { revokePlatformSession } from '@/utils/sso'
+import { AgriVueTopHeader } from '@agri/shared/vue/workspace'
 import BrandMark from '@/components/BrandMark.vue'
 import MenuIcon from '@/components/MenuIcon.vue'
 import PointHiddenNotice from '@/components/ui/PointHiddenNotice.vue'
@@ -222,20 +294,143 @@ const menuGroups: MenuGroup[] = [
   },
 ]
 
+const menuSections = [
+  { title: '平台运营', groups: menuGroups.slice(0, 3) },
+  { title: '主数据与标准', groups: menuGroups.slice(3, 6) },
+  { title: '治理与系统', groups: menuGroups.slice(6) },
+]
+
 const router = useRouter()
 const route = useRoute()
 const session = useSessionStore()
 
 const userInfo = computed(() => session.user ?? { username: '', nickname: '', roles: [] })
-const userInitial = computed(() => (userInfo.value.nickname || userInfo.value.username || '管').slice(0, 1))
+const userDisplayName = computed(() => userInfo.value.nickname || userInfo.value.username || '管理员')
+const userRoleSummary = computed(() => (userInfo.value.roles?.length ? userInfo.value.roles.join(' / ') : '主数据运营'))
+const userInitial = computed(() => userDisplayName.value.slice(0, 1))
 const userEntry = `${window.location.protocol}//${window.location.hostname}:8086/member/buyer`
+const personalCenter = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
 const userCenterOps = `${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`
 
 const COLLAPSE_KEY = 'mds.sidebar.collapsed'
-const collapsed = ref(localStorage.getItem(COLLAPSE_KEY) === '1')
+const isCompactViewport = ref(typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px) and (max-width: 1279px)').matches)
+const isMobile = ref(typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches)
+const collapsed = ref(
+  isCompactViewport.value ? true : localStorage.getItem(COLLAPSE_KEY) === '1',
+)
+const drawerOpen = ref(false)
+const effectiveCollapsed = computed(() => !isMobile.value && collapsed.value)
 const loggingOut = ref(false)
 const searchKeyword = ref('')
 const expandedKeys = ref<string[]>([])
+const userMenuOpen = ref(false)
+const userMenuRef = ref<HTMLElement | null>(null)
+const flyoutGroup = ref<MenuGroup | null>(null)
+const flyoutTop = ref(72)
+let flyoutTimer: number | null = null
+
+function cancelCloseFlyout() {
+  if (flyoutTimer !== null) {
+    window.clearTimeout(flyoutTimer)
+    flyoutTimer = null
+  }
+}
+
+function closeFlyout() {
+  cancelCloseFlyout()
+  flyoutGroup.value = null
+}
+
+function scheduleCloseFlyout() {
+  cancelCloseFlyout()
+  flyoutTimer = window.setTimeout(() => {
+    flyoutGroup.value = null
+  }, 140)
+}
+
+function positionFlyout(target: EventTarget | null) {
+  const el = target instanceof HTMLElement ? target.closest('.nav-group, .group-head') as HTMLElement | null : null
+  const rect = el?.getBoundingClientRect()
+  const rawTop = rect ? rect.top : 72
+  const maxTop = Math.max(72, window.innerHeight - 280)
+  flyoutTop.value = Math.min(Math.max(68, rawTop), maxTop)
+}
+
+function openFlyout(group: MenuGroup, event: Event) {
+  if (!effectiveCollapsed.value) return
+  cancelCloseFlyout()
+  positionFlyout(event.currentTarget)
+  flyoutGroup.value = group
+}
+
+function handleGroupClick(group: MenuGroup, event: Event) {
+  if (effectiveCollapsed.value) {
+    openFlyout(group, event)
+    return
+  }
+  expandedKeys.value = isGroupOpen(group)
+    ? expandedKeys.value.filter((key) => key !== group.key)
+    : [...expandedKeys.value, group.key]
+}
+
+function focusFlyout(group: MenuGroup, event: Event) {
+  if (!effectiveCollapsed.value) return
+  openFlyout(group, event)
+  window.setTimeout(() => document.querySelector<HTMLAnchorElement>('.nav-flyout a')?.focus(), 0)
+}
+
+function handleNavigationEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  const label = flyoutGroup.value?.label
+  closeFlyout()
+  userMenuOpen.value = false
+  drawerOpen.value = false
+  if (label) [...document.querySelectorAll<HTMLButtonElement>('.group-head')].find(button => button.title === label)?.focus()
+}
+
+function toggleCollapse() {
+  if (isMobile.value) {
+    drawerOpen.value = !drawerOpen.value
+    return
+  }
+  collapsed.value = !collapsed.value
+  closeFlyout()
+  if (!isCompactViewport.value) {
+    localStorage.setItem(COLLAPSE_KEY, collapsed.value ? '1' : '0')
+  }
+}
+
+let compactMedia: MediaQueryList | null = null
+let mobileMedia: MediaQueryList | null = null
+
+function syncViewport() {
+  if (!compactMedia || !mobileMedia) return
+  isCompactViewport.value = compactMedia.matches
+  isMobile.value = mobileMedia.matches
+  if (mobileMedia.matches) {
+    drawerOpen.value = false
+    closeFlyout()
+  } else if (compactMedia.matches) {
+    collapsed.value = true
+    drawerOpen.value = false
+  } else {
+    collapsed.value = localStorage.getItem(COLLAPSE_KEY) === '1'
+    drawerOpen.value = false
+    closeFlyout()
+  }
+}
+
+function handleDocClick(event: MouseEvent) {
+  if (userMenuOpen.value && userMenuRef.value && !userMenuRef.value.contains(event.target as Node)) {
+    userMenuOpen.value = false
+  }
+  if (flyoutGroup.value) {
+    const target = event.target as HTMLElement | null
+    if (!target?.closest('.nav-flyout') && !target?.closest('.nav-group')) {
+      closeFlyout()
+    }
+  }
+}
 
 /** 默认展开当前页所在分组；首次进入展开「运营总览」。 */
 function defaultExpanded(): string[] {
@@ -247,7 +442,10 @@ function isActive(path: string): boolean {
   const current = route.path
   if (current === path) return true
   // 详情/编辑页归属到列表菜单，例如 /subject/detail/9 → /subject/list
-  if (path === '/subject/list' && /^\/subject\/(detail|edit)\//.test(current)) return true
+  if (path === '/subject/list' && /^\/(subject|tenant)\/(list|detail|edit)(\/|$)/.test(current)) return true
+  if (path === '/subject/package' && /^\/(subject|tenant)\/package(\/|$)/.test(current)) return true
+  if (path === '/subject/quota' && /^\/(subject|tenant)\/quota(\/|$)/.test(current)) return true
+  if (path === '/subject/statistics' && /^\/(subject|tenant)\/statistics(\/|$)/.test(current)) return true
   if (path === '/permission/role' && /^\/permission\/role\//.test(current)) return true
   if (path === '/org/list' && /^\/org\//.test(current)) return true
   if (path === '/user/list' && /^\/user\/detail\//.test(current)) return true
@@ -259,24 +457,28 @@ function isGroupOpen(group: MenuGroup): boolean {
   return expandedKeys.value.includes(group.key)
 }
 
-function toggleGroup(group: MenuGroup) {
-  if (collapsed.value) {
-    collapsed.value = false
-    localStorage.setItem(COLLAPSE_KEY, '0')
-  }
-  expandedKeys.value = isGroupOpen(group)
-    ? expandedKeys.value.filter((key) => key !== group.key)
-    : [...expandedKeys.value, group.key]
-}
-
-function toggleCollapse() {
-  collapsed.value = !collapsed.value
-  localStorage.setItem(COLLAPSE_KEY, collapsed.value ? '1' : '0')
-}
+const subPageTitleRules: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /^\/(subject|tenant)\/detail\/[^/]+$/, label: '主体详情' },
+  { pattern: /^\/(subject|tenant)\/edit\/[^/]+$/, label: '编辑主体资料' },
+  { pattern: /^\/(subject|tenant)\/package\/new$/, label: '新建服务套餐' },
+  { pattern: /^\/(subject|tenant)\/package\/[^/]+\/edit$/, label: '编辑服务套餐' },
+  { pattern: /^\/(subject|tenant)\/package\/[^/]+$/, label: '服务套餐详情' },
+  { pattern: /^\/(subject|tenant)\/quota\/[^/]+\/edit$/, label: '编辑主体配额' },
+  { pattern: /^\/(subject|tenant)\/quota\/[^/]+$/, label: '主体配额详情' },
+  { pattern: /^\/org\/new$/, label: '新建组织' },
+  { pattern: /^\/org\/edit\/[^/]+$/, label: '编辑组织' },
+  { pattern: /^\/org\/detail\/[^/]+$/, label: '组织详情' },
+  { pattern: /^\/permission\/role\/new$/, label: '新建角色' },
+  { pattern: /^\/permission\/role\/[^/]+\/edit$/, label: '编辑角色' },
+  { pattern: /^\/permission\/role\/[^/]+$/, label: '角色详情' },
+  { pattern: /^\/user\/detail\/[^/]+$/, label: '统一用户详情' },
+]
 
 const currentGroup = computed(() => menuGroups.find((group) => group.items.some((item) => isActive(item.path))))
 const currentGroupLabel = computed(() => currentGroup.value?.label ?? '主数据管理')
 const currentPageLabel = computed(() => {
+  const matchedSub = subPageTitleRules.find((rule) => rule.pattern.test(route.path))
+  if (matchedSub) return matchedSub.label
   const item = currentGroup.value?.items.find((entry) => isActive(entry.path))
   if (item) return item.label
   return detailTitles[route.path] ?? '页面'
@@ -309,6 +511,9 @@ async function handleLogout() {
 watch(
   () => route.path,
   () => {
+    drawerOpen.value = false
+    closeFlyout()
+    userMenuOpen.value = false
     const key = currentGroup.value?.key
     if (key && !expandedKeys.value.includes(key)) {
       expandedKeys.value = [...expandedKeys.value, key]
@@ -318,6 +523,21 @@ watch(
 
 onMounted(() => {
   expandedKeys.value = defaultExpanded()
+  compactMedia = window.matchMedia('(min-width: 1024px) and (max-width: 1279px)')
+  mobileMedia = window.matchMedia('(max-width: 1023px)')
+  syncViewport()
+  compactMedia.addEventListener('change', syncViewport)
+  mobileMedia.addEventListener('change', syncViewport)
+  document.addEventListener('click', handleDocClick)
+  document.addEventListener('keydown', handleNavigationEscape)
+})
+
+onBeforeUnmount(() => {
+  cancelCloseFlyout()
+  compactMedia?.removeEventListener('change', syncViewport)
+  mobileMedia?.removeEventListener('change', syncViewport)
+  document.removeEventListener('click', handleDocClick)
+  document.removeEventListener('keydown', handleNavigationEscape)
 })
 </script>
 
@@ -329,9 +549,9 @@ onMounted(() => {
 }
 
 .sidebar {
-  width: 224px;
-  background: #062b1c;
-  color: #fff;
+  width: 240px;
+  background: #001529;
+  color: #a6a6a6;
   position: fixed;
   left: 0;
   top: 0;
@@ -339,12 +559,23 @@ onMounted(() => {
   z-index: 100;
   display: flex;
   flex-direction: column;
-  transition: width 0.22s ease;
-  overflow: hidden;
+  transition: width 0.2s ease, transform 0.2s ease;
+  overflow: visible;
 }
 
 .is-collapsed .sidebar {
-  width: 64px;
+  width: 80px;
+}
+
+.sidebar-overlay {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 21, 41, 0.45);
+  cursor: pointer;
 }
 
 .logo-section {
@@ -352,31 +583,50 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 0 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.is-collapsed .logo-section {
+  justify-content: center;
+  padding: 0;
 }
 
 .logo-text h1 {
   margin: 0;
+  color: #fff;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
 
 .logo-text p {
   margin: 2px 0 0;
-  font-size: var(--agri-font-size-micro);
-  opacity: 0.55;
-  letter-spacing: 2.4px;
+  color: #a6a6a6;
+  font-size: 12px;
+  letter-spacing: 1.5px;
   white-space: nowrap;
 }
 
 .nav-menu {
   flex: 1;
-  padding: 8px 8px 12px;
+  min-height: 0;
+  padding: 8px 0 12px;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.nav-section-title {
+  padding: 12px 18px 4px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .nav-menu::-webkit-scrollbar {
@@ -389,7 +639,7 @@ onMounted(() => {
 }
 
 .nav-group + .nav-group {
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .group-head {
@@ -397,30 +647,43 @@ onMounted(() => {
   align-items: center;
   gap: 9px;
   width: 100%;
-  padding: 9px 10px;
+  height: 40px;
+  padding: 0 16px 0 15px;
   border: 0;
-  border-radius: 8px;
+  border-left: 3px solid transparent;
+  border-radius: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
-  font-weight: 600;
+  color: #a6a6a6;
+  font-size: 14px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.16s ease, color 0.16s ease;
 }
 
 .group-head:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: #0d2137;
+  color: #fff;
+}
+
+.group-head.is-current {
+  color: #fff;
+}
+
+.is-collapsed .group-head.is-current {
+  background: rgba(45, 143, 78, 0.18);
+  border-left-color: #2d8f4e;
   color: #fff;
 }
 
 .group-icon {
   display: inline-flex;
-  color: rgba(255, 255, 255, 0.55);
-}
-
-.group-head:hover .group-icon,
-.group-head.is-open .group-icon {
-  color: #7fe0ae;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: inherit;
 }
 
 .group-label {
@@ -431,9 +694,10 @@ onMounted(() => {
 }
 
 .group-arrow {
-  font-size: var(--agri-font-size-micro);
-  color: rgba(255, 255, 255, 0.35);
-  transition: transform 0.2s;
+  display: inline-flex;
+  align-items: center;
+  color: #a6a6a6;
+  transition: transform 0.2s ease;
 }
 
 .group-head.is-open .group-arrow {
@@ -442,34 +706,91 @@ onMounted(() => {
 
 .sub-menu {
   list-style: none;
-  margin: 2px 0 6px;
-  padding: 0;
+  margin: 0;
+  padding: 2px 0;
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .sub-menu li a {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px 8px 35px;
+  height: 40px;
+  padding: 0 16px 0 40px;
   border-left: 3px solid transparent;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 12.5px;
+  color: #a6a6a6;
+  font-size: 14px;
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
 .sub-menu li a:hover {
-  background: rgba(19, 160, 90, 0.16);
+  background: #0d2137;
   color: #fff;
 }
 
 .sub-menu li.active a {
-  border-left-color: #7fe0ae;
-  background: rgba(19, 160, 90, 0.24);
+  border-left-color: #2d8f4e;
+  background: rgba(45, 143, 78, 0.18);
   color: #fff;
+  font-weight: 500;
+}
+
+.nav-flyout {
+  position: fixed;
+  left: 84px;
+  z-index: 220;
+  min-width: 210px;
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
+  padding: 6px 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #001529;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+.nav-flyout-title {
+  padding: 8px 16px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
   font-weight: 600;
+}
+
+.nav-flyout-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.nav-flyout-list li a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px 0 13px;
+  border-left: 3px solid transparent;
+  color: #a6a6a6;
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-flyout-list li a:hover {
+  background: #0d2137;
+  color: #fff;
+}
+
+.nav-flyout-list li.active a {
+  background: rgba(45, 143, 78, 0.18);
+  border-left-color: #2d8f4e;
+  color: #fff;
+  font-weight: 500;
 }
 
 .readonly-mark {
@@ -477,45 +798,48 @@ onMounted(() => {
   padding: 0 4px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.6);
-  font-size: var(--agri-font-size-micro);
-  line-height: 15px;
-}
-
-.sidebar-foot {
-  flex: none;
-  padding: 12px 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.32);
-  font-size: var(--agri-font-size-micro);
-  text-align: center;
-  white-space: nowrap;
+  color: #a6a6a6;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 .is-collapsed .logo-text,
 .is-collapsed .group-label,
 .is-collapsed .group-arrow,
-.is-collapsed .sub-menu,
-.is-collapsed .sidebar-foot {
+.is-collapsed .sub-menu {
   display: none;
 }
 
 .is-collapsed .group-head {
   justify-content: center;
-  padding: 10px 0;
+  padding: 0;
 }
 
 .main-content {
   flex: 1;
   min-width: 0;
-  margin-left: 224px;
+  margin-left: 240px;
   display: flex;
   flex-direction: column;
-  transition: margin-left 0.22s ease;
+  transition: margin-left 0.2s ease;
 }
 
 .is-collapsed .main-content {
-  margin-left: 64px;
+  margin-left: 80px;
+}
+
+.is-mobile .sidebar {
+  width: 240px;
+  transform: translateX(-100%);
+  box-shadow: 16px 0 40px rgba(0, 0, 0, 0.28);
+}
+
+.is-mobile .sidebar.is-open {
+  transform: translateX(0);
+}
+
+.is-mobile .main-content {
+  margin-left: 0;
 }
 
 .top-header {
@@ -657,10 +981,10 @@ onMounted(() => {
   justify-content: center;
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
-.user-detail {
+.header-user-detail {
   display: flex;
   flex-direction: column;
   line-height: 1.25;
@@ -695,8 +1019,8 @@ onMounted(() => {
 
 .logout-btn:hover:not(:disabled) {
   border-color: #10b981;
-  color: #047857;
-  background: #ecfdf5;
+  color: var(--pc-brand, #2d8f4e);
+  background: var(--pc-light, #e8f5e9);
 }
 
 .logout-btn:disabled {
@@ -707,31 +1031,10 @@ onMounted(() => {
 .content-wrapper {
   flex: 1;
   padding: 18px 22px 34px;
-  background: var(--mds-bg, #f5f7fa);
+  background: var(--pc-bg, #f5f6fa);
 }
 
-@media (max-width: 1024px) {
-  .sidebar {
-    width: 64px;
-  }
-
-  .logo-text,
-  .group-label,
-  .group-arrow,
-  .sub-menu,
-  .sidebar-foot {
-    display: none;
-  }
-
-  .group-head {
-    justify-content: center;
-    padding: 10px 0;
-  }
-
-  .main-content {
-    margin-left: 64px;
-  }
-
+@media (max-width: 1023px) {
   .global-search {
     display: none;
   }
@@ -746,7 +1049,7 @@ onMounted(() => {
     padding: 0 12px;
   }
 
-  .user-detail,
+  .header-user-detail,
   .role-switch {
     display: none;
   }

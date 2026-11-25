@@ -10,8 +10,6 @@ import {
   CloudServerOutlined,
   DashboardOutlined,
   DatabaseOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   ReloadOutlined,
   SearchOutlined,
   ShopOutlined,
@@ -52,7 +50,8 @@ import { downloadCsv, stampFilename } from "../../shared-ui/exportCsv";
 import { useClock } from "../../shared-ui/clock";
 import UnifiedSsoGate from "../../shared-ui/sso";
 
-import { WorkspaceNavigation, MobileNavigationButton, AccountMenu } from "../../shared-ui/WorkspaceNavigation";
+import { WorkspaceNavigation, AccountMenu, SidebarUserCard } from "../../shared-ui/WorkspaceNavigation";
+import { RouteWorkspaceTabs, WorkspaceHeader } from "@agri/shared";
 
 type Page =
   | "dashboard"
@@ -408,7 +407,7 @@ function Tenants() {
         desc="物联网租户、设备容量、套餐到期和服务状态。"
       />
       <section className="o-card o-table">
-        <Table rowKey="id" columns={columns} dataSource={items} />
+        <Table rowKey="id" columns={columns} dataSource={items} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} />
       </section>
       <Modal
         title="调整租户配额"
@@ -520,8 +519,7 @@ function Devices() {
           rowKey="id"
           dataSource={items}
           columns={columns}
-          scroll={{ x: 1050 }}
-        />
+          scroll={{ x: 1050 }} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} />
       </section>
     </div>
   );
@@ -652,7 +650,7 @@ function Alerts() {
         <Button icon={<ReloadOutlined />} onClick={load}>刷新</Button>
       </section>
       <section className="o-card o-table">
-        <Table rowKey="id" dataSource={items} columns={columns} locale={{ emptyText: <div className="o-empty-list"><b>暂无告警记录</b><span>设备产生告警后会自动进入统一台账。</span></div> }} scroll={{ x: 980 }} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条告警` }} />
+        <Table rowKey="id" dataSource={items} columns={columns} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} locale={{ emptyText: <div className="o-empty-list"><b>暂无告警记录</b><span>设备产生告警后会自动进入统一台账。</span></div> }} scroll={{ x: 980 }} />
       </section>
       <Modal
         title="告警处置"
@@ -744,7 +742,7 @@ function AlertRules() {
           { title: "等级", dataIndex: "level", render: (v) => <Status value={v} /> },
           { title: "状态", dataIndex: "enabled", render: (v) => <Status value={v ? "running" : "disabled"} /> },
           { title: "操作", render: (_, r) => <><Button size="small" onClick={() => openForm(r)}>编辑</Button><Button size="small" onClick={() => void toggle(r)}>{r.enabled ? "停用" : "启用"}</Button><Button size="small" danger onClick={() => remove(r)}>删除</Button></> },
-        ]} />
+        ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} />
       </section>
       <section className="o-card o-table" style={{ marginTop: 14 }}>
         <Head title="各经营主体自定义阈值" sub="只读：主体在用户端维护，同指标规则覆盖平台预置" />
@@ -756,7 +754,7 @@ function AlertRules() {
           { title: "持续", dataIndex: "durationSeconds", render: (v) => v > 0 ? `${v} 秒` : "瞬时" },
           { title: "等级", dataIndex: "level", render: (v) => <Status value={v} /> },
           { title: "状态", dataIndex: "enabled", render: (v) => <Status value={v ? "running" : "disabled"} /> },
-        ]} />
+        ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} />
       </section>
       <Modal title={editing ? "编辑平台指标规则" : "新增平台指标规则"} open={open} onCancel={() => setOpen(false)} onOk={() => void save()} okText="保存">
         <Form form={form} layout="vertical">
@@ -905,7 +903,7 @@ function Access() {
           dataSource={items}
           scroll={{ x: 900 }}
           locale={{ emptyText: <div className="o-empty-list"><b>暂无接入申请</b><span>设备提交接入后会出现在这里。</span></div> }}
-          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 条申请` }}
+          pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }}
           columns={[
             { title: "设备", dataIndex: "deviceName", render: (_, row) => <div className="o-entity"><b>{row.deviceName}</b><small>{row.deviceCode} · {row.requestType}</small></div> },
             { title: "所属主体", dataIndex: "tenantName" },
@@ -1046,7 +1044,7 @@ function Firmwares() {
       title: 'SHA-256 完整摘要',
       dataIndex: 'sha256Text',
       width: 220,
-      render: (v) => <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{v}</span>,
+      render: (v) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{v}</span>,
     },
     {
       title: '状态',
@@ -1140,7 +1138,7 @@ function Firmwares() {
         dataSource={items}
         loading={loading}
         scroll={{x:1300}}
-        pagination={{ defaultPageSize: 10,showSizeChanger:true }}
+        pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }}
       />
 
       <Modal title="废弃固件包" open={deprecating!==null} onCancel={()=>setDeprecating(null)} onOk={()=>{if(deprecating!==null)return handleDeprecate(deprecating)}} okButtonProps={{disabled:reason.trim().length<4}}>
@@ -1330,8 +1328,7 @@ function WorkOrders() {
             { title: "操作", key: "action", fixed: "right", width: 140, render: (_, row) =>
               <Button disabled={!["pending", "processing"].includes(row.status)} onClick={() => {setTarget(row);setNote("");}}>
                 {row.status === "pending" ? "受理工单" : "登记完成"}</Button> },
-          ]}
-        />
+          ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} />
       </section>
       <Modal title={target?.status === "pending" ? "受理运维工单" : "登记实际维修完成结果"} open={Boolean(target)} confirmLoading={saving}
         onCancel={() => {if(!saving)setTarget(null);}} onOk={async () => {
@@ -1496,8 +1493,7 @@ function Logs() {
               dataIndex: "ip",
               render: (v) => v || "—",
             },
-          ]}
-        />
+          ]} pagination={{ defaultPageSize: 20, showSizeChanger: true, showQuickJumper: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (total) => `共 ${total} 条` }} />
       </section>
     </div>
   );
@@ -1559,9 +1555,21 @@ function PendingAuditBadge({ onOpen }: { onOpen: () => void }) {
 
 function OpsShell() {
   const [page, setPage] = useState<Page>(parse),
-    [collapsed, setCollapsed] = useState(false);
+    [collapsed, setCollapsed] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1280);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
   const clock = useClock();
   const [mobileOpen, setMobileOpen] = useState(false);
+  useEffect(() => {
+    const syncLayout = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 1024);
+      if (w >= 1024 && w < 1280) setCollapsed(true);
+      else if (w >= 1280) setCollapsed(false);
+      if (w >= 1024) setMobileOpen(false);
+    };
+    window.addEventListener("resize", syncLayout);
+    return () => window.removeEventListener("resize", syncLayout);
+  }, []);
   useEffect(() => {
     const h = () => setPage(parse());
     addEventListener("popstate", h);
@@ -1583,50 +1591,49 @@ function OpsShell() {
             </div>
           )}
         </button>
-        <WorkspaceNavigation groups={MENU} selected={page} collapsed={collapsed}
+        <WorkspaceNavigation clientId="iot-admin" groups={MENU} selected={page} collapsed={collapsed}
           onNavigate={key => go(key as Page)} mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-        <div className="o-side-foot">
-          {!collapsed && (
-            <div>
-              <b>物联网平台运营</b>
-              <small>接入治理 · 告警处置 · 运维审计</small>
-            </div>
-          )}
-          <button type="button" onClick={() => setCollapsed(!collapsed)}>
-            {collapsed ? (
-              <MenuUnfoldOutlined />
-            ) : (
-              <>
-                <MenuFoldOutlined />
-                收起导航
-              </>
-            )}
-          </button>
+        <div className="pc-side-user">
+          <SidebarUserCard clientId="iot-admin" roleLabel="物联网平台运营" collapsed={collapsed}
+            switchUrl={`${window.location.protocol}//${window.location.hostname}:8101/`} switchLabel="切换身份（用户端）" />
         </div>
       </aside>
       <div className="o-main">
-        <header className="o-header">
-          <MobileNavigationButton onClick={() => setMobileOpen(true)} />
-          <div>
-            <span>物联网运营</span>
-            <b>/</b>
-            <strong>{TITLES[page]}</strong>
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              go("devices");
-            }}
-          >
-            <SearchOutlined />
-            <input placeholder="搜索设备 / 租户 / 告警" />
-          </form>
-          <div className="o-header-right">
-            <span>{clock.date}</span>
-            <PendingAuditBadge onOpen={() => go("access")} />
-            <AccountMenu clientId="iot-admin" onLogs={() => go("logs")} />
-          </div>
-        </header>
+        <WorkspaceHeader
+          className="o-header"
+          rightClassName="o-header-right"
+          collapsed={collapsed}
+          mobile={isMobile}
+          mobileOpen={mobileOpen}
+          onToggleCollapse={() => (isMobile ? setMobileOpen((prev) => !prev) : setCollapsed((prev) => !prev))}
+          breadcrumbs={["物联网运营", TITLES[page]]}
+          center={
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                go("devices");
+              }}
+            >
+              <SearchOutlined />
+              <input placeholder="搜索设备 / 租户 / 告警" />
+            </form>
+          }
+          right={
+            <>
+              <span>{clock.date}</span>
+              <PendingAuditBadge onOpen={() => go("access")} />
+              <AccountMenu clientId="iot-admin" onLogs={() => go("logs")} />
+            </>
+          }
+        />
+        <RouteWorkspaceTabs
+          activeKey={page}
+          activeLabel={TITLES[page]}
+          homeKey="dashboard"
+          homeLabel={TITLES.dashboard}
+          onNavigate={key => go(key as Page)}
+          storageKey="agri-iot-ops:workspace-tabs"
+        />
         <main>
           <Content page={page} />
         </main>

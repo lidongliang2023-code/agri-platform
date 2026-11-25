@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, message } from 'antd'
-import { EditOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons'
+import { Alert, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Tag, message } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { ListRowActions } from '@agri/shared'
 import {
   createTemplate, deleteTemplate, getTemplates, updateTemplate, type TemplateRow
 } from '@/api/contract-template'
+import { TradeFilters, TradeList } from '@/components/TradeList'
 
 const TYPE: Record<string, string> = {
   standard: '标准购销',
@@ -13,17 +15,12 @@ const TYPE: Record<string, string> = {
 
 /**
  * 合同模板（运营端）。
- *
- * 模板是全平台共用的合同格式。此前只有"列表 + 新建"两个接口、没有页面，
- * **也没有删除** —— 模板加进去就撤不回来了。这里补齐列表/新建/修改/删除。
- *
- * 合同表里存的合同是从某个模板起草出来的：模板改了不影响已生成的合同
- * （合同有自己的正文快照），所以改模板不会把存量合同改掉。
  */
 export default function AdminContractTemplate() {
   const [rows, setRows] = useState<TemplateRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [keyword, setKeyword] = useState<string | undefined>()
   const [draftKeyword, setDraftKeyword] = useState<string | undefined>()
   const [loading, setLoading] = useState(false)
@@ -35,7 +32,7 @@ export default function AdminContractTemplate() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await getTemplates({ pageNum: page, pageSize: 10, templateName: keyword })
+      const res = await getTemplates({ pageNum: page, pageSize, templateName: keyword })
       if (res?.code === 200) {
         setRows(res.data?.records ?? [])
         setTotal(Number(res.data?.total ?? 0))
@@ -47,11 +44,22 @@ export default function AdminContractTemplate() {
     } finally {
       setLoading(false)
     }
-  }, [page, keyword])
+  }, [page, pageSize, keyword])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const handleQuery = () => {
+    setPage(1)
+    setKeyword(draftKeyword?.trim() || undefined)
+  }
+
+  const handleReset = () => {
+    setDraftKeyword(undefined)
+    setKeyword(undefined)
+    setPage(1)
+  }
 
   const openForm = (row?: TemplateRow) => {
     setEditing(row ?? null)
@@ -106,63 +114,89 @@ export default function AdminContractTemplate() {
 
   return (
     <div style={{ padding: 20 }}>
-      <Card
-        title={`合同模板 ${total} 个`}
-        extra={
-          <Space>
-            <Input placeholder="按模板名称搜索" style={{ width: 180 }} allowClear
-              onChange={(e) => setDraftKeyword(e.target.value || undefined)} />
-            <Button onClick={() => { setPage(1); setKeyword(draftKeyword) }}>查询</Button>
-            <Button icon={<ReloadOutlined />} loading={loading} onClick={load}>刷新</Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>新建模板</Button>
-          </Space>
-        }
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message="模板是全平台共用的合同格式"
-          description="合同是从模板起草出来的，但合同有自己的正文快照 —— 改模板不会改动已生成的合同。删除是软删，列表里不再出现。"
-        />
-        <Table
-          rowKey="id"
-          loading={loading}
-          dataSource={rows}
-          scroll={{ x: 1200 }}
-          pagination={{ current: page, pageSize: 10, total, onChange: setPage }}
-          columns={[
-            { title: '模板编码', dataIndex: 'templateCode', width: 190 },
-            { title: '模板名称', dataIndex: 'templateName', width: 220 },
-            { title: '类型', dataIndex: 'templateType', width: 110,
-              render: (v: string) => TYPE[v] ?? v ?? '—' },
-            { title: '说明', dataIndex: 'description', ellipsis: true, render: (v: string) => v ?? '—' },
-            { title: '排序', dataIndex: 'sortOrder', width: 80 },
-            { title: '状态', dataIndex: 'status', width: 100,
-              render: (v: number) => <Tag color={v === 1 ? 'success' : 'default'}>{v === 1 ? '启用' : '停用'}</Tag> },
-            { title: '更新时间', dataIndex: 'updateTime', width: 170 },
-            {
-              title: '操作',
-              width: 150,
-              fixed: 'right' as const,
-              render: (_: unknown, row: TemplateRow) => (
-                <Space size={0}>
-                  <Button type="link" icon={<EditOutlined />} onClick={() => openForm(row)}>编辑</Button>
-                  <Popconfirm
-                    title="确认删除该模板？"
-                    description="已用该模板起草的合同不受影响。"
-                    okText="确 定"
-                    cancelText="取 消"
-                    onConfirm={() => handleDelete(row)}
-                  >
-                    <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
-                  </Popconfirm>
-                </Space>
-              )
-            }
-          ]}
-        />
-      </Card>
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message="模板是全平台共用的合同格式"
+        description="合同是从模板起草出来的，但合同有自己的正文快照 —— 改模板不会改动已生成的合同。删除是软删，列表里不再出现。"
+      />
+
+      <TradeList<TemplateRow>
+        listId="admin-contract-template"
+        rowKey="id"
+        loading={loading}
+        dataSource={rows}
+        onRefresh={load}
+        toolbarLeft={(
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>
+            新建模板
+          </Button>
+        )}
+        filterSlot={(
+          <TradeFilters
+            loading={loading}
+            onQuery={handleQuery}
+            onReset={handleReset}
+            fields={[
+              {
+                label: '模板名称',
+                control: (
+                  <Input
+                    allowClear
+                    value={draftKeyword}
+                    placeholder="按模板名称搜索"
+                    onChange={(e) => setDraftKeyword(e.target.value || undefined)}
+                    onPressEnter={handleQuery}
+                  />
+                ),
+              },
+            ]}
+          />
+        )}
+        pagination={{
+          current: page,
+          pageSize,
+          total,
+          onChange: (nextPage, nextSize) => {
+            setPage(nextPage)
+            setPageSize(nextSize)
+          },
+        }}
+        columns={[
+          { title: '模板编码', dataIndex: 'templateCode', width: 190, ellipsis: true },
+          { title: '模板名称', dataIndex: 'templateName', width: 220, ellipsis: true },
+          { title: '类型', dataIndex: 'templateType', width: 110, render: (v: string) => TYPE[v] ?? v ?? '—' },
+          { title: '说明', dataIndex: 'description', width: 220, ellipsis: true, render: (v: string) => v ?? '—' },
+          { title: '排序', dataIndex: 'sortOrder', width: 80 },
+          {
+            title: '状态',
+            dataIndex: 'status',
+            width: 100,
+            render: (v: number) => <Tag color={v === 1 ? 'success' : 'default'}>{v === 1 ? '启用' : '停用'}</Tag>
+          },
+          { title: '更新时间', dataIndex: 'updateTime', width: 170 },
+          {
+            title: '操作',
+            key: 'action',
+            width: 140,
+            render: (_: unknown, row: TemplateRow) => (
+              <ListRowActions>
+                <Button type="link" size="small" onClick={() => openForm(row)}>编辑</Button>
+                <Popconfirm
+                  title="确认删除该模板？"
+                  description="已用该模板起草的合同不受影响。"
+                  okText="确 定"
+                  cancelText="取 消"
+                  onConfirm={() => handleDelete(row)}
+                >
+                  <Button type="link" size="small" danger>删除</Button>
+                </Popconfirm>
+              </ListRowActions>
+            )
+          }
+        ]}
+      />
 
       <Modal title={editing ? '编辑合同模板' : '新建合同模板'} open={open}
         onCancel={() => setOpen(false)} onOk={submit} confirmLoading={saving} destroyOnClose width={720}>

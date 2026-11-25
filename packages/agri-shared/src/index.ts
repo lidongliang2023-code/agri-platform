@@ -15,3 +15,4 @@ export { default as TiandituBoundaryEditor } from './components/TiandituBoundary
 export * from './components/tianditu'
 export * from './components/chinaRegionCenters'
 export * from './components/list'
+export * from './components/workspace'

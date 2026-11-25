@@ -2,17 +2,24 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_COLLAPSE_THRESHOLD,
   DEFAULT_VUE_PAGE_SIZE,
+  MIN_RESIZABLE_COLUMN_WIDTH,
   buildPageTokens,
   clampPage,
   computeTotalPages,
   filterVisibleVueColumns,
   formatSelectionSummary,
+  loadStoredColumnWidths,
   loadStoredHiddenKeys,
   normalizeVueColumn,
   normalizeVueColumns,
   partitionRowActions,
   readCellValue,
+  removeColumnWidthEntry,
+  resolveDefaultVueColumnWidth,
+  resolveEffectiveVueColumnWidth,
+  saveStoredColumnWidths,
   saveStoredHiddenKeys,
+  setColumnWidthEntry,
   shouldCollapseFilters,
   type StorageLike,
 } from '../src/vue/list/vueListUtils'
@@ -25,6 +32,9 @@ function createMemoryStorage(initial: Record<string, string> = {}): StorageLike 
     },
     setItem(key, value) {
       map.set(key, value)
+    },
+    removeItem(key) {
+      map.delete(key)
     },
     dump() {
       return Object.fromEntries(map.entries())
@@ -160,5 +170,64 @@ describe('vueListUtils：Vue 端共享列表纯逻辑工具', () => {
     expect(formatSelectionSummary(286, 2)).toBe('已选 2 项 · 共 286 条')
     expect(formatSelectionSummary(286, 0)).toBe('共 286 条')
     expect(formatSelectionSummary(-5, -1, '单')).toBe('共 0 单')
+  })
+
+  it('读写持久化列宽、计算默认/生效列宽以及更新和还原单列宽', () => {
+    const { columns } = normalizeVueColumns([
+      { prop: 'code', label: '编码', width: 180 },
+      { prop: 'amount', label: '金额' },
+      { prop: 'status', label: '状态' },
+      { prop: 'remark', label: '备注', minWidth: 200 },
+      { prop: 'title', label: '标题' },
+      { key: 'actions', label: '操作' },
+    ])
+
+    expect(resolveDefaultVueColumnWidth(columns[0])).toBe(180)
+    expect(resolveDefaultVueColumnWidth(columns[1])).toBe(120)
+    expect(resolveDefaultVueColumnWidth(columns[2])).toBe(104)
+    expect(resolveDefaultVueColumnWidth(columns[3])).toBe(200)
+    expect(resolveDefaultVueColumnWidth(columns[4])).toBe(140)
+    expect(resolveDefaultVueColumnWidth(columns[5])).toBe(150)
+
+    const mem = createMemoryStorage()
+    expect(loadStoredColumnWidths(mem, 'mds:cols:demo:widths')).toEqual({})
+    expect(loadStoredColumnWidths(mem, false)).toEqual({})
+
+    let widths = setColumnWidthEntry({}, 'code', 260.4)
+    widths = setColumnWidthEntry(widths, 'amount', 40)
+    expect(widths).toEqual({ code: 260, amount: MIN_RESIZABLE_COLUMN_WIDTH })
+
+    const saved = saveStoredColumnWidths(mem, 'mds:cols:demo:widths', widths)
+    expect(saved).toEqual({ code: 260, amount: MIN_RESIZABLE_COLUMN_WIDTH })
+    expect(loadStoredColumnWidths(mem, 'mds:cols:demo:widths')).toEqual({
+      code: 260,
+      amount: MIN_RESIZABLE_COLUMN_WIDTH,
+    })
+
+    expect(resolveEffectiveVueColumnWidth(columns[0], saved)).toBe(260)
+    expect(resolveEffectiveVueColumnWidth(columns[4], saved)).toBe(140)
+
+    const afterSingleReset = removeColumnWidthEntry(saved, 'code')
+    expect(afterSingleReset).toEqual({ amount: MIN_RESIZABLE_COLUMN_WIDTH })
+    expect(removeColumnWidthEntry(afterSingleReset, 'missing')).toBe(afterSingleReset)
+
+    // 清空列宽时触发 removeItem 释放键
+    saveStoredColumnWidths(mem, 'mds:cols:demo:widths', {})
+    expect(mem.dump()).toEqual({})
+
+    // 存储异常时不崩溃
+    const broken: StorageLike = {
+      getItem() {
+        throw new Error('denied')
+      },
+      setItem() {
+        throw new Error('quota')
+      },
+      removeItem() {
+        throw new Error('denied')
+      },
+    }
+    expect(loadStoredColumnWidths(broken, 'k')).toEqual({})
+    expect(saveStoredColumnWidths(broken, 'k', { code: 200 })).toEqual({ code: 200 })
   })
 })

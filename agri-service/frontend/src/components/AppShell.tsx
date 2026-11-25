@@ -10,8 +10,6 @@ import {
   HomeOutlined,
   InsuranceOutlined,
   MessageOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   ProfileOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
@@ -19,7 +17,6 @@ import {
   ShopOutlined,
   SolutionOutlined,
   TeamOutlined,
-  ToolOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { Avatar, Badge, Dropdown } from 'antd'
@@ -27,6 +24,8 @@ import { useApp } from '../app-context'
 import type { PageKey } from '../types'
 import { serviceApi } from '../api'
 import { logoutUnified, useUnifiedUser } from '../sso'
+import { SidebarUserCard } from './SidebarUserCard'
+import { RouteWorkspaceTabs, WorkspaceHeader } from '@agri/shared'
 
 type MenuItem = { key: PageKey; label: string; icon: ReactNode }
 type MenuGroup = { title: string; items: MenuItem[] }
@@ -94,9 +93,23 @@ const PRIMARY_MOBILE: PageKey[] = ['home', 'services', 'orders', 'messages']
 
 export function AppShell({ children }: { children: ReactNode }): JSX.Element {
   const { user } = useUnifiedUser()
-  const { page, navigate, openServices } = useApp()
-  const [collapsed, setCollapsed] = useState(false)
+  const { page, id, navigate, openServices } = useApp()
+  const [collapsed, setCollapsed] = useState(() => window.innerWidth >= 1024 && window.innerWidth < 1280)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const showSidebarCopy = !collapsed || mobileOpen
+
+  useEffect(() => {
+    const syncLayout = (): void => {
+      const w = window.innerWidth
+      setIsMobile(w < 1024)
+      if (w >= 1024 && w < 1280) setCollapsed(true)
+      else if (w >= 1280) setCollapsed(false)
+      if (w >= 1024) setMobileOpen(false)
+    }
+    window.addEventListener('resize', syncLayout)
+    return () => window.removeEventListener('resize', syncLayout)
+  }, [])
   const [keyword, setKeyword] = useState('')
   const [unread, setUnread] = useState(0)
   const [subjectName, setSubjectName] = useState('')
@@ -126,7 +139,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
       <aside className={`app-sidebar${mobileOpen ? ' mobile-open' : ''}`}>
         <button className="app-brand" type="button" onClick={() => go('home')}>
           <img className="app-brand-mark" src={`${import.meta.env.BASE_URL}fengchain.svg`} alt="丰链云" />
-          {!collapsed && (
+          {showSidebarCopy && (
             <span className="app-brand-copy">
               <b>丰链云</b>
               <small>FENGCHAIN · AGRI</small>
@@ -136,7 +149,6 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
         <div className="sidebar-groups">
           {MENU.map((group) => (
             <section className="sidebar-group" key={group.title}>
-              {!collapsed && <h3>{group.title}</h3>}
               {group.items.map((item) => (
                 <button
                   key={item.key}
@@ -146,77 +158,82 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
                   onClick={() => go(item.key)}
                 >
                   <span className="sidebar-icon">{item.icon}</span>
-                  {!collapsed && <span>{item.label}</span>}
-                  {!collapsed && item.key === 'messages' && unread > 0 && <i>{unread}</i>}
+                  {showSidebarCopy && <span>{item.label}</span>}
+                  {showSidebarCopy && item.key === 'messages' && unread > 0 && <i>{unread}</i>}
                 </button>
               ))}
             </section>
           ))}
         </div>
-        <div className="sidebar-bottom">
-          {!collapsed && (
-            <div className="sidebar-aid">
-              <span><ToolOutlined /></span>
-              <div><b>需要协助？</b><small>服务管家 7×12 小时在线</small></div>
-            </div>
-          )}
-          <button type="button" className="sidebar-toggle" onClick={() => setCollapsed(!collapsed)}>
-            {collapsed ? <MenuUnfoldOutlined /> : <><MenuFoldOutlined /> 收起导航</>}
-          </button>
-        </div>
+        <SidebarUserCard name={displayName} role="综合服务用户" collapsed={!showSidebarCopy}
+          switchLabel="切换身份（服务商移动端）" switchUrl={`${window.location.protocol}//${window.location.hostname}:8106/`}
+          onLogout={() => void logoutUnified('service')} />
       </aside>
 
       {mobileOpen && <button type="button" className="mobile-overlay" aria-label="关闭菜单" onClick={() => setMobileOpen(false)} />}
 
       <div className="app-main">
-        <header className="app-header">
-          <div className="header-left">
-            <button type="button" className="mobile-menu-button" onClick={() => setMobileOpen(true)}>
-              <MenuUnfoldOutlined />
-            </button>
-            <div className="header-crumb">
-              <span>综合服务</span><b>/</b><strong>{activeLabel}</strong>
-            </div>
-          </div>
-          <form
-            className="global-search"
-            onSubmit={(event) => {
-              event.preventDefault()
-              openServices(keyword.trim())
-            }}
-          >
-            <SearchOutlined />
-            <input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜索农机、农技、检测或服务商"
-              aria-label="搜索服务"
-            />
-            <kbd>搜索</kbd>
-          </form>
-          <div className="header-right">
-            <button type="button" className="header-link" onClick={() => go('join')}>我是服务商</button>
-            <button type="button" className="header-icon" aria-label="消息中心" onClick={() => go('messages')}>
-              <Badge count={unread} size="small"><BellOutlined /></Badge>
-            </button>
-            <Dropdown
-              menu={{
-                items: [
-                  { key: 'orders', label: '我的服务订单', onClick: () => go('orders') },
-                  { key: 'messages', label: '消息与通知', onClick: () => go('messages') },
-                  { key: 'join', label: '服务商入驻', onClick: () => go('join') },
-                  { key: 'logout', label: '退出统一登录', onClick: () => void logoutUnified('service') },
-                ],
+        <WorkspaceHeader
+          className="app-header"
+          leftClassName="header-left"
+          rightClassName="header-right"
+          collapsed={collapsed}
+          mobile={isMobile}
+          mobileOpen={mobileOpen}
+          onToggleCollapse={() => (isMobile ? setMobileOpen((prev) => !prev) : setCollapsed((prev) => !prev))}
+          breadcrumbs={['综合服务', activeLabel]}
+          center={
+            <form
+              className="global-search"
+              onSubmit={(event) => {
+                event.preventDefault()
+                openServices(keyword.trim())
               }}
-              placement="bottomRight"
             >
-              <button type="button" className="user-chip">
-                <Avatar size={32} icon={<UserOutlined />} className="user-avatar">{displayName.slice(0, 1)}</Avatar>
-                <span><b>{displayName}</b><small>{subjectName ? `经营主体：${subjectName}` : '未解析到经营主体'}</small></span>
+              <SearchOutlined />
+              <input
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="搜索农机、农技、检测或服务商"
+                aria-label="搜索服务"
+              />
+              <kbd>搜索</kbd>
+            </form>
+          }
+          right={
+            <>
+              <button type="button" className="header-link" onClick={() => go('join')}>我是服务商</button>
+              <button type="button" className="header-icon" aria-label="消息中心" onClick={() => go('messages')}>
+                <Badge count={unread} size="small"><BellOutlined /></Badge>
               </button>
-            </Dropdown>
-          </div>
-        </header>
+              <Dropdown
+                menu={{
+                  items: [
+                    { key: 'orders', label: '我的服务订单', onClick: () => go('orders') },
+                    { key: 'messages', label: '消息与通知', onClick: () => go('messages') },
+                    { key: 'join', label: '服务商入驻', onClick: () => go('join') },
+                    { key: 'logout', label: '退出统一登录', onClick: () => void logoutUnified('service') },
+                  ],
+                }}
+                placement="bottomRight"
+              >
+                <button type="button" className="user-chip">
+                  <Avatar size={32} icon={<UserOutlined />} className="user-avatar">{displayName.slice(0, 1)}</Avatar>
+                  <span><b>{displayName}</b><small>{subjectName ? `经营主体：${subjectName}` : '未解析到经营主体'}</small></span>
+                </button>
+              </Dropdown>
+            </>
+          }
+        />
+        <RouteWorkspaceTabs
+          activeKey={id === undefined ? page : `${page}/${id}`}
+          activeLabel={id === undefined ? activeLabel : `${activeLabel} · ${id}`}
+          activePath={window.location.hash.replace(/^#\/?/, '')}
+          homeKey="home"
+          homeLabel={TITLES.home}
+          onNavigate={(path) => { window.location.hash = `/${path}` }}
+          storageKey="agri-service:workspace-tabs"
+        />
 
         <main className="app-content">{children}</main>
         <footer className="app-footer">© 2026 农业产业互联网平台 · 丰链云综合服务</footer>

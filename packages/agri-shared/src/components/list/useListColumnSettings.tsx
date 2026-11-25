@@ -13,6 +13,11 @@ export interface UseListColumnSettingsResult<T> {
   columnSettings: ReactNode
 }
 
+export interface UseListColumnSettingsOptions {
+  /** 点击「恢复默认」时的额外回调（例如同步重置自定义拖拽列宽）。 */
+  onReset?: () => void
+}
+
 /**
  * 标准 Ant Design Table 的列显隐偏好管理与「列设置」弹层构建器。
  * 适用于无 ProTable 的子系统列表（如物联网、交易撮合、资讯、SSO、政务、社会化服务等）。
@@ -21,6 +26,7 @@ export function useListColumnSettings<T>(
   storageKey: string | false,
   columns: TableColumnsType<T>,
   lockedKeys: string[] = ['actions', 'action', 'option'],
+  options?: UseListColumnSettingsOptions,
 ): UseListColumnSettingsResult<T> {
   const [hiddenState, setHiddenState] = useState<{ key: string | false; values: string[] }>(() => {
     if (!storageKey) return { key: storageKey, values: [] }
@@ -59,7 +65,10 @@ export function useListColumnSettings<T>(
     }
   }
 
-  const resetColumns = () => setHiddenKeys([])
+  const resetColumns = () => {
+    setHiddenKeys([])
+    options?.onReset?.()
+  }
 
   const visibleColumns = useMemo(
     () =>

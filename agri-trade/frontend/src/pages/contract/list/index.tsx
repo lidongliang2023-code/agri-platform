@@ -1,5 +1,7 @@
+import { ListRowActions } from '@agri/shared'
+import { TradeList, TradeFilters } from '@/components/TradeList'
 import { useEffect, useMemo, useState } from 'react'
-import { Checkbox, Form, Image, Input, Radio, Select, Spin, Upload, message } from 'antd'
+import { Checkbox, Form, Image, Input, Radio, Select, Upload, message } from 'antd'
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
@@ -24,7 +26,7 @@ import {
   type ContractVO,
 } from '@/api/contract'
 import { getMyMerchants } from '@/api/identity'
-import { EmptyState, Panel, money, shortDate } from '../../member-center/shared'
+import { Panel, money, shortDate } from '../../member-center/shared'
 import './contract-management.css'
 
 type PageMode = 'list' | 'detail' | 'sign'
@@ -108,7 +110,7 @@ function PartyMark({ side }: { side: 'buyer' | 'seller' }): JSX.Element {
  */
 export default function ContractManagement(): JSX.Element {
   const queryClient = useQueryClient()
-  const [query, setQuery] = useState<ContractQuery>({ pageNum: 1, pageSize: 10 })
+  const [query, setQuery] = useState<ContractQuery>({ pageNum: 1, pageSize: 20 })
   const [draft, setDraft] = useState<{ contractNo?: string; contractStatus?: string }>({})
   const [pageMode, setPageMode] = useState<PageMode>('list')
   const [activeContract, setActiveContract] = useState<ContractVO | null>(null)
@@ -139,14 +141,12 @@ export default function ContractManagement(): JSX.Element {
     && ((isBuyer(row) && row.buyerSignStatus !== 'signed')
       || (isSeller(row) && row.sellerSignStatus !== 'signed'))
 
-  const { data, isLoading } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     queryKey: ['contracts', query],
     queryFn: () => getContractList(query),
   })
   const rows: ContractVO[] = data?.data?.records ?? []
   const total = Number(data?.data?.total ?? 0)
-  const currentPage = Number(data?.data?.current ?? query.pageNum ?? 1)
-  const pageCount = Math.max(1, Math.ceil(total / Number(query.pageSize ?? 10)))
   const pageStats = useMemo(() => ({
     waiting: rows.filter(canSign).length,
     signed: rows.filter((item) => item.contractStatus === 'signed').length,
@@ -496,12 +496,13 @@ export default function ContractManagement(): JSX.Element {
         </div>
       </section>
 
-      <Panel
-        title="合同档案"
-        extra={<span className="contract-count">共 {total} 份</span>}
-      >
-        <div className="contract-toolbar">
-          <Input
+      <TradeList
+            listId="member-contract"
+            rowKey="id"
+            dataSource={rows}
+            onRefresh={() => void refetch()}
+            loading={isFetching}
+            filterSlot={<TradeFilters fields={[{ label: '合同编号', control: (<Input
             placeholder="输入合同编号搜索"
             prefix={<SearchOutlined />}
             value={draft.contractNo}
@@ -510,8 +511,8 @@ export default function ContractManagement(): JSX.Element {
               ...previous,
               contractNo: event.target.value || undefined,
             }))}
-          />
-          <Select
+          />) },
+                { label: '合同状态', control: (<Select
             placeholder="全部合同状态"
             allowClear
             value={draft.contractStatus}
@@ -520,70 +521,26 @@ export default function ContractManagement(): JSX.Element {
               value,
               label: item.text,
             }))}
-          />
-          <button type="button" className="mc-btn" onClick={() => setQuery((previous) => ({
-            ...previous,
-            pageNum: 1,
-            ...draft,
-          }))}>
-            搜索
-          </button>
-          <button type="button" className="mc-btn ghost" onClick={() => {
-            setDraft({})
-            setQuery({ pageNum: 1, pageSize: 10 })
-          }}>
-            重置
-          </button>
-        </div>
-
-        {isLoading ? (
-          <div className="contract-loading"><Spin /><span>正在读取合同档案…</span></div>
-        ) : rows.length === 0 ? (
-          <EmptyState
-            title="还没有合同"
-            desc="报价成交后系统会自动生成待签合同；线下合同可由交易双方上传签署。"
-          />
-        ) : (
-          <>
-            <div className="mc-table-wrap">
-              <table className="mc-table contract-table">
-                <thead>
-                  <tr>
-                    <th>合同名称 / 编号</th>
-                    <th>交易双方</th>
-                    <th>合同金额</th>
-                    <th>双方签署</th>
-                    <th>合同状态</th>
-                    <th>创建时间</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <button type="button" className="contract-name-link" onClick={() => showDetail(row)}>
+          />) }]} onQuery={() => setQuery((prev) => ({ ...prev, pageNum: 1, contractNo: draft.contractNo, contractStatus: draft.contractStatus }))} onReset={() => { setDraft({}); setQuery((prev) => ({ pageNum: 1, pageSize: prev.pageSize })) }} />}
+            pagination={{ current: query.pageNum ?? 1, pageSize: query.pageSize ?? 20, total, onChange: (pageNum, pageSize) => setQuery((prev) => ({ ...prev, pageNum, pageSize })) }}
+            locale={{ emptyText: '还没有合同' }}
+            columns={[
+              { title: "合同名称 / 编号", key: 'col-1', width: 160, render: (_, row) => (<><button type="button" className="contract-name-link" onClick={() => showDetail(row)}>
                           <strong>{row.contractName || '采购合同'}</strong>
                           <span className="mc-mono">{row.contractNo}</span>
-                        </button>
-                      </td>
-                      <td>
-                        <div className="contract-parties-cell">
+                        </button></>) },
+              { title: "交易双方", key: 'col-2', width: 160, render: (_, row) => (<><div className="contract-parties-cell">
                           <div><PartyMark side="buyer" /><span>{row.buyerName || '—'}</span></div>
                           <div><PartyMark side="seller" /><span>{row.sellerName || '—'}</span></div>
-                        </div>
-                      </td>
-                      <td><span className="mc-price">{money(row.contractAmount)}</span></td>
-                      <td>
-                        <div className="contract-progress">
+                        </div></>) },
+              { title: "合同金额", key: 'col-3', width: 160, render: (_, row) => (<><span className="mc-price">{money(row.contractAmount)}</span></>) },
+              { title: "双方签署", key: 'col-4', width: 160, render: (_, row) => (<><div className="contract-progress">
                           <div><span>买方</span><StatusPill map={SIGN_STATUS} value={row.buyerSignStatus} /></div>
                           <div><span>卖方</span><StatusPill map={SIGN_STATUS} value={row.sellerSignStatus} /></div>
-                        </div>
-                      </td>
-                      <td><StatusPill map={CONTRACT_STATUS} value={row.contractStatus} /></td>
-                      <td className="mc-mono mc-xs">{shortDate(row.createTime)}</td>
-                      <td>
-                        <div className="mc-actions">
+                        </div></>) },
+              { title: "合同状态", key: 'col-5', width: 108, render: (_, row) => (<><StatusPill map={CONTRACT_STATUS} value={row.contractStatus} /></>) },
+              { title: "创建时间", key: 'col-6', width: 160, render: (_, row) => (<span className="mc-mono mc-xs">{shortDate(row.createTime)}</span>) },
+              { title: "操作", key: 'action', width: 170, render: (_, row) => (<><ListRowActions>
                           <button type="button" className="mc-link contract-action-link" onClick={() => showDetail(row)}>
                             <EyeOutlined /> 查看
                           </button>
@@ -597,23 +554,9 @@ export default function ContractManagement(): JSX.Element {
                               <InboxOutlined /> 归档
                             </button>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mc-pager contract-pager">
-              <button type="button" disabled={currentPage <= 1}
-                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage - 1 }))}>上一页</button>
-              <span>第 {currentPage} / {pageCount} 页 · 共 {total} 份合同</span>
-              <button type="button" disabled={currentPage >= pageCount}
-                onClick={() => setQuery((previous) => ({ ...previous, pageNum: currentPage + 1 }))}>下一页</button>
-            </div>
-          </>
-        )}
-      </Panel>
+                        </ListRowActions></>) },
+            ]}
+          />
     </div>
   )
 }

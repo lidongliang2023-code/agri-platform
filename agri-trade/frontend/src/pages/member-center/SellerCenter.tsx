@@ -1,7 +1,10 @@
+import type { TablePaginationConfig } from 'antd'
+import { ListRowActions } from '@agri/shared'
+import { TradeList, TradeFilters } from '@/components/TradeList'
 import TradeAgentPanel from './TradeAgentPanel'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Modal, message } from 'antd'
+import { Modal, Select, message } from 'antd'
 import {
   AlertOutlined,
   ApiOutlined,
@@ -60,20 +63,20 @@ import {
 } from './shared'
 
 const NAV: MemberNavItem[] = [
-  { key: 'agent', label: '供货 Agent', icon: <FileTextOutlined /> },
-  { key: 'overview', label: '首页概览', icon: <HomeOutlined /> },
-  { key: 'goods', label: '商品管理', icon: <AppstoreOutlined /> },
-  { key: 'p2t', label: '产销对接（承接）', icon: <SwapOutlined /> },
-  { key: 'trade', label: '报价与撮合', icon: <StarOutlined /> },
-  { key: 'chat', label: '洽谈消息', icon: <CustomerServiceOutlined /> },
-  { key: 'sales', label: '销售订单', icon: <ShopOutlined /> },
-  { key: 'ship', label: '发货与物流', icon: <TruckOutlined /> },
-  { key: 'after', label: '售后处理', icon: <AlertOutlined /> },
-  { key: 'rate', label: '店铺评价与信用', icon: <StarOutlined /> },
-  { key: 'contract', label: '合同管理', icon: <FileTextOutlined /> },
-  { key: 'fund', label: '资金结算', icon: <DollarOutlined /> },
-  { key: 'customer', label: '客户管理', icon: <TeamOutlined /> },
-  { key: 'iot', label: '生产接入', icon: <ApiOutlined /> },
+  { key: 'agent', label: '供货 Agent', icon: <FileTextOutlined />, group: '商品与撮合' },
+  { key: 'overview', label: '首页概览', icon: <HomeOutlined />, group: '商品与撮合' },
+  { key: 'goods', label: '商品管理', icon: <AppstoreOutlined />, group: '商品与撮合' },
+  { key: 'p2t', label: '产销对接（承接）', icon: <SwapOutlined />, group: '商品与撮合' },
+  { key: 'trade', label: '报价与撮合', icon: <StarOutlined />, group: '商品与撮合' },
+  { key: 'chat', label: '洽谈消息', icon: <CustomerServiceOutlined />, group: '商品与撮合' },
+  { key: 'sales', label: '销售订单', icon: <ShopOutlined />, group: '履约与售后' },
+  { key: 'ship', label: '发货与物流', icon: <TruckOutlined />, group: '履约与售后' },
+  { key: 'after', label: '售后处理', icon: <AlertOutlined />, group: '履约与售后' },
+  { key: 'rate', label: '店铺评价与信用', icon: <StarOutlined />, group: '履约与售后' },
+  { key: 'contract', label: '合同管理', icon: <FileTextOutlined />, group: '账务与客户' },
+  { key: 'fund', label: '资金结算', icon: <DollarOutlined />, group: '账务与客户' },
+  { key: 'customer', label: '客户管理', icon: <TeamOutlined />, group: '账务与客户' },
+  { key: 'iot', label: '生产接入', icon: <ApiOutlined />, group: '账务与客户' },
 ]
 
 const PERSONAL_CENTER = `${window.location.protocol}//${window.location.hostname}:8098/portal/#/account/business`
@@ -105,8 +108,10 @@ export default function SellerCenter(): JSX.Element {
   const sellerId = sellerMerchant ? String(sellerMerchant.merchantId) : null
   const allOrders = useOrders('seller', '', 1, 100)
   const [status, setStatus] = useState('')
+  const [draftOrderStatus, setDraftOrderStatus] = useState('')
   const [page, setPage] = useState(1)
-  const pagedOrders = useOrders('seller', status, page, 10)
+  const [pageSize, setPageSize] = useState(20)
+  const pagedOrders = useOrders('seller', status, page, pageSize)
   const products = useProducts(sellerId)
   const logistics = useLogistics()
   const disputes = useDisputes()
@@ -114,22 +119,22 @@ export default function SellerCenter(): JSX.Element {
   const guarantees = useGuarantees()
   const inquiries = useReceivedInquiries()
   const [goodsStatus, setGoodsStatus] = useState('all')
+  const [draftGoodsStatus, setDraftGoodsStatus] = useState('all')
+  const [goodsPage, setGoodsPage] = useState(1)
   const [tradeTab, setTradeTab] = useState<'quote' | 'match' | 'price'>('quote')
   const [settlement, setSettlement] = useState<SellerSettlementView | null>(null)
 
-  useEffect(() => {
-    let cancelled = false
-    getMySettlement()
-      .then((body) => {
-        if (!cancelled && body?.code === 200) setSettlement(body.data ?? null)
-      })
-      .catch(() => { /* 结算接口不可用时页面显示未接入说明 */ })
-    return () => { cancelled = true }
+  const loadSettlement = useCallback(async () => {
+    try {
+      const body = await getMySettlement()
+      if (body?.code === 200) setSettlement(body.data ?? null)
+      else message.error(body?.message ?? '加载结算记录失败')
+    } catch {
+      message.error('加载结算记录失败')
+    }
   }, [])
+  useEffect(() => { void loadSettlement() }, [loadSettlement])
 
-  useEffect(() => {
-    setPage(1)
-  }, [status])
 
   const sellerOrders = allOrders.rows
   const sellerOrderIds = useMemo(() => new Set(sellerOrders.map((item) => item.id)), [sellerOrders])
@@ -204,13 +209,13 @@ export default function SellerCenter(): JSX.Element {
   }
 
   const orderActions = (order: OrderRow): JSX.Element => (
-    <div className="mc-actions">
+    <ListRowActions>
       <a className="mc-link" href={`/order/detail/${order.id}`}>查看详情</a>
       {order.orderStatus === 'paid' && (
         <button type="button" className="mc-link" onClick={() => shipOrder(order)}>发货</button>
       )}
       <a className="mc-link" href="/logistics">物流</a>
-    </div>
+    </ListRowActions>
   )
 
   const renderOverview = (): JSX.Element => (
@@ -308,27 +313,15 @@ export default function SellerCenter(): JSX.Element {
   )
 
   const renderSales = (): JSX.Element => (
-    <>
-      <div className="mc-toolbar">
-        <span className="mc-toolbar-label">状态</span>
-        <div className="mc-chips">
-          {SELLER_STATUS.map((item) => (
-            <button type="button" key={item.value} className={status === item.value ? 'on' : ''}
-              onClick={() => setStatus(item.value)}>{item.label}</button>
-          ))}
-        </div>
-        <span className="mc-spacer" />
-        <button type="button" className="mc-btn ghost" onClick={() => setActive('publish')}>发布新商品</button>
-      </div>
-      <Panel>
-        {renderSellerOrders(pagedOrders.rows, pagedOrders.loading, pagedOrders.error, orderActions)}
-        <div className="mc-pager">
-          <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)}>上一页</button>
-          <span>第 {page} / {Math.max(1, Math.ceil(pagedOrders.total / 10))} 页 · 共 {pagedOrders.total} 笔</span>
-          <button type="button" disabled={page >= Math.ceil(pagedOrders.total / 10)} onClick={() => setPage(page + 1)}>下一页</button>
-        </div>
-      </Panel>
-    </>
+    renderSellerOrders(pagedOrders.rows, pagedOrders.loading, pagedOrders.error, orderActions, {
+      onRefresh: pagedOrders.reload,
+      filterSlot: <TradeFilters fields={[
+        { label: '订单状态', control: <Select value={draftOrderStatus} onChange={setDraftOrderStatus} options={SELLER_STATUS} /> },
+      ]} onQuery={() => { setStatus(draftOrderStatus); setPage(1) }}
+         onReset={() => { setDraftOrderStatus(''); setStatus(''); setPage(1) }} />,
+      toolbarLeft: <button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布新商品</button>,
+      pagination: { current: page, pageSize, total: pagedOrders.total, onChange: (nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize) } },
+    })
   )
 
   const renderTrade = (): JSX.Element => (
@@ -365,51 +358,34 @@ export default function SellerCenter(): JSX.Element {
 
   const renderGoods = (): JSX.Element => (
     <>
-      <div className="mc-toolbar">
-        <span className="mc-toolbar-label">状态</span>
-        <div className="mc-chips">
-          {[{ value: 'all', label: '全部' }, { value: 'published', label: '在售' }, { value: 'pending', label: '待审核' }, { value: 'draft', label: '草稿' }, { value: 'rejected', label: '已驳回' }, { value: 'soldout', label: '已售罄' }].map((item) => (
-            <button type="button" key={item.value} className={goodsStatus === item.value ? 'on' : ''}
-              onClick={() => setGoodsStatus(item.value)}>{item.label}</button>
-          ))}
-        </div>
-        <span className="mc-spacer" />
-        <button type="button" className="mc-btn" onClick={() => setActive('publish')}>上架新商品</button>
-      </div>
-      <Panel title="商品管理">
-        {products.loading ? (
-          <EmptyState title="正在读取当前卖家的商品…" />
-        ) : products.error ? (
-          <EmptyState title="商品加载失败" desc={products.error} />
-        ) : filteredProducts.length === 0 ? (
-          <EmptyState title="没有符合条件的商品" desc="上架新商品后会出现在这里。"
-            action={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>上架新商品</button>} />
-        ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>图片</th><th>商品</th><th>品类</th><th>SKU / 规格</th><th>价格</th><th>库存</th><th>发布状态</th><th>启停</th><th>操作</th></tr></thead>
-              <tbody>
-                {filteredProducts.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      {item.images?.[0]
+      <TradeList
+            listId="seller-goods"
+            rowKey="id"
+            dataSource={filteredProducts}
+            onRefresh={products.reload}
+            loading={products.loading}
+            pagination={{ current: goodsPage, onChange: setGoodsPage }}
+            filterSlot={<TradeFilters fields={[
+              { label: '商品状态', control: <Select value={draftGoodsStatus} onChange={setDraftGoodsStatus} options={[{ value: 'all', label: '全部' }, { value: 'published', label: '在售' }, { value: 'pending', label: '待审核' }, { value: 'draft', label: '草稿' }, { value: 'rejected', label: '已驳回' }, { value: 'soldout', label: '已售罄' }]} /> },
+            ]} onQuery={() => { setGoodsStatus(draftGoodsStatus); setGoodsPage(1) }}
+               onReset={() => { setDraftGoodsStatus('all'); setGoodsStatus('all'); setGoodsPage(1) }} />}
+            toolbarLeft={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>上架新商品</button>}
+            locale={{ emptyText: <EmptyState title={products.error || '没有符合条件的商品'} /> }}
+            columns={[
+              { title: "图片", key: 'col-1', width: 108, render: (_, item) => (<>{item.images?.[0]
                         ? <img src={item.images[0]} alt={item.productName} style={{ width: 42, height: 42, borderRadius: 7, objectFit: 'cover' }} />
-                        : <span className="mc-tag ghost">无图</span>}
-                    </td>
-                    <td><strong>{item.productName}</strong><div className="mc-toolbar-muted">{item.productCode}</div></td>
-                    <td>{item.categoryName ?? '—'}</td>
-                    <td>
-                      <span className="mc-tag ghost">{item.skus?.length ?? 0} 个 SKU</span>
+                        : <span className="mc-tag ghost">无图</span>}</>) },
+              { title: "商品", key: 'col-2', width: 160, render: (_, item) => (<><strong>{item.productName}</strong><div className="mc-toolbar-muted">{item.productCode}</div></>) },
+              { title: "品类", key: 'col-3', width: 160, render: (_, item) => (<>{item.categoryName ?? '—'}</>) },
+              { title: "SKU / 规格", key: 'col-4', width: 220, render: (_, item) => (<><span className="mc-tag ghost">{item.skus?.length ?? 0} 个 SKU</span>
                       <div className="mc-toolbar-muted">
                         {(item.skus ?? []).slice(0, 2).map((sku) => sku.skuName).join(' / ') || item.specSize || item.specLevel || '默认规格'}
-                      </div>
-                    </td>
-                    <td className="mc-price">{skuPriceText(item)}<span className="mc-unit">/{item.unit}</span></td>
-                    <td className="mc-mono">{item.stockQuantity ?? '—'} {item.unit}</td>
-                    <td><span className={`mc-tag ${item.publishStatus === 'published' ? 'green' : item.publishStatus === 'pending' ? 'amber' : 'ghost'}`}>{publishText(item.publishStatus)}</span></td>
-                    <td><span className={`mc-tag ${item.status === 1 ? 'green' : 'ghost'}`}>{item.status === 1 ? '启用' : '停用'}</span></td>
-                    <td>
-                      <div className="mc-actions">
+                      </div></>) },
+              { title: "价格", key: 'col-5', width: 160, render: (_, item) => (<span className="mc-price">{skuPriceText(item)}<span className="mc-unit">/{item.unit}</span></span>) },
+              { title: "库存", key: 'col-6', width: 160, render: (_, item) => (<span className="mc-mono">{item.stockQuantity ?? '—'} {item.unit}</span>) },
+              { title: "发布状态", key: 'col-7', width: 108, render: (_, item) => (<><span className={`mc-tag ${item.publishStatus === 'published' ? 'green' : item.publishStatus === 'pending' ? 'amber' : 'ghost'}`}>{publishText(item.publishStatus)}</span></>) },
+              { title: "启停", key: 'col-8', width: 108, render: (_, item) => (<><span className={`mc-tag ${item.status === 1 ? 'green' : 'ghost'}`}>{item.status === 1 ? '启用' : '停用'}</span></>) },
+              { title: "操作", key: 'action', width: 170, render: (_, item) => (<><ListRowActions>
                         {item.publishStatus === 'published' && <a className="mc-link" href={`/product/detail/${item.id}`}>官网详情</a>}
                         <a className="mc-link"
                           href={`/product/edit/${item.id}${sellerId ? `?sellerId=${encodeURIComponent(sellerId)}` : ''}`}>
@@ -418,15 +394,9 @@ export default function SellerCenter(): JSX.Element {
                         <button type="button" className="mc-link" onClick={() => void toggleProductStatus(item.id, item.status)}>
                           {item.status === 1 ? '下架' : '上架'}
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
+                      </ListRowActions></>) },
+            ]}
+          />
     </>
   )
 
@@ -442,20 +412,19 @@ export default function SellerCenter(): JSX.Element {
           <EmptyState title="还没有发布供应" desc="发布货源后会在这里看到浏览与询单数据。"
             action={<button type="button" className="mc-btn" onClick={() => setActive('publish')}>发布新商品</button>} />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>商品</th><th>品类</th><th>可供量</th><th>报价</th><th>浏览 / 询单</th><th>状态</th><th>操作</th></tr></thead>
-              <tbody>
-                {products.rows.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.productName}</td>
-                    <td>{item.categoryName ?? '—'}</td>
-                    <td className="mc-mono">{item.stockQuantity ?? '—'} {item.unit}</td>
-                    <td className="mc-mono">{money(item.price)}/{item.unit}</td>
-                    <td className="mc-mono">{item.viewCount ?? 0} / {item.inquiryCount ?? 0}</td>
-                    <td><span className={`mc-tag ${item.publishStatus === 'published' ? 'tech' : 'ghost'}`}>{publishText(item.publishStatus)}</span></td>
-                    <td>
-                      <div className="mc-actions">
+          <TradeList
+            listId="seller-supply"
+            rowKey="id"
+            dataSource={products.rows}
+            onRefresh={products.reload}
+            columns={[
+              { title: "商品", key: 'col-1', width: 160, render: (_, item) => (<>{item.productName}</>) },
+              { title: "品类", key: 'col-2', width: 160, render: (_, item) => (<>{item.categoryName ?? '—'}</>) },
+              { title: "可供量", key: 'col-3', width: 160, render: (_, item) => (<span className="mc-mono">{item.stockQuantity ?? '—'} {item.unit}</span>) },
+              { title: "报价", key: 'col-4', width: 160, render: (_, item) => (<span className="mc-mono">{money(item.price)}/{item.unit}</span>) },
+              { title: "浏览 / 询单", key: 'col-5', width: 160, render: (_, item) => (<span className="mc-mono">{item.viewCount ?? 0} / {item.inquiryCount ?? 0}</span>) },
+              { title: "状态", key: 'col-6', width: 108, render: (_, item) => (<><span className={`mc-tag ${item.publishStatus === 'published' ? 'tech' : 'ghost'}`}>{publishText(item.publishStatus)}</span></>) },
+              { title: "操作", key: 'action', width: 170, render: (_, item) => (<><ListRowActions>
                         <button type="button" className="mc-link" onClick={() => {
                           const next = new URLSearchParams(params)
                           next.set('tab', 'publish')
@@ -465,13 +434,9 @@ export default function SellerCenter(): JSX.Element {
                         }}>编辑</button>
                         {item.publishStatus === 'published'
                           && <a className="mc-link" href={`/product/detail/${item.id}`}>官网详情</a>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </ListRowActions></>) },
+            ]}
+          />
         )}
       </Panel>
     </>
@@ -483,23 +448,20 @@ export default function SellerCenter(): JSX.Element {
         {sellerOrders.filter((item) => item.orderStatus === 'paid').length === 0 ? (
           <EmptyState title="没有待发货订单" desc="订单付款后会进入待发货，完成发货后可在下方物流管理中跟踪。" />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>订单号</th><th>商品</th><th>采购方</th><th>订单金额</th><th>状态</th><th>操作</th></tr></thead>
-              <tbody>
-                {sellerOrders.filter((item) => item.orderStatus === 'paid').map((order) => (
-                  <tr key={`pending-${order.id}`}>
-                    <td className="mc-mono">{order.orderNo}</td>
-                    <td>{order.productName || order.categoryName || '—'}</td>
-                    <td>{order.buyerName}</td>
-                    <td className="mc-price">{money(order.totalAmount)}</td>
-                    <td><span className="mc-tag amber">待发货</span></td>
-                    <td><button type="button" className="mc-link" onClick={() => shipOrder(order)}>去发货</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TradeList
+            listId="seller-ship"
+            rowKey="id"
+            dataSource={sellerOrders.filter((item) => item.orderStatus === 'paid')}
+            onRefresh={allOrders.reload}
+            columns={[
+              { title: "订单号", key: 'col-1', width: 160, render: (_, order) => (<span className="mc-mono">{order.orderNo}</span>) },
+              { title: "商品", key: 'col-2', width: 160, render: (_, order) => (<>{order.productName || order.categoryName || '—'}</>) },
+              { title: "采购方", key: 'col-3', width: 160, render: (_, order) => (<>{order.buyerName}</>) },
+              { title: "订单金额", key: 'col-4', width: 160, render: (_, order) => (<span className="mc-price">{money(order.totalAmount)}</span>) },
+              { title: "状态", key: 'col-5', width: 108, render: () => <span className="mc-tag amber">待发货</span> },
+              { title: "操作", key: 'action', width: 170, render: (_, order) => (<><button type="button" className="mc-link" onClick={() => shipOrder(order)}>去发货</button></>) },
+            ]}
+          />
         )}
       </Panel>
       <LogisticsList />
@@ -577,47 +539,41 @@ export default function SellerCenter(): JSX.Element {
         {!settlement || settlement.pending.length === 0 ? (
           <EmptyState title="没有待结算订单" desc="订单确认收货并完成付款后，会进入待结算。" />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>订单号</th><th>采购方</th><th>订单金额</th><th>平台服务费</th><th>卖家应收</th><th>状态</th></tr></thead>
-              <tbody>
-                {settlement.pending.map((row) => (
-                  <tr key={row.orderId}>
-                    <td className="mc-mono">{row.orderNo}</td>
-                    <td>{row.buyerName ?? '—'}</td>
-                    <td className="mc-price">{money(row.totalAmount)}</td>
-                    <td>{money(row.platformFee)} <span className="mc-xs">({(Number(row.platformFeeRate) * 100).toFixed(2)}%)</span></td>
-                    <td className="mc-price">{money(row.sellerReceivable)}</td>
-                    <td><span className="mc-tag amber">待结算</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TradeList
+            listId="seller-pending-settlement"
+            rowKey="orderId"
+            dataSource={settlement.pending}
+            onRefresh={loadSettlement}
+            columns={[
+              { title: "订单号", key: 'col-1', width: 160, render: (_, row) => (<span className="mc-mono">{row.orderNo}</span>) },
+              { title: "采购方", key: 'col-2', width: 160, render: (_, row) => (<>{row.buyerName ?? '—'}</>) },
+              { title: "订单金额", key: 'col-3', width: 160, render: (_, row) => (<span className="mc-price">{money(row.totalAmount)}</span>) },
+              { title: "平台服务费", key: 'col-4', width: 160, render: (_, row) => (<>{money(row.platformFee)} <span className="mc-xs">({(Number(row.platformFeeRate) * 100).toFixed(2)}%)</span></>) },
+              { title: "卖家应收", key: 'col-5', width: 160, render: (_, row) => (<span className="mc-price">{money(row.sellerReceivable)}</span>) },
+              { title: "状态", key: 'col-6', width: 108, render: () => <span className="mc-tag amber">待结算</span> },
+            ]}
+          />
         )}
       </Panel>
       <Panel title="已结算记录" extra={<span className="mc-toolbar-muted">按平台结算单展示</span>}>
         {!settlement || settlement.settled.length === 0 ? (
           <EmptyState title="还没有已结算记录" desc="运营端完成结算后，分账金额与平台服务费会在这里展示。" />
         ) : (
-          <div className="mc-table-wrap">
-            <table className="mc-table">
-              <thead><tr><th>结算单号</th><th>订单号</th><th>采购方</th><th>订单金额</th><th>平台服务费</th><th>卖家应收</th><th>结算时间</th></tr></thead>
-              <tbody>
-                {settlement.settled.map((row) => (
-                  <tr key={row.id}>
-                    <td className="mc-mono">{row.settlementNo}</td>
-                    <td className="mc-mono">{row.orderNo}</td>
-                    <td>{row.buyerName ?? '—'}</td>
-                    <td className="mc-price">{money(row.totalAmount)}</td>
-                    <td>{money(row.platformFee)}</td>
-                    <td className="mc-price">{money(row.sellerReceivable)}</td>
-                    <td className="mc-mono mc-xs">{shortDate(row.settleTime)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TradeList
+            listId="seller-settled"
+            rowKey="id"
+            dataSource={settlement.settled}
+            onRefresh={loadSettlement}
+            columns={[
+              { title: "结算单号", key: 'col-1', width: 160, render: (_, row) => (<span className="mc-mono">{row.settlementNo}</span>) },
+              { title: "订单号", key: 'col-2', width: 160, render: (_, row) => (<span className="mc-mono">{row.orderNo}</span>) },
+              { title: "采购方", key: 'col-3', width: 160, render: (_, row) => (<>{row.buyerName ?? '—'}</>) },
+              { title: "订单金额", key: 'col-4', width: 160, render: (_, row) => (<span className="mc-price">{money(row.totalAmount)}</span>) },
+              { title: "平台服务费", key: 'col-5', width: 160, render: (_, row) => (<>{money(row.platformFee)}</>) },
+              { title: "卖家应收", key: 'col-6', width: 160, render: (_, row) => (<span className="mc-price">{money(row.sellerReceivable)}</span>) },
+              { title: "结算时间", key: 'col-7', width: 160, render: (_, row) => (<span className="mc-mono mc-xs">{shortDate(row.settleTime)}</span>) },
+            ]}
+          />
         )}
       </Panel>
       </div>
@@ -712,44 +668,56 @@ export default function SellerCenter(): JSX.Element {
     </div>
   )
 
-  const content = active === 'agent' ? <TradeAgentPanel role="SELLER" /> : active === 'publish' ? <ProductCreate embedded />
-    : active === 'sales' ? renderSales()
-    : active === 'goods' ? renderGoods()
-      : active === 'supply' ? renderSupply()
-        : active === 'trade' ? renderTrade()
-          : active === 'chat' ? (
-            <div className="mc-embedded seller-negotiation-inbox">
-              <ShopChat
-                open
-                embedded
-                inbox
-                inboxRole="seller"
-                sellerId={sellerId ?? ''}
-                sellerName={sellerMerchant?.merchantName ?? ''}
-                onClose={() => setActive('overview')}
-              />
-            </div>
-          )
-          : active === 'ship' ? renderShip()
-            : active === 'after' ? renderAfter()
-              : active === 'rate' ? renderRate()
-                : active === 'contract' ? renderContract()
-                  : active === 'fund' ? renderFund()
-                    : active === 'customer' ? renderCustomer()
-                      : active === 'iot' ? renderIot()
-                        : active === 'p2t' ? (
-                          <SellerP2tPanel merchants={base.merchants} preferredMerchantId={sellerId} />
-                        )
-                          : renderOverview()
+  const renderTabContent = (tab: string): JSX.Element => (
+    tab === 'agent' ? <TradeAgentPanel role="SELLER" />
+      : tab === 'publish' ? <ProductCreate embedded />
+        : tab === 'sales' ? renderSales()
+          : tab === 'goods' ? renderGoods()
+            : tab === 'supply' ? renderSupply()
+              : tab === 'trade' ? renderTrade()
+                : tab === 'chat' ? (
+                  <div className="mc-embedded seller-negotiation-inbox">
+                    <ShopChat
+                      open
+                      embedded
+                      inbox
+                      inboxRole="seller"
+                      sellerId={sellerId ?? ''}
+                      sellerName={sellerMerchant?.merchantName ?? ''}
+                      onClose={() => setActive('overview')}
+                    />
+                  </div>
+                )
+                  : tab === 'ship' ? renderShip()
+                    : tab === 'after' ? renderAfter()
+                      : tab === 'rate' ? renderRate()
+                        : tab === 'contract' ? renderContract()
+                          : tab === 'fund' ? renderFund()
+                            : tab === 'customer' ? renderCustomer()
+                              : tab === 'iot' ? renderIot()
+                                : tab === 'p2t' ? (
+                                  <SellerP2tPanel merchants={base.merchants} preferredMerchantId={sellerId} />
+                                )
+                                  : renderOverview()
+  )
 
   return (
-    <MemberCenterShell role="seller"
-      active={active === 'publish' || active === 'supply' ? 'goods' : active} navItems={NAV}
-      merchantName={sellerMerchant?.merchantName ?? ''} onNavigate={setActive}>
-      {base.loading && <div className="mc-loading">正在加载会员数据…</div>}
-      {base.error && <div className="mc-alert"><AlertOutlined />{base.error}</div>}
-      {content}
-    </MemberCenterShell>
+    <MemberCenterShell
+      role="seller"
+      active={active === 'publish' || active === 'supply' ? 'goods' : active}
+      tabKey={active}
+      extraTabLabels={{ publish: '发布商品', supply: '供应信息' }}
+      navItems={NAV}
+      merchantName={sellerMerchant?.merchantName ?? ''}
+      onNavigate={setActive}
+      notice={(
+        <>
+          {base.loading && <div className="mc-loading">正在加载会员数据…</div>}
+          {base.error && <div className="mc-alert"><AlertOutlined />{base.error}</div>}
+        </>
+      )}
+      renderTab={renderTabContent}
+    />
   )
 }
 
@@ -758,32 +726,32 @@ function renderSellerOrders(
   loading: boolean,
   error: string,
   actions: (order: OrderRow) => JSX.Element,
+  options?: { onRefresh: () => void; filterSlot: React.ReactNode; toolbarLeft: React.ReactNode; pagination: TablePaginationConfig },
 ): JSX.Element {
-  if (loading) return <div className="mc-loading">加载订单中…</div>
-  if (error) return <div className="mc-alert">{error}</div>
-  if (rows.length === 0) return <EmptyState title="还没有销售订单" desc="采购方下单后，销售订单会出现在这里。" />
   return (
-    <div className="mc-table-wrap">
-      <table className="mc-table">
-        <thead>
-          <tr><th>订单号</th><th>商品</th><th>数量</th><th>金额</th><th>采购方</th><th>状态</th><th>下单时间</th><th>操作</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((order) => (
-            <tr key={order.id}>
-              <td className="mc-mono">{order.orderNo}</td>
-              <td>{order.productName || order.categoryName || '—'}</td>
-              <td className="mc-mono">{order.totalQuantity ?? '—'}</td>
-              <td className="mc-price">{money(order.totalAmount)}</td>
-              <td>{order.buyerName ?? '—'}</td>
-              <td><StatusTag status={order.orderStatus} side="seller" /></td>
-              <td className="mc-mono mc-xs">{shortDate(order.createTime)}</td>
-              <td>{actions(order)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <TradeList
+            listId={options ? 'seller-orders' : 'seller-recent-orders'}
+            loading={loading}
+            locale={{ emptyText: <EmptyState title={error || '还没有销售订单'} /> }}
+            rowKey="id"
+            dataSource={rows}
+            onRefresh={options?.onRefresh}
+            filterSlot={options?.filterSlot}
+            toolbarLeft={options?.toolbarLeft}
+            pagination={options?.pagination ?? false}
+            showToolbar={Boolean(options)}
+            selectable={Boolean(options)}
+            columns={[
+              { title: "订单号", key: 'col-1', width: 160, render: (_, order) => (<span className="mc-mono">{order.orderNo}</span>) },
+              { title: "商品", key: 'col-2', width: 160, render: (_, order) => (<>{order.productName || order.categoryName || '—'}</>) },
+              { title: "数量", key: 'col-3', width: 108, render: (_, order) => (<span className="mc-mono">{order.totalQuantity ?? '—'}</span>) },
+              { title: "金额", key: 'col-4', width: 160, render: (_, order) => (<span className="mc-price">{money(order.totalAmount)}</span>) },
+              { title: "采购方", key: 'col-5', width: 160, render: (_, order) => (<>{order.buyerName ?? '—'}</>) },
+              { title: "状态", key: 'col-6', width: 108, render: (_, order) => (<><StatusTag status={order.orderStatus} side="seller" /></>) },
+              { title: "下单时间", key: 'col-7', width: 160, render: (_, order) => (<span className="mc-mono mc-xs">{shortDate(order.createTime)}</span>) },
+              { title: "操作", key: 'action', width: 170, render: (_, order) => (<>{actions(order)}</>) },
+            ]}
+          />
   )
 }
 
