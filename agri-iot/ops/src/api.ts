@@ -15,9 +15,9 @@ export interface FirmwarePackage {
   createdAt: string
 }
 
-import type { CommandReceipt } from '../../shared-ui/CommandReceipts'
+import type { CommandReceipt, SamplingConfig } from '../../shared-ui/vue/types'
 import axios from 'axios'
-import { attachUnifiedAuth } from '../../shared-ui/sso'
+import { attachUnifiedAuth } from '../../shared-ui/vue/sso'
 export interface Tenant{id:number;tenantName:string;tenantCode:string;planName:string;deviceLimit:number;deviceCount:number;region:string;status:string;expireDate:string}
 export interface Device{id:number;tenantName:string;farmName:string;deviceCode:string;deviceName:string;typeName:string;protocol:string;onlineStatus:string;lastReport:string;rssi:number|null;battery:number;firmwareVersion:string}
 export interface Gateway{id:number;farmName:string;gatewayCode:string;gatewayName:string;model:string;protocol:string;firmwareVersion:string;onlineCount:number;totalCount:number;onlineStatus:string;cpuRate:number;memoryRate:number;lastOnline:string}
@@ -34,8 +34,8 @@ const client=axios.create({baseURL:'/api/v1/iot/ops',timeout:15000})
 attachUnifiedAuth(client,'iot-admin')
 async function req<T>(call:Promise<{data:Envelope<T>}>):Promise<T>{try{const r=await call;if(![0,200].includes(r.data.code))throw new Error(r.data.message);return r.data.data}catch(e){if(axios.isAxiosError(e)){const m=(e.response?.data as {message?:string}|undefined)?.message;throw new Error(m||'物联网运营服务不可用')}throw e}}
 export const opsApi={
-  sampling:(id:number)=>req<import('../../shared-ui/DeviceSampling').SamplingConfig>(client.get(`/devices/${id}/sampling`)),
-  saveSampling:(id:number,body:import('../../shared-ui/DeviceSampling').SamplingConfig)=>req<import('../../shared-ui/DeviceSampling').SamplingConfig>(client.put(`/devices/${id}/sampling`,body)),
+  sampling:(id:number)=>req<SamplingConfig>(client.get(`/devices/${id}/sampling`)),
+  saveSampling:(id:number,body:SamplingConfig)=>req<SamplingConfig>(client.put(`/devices/${id}/sampling`,body)),
   uploadFirmwarePackage:(file:File,expectedSha256?:string)=>{const data=new FormData();data.append('file',file);if(expectedSha256)data.append('expectedSha256',expectedSha256);return req<{packageUrl:string;sha256Text:string;fileSizeBytes:number;originalName:string}>(client.post('/firmware/packages/upload',data,{timeout:300000}))},
   listFirmwarePackages:(params?:{type?:string;model?:string;status?:string})=>req<FirmwarePackage[]>(client.get('/firmware/packages',{params})),
   getFirmwarePackage:(id:number)=>req<FirmwarePackage>(client.get(`/firmware/packages/${id}`)),

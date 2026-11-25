@@ -1,0 +1,218 @@
+/* Vue 通用顶部多页签导航栏（对齐 WorkspaceTabs.css 视觉规范） */
+.agri-vue-tabs-scroll {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.agri-vue-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.agri-vue-tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid #e5ece8;
+  background: #f7faf8;
+  color: #4a5a52;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.agri-vue-tab-item:hover {
+  border-color: #c8e0d1;
+  color: #23744c;
+  background: #f1f8f3;
+}
+
+.agri-vue-tab-item.is-active {
+  border-color: #b7dfc7;
+  background: #eaf5ee;
+  color: #23744c;
+  font-weight: 500;
+}
+
+.agri-vue-tab-item.is-dragging {
+  opacity: 0.45;
+}
+
+.agri-vue-tab-item.is-drop-left {
+  box-shadow: -2px 0 0 #2d8f4e;
+}
+
+.agri-vue-tab-item.is-drop-right {
+  box-shadow: 2px 0 0 #2d8f4e;
+}
+
+.agri-vue-tab-label {
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agri-vue-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agri-vue-tab-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.agri-vue-tabs-actions {
+  position: relative;
+  flex: none;
+}
+
+.agri-vue-tabs-actions-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #595959;
+  cursor: pointer;
+}
+
+.agri-vue-tabs-actions-btn:hover {
+  color: #2d8f4e;
+  border-color: #c8e0d1;
+  background: #f4faf6;
+}
+
+.agri-vue-tabs-dropdown,
+.agri-vue-tabs-context-menu {
+  min-width: 136px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1200;
+}
+
+.agri-vue-tabs-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+}
+
+.agri-vue-tabs-context-menu {
+  position: fixed;
+}
+
+.agri-vue-tabs-menu-item {
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2937;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agri-vue-tabs-menu-item:hover:not(:disabled) {
+  background: #f0f9f1;
+  color: #23744c;
+}
+
+.agri-vue-tabs-menu-item:disabled {
+  color: #bfbfbf;
+  cursor: not-allowed;
+}
+
+.agri-vue-tabs-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: #f0f0f0;
+}
+
+.agri-vue-tabs-confirm-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1300;
+}
+
+.agri-vue-tabs-confirm-card {
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  padding: 20px 24px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+
+.agri-vue-tabs-confirm-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.agri-vue-tabs-confirm-body {
+  font-size: 14px;
+  color: #595959;
+  margin-bottom: 18px;
+}
+
+.agri-vue-tabs-confirm-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agri-vue-tabs-btn {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.agri-vue-tabs-btn.is-primary {
+  border-color: #2d8f4e;
+  background: #2d8f4e;
+  color: #fff;
+}

@@ -15,6 +15,10 @@
     "./vue/list/*": "./src/vue/list/*",
     "./vue/workspace": "./src/vue/workspace/index.ts",
     "./vue/workspace/*": "./src/vue/workspace/*",
+    "./vue/antdv": "./src/vue/antdv/index.ts",
+    "./vue/antdv/*": "./src/vue/antdv/*",
+    "./vue/http": "./src/vue/http/index.ts",
+    "./vue/http/*": "./src/vue/http/*",
     "./vue/element": "./src/vue/element/index.ts",
     "./vue/element/*": "./src/vue/element/*"
   },
@@ -22,10 +26,22 @@
     "*.css",
     "*.less"
   ],
+  "dependencies": {
+    "axios": "^1.6.5"
+  },
   "peerDependencies": {
+    "ant-design-vue": "^4.2.6",
     "antd": "^5.13.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "vue": "^3.4.0"
+  },
+  "peerDependenciesMeta": {
+    "ant-design-vue": { "optional": true },
+    "antd": { "optional": true },
+    "react": { "optional": true },
+    "react-dom": { "optional": true },
+    "vue": { "optional": true }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

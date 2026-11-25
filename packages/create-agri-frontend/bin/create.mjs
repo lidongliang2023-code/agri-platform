@@ -20,11 +20,11 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const TEMPLATE_DIR = path.resolve(HERE, '../templates/react-spa')
+const TEMPLATE_DIR = path.resolve(HERE, '../templates/vue-spa')
 const SHARED_REL_FROM_REPO = path.join('packages', 'agri-shared', 'src')
 
 /** 只对已知文本文件做占位符替换；其余按字节复制。 */
-const TEXT_EXTENSIONS = new Set(['.json', '.ts', '.tsx', '.js', '.mjs', '.html', '.md', '.less', '.css'])
+const TEXT_EXTENSIONS = new Set(['.json', '.ts', '.vue', '.js', '.mjs', '.html', '.md', '.less', '.css'])
 
 const USAGE = `用法：
   create-agri-frontend <目标目录> --app <slug> [选项]

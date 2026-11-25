@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@agri/shared": ["{{SHARED_SRC_REL}}/index.ts"],
+      "@agri/shared/vue/antdv": ["{{SHARED_SRC_REL}}/vue/antdv/index.ts"],
+      "@agri/shared/vue/list": ["{{SHARED_SRC_REL}}/vue/list/index.ts"],
+      "@agri/shared/vue/workspace": ["{{SHARED_SRC_REL}}/vue/workspace/index.ts"],
+      "@agri/shared/vue/http": ["{{SHARED_SRC_REL}}/vue/http/index.ts"],
+      "@agri/shared/*": ["{{SHARED_SRC_REL}}/*"],
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"]
+}

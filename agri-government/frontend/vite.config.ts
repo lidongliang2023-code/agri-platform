@@ -1,12 +1,11 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [vue()],
   resolve: {
     alias: {
-      'antd': path.resolve(__dirname, 'node_modules/antd'),
       '@agri/shared': path.resolve(__dirname, '../../packages/agri-shared/src'),
       '@': path.resolve(__dirname, './src'),
     },

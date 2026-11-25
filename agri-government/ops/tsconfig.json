@@ -1,9 +1,30 @@
 {
   "compilerOptions": {
-    "target":"ES2020","useDefineForClassFields":true,"lib":["ES2020","DOM","DOM.Iterable"],
-    "skipLibCheck":true,"module":"ESNext","moduleResolution":"bundler","allowImportingTsExtensions":true,
-    "resolveJsonModule":true,"isolatedModules":true,"noEmit":true,"jsx":"react-jsx","strict":true,
-    "noUnusedLocals":true,"noUnusedParameters":true,"types":["vite/client"],"baseUrl":".","paths":{"@/*":["src/*"],"@agri/shared":["../../packages/agri-shared/src"],"@agri/shared/*":["../../packages/agri-shared/src/*"],"react":["node_modules/@types/react/index.d.ts"],"react/jsx-runtime":["node_modules/@types/react/jsx-runtime.d.ts"],"antd":["node_modules/antd"]}
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "vue": ["./node_modules/vue"],
+      "@agri/shared": ["../../packages/agri-shared/src/index.ts"],
+      "@agri/shared/vue/workspace": ["../../packages/agri-shared/src/vue/workspace/index.ts"],
+      "@agri/shared/vue/list": ["../../packages/agri-shared/src/vue/list/index.ts"],
+      "@agri/shared/vue/antdv": ["../../packages/agri-shared/src/vue/antdv/index.ts"],
+      "@agri/shared/*": ["../../packages/agri-shared/src/*"],
+      "@/*": ["src/*"]
+    }
   },
-  "include":["src"],"references":[{"path":"./tsconfig.node.json"}]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"]
 }

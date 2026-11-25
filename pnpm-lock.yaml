@@ -41,34 +41,34 @@ importers:
 
   agri-government/frontend:
     dependencies:
-      '@ant-design/icons':
-        specifier: ^5.2.6
-        version: 5.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      antd:
-        specifier: ^5.13.2
-        version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@agri/shared':
+        specifier: workspace:*
+        version: link:../../packages/agri-shared
+      '@ant-design/icons-vue':
+        specifier: ^7.0.1
+        version: 7.0.1(vue@3.5.43(typescript@5.9.3))
+      ant-design-vue:
+        specifier: ^4.2.6
+        version: 4.2.6(vue@3.5.43(typescript@5.9.3))
       axios:
         specifier: ^1.6.5
         version: 1.16.0(debug@4.4.3(supports-color@7.2.0))
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
+      pinia:
+        specifier: ^2.3.1
+        version: 2.3.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.43(typescript@5.9.3)
+      vue-router:
+        specifier: ^4.5.0
+        version: 4.6.4(vue@3.5.43(typescript@5.9.3))
     devDependencies:
       '@types/node':
         specifier: ^20.11.5
         version: 20.19.43
-      '@types/react':
-        specifier: ^18.2.48
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.18
-        version: 18.3.7(@types/react@18.3.31)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.1
-        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.4
+        version: 5.2.4(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))(vue@3.5.43(typescript@5.9.3))
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -130,34 +130,34 @@ importers:
 
   agri-government/ops:
     dependencies:
-      '@ant-design/icons':
-        specifier: ^5.2.6
-        version: 5.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      antd:
-        specifier: ^5.13.2
-        version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@agri/shared':
+        specifier: workspace:*
+        version: link:../../packages/agri-shared
+      '@ant-design/icons-vue':
+        specifier: ^7.0.1
+        version: 7.0.1(vue@3.5.43(typescript@5.9.3))
+      ant-design-vue:
+        specifier: ^4.2.6
+        version: 4.2.6(vue@3.5.43(typescript@5.9.3))
       axios:
         specifier: ^1.6.5
         version: 1.16.0(debug@4.4.3(supports-color@7.2.0))
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
+      pinia:
+        specifier: ^2.3.1
+        version: 2.3.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.43(typescript@5.9.3)
+      vue-router:
+        specifier: ^4.5.0
+        version: 4.6.4(vue@3.5.43(typescript@5.9.3))
     devDependencies:
       '@types/node':
         specifier: ^20.11.5
         version: 20.19.43
-      '@types/react':
-        specifier: ^18.2.48
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.18
-        version: 18.3.7(@types/react@18.3.31)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.1
-        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.4
+        version: 5.2.4(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))(vue@3.5.43(typescript@5.9.3))
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -219,6 +219,9 @@ importers:
       '@dcloudio/uni-h5':
         specifier: 3.0.0-4010520240507001
         version: 3.0.0-4010520240507001(@vueuse/core@15.0.0(vue@3.5.43(typescript@5.9.3)))(postcss@8.5.29)(rollup@4.64.3)(supports-color@7.2.0)(vue@3.5.43(typescript@5.9.3))
+      '@dcloudio/uni-mp-vue':
+        specifier: 3.0.0-4010520240507001
+        version: 3.0.0-4010520240507001
       '@dcloudio/uni-mp-weixin':
         specifier: 3.0.0-4010520240507001
         version: 3.0.0-4010520240507001(@vueuse/core@15.0.0(vue@3.5.43(typescript@5.9.3)))(debug@4.4.3(supports-color@7.2.0))(postcss@8.5.29)(rollup@4.64.3)(supports-color@7.2.0)(vue@3.5.43(typescript@5.9.3))
@@ -351,34 +354,34 @@ importers:
 
   agri-iot/ops:
     dependencies:
-      '@ant-design/icons':
-        specifier: ^5.2.6
-        version: 5.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      antd:
-        specifier: ^5.13.2
-        version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@agri/shared':
+        specifier: workspace:*
+        version: link:../../packages/agri-shared
+      '@ant-design/icons-vue':
+        specifier: ^7.0.1
+        version: 7.0.1(vue@3.5.43(typescript@5.9.3))
+      ant-design-vue:
+        specifier: ^4.2.6
+        version: 4.2.6(vue@3.5.43(typescript@5.9.3))
       axios:
         specifier: ^1.6.5
         version: 1.16.0(debug@4.4.3(supports-color@7.2.0))
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
+      pinia:
+        specifier: ^2.3.1
+        version: 2.3.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.43(typescript@5.9.3)
+      vue-router:
+        specifier: ^4.5.0
+        version: 4.6.4(vue@3.5.43(typescript@5.9.3))
     devDependencies:
       '@types/node':
         specifier: ^20.11.5
         version: 20.19.43
-      '@types/react':
-        specifier: ^18.2.48
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.18
-        version: 18.3.7(@types/react@18.3.31)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.1
-        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.4
+        version: 5.2.4(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))(vue@3.5.43(typescript@5.9.3))
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -477,24 +480,9 @@ importers:
       '@agri/shared':
         specifier: workspace:*
         version: link:../../packages/agri-shared
-      '@ant-design/icons':
-        specifier: ^5.2.6
-        version: 5.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@ant-design/pro-components':
-        specifier: ^2.6.43
-        version: 2.8.10(antd@5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(rc-field-form@2.7.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@tanstack/react-query':
-        specifier: ^5.17.19
-        version: 5.104.1(react@18.3.1)
-      ahooks:
-        specifier: ^3.7.8
-        version: 3.10.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       ant-design-vue:
         specifier: ^4.2.6
-        version: 4.2.6(vue@3.5.43(typescript@5.9.3))
-      antd:
-        specifier: ^5.13.2
-        version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 4.2.6(vue@3.5.43)
       axios:
         specifier: ^1.6.5
         version: 1.16.0(debug@4.4.3(supports-color@7.2.0))
@@ -504,33 +492,18 @@ importers:
       echarts:
         specifier: ^5.5.0
         version: 5.6.0
-      echarts-for-react:
-        specifier: ^3.0.2
-        version: 3.0.6(echarts@5.6.0)(react@18.3.1)
       lodash:
         specifier: ^4.17.21
         version: 4.18.1
       pinia:
         specifier: ^2.3.1
         version: 2.3.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
-      react-router-dom:
-        specifier: ^6.21.2
-        version: 6.30.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       vue:
         specifier: ^3.5.43
         version: 3.5.43(typescript@5.9.3)
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.43(typescript@5.9.3))
-      zustand:
-        specifier: ^4.4.7
-        version: 4.5.7(@types/react@18.3.31)(react@18.3.1)
     devDependencies:
       '@types/lodash':
         specifier: ^4.14.202
@@ -538,33 +511,18 @@ importers:
       '@types/node':
         specifier: ^20.11.5
         version: 20.19.43
-      '@types/react':
-        specifier: ^18.2.48
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.18
-        version: 18.3.7(@types/react@18.3.31)
       '@typescript-eslint/eslint-plugin':
         specifier: ^6.19.1
         version: 6.21.0(@typescript-eslint/parser@6.21.0(eslint@8.57.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3))(eslint@8.57.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
       '@typescript-eslint/parser':
         specifier: ^6.19.1
         version: 6.21.0(eslint@8.57.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@5.9.3)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.1
-        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))
       '@vitejs/plugin-vue':
         specifier: ^5.2.4
         version: 5.2.4(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))(vue@3.5.43(typescript@5.9.3))
       eslint:
         specifier: ^8.56.0
         version: 8.57.1(supports-color@7.2.0)
-      eslint-plugin-react-hooks:
-        specifier: ^4.6.0
-        version: 4.6.2(eslint@8.57.1(supports-color@7.2.0))
-      eslint-plugin-react-refresh:
-        specifier: ^0.4.5
-        version: 0.4.26(eslint@8.57.1(supports-color@7.2.0))
       less:
         specifier: ^4.6.4
         version: 4.9.1(supports-color@7.2.0)
@@ -720,6 +678,9 @@ importers:
       '@dcloudio/uni-h5':
         specifier: 3.0.0-4010520240507001
         version: 3.0.0-4010520240507001(@vueuse/core@15.0.0(vue@3.5.43(typescript@5.9.3)))(postcss@8.5.29)(rollup@4.64.3)(supports-color@7.2.0)(vue@3.5.43(typescript@5.9.3))
+      '@dcloudio/uni-mp-vue':
+        specifier: 3.0.0-4010520240507001
+        version: 3.0.0-4010520240507001
       '@dcloudio/uni-mp-weixin':
         specifier: 3.0.0-4010520240507001
         version: 3.0.0-4010520240507001(@vueuse/core@15.0.0(vue@3.5.43(typescript@5.9.3)))(debug@4.4.3(supports-color@7.2.0))(postcss@8.5.29)(rollup@4.64.3)(supports-color@7.2.0)(vue@3.5.43(typescript@5.9.3))
@@ -1064,34 +1025,34 @@ importers:
 
   agri-service/ops:
     dependencies:
-      '@ant-design/icons':
-        specifier: ^5.2.6
-        version: 5.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      antd:
-        specifier: ^5.13.2
-        version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@agri/shared':
+        specifier: workspace:*
+        version: link:../../packages/agri-shared
+      '@ant-design/icons-vue':
+        specifier: ^7.0.1
+        version: 7.0.1(vue@3.5.43(typescript@5.9.3))
+      ant-design-vue:
+        specifier: ^4.2.6
+        version: 4.2.6(vue@3.5.43(typescript@5.9.3))
       axios:
         specifier: ^1.6.5
         version: 1.16.0(debug@4.4.3(supports-color@7.2.0))
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
+      pinia:
+        specifier: ^2.3.1
+        version: 2.3.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.43(typescript@5.9.3)
+      vue-router:
+        specifier: ^4.5.0
+        version: 4.6.4(vue@3.5.43(typescript@5.9.3))
     devDependencies:
       '@types/node':
         specifier: ^20.11.5
         version: 20.19.43
-      '@types/react':
-        specifier: ^18.2.48
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.18
-        version: 18.3.7(@types/react@18.3.31)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.1
-        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.4
+        version: 5.2.4(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))(vue@3.5.43(typescript@5.9.3))
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -1104,25 +1065,19 @@ importers:
       '@agri/shared':
         specifier: workspace:*
         version: link:../../packages/agri-shared
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
+      pinia:
+        specifier: ^2.3.1
+        version: 2.3.1(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.43(typescript@5.9.3)
     devDependencies:
       '@types/node':
         specifier: ^20.11.5
         version: 20.19.43
-      '@types/react':
-        specifier: ^18.2.48
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.18
-        version: 18.3.7(@types/react@18.3.31)
-      '@vitejs/plugin-react':
-        specifier: ^4.2.1
-        version: 4.7.0(supports-color@7.2.0)(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.4
+        version: 5.2.4(vite@5.4.21(@types/node@20.19.43)(less@4.9.1(supports-color@7.2.0))(lightningcss@1.33.0)(sass@1.105.1)(terser@5.51.2))(vue@3.5.43(typescript@5.9.3))
       typescript:
         specifier: ^5.3.3
         version: 5.9.3
@@ -1184,15 +1139,24 @@ importers:
 
   packages/agri-shared:
     dependencies:
+      ant-design-vue:
+        specifier: ^4.2.6
+        version: 4.2.6(vue@3.5.43)
       antd:
         specifier: ^5.13.0
         version: 5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      axios:
+        specifier: ^1.6.5
+        version: 1.16.0(debug@4.4.3(supports-color@7.2.0))
       react:
         specifier: ^18.2.0
         version: 18.3.1
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+      vue:
+        specifier: ^3.4.0
+        version: 3.5.43(typescript@5.9.3)
     devDependencies:
       '@vitest/coverage-v8':
         specifier: ^5.0.3
@@ -6968,6 +6932,12 @@ snapshots:
       '@ant-design/icons-svg': 4.6.0
       vue: 3.5.43(typescript@5.9.3)
 
+  '@ant-design/icons-vue@7.0.1(vue@3.5.43)':
+    dependencies:
+      '@ant-design/colors': 6.0.0
+      '@ant-design/icons-svg': 4.6.0
+      vue: 3.5.43(typescript@5.9.3)
+
   '@ant-design/icons@5.6.1(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@ant-design/colors': 7.2.1
@@ -9917,6 +9887,32 @@ snapshots:
       throttle-debounce: 5.0.2
       vue: 3.5.43(typescript@5.9.3)
       vue-types: 3.0.2(vue@3.5.43(typescript@5.9.3))
+      warning: 4.0.3
+
+  ant-design-vue@4.2.6(vue@3.5.43):
+    dependencies:
+      '@ant-design/colors': 6.0.0
+      '@ant-design/icons-vue': 7.0.1(vue@3.5.43)
+      '@babel/runtime': 7.29.10
+      '@ctrl/tinycolor': 3.6.1
+      '@emotion/hash': 0.9.2
+      '@emotion/unitless': 0.8.1
+      '@simonwep/pickr': 1.8.2
+      array-tree-filter: 2.1.0
+      async-validator: 4.2.5
+      csstype: 3.2.3
+      dayjs: 1.11.23
+      dom-align: 1.12.4
+      dom-scroll-into-view: 2.0.1
+      lodash: 4.18.1
+      lodash-es: 4.18.1
+      resize-observer-polyfill: 1.5.1
+      scroll-into-view-if-needed: 2.2.31
+      shallow-equal: 1.2.1
+      stylis: 4.4.0
+      throttle-debounce: 5.0.2
+      vue: 3.5.43(typescript@5.9.3)
+      vue-types: 3.0.2(vue@3.5.43)
       warning: 4.0.3
 
   antd@5.29.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
@@ -13713,6 +13709,11 @@ snapshots:
       typescript: 5.9.3
 
   vue-types@3.0.2(vue@3.5.43(typescript@5.9.3)):
+    dependencies:
+      is-plain-object: 3.0.1
+      vue: 3.5.43(typescript@5.9.3)
+
+  vue-types@3.0.2(vue@3.5.43):
     dependencies:
       is-plain-object: 3.0.1
       vue: 3.5.43(typescript@5.9.3)

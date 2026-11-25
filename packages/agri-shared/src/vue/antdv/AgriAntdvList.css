@@ -1,0 +1,28 @@
+/* Ant Design Vue 4 列表视觉对齐（与 pc-ui-v1 及生产管理四段式列表规范一致） */
+.agri-antdv-list-page .ant-table-wrapper .ant-table {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+
+.agri-antdv-list-page .ant-table-thead > tr > th.ant-table-selection-column,
+.agri-antdv-list-page .ant-table-tbody > tr > td.ant-table-selection-column {
+  padding-inline: 8px !important;
+  text-align: center !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.agri-antdv-list-page .ant-table-tbody > tr.agri-vue-row-selected > td,
+.agri-antdv-list-page .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: #e8f5e9 !important;
+}
+
+.agri-antdv-list-page .ant-table-tbody > tr.agri-vue-row-selected:hover > td,
+.agri-antdv-list-page .ant-table-tbody > tr.ant-table-row-selected:hover > td {
+  background: #dcf0df !important;
+}
+
+.agri-antdv-list-page .ant-table-thead > tr > th {
+  position: relative;
+}

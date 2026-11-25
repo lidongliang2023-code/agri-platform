@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { attachUnifiedAuth } from '../../frontend/src/sso'
+import { attachUnifiedAuth } from './sso'
 
 export interface OpsProvider {
   id: number
@@ -115,6 +115,7 @@ export interface Complaint {
 }
 
 export interface PolicyApplication {
+  allowedStatuses: string[]
   id: number
   applicationNo: string
   policyTitle: string
@@ -221,7 +222,11 @@ async function request<T>(call: Promise<{ data: Envelope<T> }>): Promise<T> {
   }
 }
 
+export interface OpsExpert { id: string; name: string; title: string; category: string; organization: string; status: string; userId: string | null; accountName: string | null }
+
 export const opsApi = {
+  experts: () => request<OpsExpert[]>(client.get('/ops/experts')),
+  bindExpert: (id: string, userId: string | null) => request(client.put(`/ops/experts/${id}/user-binding`, { userId })),
   /** 当前登录运营账号解析出的身份，用于顶栏与"操作人来自令牌"的可核查展示。 */
   identity: () => request<{
     merchantId: string
