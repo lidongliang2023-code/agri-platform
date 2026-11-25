@@ -1,4 +1,6 @@
+import '@/components/ProductionListDense.css'
 import Table from '@/components/ProductionListTable'
+import PageContainer from '@/components/ProductionPageContainer'
 import { useMemo, useState } from 'react'
 import { Alert, Card, Col, Descriptions, Empty, Row, Space, Statistic, Tabs, Tag, Typography } from 'antd'
 import { LinkOutlined, RobotOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
@@ -60,7 +62,8 @@ export default function Models(): JSX.Element {
   const callData = calls.data?.records ?? []
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <PageContainer className="production-list-dense production-member-list" title="AI 中台治理" subTitle="生产域 AI 场景、模型渠道与调用审计总览">
+      <Space direction="vertical" size={12} style={{ width: '100%' }}>
       <Alert
         type="info"
         showIcon
@@ -87,12 +90,13 @@ export default function Models(): JSX.Element {
       </Card>
       <Card>
         <Tabs items={[
-          { key: 'scenes', label: `场景治理（${scenes.data?.length ?? 0}）`, children: <Table<AiHubScene> rowKey="sceneCode" loading={scenes.isLoading} columns={sceneColumns} dataSource={scenes.data ?? []} pagination={{ defaultPageSize: 20 }} scroll={{ x: 1050 }} /> },
-          { key: 'providers', label: `模型渠道（${providers.data?.length ?? 0}）`, children: <Table<AiHubProvider> rowKey="id" loading={providers.isLoading} columns={providerColumns} dataSource={providers.data ?? []} pagination={{ defaultPageSize: 20 }} scroll={{ x: 800 }} /> },
-          { key: 'calls', label: '调用审计', children: <Table<AiHubCall> rowKey={(row) => `${row.taskId ?? ''}-${row.traceId ?? ''}`} loading={calls.isLoading} columns={callColumns} dataSource={callData} pagination={{ current: callPage, pageSize: callSize, total: calls.data?.total ?? 0, onChange: (page, size) => { setCallPage(page); setCallSize(size) } }} scroll={{ x: 900 }} /> },
+          { key: 'scenes', label: `场景治理（${scenes.data?.length ?? 0}）`, children: <Table<AiHubScene> rowKey="sceneCode" rowSelection={{}} columnSettingsStorageKey="agri:production:visible-columns:v1:admin-ai-scenes" columnWidthStorageKey="agri:production:column-widths:v1:admin-ai-scenes" onRefresh={() => void scenes.refetch()} loading={scenes.isLoading} columns={sceneColumns} dataSource={scenes.data ?? []} pagination={{ defaultPageSize: 20 }} scroll={{ x: 1050 }} /> },
+          { key: 'providers', label: `模型渠道（${providers.data?.length ?? 0}）`, children: <Table<AiHubProvider> rowKey="id" rowSelection={{}} columnSettingsStorageKey="agri:production:visible-columns:v1:admin-ai-providers" columnWidthStorageKey="agri:production:column-widths:v1:admin-ai-providers" onRefresh={() => void providers.refetch()} loading={providers.isLoading} columns={providerColumns} dataSource={providers.data ?? []} pagination={{ defaultPageSize: 20 }} scroll={{ x: 800 }} /> },
+          { key: 'calls', label: '调用审计', children: <Table<AiHubCall> rowKey={(row) => `${row.taskId ?? ''}-${row.traceId ?? ''}`} rowSelection={{}} columnSettingsStorageKey="agri:production:visible-columns:v1:admin-ai-calls" columnWidthStorageKey="agri:production:column-widths:v1:admin-ai-calls" onRefresh={() => void calls.refetch()} loading={calls.isLoading} columns={callColumns} dataSource={callData} pagination={{ current: callPage, pageSize: callSize, total: calls.data?.total ?? 0, onChange: (page, size) => { setCallPage(page); setCallSize(size) } }} scroll={{ x: 900 }} /> },
         ]} />
         {!scenes.isLoading && !providers.isLoading && (scenes.data?.length ?? 0) === 0 && (providers.data?.length ?? 0) === 0 ? <Empty description="AI中台暂无治理数据" /> : null}
       </Card>
     </Space>
+    </PageContainer>
   )
 }

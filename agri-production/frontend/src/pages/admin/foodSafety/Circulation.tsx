@@ -1,5 +1,6 @@
 import DetailInfoGrid from '@/components/DetailInfoGrid'
 import ProductionTable from '@/components/ProductionTable'
+import ListRowActions from '@/components/ListRowActions'
 import { QualityPage, tradeOpsUrl } from '../quality/QualityShared'
 import { useNavigate } from 'react-router-dom'
 /**
@@ -101,7 +102,7 @@ function Circulation(): JSX.Element {
   /** 页码 */
   const [pageNum, setPageNum] = useState<number>(1)
   /** 每页条数 */
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   /** 处置弹窗当前处理的记录 */
   const [activeRecord, setActiveRecord] = useState<CirculationRecord | null>(null)
   /** 详情弹窗当前查看的记录 */
@@ -173,29 +174,35 @@ function Circulation(): JSX.Element {
       title: '操作',
       key: 'action',
       width: 150,
-      render: (_value: unknown, record: CirculationRecord) =>
-        record.status === 'done' ? (
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetailRecord(record)}>
-            查看
-          </Button>
-        ) : (
-          <Space size={4}>
-            <Button
-              type="link"
-              size="small"
-              icon={<ToolOutlined />}
-              onClick={() => {
-                setActiveRecord(record)
-                handleForm.setFieldsValue({ action: ACTION_OPTIONS[0], remark: '' })
-              }}
-            >
-              处理
-            </Button>
-            <Button type="link" size="small" onClick={() => setDetailRecord(record)}>
-              详情
-            </Button>
-          </Space>
-        ),
+      render: (_value: unknown, record: CirculationRecord) => (
+        <ListRowActions
+          items={
+            record.status === 'done'
+              ? [
+                  <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetailRecord(record)}>
+                    查看
+                  </Button>,
+                ]
+              : [
+                  <Button
+                    key="handle"
+                    type="link"
+                    size="small"
+                    icon={<ToolOutlined />}
+                    onClick={() => {
+                      setActiveRecord(record)
+                      handleForm.setFieldsValue({ action: ACTION_OPTIONS[0], remark: '' })
+                    }}
+                  >
+                    处理
+                  </Button>,
+                  <Button key="detail" type="link" size="small" onClick={() => setDetailRecord(record)}>
+                    详情
+                  </Button>,
+                ]
+          }
+        />
+      ),
     },
   ]
 
@@ -245,12 +252,11 @@ function Circulation(): JSX.Element {
       )}
 
       {/* 筛选器（原型 P16 Filter Bar） */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap size={12}>
-          <Space size={4}>
-            <Text>异常类型：</Text>
+      <Card size="small" className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>异常类型</label>
             <Select
-              style={{ width: 140 }}
               value={type}
               options={TYPE_OPTIONS}
               onChange={(value: CirculationType | 'all') => {
@@ -258,11 +264,10 @@ function Circulation(): JSX.Element {
                 setPageNum(1)
               }}
             />
-          </Space>
-          <Space size={4}>
-            <Text>严重程度：</Text>
+          </div>
+          <div className="production-filter-field">
+            <label>严重程度</label>
             <Select
-              style={{ width: 120 }}
               value={severity}
               options={SEVERITY_OPTIONS}
               onChange={(value: Severity | 'all') => {
@@ -270,11 +275,10 @@ function Circulation(): JSX.Element {
                 setPageNum(1)
               }}
             />
-          </Space>
-          <Space size={4}>
-            <Text>日期：</Text>
+          </div>
+          <div className="production-filter-field">
+            <label>日期</label>
             <DatePicker
-              style={{ width: 150 }}
               value={date ? dayjs(date) : null}
               allowClear
               placeholder={PROTOTYPE_DATE}
@@ -283,38 +287,45 @@ function Circulation(): JSX.Element {
                 setPageNum(1)
               }}
             />
-          </Space>
-          <Button
-            type="primary"
-            icon={<SearchOutlined />}
-            onClick={() => {
-              setPageNum(1)
-              void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'circulation'] })
-            }}
-          >
-            查询
-          </Button>
-          <Button
-            onClick={() => {
-              setType('all')
-              setSeverity('all')
-              setDate(DEFAULT_DATE)
-              setPageNum(1)
-            }}
-          >
-            重置
-          </Button>
-        </Space>
+          </div>
+          <div className="production-filter-actions">
+            <Button
+              onClick={() => {
+                setType('all')
+                setSeverity('all')
+                setDate(DEFAULT_DATE)
+                setPageNum(1)
+              }}
+            >
+              重置
+            </Button>
+            <Button
+              type="primary"
+              icon={<SearchOutlined />}
+              onClick={() => {
+                setPageNum(1)
+                void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'circulation'] })
+              }}
+            >
+              查询
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {/* 流通异常检测列表 */}
-      <Card title="异常流向检测列表">
+      <Card>
         <ProductionTable<CirculationRecord>
           rowKey="id"
+          memberListToolbar
+          rowSelection={{}}
+          cardProps={false}
+          headerTitle="异常流向检测列表"
           size="small" search={false}
           loading={listQuery.isLoading}
           columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={records}
+          options={{ reload: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'circulation'] }) }}
           locale={{ emptyText: <Empty description="当前筛选条件下暂无流通异常记录" /> }}
           pagination={{
             current: pageNum,

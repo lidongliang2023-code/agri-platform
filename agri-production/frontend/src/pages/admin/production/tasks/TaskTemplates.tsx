@@ -1,4 +1,5 @@
 import '@/components/ProductionDetailCompact.css'
+import '@/components/ProductionListDense.css'
 import { useMemo, useRef, useState } from 'react'
 import {
   ModalForm,
@@ -11,6 +12,7 @@ import {
 } from '@ant-design/pro-components'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
 import ProTable from '@/components/ProductionTable'
+import ListRowActions from '@/components/ListRowActions'
 import { Button, Popconfirm, Tag, Typography, message } from 'antd'
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -235,80 +237,84 @@ export default function TaskTemplates(): JSX.Element {
     {
       title: '操作',
       key: 'option',
-      width: 160,
+      width: 150,
       fixed: 'right',
       valueType: 'option',
-      render: (_, record) => [
-        <Button
-          key="edit"
-          type="link"
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => openEdit(record)}
-        >
-          编辑
-        </Button>,
-        record.status === 1 ? (
-          <Popconfirm
-            key="toggle"
-            title="确认停用该模板？"
-            description="停用后各农场创建新任务时不可选择该模板；已有引用任务不受影响。"
-            onConfirm={() => void handleToggleStatus(record)}
-          >
-            <Button type="link" size="small" danger icon={<StopOutlined />}>
-              停用
-            </Button>
-          </Popconfirm>
-        ) : (
-          <Button
-            key="toggle"
-            type="link"
-            size="small"
-            icon={<CheckCircleOutlined />}
-            onClick={() => void handleToggleStatus(record)}
-          >
-            启用
-          </Button>
-        ),
-        <Popconfirm
-          key="delete"
-          title="确认删除该模板？"
-          description="删除后模板将不可恢复，请确认是否继续。"
-          okText="确认删除"
-          cancelText="取消"
-          okButtonProps={{ danger: true }}
-          onConfirm={() => void handleDelete(record)}
-        >
-          <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-            删除
-          </Button>
-        </Popconfirm>,
-      ],
+      render: (_, record) => (
+        <ListRowActions
+          items={[
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEdit(record)}
+            >
+              编辑
+            </Button>,
+            record.status === 1 ? (
+              <Popconfirm
+                key="toggle"
+                title="确认停用该模板？"
+                description="停用后各农场创建新任务时不可选择该模板；已有引用任务不受影响。"
+                onConfirm={() => void handleToggleStatus(record)}
+              >
+                <Button type="link" size="small" danger icon={<StopOutlined />}>
+                  停用
+                </Button>
+              </Popconfirm>
+            ) : (
+              <Button
+                key="toggle"
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={() => void handleToggleStatus(record)}
+              >
+                启用
+              </Button>
+            ),
+            <Popconfirm
+              key="delete"
+              title="确认删除该模板？"
+              description="删除后模板将不可恢复，请确认是否继续。"
+              okText="确认删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => void handleDelete(record)}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                删除
+              </Button>
+            </Popconfirm>,
+          ]}
+        />
+      ),
     },
   ]
 
   return (
     <PageContainer
+      className="production-list-dense production-member-list"
       title="任务模板库"
       subTitle="平台统一维护标准农事作业规范（SOP），供各农场生产作业时标准化引用"
     >
       <ProTable<TaskTemplateRow>
         actionRef={actionRef}
         rowKey="templateId"
-        headerTitle="标准模板台账"
+        memberListToolbar
+        rowSelection={{}}
+        headerTitle={
+          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            新建任务模板
+          </Button>
+        }
         columns={columns}
         search={{ labelWidth: 'auto' }}
         options={{
-          density: true,
-          fullScreen: true,
           reload: true,
-          setting: true,
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新建任务模板
-          </Button>,
-        ]}
+        toolBarRender={() => []}
         request={async (params) => {
           const res = await fetchTaskTemplatesPage({
             pageNum: params.current ?? 1,

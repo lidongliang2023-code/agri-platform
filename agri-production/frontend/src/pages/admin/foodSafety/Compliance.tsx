@@ -1,5 +1,6 @@
 import DetailInfoGrid from '@/components/DetailInfoGrid'
 import ProductionTable from '@/components/ProductionTable'
+import ListRowActions from '@/components/ListRowActions'
 import { QualityPage } from '../quality/QualityShared'
 /**
  * 页面名称：合规校验管理
@@ -145,7 +146,7 @@ function InputComplianceTab(): JSX.Element {
   /** 页码 */
   const [pageNum, setPageNum] = useState<number>(1)
   /** 每页条数 */
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   /** 详情弹窗记录 */
   const [detail, setDetail] = useState<InputComplianceRecord | null>(null)
   /** 处罚弹窗记录 */
@@ -230,25 +231,28 @@ function InputComplianceTab(): JSX.Element {
       key: 'action',
       width: 150,
       render: (_value: unknown, record: InputComplianceRecord) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
-            查看
-          </Button>
-          {record.result === 'over' && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<WarningOutlined />}
-              onClick={() => {
-                setPunishTarget(record)
-                punishForm.setFieldsValue({ action: PUNISH_OPTIONS[0], amount: 2000, remark: '' })
-              }}
-            >
-              处罚
-            </Button>
-          )}
-        </Space>
+        <ListRowActions
+          items={[
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
+              查看
+            </Button>,
+            record.result === 'over' && (
+              <Button
+                key="punish"
+                type="link"
+                size="small"
+                danger
+                icon={<WarningOutlined />}
+                onClick={() => {
+                  setPunishTarget(record)
+                  punishForm.setFieldsValue({ action: PUNISH_OPTIONS[0], amount: 2000, remark: '' })
+                }}
+              >
+                处罚
+              </Button>
+            ),
+          ]}
+        />
       ),
     },
   ]
@@ -307,12 +311,11 @@ function InputComplianceTab(): JSX.Element {
         </Col>
       </Row>
 
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap size={12}>
-          <Space size={4}>
-            <Text>校验结果：</Text>
+      <Card size="small" className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>校验结果</label>
             <Select
-              style={{ width: 120 }}
               value={result}
               options={[
                 { value: 'all', label: '全部' },
@@ -324,46 +327,53 @@ function InputComplianceTab(): JSX.Element {
                 setPageNum(1)
               }}
             />
-          </Space>
-          <Space size={4}>
-            <Text>农场：</Text>
+          </div>
+          <div className="production-filter-field">
+            <label>农场</label>
             <Input
-              style={{ width: 160 }}
               allowClear
               placeholder="请输入农场名称"
               value={farmName}
               onChange={(event) => setFarmName(event.target.value)}
             />
-          </Space>
-          <Button
-            type="primary"
-            icon={<SearchOutlined />}
-            onClick={() => {
-              setPageNum(1)
-              void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'inputs'] })
-            }}
-          >
-            查询
-          </Button>
-          <Button
-            onClick={() => {
-              setResult('all')
-              setFarmName('')
-              setPageNum(1)
-            }}
-          >
-            重置
-          </Button>
-        </Space>
+          </div>
+          <div className="production-filter-actions">
+            <Button
+              onClick={() => {
+                setResult('all')
+                setFarmName('')
+                setPageNum(1)
+              }}
+            >
+              重置
+            </Button>
+            <Button
+              type="primary"
+              icon={<SearchOutlined />}
+              onClick={() => {
+                setPageNum(1)
+                void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'inputs'] })
+              }}
+            >
+              查询
+            </Button>
+          </div>
+        </div>
       </Card>
 
-      <Card title="投入品合规台账">
+      <Card>
         <ProductionTable<InputComplianceRecord>
           rowKey="id"
+          memberListToolbar
+          rowSelection={{}}
+          cardProps={false}
+          headerTitle="投入品合规台账"
+          columnWidthStorageKey="compliance-inputs"
           size="small" search={false}
           loading={listQuery.isLoading}
           columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={listQuery.data?.list ?? []}
+          options={{ reload: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'inputs'] }) }}
           locale={{ emptyText: <Empty description="暂无投入品合规校验记录" /> }}
           pagination={{
             current: pageNum,
@@ -494,7 +504,7 @@ function LabelComplianceTab(): JSX.Element {
   /** 页码 */
   const [pageNum, setPageNum] = useState<number>(1)
   /** 每页条数 */
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   /** 详情弹窗记录 */
   const [detail, setDetail] = useState<LabelComplianceRecord | null>(null)
   /** 整改通知弹窗记录 */
@@ -613,24 +623,27 @@ function LabelComplianceTab(): JSX.Element {
       key: 'action',
       width: 160,
       render: (_value: unknown, record: LabelComplianceRecord) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
-            查看
-          </Button>
-          {record.result === 'fail' && record.rectifyStatus !== 'done' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<WarningOutlined />}
-              onClick={() => {
-                setRectifyTarget(record)
-                rectifyForm.setFieldsValue({ deadline: '', remark: '' })
-              }}
-            >
-              整改通知
-            </Button>
-          )}
-        </Space>
+        <ListRowActions
+          items={[
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
+              查看
+            </Button>,
+            record.result === 'fail' && record.rectifyStatus !== 'done' && (
+              <Button
+                key="rectify"
+                type="link"
+                size="small"
+                icon={<WarningOutlined />}
+                onClick={() => {
+                  setRectifyTarget(record)
+                  rectifyForm.setFieldsValue({ deadline: '', remark: '' })
+                }}
+              >
+                整改通知
+              </Button>
+            ),
+          ]}
+        />
       ),
     },
   ]
@@ -673,22 +686,20 @@ function LabelComplianceTab(): JSX.Element {
         </Col>
       </Row>
 
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap size={12}>
-          <Space size={4}>
-            <Text>产品名称：</Text>
+      <Card size="small" className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>产品名称</label>
             <Input
-              style={{ width: 160 }}
               allowClear
               placeholder="请输入产品名称"
               value={productName}
               onChange={(event) => setProductName(event.target.value)}
             />
-          </Space>
-          <Space size={4}>
-            <Text>校验结果：</Text>
+          </div>
+          <div className="production-filter-field">
+            <label>校验结果</label>
             <Select
-              style={{ width: 120 }}
               value={result}
               options={[
                 { value: 'all', label: '全部' },
@@ -700,37 +711,45 @@ function LabelComplianceTab(): JSX.Element {
                 setPageNum(1)
               }}
             />
-          </Space>
-          <Button
-            type="primary"
-            icon={<SearchOutlined />}
-            onClick={() => {
-              setPageNum(1)
-              void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'labels'] })
-            }}
-          >
-            查询
-          </Button>
-          <Button
-            onClick={() => {
-              setResult('all')
-              setProductName('')
-              setPageNum(1)
-            }}
-          >
-            重置
-          </Button>
-        </Space>
+          </div>
+          <div className="production-filter-actions">
+            <Button
+              onClick={() => {
+                setResult('all')
+                setProductName('')
+                setPageNum(1)
+              }}
+            >
+              重置
+            </Button>
+            <Button
+              type="primary"
+              icon={<SearchOutlined />}
+              onClick={() => {
+                setPageNum(1)
+                void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'labels'] })
+              }}
+            >
+              查询
+            </Button>
+          </div>
+        </div>
       </Card>
 
-      <Card title="产品标签校验结果">
+      <Card>
         <ProductionTable<LabelComplianceRecord>
           rowKey="id"
+          memberListToolbar
+          rowSelection={{}}
+          cardProps={false}
+          headerTitle="产品标签校验结果"
+          columnWidthStorageKey="compliance-labels"
           size="small" search={false}
           loading={listQuery.isLoading}
           columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={listQuery.data?.list ?? []}
           scroll={{ x: 1400 }}
+          options={{ reload: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'compliance', 'labels'] }) }}
           locale={{ emptyText: <Empty description="暂无标签校验记录" /> }}
           pagination={{
             current: pageNum,
@@ -1087,11 +1106,16 @@ function StandardCheckTab(): JSX.Element {
       >
         <ProductionTable<StandardCheckItem>
           rowKey="id"
+          memberListToolbar
+          rowSelection={{}}
+          cardProps={false}
+          columnWidthStorageKey="compliance-standard-items"
           size="small" search={false}
           loading={itemsQuery.isLoading}
           columns={itemColumns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={items}
-          pagination={false}
+          options={{ reload: () => void itemsQuery.refetch() }}
+          pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           locale={{ emptyText: <Empty description="该标准下暂无校验项" /> }}
         />
         <div style={{ marginTop: 8 }}>

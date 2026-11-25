@@ -8,6 +8,7 @@ import type { Alert } from '@/types'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
 import '@/components/ProductionDetailCompact.css'
 import Table from '@/components/ProductionTable'
+import ListRowActions from '@/components/ListRowActions'
 import { Card, FarmFilter, MonitorPage, QueryError, displayTime, iotOpsUrl } from '../monitor/MonitorShared'
 
 const states: Record<number, string> = { 1: '待处理', 2: '处理中', 3: '已处理', 4: '已忽略' }
@@ -95,11 +96,13 @@ export default function AdminAlertCenter(): JSX.Element {
     { title: '级别', width: 90, render: (_, row) => <Tag color={row.alertLevel === 4 ? 'red' : row.alertLevel === 3 ? 'orange' : 'default'}>{levels[row.alertLevel] || '未分级'}</Tag> },
     { title: '状态', width: 95, render: (_, row) => <Tag color={actionable(row) ? 'orange' : 'default'}>{states[row.status] || '未知状态'}</Tag> },
     { title: '触发时间', width: 175, render: (_, row) => displayTime(row.triggeredAt) },
-    { title: '操作', valueType: 'option', fixed: 'right', width: 245, render: (_, row) => [
-      <Button key="detail" type="link" onClick={() => void openDetail(row)}>详情</Button>,
-      <Button key="handle" type="link" disabled={!actionable(row) || busy} onClick={() => openHandle([row])}>{row.status === 2 ? '完成处置' : '介入'}</Button>,
-      <Button key="check" type="link" disabled={!row.farmId} onClick={() => navigate(`/admin/production/farms/compliance?farmId=${encodeURIComponent(row.farmId!)}`)}>检查整改</Button>,
-    ] },
+    { title: '操作', valueType: 'option', fixed: 'right', width: 160, render: (_, row) => (
+      <ListRowActions items={[
+        <Button key="detail" type="link" size="small" onClick={() => void openDetail(row)}>详情</Button>,
+        <Button key="handle" type="link" size="small" disabled={!actionable(row) || busy} onClick={() => openHandle([row])}>{row.status === 2 ? '完成处置' : '介入'}</Button>,
+        <Button key="check" type="link" size="small" disabled={!row.farmId} onClick={() => navigate(`/admin/production/farms/compliance?farmId=${encodeURIComponent(row.farmId!)}`)}>检查整改</Button>,
+      ]} />
+    ) },
   ]
   return <MonitorPage title="生产告警处置与复盘" subTitle="统一生产告警台账、处置进展与历史复盘" extra={<Space wrap>
     <Button onClick={() => navigate('/admin/production/monitor/tasks')}>任务监控</Button>
@@ -109,18 +112,23 @@ export default function AdminAlertCenter(): JSX.Element {
   </Space>}>
     <Notice showIcon type="info" message="与用户端共用生产告警；此处记录处置进展。设备指令和维修在物联网办理，农场问题进入检查整改；已处理和已忽略记录只读。" />
     <QueryError error={query.error} />
-    <Card title="生产告警台账">
-      <Space wrap style={{ marginBottom: 12 }}>
-        <FarmFilter value={farmId} onChange={value => filter('farmId', value)} />
-        <Select allowClear aria-label="告警状态" value={status} placeholder="全部状态" style={{ width: 150 }} options={Object.entries(states).map(([value, label]) => ({ value: Number(value), label }))} onChange={value => filter('status', value)} />
-        <Select allowClear aria-label="告警级别" value={alertLevel} placeholder="全部级别" style={{ width: 150 }} options={Object.entries(levels).map(([value, label]) => ({ value: Number(value), label }))} onChange={value => filter('alertLevel', value)} />
-        <Button onClick={() => { setParams({}, { replace: true }); setPage(1) }}>重置</Button>
-        <Button onClick={() => filter('status', 3)}>已处理复盘</Button>
-      </Space>
-      <Table<Alert> rowKey="alertId" columns={columns} dataSource={rows} loading={query.isFetching} search={false}
-        columnWidthStorageKey="admin-production-alerts" options={{ reload: () => void refresh(), density: true, setting: true }}
+    <Card className="production-dense-filter-card">
+      <div className="production-filter-grid">
+        <div className="production-filter-field"><label>所属农场</label><FarmFilter value={farmId} onChange={value => filter('farmId', value)} /></div>
+        <div className="production-filter-field"><label>告警状态</label><Select allowClear aria-label="告警状态" value={status} placeholder="全部" options={Object.entries(states).map(([value, label]) => ({ value: Number(value), label }))} onChange={value => filter('status', value)} /></div>
+        <div className="production-filter-field"><label>告警级别</label><Select allowClear aria-label="告警级别" value={alertLevel} placeholder="全部" options={Object.entries(levels).map(([value, label]) => ({ value: Number(value), label }))} onChange={value => filter('alertLevel', value)} /></div>
+        <div className="production-filter-actions">
+          <Button onClick={() => { setParams({}, { replace: true }); setPage(1) }}>重置</Button>
+          <Button type="primary" loading={query.isFetching} onClick={() => { setPage(1); void query.refetch() }}>查询</Button>
+        </div>
+      </div>
+    </Card>
+    <Card>
+      <Table<Alert> rowKey="alertId" memberListToolbar cardProps={false} columns={columns} dataSource={rows} loading={query.isFetching} search={false}
+        columnWidthStorageKey="admin-production-alerts" options={{ reload: () => void refresh() }}
         rowSelection={{ selectedRowKeys: selected, onChange: setSelected, getCheckboxProps: row => ({ disabled: !actionable(row) || busy }) }}
-        toolBarRender={() => [<Button key="handle" disabled={!selected.length || busy} onClick={() => openHandle(rows.filter(row => selected.includes(row.alertId)))}>批量登记进展（{selected.length}）</Button>]}
+        headerTitle={<Space size={8}><Button type="primary" disabled={!selected.length || busy} onClick={() => openHandle(rows.filter(row => selected.includes(row.alertId)))}>批量登记进展（{selected.length}）</Button><Button onClick={() => filter('status', 3)}>已处理复盘</Button></Space>}
+        toolBarRender={() => []}
         pagination={{ current: page, pageSize: size, total: query.data?.total ?? 0, showSizeChanger: true, onChange: (p, s) => { setPage(s === size ? p : 1); setSize(s); setSelected([]) } }} />
     </Card>
     <Modal rootClassName="production-form-dialog" title="登记告警处置进展" open={!!targets.length} confirmLoading={busy} onOk={() => void submit()} onCancel={() => { if (!busy) setTargets([]) }} okText="保存进展">

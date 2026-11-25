@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import type { ProColumns } from '@ant-design/pro-components'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
+import ListRowActions from '@/components/ListRowActions'
 import { fetchAdminTraceChain, type AdminInspectionRow } from '@/api/admin/trace'
 import { Card, Table, QualityPage, LoadError, codeName, resultName, InspectionDetail } from '../quality/QualityShared'
 
@@ -16,7 +17,7 @@ export default function Detail(){
     {title:'检测单号',dataIndex:'inspectionNo',width:210,render:(_,r)=><Button type="link" onClick={()=>setActive(r.inspectionId)}>{r.inspectionNo||r.inspectionId}</Button>},
     {title:'机构',dataIndex:'labName',width:200},{title:'抽样时间',dataIndex:'sampleAt',width:180},
     {title:'结论',width:110,render:(_,r)=><Tag color={r.result==='FAIL'?'red':r.result==='PASS'?'green':'default'}>{resultName(r.result)}</Tag>},
-    {title:'操作',valueType:'option',width:120,render:(_,r)=><Button type="link" onClick={()=>setActive(r.inspectionId)}>报告详情</Button>},
+    {title:'操作',valueType:'option',width:120,render:(_,r)=><ListRowActions items={[<Button key="detail" type="link" size="small" onClick={()=>setActive(r.inspectionId)}>报告详情</Button>]}/>},
   ]
   return <QualityPage title="溯源监管详情" subTitle={code} extra={<Button onClick={()=>nav('/admin/production/trace/codes')}>返回台账</Button>}>
     <LoadError error={query.error}/>
@@ -37,7 +38,7 @@ export default function Detail(){
           {key:'state',label:'管控状态',value:<Tag color={Number(b.status)===4?'red':'default'}>{Number(b.status)===4?'已冻结':'未冻结'}</Tag>},
         ]}/>:<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未关联有效批次"/>}
       </Card>
-      <Card title="检测与风险记录"><Table<AdminInspectionRow> rowKey="inspectionId" columns={cols} dataSource={d?.inspections??[]} search={false} pagination={false} scroll={{x:820}}/></Card>
+      <Card title="检测与风险记录"><Table<AdminInspectionRow> rowKey="inspectionId" memberListToolbar rowSelection={{}} cardProps={false} columns={cols} dataSource={d?.inspections??[]} search={false} pagination={{defaultPageSize:20,showSizeChanger:true}} scroll={{x:820}} options={{reload:()=>void query.refetch()}}/></Card>
       <Card title="真实生产链路" extra={<span className="quality-detail-muted">{d?.nodes?.length??0} 个关联节点</span>}>
         {d?.nodes?.length?<Timeline className="quality-trace-timeline" items={d.nodes.map((n,index)=>({key:`${n.nodeType}-${n.refId}-${index}`,color:n.onChain?'green':'blue',children:<div className="quality-trace-node">
           <div className="quality-trace-node-heading"><strong>{n.nodeName||n.nodeType}</strong><span className="quality-detail-muted">{n.occurredAt?.replace('T',' ')||'未登记时间'}</span><Tag color={n.onChain?'green':'default'}>{n.onChain?'已上链':n.chainStatus||'无成功存证'}</Tag></div>

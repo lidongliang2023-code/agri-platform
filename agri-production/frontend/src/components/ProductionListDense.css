@@ -333,5 +333,5 @@ html.pc-ui-v1 .production-list-dense .ant-table-tbody > tr:not(.ant-table-measur
 .production-member-shell .agri-sider .ant-menu-inline .ant-menu-sub { background: #132b40; }
 .production-member-shell .agri-sider .ant-menu-dark .ant-menu-item-selected { background: #d8efdf; color: #165c33; }
 .production-member-list ul.production-pagination .ant-pagination-item { border-radius: 4px; }
-.production-member-shell .production-member-list ul.production-pagination .ant-pagination-item-active { background: #258849; border-color: #258849; }
-.production-member-shell .production-member-list ul.production-pagination .ant-pagination-item-active a { color: #fff; }
+.production-member-list ul.production-pagination .ant-pagination-item-active { background: #258849; border-color: #258849; }
+.production-member-list ul.production-pagination .ant-pagination-item-active a { color: #fff; }

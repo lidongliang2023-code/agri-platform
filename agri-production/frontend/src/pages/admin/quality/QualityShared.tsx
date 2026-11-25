@@ -8,10 +8,11 @@ import Table from '@/components/ProductionTable'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
 import { qualityRecord } from '@/api/admin/quality-workbench'
 import './QualityCompact.css'
+import '@/components/ProductionListDense.css'
 export { Card, Table }
 export const tradeOpsUrl=(page:string)=>{const u=new URL(window.location.href);u.port='8086';u.pathname=`/admin/trade/${page}`;u.search='';u.hash='';return u.toString()}
 
-export function QualityPage({title,subTitle,extra,children}:{title:string;subTitle:string;extra?:ReactNode;children:ReactNode}){return <PageContainer className="quality-workbench" title={title} subTitle={subTitle} extra={extra}><Space direction="vertical" size={12} style={{width:'100%'}}>{children}</Space></PageContainer>}
+export function QualityPage({title,subTitle,extra,children}:{title:string;subTitle:string;extra?:ReactNode;children:ReactNode}){return <PageContainer className="quality-workbench production-list-dense production-member-list" title={title} subTitle={subTitle} extra={extra}><Space direction="vertical" size={10} style={{width:'100%'}}>{children}</Space></PageContainer>}
 export function LoadError({error}:{error:unknown}){return error?<Alert type="error" showIcon message="数据加载失败" description={error instanceof Error?error.message:'请刷新重试'}/>:null}
 export const resultName=(v?:string)=>v==='PASS'?'合格':v==='FAIL'?'不合格':'未出结论'
 export const stateName=(v?:string)=>({PENDING:'待检',TESTING:'检测中',DONE:'已完成'}[v||'']||v||'—')

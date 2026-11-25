@@ -1,4 +1,7 @@
+import '@/components/ProductionListDense.css'
 import DetailInfoGrid from '@/components/DetailInfoGrid'
+import Table from '@/components/ProductionListTable'
+import ListRowActions from '@/components/ListRowActions'
 /**
  * 页面名称：食品安全事件台账
  * 路由路径：/admin/production/food-safety
@@ -25,7 +28,6 @@ import {
   Skeleton,
   Space,
   Statistic,
-  Table,
   Tag,
   Typography,
 } from 'antd'
@@ -280,23 +282,26 @@ function Index(): JSX.Element {
       key: 'action',
       width: 150,
       render: (_value: unknown, record: FoodSafetyAlert) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetailAlert(record)}>
-            查看
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<ToolOutlined />}
-            disabled={record.status === '已处理'}
-            onClick={() => {
-              setActiveAlert(record)
-              handleForm.setFieldsValue({ measure: MEASURE_OPTIONS[0], remark: '' })
-            }}
-          >
-            处理
-          </Button>
-        </Space>
+        <ListRowActions
+          items={[
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetailAlert(record)}>
+              查看
+            </Button>,
+            <Button
+              key="handle"
+              type="link"
+              size="small"
+              icon={<ToolOutlined />}
+              disabled={record.status === '已处理'}
+              onClick={() => {
+                setActiveAlert(record)
+                handleForm.setFieldsValue({ measure: MEASURE_OPTIONS[0], remark: '' })
+              }}
+            >
+              处理
+            </Button>,
+          ]}
+        />
       ),
     },
   ]
@@ -521,6 +526,7 @@ function Index(): JSX.Element {
       {/* 食品安全事件告警（原型 P15 Alert List） */}
       <Card
         title="食品安全事件告警"
+        className="production-list-dense production-member-list"
         extra={
           <Button
             type="link"
@@ -537,7 +543,11 @@ function Index(): JSX.Element {
           loading={alertsQuery.isLoading}
           columns={alertColumns}
           dataSource={alertList}
-          pagination={false}
+          rowSelection={{}}
+          columnSettingsStorageKey="agri:production:visible-columns:v1:admin-food-safety-alerts"
+          columnWidthStorageKey="agri:production:column-widths:v1:admin-food-safety-alerts"
+          onRefresh={() => void alertsQuery.refetch()}
+          pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           locale={{ emptyText: <Empty description="暂无食品安全告警" /> }}
         />
       </Card>

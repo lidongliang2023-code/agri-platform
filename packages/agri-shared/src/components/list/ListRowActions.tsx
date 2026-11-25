@@ -3,7 +3,9 @@ import type { ReactNode } from 'react'
 import { Button, Popover, Space } from 'antd'
 
 export interface ListRowActionsProps {
-  children: ReactNode
+  children?: ReactNode
+  /** 便捷数组入参，与 children 二选一；会自动过滤假值节点。 */
+  items?: ReactNode[]
   /** 直接平铺显示的最大操作数，默认 2（超出部分保留第 1 项并收拢进「更多」弹层）。 */
   maxVisible?: number
   size?: number
@@ -13,11 +15,12 @@ export interface ListRowActionsProps {
 /** 表格行操作收拢组件：保留原操作节点的禁用态、权限判断与二次确认。 */
 export default function ListRowActions({
   children,
+  items,
   maxVisible = 2,
   size = 10,
   moreLabel = '更多',
 }: ListRowActionsProps) {
-  const actions = Children.toArray(children).filter(Boolean)
+  const actions = Children.toArray(items ?? children).filter(Boolean)
   const limit = Math.max(1, maxVisible)
   return (
     <Space size={size}>

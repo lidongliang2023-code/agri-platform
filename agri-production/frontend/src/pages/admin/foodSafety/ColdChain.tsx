@@ -1,3 +1,4 @@
+import '@/components/ProductionListDense.css'
 import ProductionPagination from '@/components/ProductionPagination'
 import Table from '@/components/ProductionListTable'
 /**
@@ -168,7 +169,7 @@ export default function ColdChain(): JSX.Element {
   /** 资源页码 */
   const [pageNum, setPageNum] = useState<number>(1)
   /** 资源每页条数（资源卡） */
-  const [pageSize, setPageSize] = useState<number>(8)
+  const [pageSize, setPageSize] = useState<number>(20)
   /** 撮合记录页码 */
   const [matchPageNum, setMatchPageNum] = useState<number>(1)
   /** 撮合记录每页条数 */
@@ -519,13 +520,17 @@ export default function ColdChain(): JSX.Element {
       </div>
 
       {/* 撮合记录（原型 P19 Match Records） */}
-      <Card title="撮合记录">
+      <Card title="撮合记录" className="production-list-dense production-member-list">
         <Table<MatchRecord>
           rowKey="id"
           size="middle"
           loading={matchQuery.isLoading}
           columns={matchColumns}
           dataSource={matchRecords}
+          rowSelection={{}}
+          columnSettingsStorageKey="agri:production:visible-columns:v1:admin-coldchain-matches"
+          columnWidthStorageKey="agri:production:column-widths:v1:admin-coldchain-matches"
+          onRefresh={() => void matchQuery.refetch()}
           locale={{ emptyText: <Empty description="暂无撮合记录" /> }}
           pagination={{
             current: matchPageNum,

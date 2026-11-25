@@ -1,4 +1,5 @@
 import './FarmSupervisionCompact.css'
+import '@/components/ProductionListDense.css'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -9,6 +10,7 @@ import PageContainer from '@/components/ProductionPageContainer'
 import Card from '@/components/SectionCard'
 import { DetailMetricGrid } from '@/components'
 import ProTable from '@/components/ProductionTable'
+import ListRowActions from '@/components/ListRowActions'
 import FarmCoordinateFields from '@/components/FarmCoordinateFields'
 import FarmBoundaryFields from '@/components/FarmBoundaryFields'
 import { listSupervisedFarmMapPoints, saveSupervisedFarmCoordinates, saveSupervisedFarmBoundary, type FarmMapPoint } from '@/api/admin/farms'
@@ -103,12 +105,12 @@ export default function FarmGisMap({ embedded = false }: { embedded?: boolean })
     { title: '纬度', width: 140, render: (_, farm) => farm.latitude == null ? '—' : Number(farm.latitude).toFixed(8) },
     { title: '坐标状态', width: 120, render: (_, farm) => <Tag color={hasCoordinates(farm) ? 'green' : 'orange'}>{hasCoordinates(farm) ? '已登记' : '待补录'}</Tag> },
     { title: '边界状态', width: 110, render: (_, farm) => <Tag color={parseBoundaryVertices(farm.boundary).length >= 3 ? 'green' : 'default'}>{parseBoundaryVertices(farm.boundary).length >= 3 ? '已绘制' : '未绘制'}</Tag> },
-    { title: '操作', valueType: 'option', fixed: 'right', width: 330, render: (_, farm) => <Space size={0}>
-      <Button type="link" disabled={!displayPoint(farm)} onClick={() => setSelectedId(String(farm.farmId))}>定位</Button>
-      <Button type="link" onClick={() => openEditor(farm)}>{hasCoordinates(farm) ? '编辑坐标' : '补录坐标'}</Button>
-      <Button type="link" onClick={() => openBoundaryEditor(farm)}>{farm.boundary ? '编辑边界' : '绘制边界'}</Button>
-      <Button type="link" onClick={() => navigate(`/admin/production/farms/${farm.farmId}`)}>监管详情</Button>
-    </Space> },
+    { title: '操作', valueType: 'option', fixed: 'right', width: 170, render: (_, farm) => <ListRowActions items={[
+      <Button key="locate" type="link" size="small" disabled={!displayPoint(farm)} onClick={() => setSelectedId(String(farm.farmId))}>定位</Button>,
+      <Button key="coord" type="link" size="small" onClick={() => openEditor(farm)}>{hasCoordinates(farm) ? '编辑坐标' : '补录坐标'}</Button>,
+      <Button key="boundary" type="link" size="small" onClick={() => openBoundaryEditor(farm)}>{farm.boundary ? '编辑边界' : '绘制边界'}</Button>,
+      <Button key="detail" type="link" size="small" onClick={() => navigate(`/admin/production/farms/${farm.farmId}`)}>监管详情</Button>,
+    ]} /> },
   ]
   const validCount = rows.filter(hasCoordinates).length
   const content = <>
@@ -130,7 +132,7 @@ export default function FarmGisMap({ embedded = false }: { embedded?: boolean })
         <TiandituMap key={selectedId ?? 'all'} height={360} points={selected && displayPoint(selected) ? [displayPoint(selected)!] : points} showLegend={false} selectedPoint={selected && hasCoordinates(selected) && !selected.boundary ? { longitude: Number(selected.longitude), latitude: Number(selected.latitude) } : null} onPointClick={point => setSelectedId(String(point.id))} />
         {selected && <Space wrap style={{ marginTop: 12 }}><Typography.Text strong>{selected.farmName}</Typography.Text><Typography.Text type="secondary">{hasCoordinates(selected) ? `${selected.longitude}, ${selected.latitude}` : '中心坐标未登记 · 使用边界中心定位'}</Typography.Text><Button type="link" onClick={() => openEditor(selected)}>编辑坐标</Button><Button type="link" onClick={() => openBoundaryEditor(selected)}>维护边界</Button><Button type="link" onClick={() => navigate(`/admin/production/farms/${selected.farmId}`)}>监管详情</Button></Space>}
       </Card>
-      <Card title="农场位置与边界台账"><ProTable<FarmMapPoint> rowKey="farmId" columns={columns} dataSource={filtered} loading={query.isFetching} search={false} scroll={{ x: 1490 }} columnWidthStorageKey="supervision-map" options={{ reload: () => void query.refetch() }} pagination={{ defaultPageSize: 10, showSizeChanger: true }} /></Card>
+      <Card title="农场位置与边界台账" className="production-member-list"><ProTable<FarmMapPoint> rowKey="farmId" memberListToolbar rowSelection={{}} cardProps={false} columns={columns} dataSource={filtered} loading={query.isFetching} search={false} scroll={{ x: 1320 }} columnWidthStorageKey="supervision-map" options={{ reload: () => void query.refetch() }} pagination={{ defaultPageSize: 20, showSizeChanger: true }} /></Card>
     </Space>
     <Modal title={`维护坐标 · ${editing?.farmName ?? ''}`} open={!!editing} width={860} destroyOnClose maskClosable={false} closable={!saving} confirmLoading={saving} cancelButtonProps={{ disabled: saving }} okText="保存坐标" onOk={() => void save()} onCancel={() => { if (!saving) setEditing(undefined) }}>
       <Typography.Paragraph type="secondary">{[editing?.province, editing?.city, editing?.district].filter(Boolean).join(' / ')} · 所属经营主体：{editing?.tenantName || '主体名称暂不可用'}</Typography.Paragraph>
@@ -143,5 +145,5 @@ export default function FarmGisMap({ embedded = false }: { embedded?: boolean })
       </Form>
     </Modal>
   </>
-  return embedded ? content : <PageContainer className="farm-supervision-compact" title="农场监管" subTitle="农场地理分布、坐标维护与主体档案联动">{content}</PageContainer>
+  return embedded ? content : <PageContainer className="farm-supervision-compact production-list-dense production-member-list" title="农场监管" subTitle="农场地理分布、坐标维护与主体档案联动">{content}</PageContainer>
 }

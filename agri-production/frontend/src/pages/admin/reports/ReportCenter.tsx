@@ -1,3 +1,4 @@
+import '@/components/ProductionListDense.css'
 import { useState } from 'react'
 import { Alert, App, Button, Card, Collapse, DatePicker, Form, Input, Modal, Popconfirm, Select, Space, Tag, Typography } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -9,8 +10,11 @@ import {
   listAdminReports,
   type ReportTask,
 } from '@/api/admin/reports'
+import PageContainer from '@/components/ProductionPageContainer'
 import ProductionTable from '@/components/ProductionTable'
-import { PlusOutlined, SearchOutlined, UndoOutlined } from '@ant-design/icons'
+import ListRowActions from '@/components/ListRowActions'
+import { CollapsibleFilterForm } from '@/components/CollapsibleFilterGrid'
+import { PlusOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import { supervisionFarms } from '@/api/admin/farm-supervision'
 import type { Farm } from '@/types'
@@ -137,83 +141,93 @@ export default function ReportCenter() {
   }
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
-      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>
-          生产与质量报表
-        </Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
-          登记报表任务
-        </Button>
-      </Space>
-
-      <Alert
-        type="info"
-        showIcon
-        message="统一管理生产与质量报表任务及快照"
-        description="支持即时登记并触发生成真实 CSV 报表快照。快照基于生产、质量及告警事实生成并落盘，未生成前不可下载，无业务记录时如实显示为零；已生成快照保持不变。"
-      />
-
-      <Card size="small">
-        <Form layout="inline" onFinish={applyFilters} style={{ rowGap: 12 }}>
-          <Form.Item label="名称 / 编号">
-            <Input placeholder="搜索报表名称或编号" allowClear value={searchText} onChange={e => setSearchText(e.target.value)} style={{ width: 230 }} />
-          </Form.Item>
-          <Form.Item label="状态">
-            <Select allowClear value={draftStatus} placeholder="全部状态" style={{ width: 140 }} options={Object.entries(STATUS).map(([value, label]) => ({ value, label }))} onChange={setDraftStatus} />
-          </Form.Item>
-          <Form.Item label="类型">
-            <Select allowClear value={draftType} placeholder="全部类型" style={{ width: 150 }} options={[{value:'GOV',label:'生产监管'},{value:'QUALITY',label:'质量'},{value:'BIZ',label:'生产经营'}]} onChange={setDraftType} />
-          </Form.Item>
-          <Form.Item label="农场">
-            <Select allowClear showSearch optionFilterProp="label" value={draftFarm} placeholder="全部农场范围" loading={farms.isFetching} style={{width:260}} options={farmOptions} onChange={setDraftFarm} />
-          </Form.Item>
-          <Form.Item label="统计期间">
-            <DatePicker.RangePicker value={draftRange} presets={datePresets} placeholder={['开始日期','结束日期']} onChange={v=>setDraftRange(v?.[0] && v?.[1] ? [v[0],v[1]] : null)} />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={query.isFetching}>查询</Button>
-              <Button icon={<UndoOutlined />} onClick={resetFilters}>重置</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-        <Typography.Paragraph type="secondary" style={{margin:'12px 0 0'}}>日期匹配与所选期间有交集的报表；调整条件后点击查询，列表筛选不改变已生成快照。</Typography.Paragraph>
-      </Card>
-
-      {farms.isError && <Alert type="error" message="农场选项读取失败" action={<Button onClick={()=>void farms.refetch()}>重试</Button>} />}
-      <Collapse size="small" items={[{key:'metrics',label:'指标口径与快照说明',children:<Typography.Paragraph style={{margin:0}}>任务按计划开始日，采收按采收日，检测按采样日，告警按创建日统计；地块与面积为生成时点在册值。任务验收完成率=验收通过任务/期间任务；检测合格率仅以已完成且结论明确的检测为分母；告警处置完成率以明确已处理或关闭为完成。无分母显示—，合计按数量加权。经营报表不含未接入的交易金额。</Typography.Paragraph>}]} />
-      {query.data?.unavailableReason || query.isError ? (
+    <PageContainer
+      className="production-list-dense production-member-list"
+      title="生产与质量报表"
+      subTitle="统一管理生产与质量报表任务及快照"
+    >
+      <Space direction="vertical" size={10} style={{ width: '100%' }}>
         <Alert
-          type="error"
+          type="info"
           showIcon
-          message={query.data?.unavailableReason || '报表读取失败'}
-          action={<Button onClick={() => void query.refetch()}>重试</Button>}
+          message="支持即时登记并触发生成真实 CSV 报表快照，基于生产、质量及告警事实生成并落盘，未生成前不可下载，已生成快照保持不变。"
         />
-      ) : null}
 
-      <ProductionTable<ReportTask>
-        headerTitle={<Space wrap><span>报表任务</span><Tag>{query.isSuccess && !query.data?.unavailableReason ? `共 ${query.data?.total ?? 0} 份` : '数量待确认'}</Tag>{filterCount > 0 && <Tag color="blue">已应用 {filterCount} 项筛选</Tag>}</Space>}
-        search={false}
-        columnWidthStorageKey="admin-report-list"
-        columnsState={{ persistenceKey: 'production-admin-report-columns-v1', persistenceType: 'localStorage' }}
-        options={{ reload: () => { void query.refetch() }, density: true, setting: true, fullScreen: true }}
-        locale={{ emptyText: filterCount ? '没有匹配的报表，请调整筛选条件或重置' : '暂无报表任务，点击右上方登记报表任务' }}
-        rowKey="reportId"
-        loading={query.isFetching}
-        dataSource={query.data?.list ?? []}
-        scroll={{ x: 1350 }}
-        pagination={{
-          current: page,
-          pageSize: size,
-          total: query.data?.total ?? 0,
-          showSizeChanger: true,
-          showTotal: total => `共 ${total} 份`,
-          onChange: (p, s) => {
-            setPage(s === size ? p : 1)
-            setSize(s)
-          },
-        }}
+        <Card size="small" className="production-dense-filter-card">
+          <CollapsibleFilterForm fieldCount={5} className="production-filter-grid" onFinish={applyFilters}>
+            {({ toggleButton }) => (
+              <>
+                <Form.Item label="名称 / 编号">
+                  <Input placeholder="搜索报表名称或编号" allowClear value={searchText} onChange={e => setSearchText(e.target.value)} />
+                </Form.Item>
+                <Form.Item label="状态">
+                  <Select allowClear value={draftStatus} placeholder="全部状态" options={Object.entries(STATUS).map(([value, label]) => ({ value, label }))} onChange={setDraftStatus} />
+                </Form.Item>
+                <Form.Item label="类型">
+                  <Select allowClear value={draftType} placeholder="全部类型" options={[{value:'GOV',label:'生产监管'},{value:'QUALITY',label:'质量'},{value:'BIZ',label:'生产经营'}]} onChange={setDraftType} />
+                </Form.Item>
+                <Form.Item label="农场">
+                  <Select allowClear showSearch optionFilterProp="label" value={draftFarm} placeholder="全部农场范围" loading={farms.isFetching} options={farmOptions} onChange={setDraftFarm} />
+                </Form.Item>
+                <Form.Item label="统计期间">
+                  <DatePicker.RangePicker value={draftRange} presets={datePresets} placeholder={['开始日期','结束日期']} onChange={v=>setDraftRange(v?.[0] && v?.[1] ? [v[0],v[1]] : null)} />
+                </Form.Item>
+                <Form.Item className="production-filter-actions">
+                  <Space size={8}>
+                    <Button onClick={resetFilters}>重置</Button>
+                    <Button type="primary" htmlType="submit" loading={query.isFetching}>查询</Button>
+                    {toggleButton}
+                  </Space>
+                </Form.Item>
+              </>
+            )}
+          </CollapsibleFilterForm>
+        </Card>
+
+        {farms.isError && <Alert type="error" message="农场选项读取失败" action={<Button onClick={()=>void farms.refetch()}>重试</Button>} />}
+        <Collapse size="small" items={[{key:'metrics',label:'指标口径与快照说明',children:<Typography.Paragraph style={{margin:0}}>任务按计划开始日，采收按采收日，检测按采样日，告警按创建日统计；地块与面积为生成时点在册值。任务验收完成率=验收通过任务/期间任务；检测合格率仅以已完成且结论明确的检测为分母；告警处置完成率以明确已处理或关闭为完成。无分母显示—，合计按数量加权。经营报表不含未接入的交易金额。</Typography.Paragraph>}]} />
+        {query.data?.unavailableReason || query.isError ? (
+          <Alert
+            type="error"
+            showIcon
+            message={query.data?.unavailableReason || '报表读取失败'}
+            action={<Button onClick={() => void query.refetch()}>重试</Button>}
+          />
+        ) : null}
+
+        <Card>
+          <ProductionTable<ReportTask>
+            memberListToolbar
+            rowSelection={{}}
+            headerTitle={
+              <Space wrap size={8}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+                  登记报表任务
+                </Button>
+                {filterCount > 0 && <Tag color="blue">已应用 {filterCount} 项筛选</Tag>}
+              </Space>
+            }
+            search={false}
+            cardProps={false}
+            columnWidthStorageKey="admin-report-list"
+            columnsState={{ persistenceKey: 'production-admin-report-columns-v1', persistenceType: 'localStorage' }}
+            options={{ reload: () => { void query.refetch() } }}
+            locale={{ emptyText: filterCount ? '没有匹配的报表，请调整筛选条件或重置' : '暂无报表任务，点击上方登记报表任务' }}
+            rowKey="reportId"
+            loading={query.isFetching}
+            dataSource={query.data?.list ?? []}
+            scroll={{ x: 1350 }}
+            pagination={{
+              current: page,
+              pageSize: size,
+              total: query.data?.total ?? 0,
+              showSizeChanger: true,
+              showTotal: total => `共 ${total} 份`,
+              onChange: (p, s) => {
+                setPage(s === size ? p : 1)
+                setSize(s)
+              },
+            }}
         columns={[
           { title: '报表编号', dataIndex: 'reportId', width: 230 },
           { title: '名称', dataIndex: 'reportName', width: 200 },
@@ -257,32 +271,38 @@ export default function ReportCenter() {
               const busy = actionCode === row.reportId
               const isDone = row.status === 'DONE'
               return (
-                <Space size={8}>
-                  {!isDone && <Popconfirm
-                    title="确认生成当前统计期间的报表快照？"
-                    onConfirm={() => void handleGenerate(row.reportId)}
-                    okText="确定"
-                    cancelText="取消"
-                  >
-                    <Button type="link" size="small" loading={busy} disabled={actionCode !== null}>
-                      {row.status === 'FAILED' ? '重试生成' : '生成快照'}
-                    </Button>
-                  </Popconfirm>}
-                  {isDone ? (
-                    <Button type="link" size="small" loading={busy} onClick={() => void handleDownload(row)}>
-                      下载
-                    </Button>
-                  ) : (
-                    <Button type="link" size="small" disabled>
-                      待生成
-                    </Button>
-                  )}
-                </Space>
+                <ListRowActions
+                  items={[
+                    !isDone && (
+                      <Popconfirm
+                        key="gen"
+                        title="确认生成当前统计期间的报表快照？"
+                        onConfirm={() => void handleGenerate(row.reportId)}
+                        okText="确定"
+                        cancelText="取消"
+                      >
+                        <Button type="link" size="small" loading={busy} disabled={actionCode !== null}>
+                          {row.status === 'FAILED' ? '重试生成' : '生成快照'}
+                        </Button>
+                      </Popconfirm>
+                    ),
+                    isDone ? (
+                      <Button key="dl" type="link" size="small" loading={busy} onClick={() => void handleDownload(row)}>
+                        下载
+                      </Button>
+                    ) : (
+                      <Button key="wait" type="link" size="small" disabled>
+                        待生成
+                      </Button>
+                    ),
+                  ]}
+                />
               )
             },
           },
         ]}
       />
+        </Card>
 
       <Modal
         title="登记报表任务"
@@ -315,6 +335,7 @@ export default function ReportCenter() {
           </Form.Item>
         </Form>
       </Modal>
-    </Space>
+      </Space>
+    </PageContainer>
   )
 }

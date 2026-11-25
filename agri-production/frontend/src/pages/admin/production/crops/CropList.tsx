@@ -1,3 +1,4 @@
+import '@/components/ProductionListDense.css'
 import { useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Button, Popconfirm, Space, Tag, Typography } from 'antd'
 import {
@@ -10,6 +11,7 @@ import {
 } from '@ant-design/pro-components'
 import type { ActionType, ProColumns } from '@ant-design/pro-components'
 import ProTable from '@/components/ProductionTable'
+import ListRowActions from '@/components/ListRowActions'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons'
 import {
@@ -169,53 +171,57 @@ export default function CropList(): JSX.Element {
       {
         title: '操作',
         key: 'option',
-        width: 180,
+        width: 150,
         fixed: 'right',
         valueType: 'option',
-        render: (_d, entity) => [
-          <Button
-            key="edit"
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => setEditing(entity)}
-          >
-            编辑
-          </Button>,
-          entity.status === 1 ? (
-            <Popconfirm
-              key="disable"
-              title="停用作物"
-              description="停用后新计划的下拉里不再出现；已有历史数据不受影响。确认停用？"
-              onConfirm={() => statusMutation.mutate({ cropId: entity.cropId, status: 0 })}
-            >
-              <Button type="link" size="small" danger icon={<StopOutlined />}>
-                停用
-              </Button>
-            </Popconfirm>
-          ) : (
-            <Button
-              key="enable"
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => statusMutation.mutate({ cropId: entity.cropId, status: 1 })}
-            >
-              启用
-            </Button>
-          ),
-          <Popconfirm
-            key="remove"
-            title="删除作物"
-            description="已被农事计划引用的作物不能删除。确认删除？"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => removeMutation.mutate(entity.cropId)}
-          >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
-            </Button>
-          </Popconfirm>,
-        ],
+        render: (_d, entity) => (
+          <ListRowActions
+            items={[
+              <Button
+                key="edit"
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => setEditing(entity)}
+              >
+                编辑
+              </Button>,
+              entity.status === 1 ? (
+                <Popconfirm
+                  key="disable"
+                  title="停用作物"
+                  description="停用后新计划的下拉里不再出现；已有历史数据不受影响。确认停用？"
+                  onConfirm={() => statusMutation.mutate({ cropId: entity.cropId, status: 0 })}
+                >
+                  <Button type="link" size="small" danger icon={<StopOutlined />}>
+                    停用
+                  </Button>
+                </Popconfirm>
+              ) : (
+                <Button
+                  key="enable"
+                  type="link"
+                  size="small"
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => statusMutation.mutate({ cropId: entity.cropId, status: 1 })}
+                >
+                  启用
+                </Button>
+              ),
+              <Popconfirm
+                key="remove"
+                title="删除作物"
+                description="已被农事计划引用的作物不能删除。确认删除？"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => removeMutation.mutate(entity.cropId)}
+              >
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                  删除
+                </Button>
+              </Popconfirm>,
+            ]}
+          />
+        ),
       },
     ],
     [removeMutation, statusMutation],
@@ -223,22 +229,16 @@ export default function CropList(): JSX.Element {
 
   return (
     <PageContainer
+      className="production-list-dense production-member-list"
       title="作物管理"
       subTitle="维护平台作物基础主数据，供农事生产、地块排产与批次采收全局引用"
     >
       <ProTable<Crop>
         actionRef={actionRef}
         rowKey="cropId"
-        headerTitle="作物档案列表"
-        columns={columns}
-        search={{ labelWidth: 'auto' }}
-        options={{
-          density: true,
-          fullScreen: true,
-          reload: true,
-          setting: true,
-        }}
-        toolBarRender={() => [
+        memberListToolbar
+        rowSelection={{}}
+        headerTitle={
           <Button
             key="create"
             type="primary"
@@ -246,8 +246,14 @@ export default function CropList(): JSX.Element {
             onClick={() => setCreateOpen(true)}
           >
             新增作物
-          </Button>,
-        ]}
+          </Button>
+        }
+        columns={columns}
+        search={{ labelWidth: 'auto' }}
+        options={{
+          reload: true,
+        }}
+        toolBarRender={() => []}
         request={async (params) => {
           try {
             const result = await listCrops({

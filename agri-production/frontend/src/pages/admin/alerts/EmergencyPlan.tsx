@@ -10,6 +10,7 @@
  * - 「查看流程」打开原型 2.4 ③ 弹窗：预案概况 + 5 步处置流程时间线 + 联系方式 + 立即启动预案；
  * - 支持新建 / 编辑预案（含处置步骤编排）、启用停用、启动预案。
  */
+import '@/components/ProductionListDense.css'
 import { useEffect, useMemo, useState } from 'react'
 import {
   App,
@@ -26,7 +27,6 @@ import {
   Select,
   Space,
   Switch,
-  Table,
   Tag,
   Timeline,
   Typography,
@@ -35,9 +35,11 @@ import {
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
-  ReloadOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
+import PageContainer from '@/components/ProductionPageContainer'
+import Table from '@/components/ProductionListTable'
+import ListRowActions from '@/components/ListRowActions'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createEmergencyPlan,
@@ -570,55 +572,62 @@ export default function EmergencyPlan(): JSX.Element {
       {
         title: '操作',
         key: 'action',
-        width: 260,
+        width: 165,
+        fixed: 'right' as const,
         render: (_: unknown, row: EmergencyPlanRow) => (
-          <Space size={0}>
-            <Button type="link" size="small" onClick={() => setDetailRow(row)}>
-              查看流程
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              disabled={row.status !== 1}
-              icon={<ThunderboltOutlined />}
-              onClick={() => startPlan(row)}
-            >
-              启动
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              disabled={row.status === 1}
-              onClick={() => toggleMutation.mutate(row)}
-            >
-              启用
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => openDrawer(row)}
-            >
-              编辑
-            </Button>
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() =>
-                modal.confirm({
-                  title: `确认删除预案「${row.planName}」？`,
-                  okText: '确认删除',
-                  cancelText: '取消',
-                  okButtonProps: { danger: true },
-                  onOk: () => removeMutation.mutateAsync(row),
-                })
-              }
-            >
-              删除
-            </Button>
-          </Space>
+          <ListRowActions
+            items={[
+              <Button key="view" type="link" size="small" onClick={() => setDetailRow(row)}>
+                查看流程
+              </Button>,
+              <Button
+                key="start"
+                type="link"
+                size="small"
+                disabled={row.status !== 1}
+                icon={<ThunderboltOutlined />}
+                onClick={() => startPlan(row)}
+              >
+                启动
+              </Button>,
+              <Button
+                key="enable"
+                type="link"
+                size="small"
+                disabled={row.status === 1}
+                onClick={() => toggleMutation.mutate(row)}
+              >
+                启用
+              </Button>,
+              <Button
+                key="edit"
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => openDrawer(row)}
+              >
+                编辑
+              </Button>,
+              <Button
+                key="del"
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() =>
+                  modal.confirm({
+                    title: `确认删除预案「${row.planName}」？`,
+                    okText: '确认删除',
+                    cancelText: '取消',
+                    okButtonProps: { danger: true },
+                    onOk: () => removeMutation.mutateAsync(row),
+                  })
+                }
+              >
+                删除
+              </Button>,
+            ]}
+          />
         ),
       },
     ],
@@ -626,32 +635,27 @@ export default function EmergencyPlan(): JSX.Element {
   )
 
   return (
-    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+    <PageContainer className="production-list-dense production-member-list" title="应急预案库" subTitle="管理灾害与异常场景的标准化处置预案与演练记录">
+    <Space direction="vertical" size={12} style={{ width: '100%' }}>
       {demoMode ? <DemoDataAlert scope={DEMO_SCOPE} writeNote={DEMO_WRITE_NOTE} /> : null}
 
-      <Card
-        title="应急预案库"
-        extra={
-          <Space>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => void queryClient.invalidateQueries({ queryKey: ['admin-emergency-plans'] })}
-            >
-              刷新
-            </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
-              新建预案
-            </Button>
-          </Space>
-        }
-      >
+      <Card>
         <Table<EmergencyPlanRow>
           rowKey="planId"
           columns={columns}
           dataSource={rows}
           loading={listQuery.isLoading}
-          pagination={false}
-          scroll={{ x: 1400 }}
+          rowSelection={{}}
+          columnSettingsStorageKey="agri:production:visible-columns:v1:admin-emergency-plans"
+          columnWidthStorageKey="agri:production:column-widths:v1:admin-emergency-plans"
+          onRefresh={() => void queryClient.invalidateQueries({ queryKey: ['admin-emergency-plans'] })}
+          toolbarLeft={
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => openDrawer()}>
+              新建预案
+            </Button>
+          }
+          pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+          scroll={{ x: 1260 }}
           locale={{ emptyText: <Empty description="暂无应急预案" /> }}
         />
       </Card>
@@ -937,5 +941,6 @@ export default function EmergencyPlan(): JSX.Element {
         </Form>
       </Drawer>
     </Space>
+    </PageContainer>
   )
 }

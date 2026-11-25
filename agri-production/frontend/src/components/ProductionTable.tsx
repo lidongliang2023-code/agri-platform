@@ -139,7 +139,7 @@ export default function ProductionTable<T extends Record<string, any>, P extends
     {...props}
     search={normalizedSearch}
     rowSelection={mergedRowSelection}
-    tableAlertRender={props.tableAlertRender ?? (pathname.startsWith('/production/') && mergedRowSelection ? false : undefined)}
+    tableAlertRender={props.tableAlertRender ?? ((pathname.startsWith('/production/') || pathname.startsWith('/admin/production/')) && mergedRowSelection ? false : undefined)}
     pagination={productionPagination(props.pagination, selectedCount)}
     tableRender={mergeToolbar ? (_tableProps, _defaultDom, dom) => <>
       {dom.toolbar && createPortal(dom.toolbar, toolbarHost)}

@@ -1,5 +1,6 @@
 import DetailInfoGrid from '@/components/DetailInfoGrid'
 import ProductionTable from '@/components/ProductionTable'
+import ListRowActions from '@/components/ListRowActions'
 import { QualityPage, tradeOpsUrl } from '../quality/QualityShared'
 import { useNavigate } from 'react-router-dom'
 /**
@@ -112,7 +113,7 @@ function TrustLabel(): JSX.Element {
   /** 页码 */
   const [pageNum, setPageNum] = useState<number>(1)
   /** 每页条数 */
-  const [pageSize, setPageSize] = useState<number>(10)
+  const [pageSize, setPageSize] = useState<number>(20)
   /** 详情弹窗产品 */
   const [detail, setDetail] = useState<TrustProduct | null>(null)
   /** 编辑弹窗产品 */
@@ -247,29 +248,32 @@ function TrustLabel(): JSX.Element {
     {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 165,
       render: (_value: unknown, record: TrustProduct) => (
-        <Space size={4}>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
-            查看
-          </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-            编辑
-          </Button>
-          {record.auditStatus === 'pending' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<AuditOutlined />}
-              onClick={() => {
-                setAuditTarget(record)
-                auditForm.setFieldsValue({ remark: '' })
-              }}
-            >
-              审核
-            </Button>
-          )}
-        </Space>
+        <ListRowActions
+          items={[
+            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
+              查看
+            </Button>,
+            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+              编辑
+            </Button>,
+            record.auditStatus === 'pending' && (
+              <Button
+                key="audit"
+                type="link"
+                size="small"
+                icon={<AuditOutlined />}
+                onClick={() => {
+                  setAuditTarget(record)
+                  auditForm.setFieldsValue({ remark: '' })
+                }}
+              >
+                审核
+              </Button>
+            ),
+          ]}
+        />
       ),
     },
   ]
@@ -352,22 +356,20 @@ function TrustLabel(): JSX.Element {
       </Row>
 
       {/* 筛选器 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap size={12}>
-          <Space size={4}>
-            <Text>产品名称：</Text>
+      <Card size="small" className="production-dense-filter-card">
+        <div className="production-filter-grid">
+          <div className="production-filter-field">
+            <label>产品名称</label>
             <Input
-              style={{ width: 160 }}
               allowClear
               placeholder="请输入产品名称"
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
-          </Space>
-          <Space size={4}>
-            <Text>可信等级：</Text>
+          </div>
+          <div className="production-filter-field">
+            <label>可信等级</label>
             <Select
-              style={{ width: 120 }}
               value={level}
               options={[{ value: 'all', label: '全部' }, ...LEVEL_OPTIONS]}
               onChange={(value: TrustLevel | 'all') => {
@@ -375,11 +377,10 @@ function TrustLabel(): JSX.Element {
                 setPageNum(1)
               }}
             />
-          </Space>
-          <Space size={4}>
-            <Text>审核状态：</Text>
+          </div>
+          <div className="production-filter-field">
+            <label>审核状态</label>
             <Select
-              style={{ width: 120 }}
               value={auditStatus}
               options={AUDIT_OPTIONS}
               onChange={(value: TrustAuditStatus | 'all') => {
@@ -387,39 +388,46 @@ function TrustLabel(): JSX.Element {
                 setPageNum(1)
               }}
             />
-          </Space>
-          <Button
-            type="primary"
-            icon={<SearchOutlined />}
-            onClick={() => {
-              setPageNum(1)
-              void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'trust-label'] })
-            }}
-          >
-            查询
-          </Button>
-          <Button
-            onClick={() => {
-              setName('')
-              setLevel('all')
-              setAuditStatus('all')
-              setPageNum(1)
-            }}
-          >
-            重置
-          </Button>
-        </Space>
+          </div>
+          <div className="production-filter-actions">
+            <Button
+              onClick={() => {
+                setName('')
+                setLevel('all')
+                setAuditStatus('all')
+                setPageNum(1)
+              }}
+            >
+              重置
+            </Button>
+            <Button
+              type="primary"
+              icon={<SearchOutlined />}
+              onClick={() => {
+                setPageNum(1)
+                void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'trust-label'] })
+              }}
+            >
+              查询
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {/* 可信农产品名单 */}
-      <Card title="可信农产品名单">
+      <Card>
         <ProductionTable<TrustProduct>
           rowKey="id"
+          memberListToolbar
+          rowSelection={{}}
+          cardProps={false}
+          headerTitle="可信农产品名单"
           size="small" search={false}
           loading={listQuery.isLoading}
           columns={columns as import('@ant-design/pro-components').ProColumns<any>[]}
           dataSource={products}
           scroll={{ x: 1400 }}
+          options={{ reload: () => void queryClient.invalidateQueries({ queryKey: ['admin', 'food-safety', 'trust-label'] }) }}
           locale={{ emptyText: <Empty description="当前筛选条件下暂无可信农产品" /> }}
           pagination={{
             current: pageNum,

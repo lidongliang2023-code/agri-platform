@@ -5,6 +5,7 @@
  * PRD 序号：PRD 6.2 #2
  * 说明：原型无此页（原型仅有运营管理大盘），按 PRD「多维度生产数据统计、区域分析、主体分析」实现。
  */
+import '@/components/ProductionListDense.css'
 import { useMemo, useState } from 'react'
 import {
   Alert as AntAlert,
@@ -20,14 +21,14 @@ import {
   Skeleton,
   Space,
   Statistic,
-  Table,
   Tag,
   Tooltip,
   Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
+import Table from '@/components/ProductionListTable'
 import { ReloadOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
 import ReactECharts from 'echarts-for-react'
@@ -98,6 +99,7 @@ const REGION_OPTIONS: Array<{ value: string; label: string }> = [
  * @returns 页面内容
  */
 export default function OpsProductionOverview(): JSX.Element {
+  const queryClient = useQueryClient()
   const { message } = App.useApp()
 
   /** 默认时间范围：近 30 天 */
@@ -412,7 +414,7 @@ export default function OpsProductionOverview(): JSX.Element {
             <Space>
               <Button onClick={handleReset}>重置</Button>
               <Tooltip title="刷新">
-                <Button icon={<ReloadOutlined />} onClick={() => window.location.reload()} />
+                <Button icon={<ReloadOutlined />} onClick={() => { void queryClient.invalidateQueries() }} />
               </Tooltip>
             </Space>
           </Col>
@@ -516,14 +518,20 @@ export default function OpsProductionOverview(): JSX.Element {
             }
           />
         ) : filter.view === 'table' ? (
-          <Table<OverviewRow>
-            rowKey="name"
-            size="small"
-            columns={columns}
-            dataSource={rows}
-            pagination={false}
-            scroll={{ x: 800 }}
-          />
+          <div className="production-list-dense production-member-list">
+            <Table<OverviewRow>
+              rowKey="name"
+              size="small"
+              columns={columns}
+              dataSource={rows}
+              rowSelection={{}}
+              columnSettingsStorageKey={`agri:production:visible-columns:v1:admin-ops-overview:${filter.dimension}`}
+              columnWidthStorageKey={`agri:production:column-widths:v1:admin-ops-overview:${filter.dimension}`}
+              onRefresh={() => void rowsQuery.refetch()}
+              pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+              scroll={{ x: 800 }}
+            />
+          </div>
         ) : (
           <ReactECharts option={chartOption} style={{ height: 380 }} notMerge />
         )}
