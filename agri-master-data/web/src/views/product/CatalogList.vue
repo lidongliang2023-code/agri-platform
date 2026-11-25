@@ -5,12 +5,7 @@
         <h1>商品与分类</h1>
         <p>主数据管理 · 交易品类维护与商品违规处置</p>
       </div>
-      <button v-if="tab === 'category'" class="add-btn" @click="openCategory()">
-        <span class="btn-icon">+</span><span>新建品类</span>
-      </button>
-      <button v-else class="add-btn" @click="openViolation">
-        <span class="btn-icon">+</span><span>违规下架</span>
-      </button>
+
     </div>
 
     <div class="catalog-tabs">
@@ -19,83 +14,98 @@
     </div>
 
     <div v-if="tab === 'category'" class="table-card">
-      <div class="card-toolbar">
-        <span>共 <b>{{ categoryTotal }}</b> 个品类 · 品类为全平台共用，删除前会检查下级与引用</span>
-        <button class="search-btn" @click="loadCategories">刷新</button>
-      </div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>品类名称</th><th>编码</th><th>上级品类</th><th>层级</th>
-            <th>排序</th><th>状态</th><th>备注</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in categories" :key="row.id">
-            <td>{{ row.categoryName }}</td>
-            <td>{{ row.categoryCode || '—' }}</td>
-            <td>{{ parentName(row.parentId) }}</td>
-            <td>{{ row.level }}</td>
-            <td>{{ row.sortOrder }}</td>
-            <td><span class="status-badge" :class="row.status === 1 ? 'active' : 'inactive'">{{ row.status === 1 ? '启用' : '停用' }}</span></td>
-            <td>{{ row.remark || '—' }}</td>
-            <td class="action-cell">
-              <button class="action-btn edit" @click="openCategory(row)">编辑</button>
-              <button class="action-btn disable" @click="removeCategory(row)">删除</button>
-            </td>
-          </tr>
-          <tr v-if="!categories.length"><td colspan="8" class="empty-cell">暂无品类</td></tr>
-        </tbody>
-      </table>
-      <div class="pagination">
-        <button class="page-btn" :disabled="categoryPage <= 1" @click="changeCategoryPage(categoryPage - 1)">上一页</button>
-        <span class="page-info">第 {{ categoryPage }} / {{ categoryPages }} 页</span>
-        <button class="page-btn" :disabled="categoryPage >= categoryPages" @click="changeCategoryPage(categoryPage + 1)">下一页</button>
-      </div>
+      
+      <AgriVueTable
+        :columns="listColumns1"
+        :data="categories"
+        row-key="id"
+        column-settings-storage-key="mds:cols:catalog-list-1"
+        :page="categoryPage"
+        :page-size="categoryPageSize"
+        :total="categoryTotal"
+        @page-change="(next, size) => size !== categoryPageSize ? changeCategorySize(size) : changeCategoryPage(next)"
+        @refresh="loadCategories"
+      >
+        <template #toolbar-left>
+          <button v-if="tab === 'category'" class="mds-btn mds-btn--primary" @click="openCategory()">
+                  <span class="btn-icon">+</span><span>新建品类</span>
+                </button>
+          <span>共 <b>{{ categoryTotal }}</b> 个品类 · 品类为全平台共用，删除前会检查下级与引用</span>
+        </template>
+        <template #empty>
+          暂无品类
+        </template>
+        <template #cell-parentId="{ row: row }">
+          {{ parentName(row.parentId) }}
+        </template>
+        <template #cell-status="{ row: row }">
+          <span class="status-badge" :class="row.status === 1 ? 'active' : 'inactive'">{{ row.status === 1 ? '启用' : '停用' }}</span>
+        </template>
+        <template #cell-actions="{ row: row }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;编辑&quot;, onClick: () => openCategory(row) },
+              { key: '2', label: &quot;删除&quot;, onClick: () => removeCategory(row), danger: true },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
+      
     </div>
 
     <div v-else class="table-card">
-      <div class="card-toolbar">
-        <div class="filter-group">
-          <select v-model="violationStatus" class="filter-select" @change="loadViolations">
-            <option value="">全部状态</option>
-            <option value="active">生效中</option>
-            <option value="revoked">已撤销</option>
-          </select>
-        </div>
-        <span>共 <b>{{ violationTotal }}</b> 条处置记录 · 下架必须填写原因并留痕</span>
-        <button class="search-btn" @click="loadViolations">刷新</button>
-      </div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>处置单号</th><th>货源</th><th>供应商</th><th>违规类型</th>
-            <th>处置原因</th><th>状态</th><th>处理人</th><th>处置时间</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in violations" :key="row.id">
-            <td>{{ row.violationNo }}</td>
-            <td>{{ row.productName }}</td>
-            <td>{{ row.sellerName || '—' }}</td>
-            <td>{{ violationTypeText(row.violationType) }}</td>
-            <td>{{ row.reason }}</td>
-            <td><span class="status-badge" :class="row.violationStatus === 'active' ? 'inactive' : 'active'">{{ row.violationStatus === 'active' ? '生效中' : '已撤销' }}</span></td>
-            <td>{{ row.operator || '—' }}</td>
-            <td>{{ formatTime(row.createTime) }}</td>
-            <td class="action-cell">
-              <button v-if="row.violationStatus === 'active'" class="action-btn edit" @click="openRevoke(row)">撤销</button>
-              <span v-else class="muted">已撤销</span>
-            </td>
-          </tr>
-          <tr v-if="!violations.length"><td colspan="9" class="empty-cell">暂无违规处置记录</td></tr>
-        </tbody>
-      </table>
-      <div class="pagination">
-        <button class="page-btn" :disabled="violationPage <= 1" @click="changeViolationPage(violationPage - 1)">上一页</button>
-        <span class="page-info">第 {{ violationPage }} / {{ violationPages }} 页</span>
-        <button class="page-btn" :disabled="violationPage >= violationPages" @click="changeViolationPage(violationPage + 1)">下一页</button>
-      </div>
+      
+      <AgriVueTable
+        :columns="listColumns2"
+        :data="violations"
+        row-key="id"
+        column-settings-storage-key="mds:cols:catalog-list-2"
+        :page="violationPage"
+        :page-size="violationPageSize"
+        :total="violationTotal"
+        @page-change="(next, size) => size !== violationPageSize ? changeViolationSize(size) : changeViolationPage(next)"
+        @refresh="loadViolations"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="1" @search="searchViolations" @reset="resetViolations">
+            <div class="agri-vue-filter-field">
+              <label>处置状态</label>
+              <select v-model="violationStatus" class="mds-select" @change="searchViolations">
+                          <option value="">全部状态</option>
+                          <option value="active">生效中</option>
+                          <option value="revoked">已撤销</option>
+                        </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button class="mds-btn mds-btn--primary" @click="openViolation">
+                  <span class="btn-icon">+</span><span>违规下架</span>
+                </button>
+          <span>共 <b>{{ violationTotal }}</b> 条处置记录 · 下架必须填写原因并留痕</span>
+        </template>
+        <template #empty>
+          暂无违规处置记录
+        </template>
+        <template #cell-violationType="{ row: row }">
+          {{ violationTypeText(row.violationType) }}
+        </template>
+        <template #cell-violationStatus="{ row: row }">
+          <span class="status-badge" :class="row.violationStatus === 'active' ? 'inactive' : 'active'">{{ row.violationStatus === 'active' ? '生效中' : '已撤销' }}</span>
+        </template>
+        <template #cell-createTime="{ row: row }">
+          {{ formatTime(row.createTime) }}
+        </template>
+        <template #cell-actions="{ row: row }">
+          <MdsRowActions v-if="row.violationStatus === 'active'"
+            :actions="[
+              { key: '1', label: &quot;撤销&quot;, onClick: () => openRevoke(row), hidden: !((row.violationStatus === 'active')) },
+            ]"
+          />
+          <span v-else class="muted">已撤销</span>
+        </template>
+      </AgriVueTable>
+      
     </div>
 
     <div v-if="categoryOpen" class="modal-overlay" @click="categoryOpen = false">
@@ -165,6 +175,8 @@
 </template>
 
 <script setup>
+import { AgriVueTable, AgriVueFilterBar } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import '@/styles/admin-page.css'
@@ -184,14 +196,14 @@ const saving = ref(false)
 
 const categories = ref([])
 const categoryPage = ref(1)
-const categoryPageSize = 20
+const categoryPageSize = ref(20)
 const categoryTotal = ref(0)
 const categoryOpen = ref(false)
 const categoryForm = reactive({ id: null, categoryName: '', categoryCode: '', parentId: null, sortOrder: 0, status: 1, remark: '' })
 
 const violations = ref([])
 const violationPage = ref(1)
-const violationPageSize = 10
+const violationPageSize = ref(20)
 const violationTotal = ref(0)
 const violationStatus = ref('')
 const violationOpen = ref(false)
@@ -200,8 +212,8 @@ const products = ref([])
 const revokeTarget = ref(null)
 const revokeReason = ref('')
 
-const categoryPages = computed(() => Math.max(1, Math.ceil(categoryTotal.value / categoryPageSize)))
-const violationPages = computed(() => Math.max(1, Math.ceil(violationTotal.value / violationPageSize)))
+const categoryPages = computed(() => Math.max(1, Math.ceil(categoryTotal.value / categoryPageSize.value)))
+const violationPages = computed(() => Math.max(1, Math.ceil(violationTotal.value / violationPageSize.value)))
 
 const formatTime = (value) => (value ? String(value).replace('T', ' ').slice(0, 19) : '—')
 const parentName = (id) => (id == null ? '顶级品类' : categories.value.find((c) => c.id === id)?.categoryName ?? `#${id}`)
@@ -211,7 +223,7 @@ const violationTypeText = (value) => ({
 
 const loadCategories = async () => {
   try {
-    const res = await getTradeCategories({ pageNum: categoryPage.value, pageSize: categoryPageSize })
+    const res = await getTradeCategories({ pageNum: categoryPage.value, pageSize: categoryPageSize.value })
     if (res.code === 200) {
       categories.value = res.data?.records ?? res.data?.list ?? []
       categoryTotal.value = res.data.total ?? 0
@@ -225,7 +237,7 @@ const loadCategories = async () => {
 
 const loadViolations = async () => {
   try {
-    const res = await getTradeViolations({ pageNum: violationPage.value, pageSize: violationPageSize, violationStatus: violationStatus.value || undefined })
+    const res = await getTradeViolations({ pageNum: violationPage.value, pageSize: violationPageSize.value, violationStatus: violationStatus.value || undefined })
     if (res.code === 200) {
       violations.value = res.data?.records ?? res.data?.list ?? []
       violationTotal.value = res.data.total ?? 0
@@ -364,6 +376,47 @@ onMounted(() => {
   loadCategories()
   loadViolations()
 })
+
+const listColumns1 = [
+  { prop: 'categoryName', label: '品类名称', minWidth: 174, locked: true },
+  { prop: 'categoryCode', label: '编码', width: 142, kind: 'code' },
+  { prop: 'parentId', label: '上级品类', width: 128, ellipsis: false },
+  { prop: 'level', label: '层级', width: 104, kind: 'number' },
+  { prop: 'sortOrder', label: '排序', width: 104, kind: 'number' },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'remark', label: '备注', width: 210 },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+const listColumns2 = [
+  { prop: 'violationNo', label: '处置单号', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'productName', label: '货源', width: 128 },
+  { prop: 'sellerName', label: '供应商', width: 128 },
+  { prop: 'violationType', label: '违规类型', width: 128, ellipsis: false },
+  { prop: 'reason', label: '处置原因', width: 128 },
+  { prop: 'violationStatus', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'operator', label: '处理人', width: 128 },
+  { prop: 'createTime', label: '处置时间', width: 152, ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+function changeCategorySize(size) {
+  categoryPageSize.value = size
+  categoryPage.value = 1
+  void loadCategories()
+}
+function searchViolations() {
+  violationPage.value = 1
+  void loadViolations()
+}
+function resetViolations() {
+  violationStatus.value = ''
+  searchViolations()
+}
+function changeViolationSize(size) {
+  violationPageSize.value = size
+  searchViolations()
+}
 </script>
 
 <style scoped>

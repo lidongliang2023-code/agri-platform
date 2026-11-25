@@ -7,95 +7,82 @@
       </div>
     </div>
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input 
-          type="text" 
-          v-model="searchForm.keyword" 
-          placeholder="搜索任务名称/目标系统..." 
-          class="search-input"
-        />
-        <button class="search-btn" @click="loadData">搜索</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.status" class="filter-select">
-          <option value="">全部状态</option>
-          <option value="pending">待执行</option>
-          <option value="running">执行中</option>
-          <option value="success">成功</option>
-          <option value="failed">失败</option>
-          <option value="paused">已暂停</option>
-        </select>
-      </div>
-    </div>
+    
 
     <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>任务编码</th>
-            <th>任务名称</th>
-            <th>目标系统</th>
-            <th>数据类型</th>
-            <th>触发方式</th>
-            <th>任务状态</th>
-            <th>进度</th>
-            <th>执行时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="task in tableData" :key="task.id">
-            <td>{{ task.taskCode }}</td>
-            <td>{{ task.taskName }}</td>
-            <!-- 接口给的是编码 + 名称两个字段，页面要显示的是名称 -->
-            <td>{{ task.targetSystemName || task.targetSystem }}</td>
-            <td>{{ task.dataTypeName || task.dataType }}</td>
-            <td>
-              <span class="type-badge" :class="task.triggerType">
-                {{ task.triggerType === 'auto' ? '自动' : '手动' }}
-              </span>
-            </td>
-            <td>
-              <span class="status-badge" :class="task.status">
-                {{ getStatusLabel(task.status) }}
-              </span>
-            </td>
-            <td>
-              <div class="progress-wrapper">
-                <div class="progress-fill" :style="{ width: task.progress + '%' }"></div>
-              </div>
-              <span class="progress-text">{{ task.progress }}%</span>
-            </td>
-            <!-- 原页面读 executeTime，接口里没有这个字段（是 startTime）→ 这一列会恒为空 -->
-            <td>{{ formatDate(task.startTime) }}</td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="viewDetail(task)">详情</button>
-              <button v-point="'POST /admin/masterdata/distribution/tasks/{id}/retry'" 
-                v-if="task.status === 'failed'"
-                class="action-btn retry"
-                @click="retryTask(task.id)"
-              >重试</button>
-              <button 
-                v-if="task.status === 'pending'"
-                class="action-btn pause"
-                @click="pauseTask(task)"
-              >暂停</button>
-              <button 
-                v-if="task.status === 'paused'"
-                class="action-btn resume"
-                @click="resumeTask(task)"
-              >恢复</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <AgriVueTable
+        :columns="columns"
+        :data="tableData"
+        row-key="id"
+        column-settings-storage-key="mds:cols:distribution-list"
+        :page="pageNum"
+        :page-size="pageSize"
+        :total="total"
+        @page-change="(next, size) => size !== pageSize ? handleSizeChange(size) : handleCurrentChange(next)"
+        @refresh="loadData"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="2" @search="searchList" @reset="resetList">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input 
+                        type="text" 
+                        v-model="searchForm.keyword" 
+                        placeholder="搜索任务名称/目标系统..." 
+                        class="mds-input"
+                      />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>任务状态</label>
+              <select v-model="searchForm.status" class="mds-select">
+                        <option value="">全部状态</option>
+                        <option value="pending">待执行</option>
+                        <option value="running">执行中</option>
+                        <option value="success">成功</option>
+                        <option value="failed">失败</option>
+                        <option value="paused">已暂停</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #cell-targetSystemName="{ row: task }">
+          {{ task.targetSystemName || task.targetSystem }}
+        </template>
+        <template #cell-dataTypeName="{ row: task }">
+          {{ task.dataTypeName || task.dataType }}
+        </template>
+        <template #cell-triggerType="{ row: task }">
+          <span class="type-badge" :class="task.triggerType">
+                          {{ task.triggerType === 'auto' ? '自动' : '手动' }}
+                        </span>
+        </template>
+        <template #cell-status="{ row: task }">
+          <span class="status-badge" :class="task.status">
+                          {{ getStatusLabel(task.status) }}
+                        </span>
+        </template>
+        <template #cell-progress="{ row: task }">
+          <div class="progress-wrapper">
+                          <div class="progress-fill" :style="{ width: task.progress + '%' }"></div>
+                        </div>
+                        <span class="progress-text">{{ task.progress }}%</span>
+        </template>
+        <template #cell-startTime="{ row: task }">
+          {{ formatDate(task.startTime) }}
+        </template>
+        <template #cell-actions="{ row: task }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;详情&quot;, onClick: () => viewDetail(task) },
+              { key: '2', label: &quot;重试&quot;, onClick: () => retryTask(task.id), hidden: !((task.status === 'failed')), point: 'POST /admin/masterdata/distribution/tasks/{id}/retry' },
+              { key: '3', label: &quot;暂停&quot;, onClick: () => pauseTask(task), hidden: !((task.status === 'pending')) },
+              { key: '4', label: &quot;恢复&quot;, onClick: () => resumeTask(task), hidden: !((task.status === 'paused')) },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
 
-      <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
-      </div>
+      
     </div>
 
     <div class="modal-overlay" v-if="detailVisible" @click="detailVisible = false">
@@ -160,6 +147,8 @@
 </template>
 
 <script setup>
+import { AgriVueTable, AgriVueFilterBar } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { pauseDistribution, resumeDistribution } from '../../utils/api'
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
@@ -167,7 +156,7 @@ import { getDistributionList, getDistributionDetail, retryDistribution } from '.
 
 const tableData = ref([])
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(20)
 const total = ref(0)
 const totalPages = ref(1)
 const detailVisible = ref(false)
@@ -281,6 +270,27 @@ const formatDate = (date) => {
 onMounted(() => {
   loadData()
 })
+
+const columns = [
+  { prop: 'taskCode', label: '任务编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'taskName', label: '任务名称', width: 128 },
+  { prop: 'targetSystemName', label: '目标系统', width: 128, ellipsis: false },
+  { prop: 'dataTypeName', label: '数据类型', width: 128, ellipsis: false },
+  { prop: 'triggerType', label: '触发方式', width: 128, ellipsis: false },
+  { prop: 'status', label: '任务状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'progress', label: '进度', width: 104, kind: 'number', ellipsis: false },
+  { prop: 'startTime', label: '执行时间', width: 152, ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+function searchList() {
+  pageNum.value = 1
+  void loadData()
+}
+function resetList() {
+  Object.assign(searchForm, { keyword: '', status: '' })
+  searchList()
+}
 </script>
 
 <style scoped>

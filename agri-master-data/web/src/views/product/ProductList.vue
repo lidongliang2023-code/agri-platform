@@ -5,80 +5,108 @@
         <h1>官网上架商品</h1>
         <p>运营端新增后直接写入交易商品库，并同步展示在官网门户商品详情</p>
       </div>
-      <button class="add-btn" @click="openCreateModal">
-        <span class="btn-icon">+</span>
-        <span>新增商品</span>
-      </button>
+      
     </div>
 
-    <div class="search-bar">
-      <div class="search-group">
-        <input v-model="searchForm.keyword" type="text" placeholder="商品名称 / 编码 / 供应商" class="search-input" @keyup.enter="loadData" />
-        <button class="search-btn" @click="loadData">搜索</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="searchForm.categoryId" class="filter-select" @change="loadData">
-          <option value="">全部分类</option>
-          <option v-for="item in categories" :key="item.id" :value="String(item.id)">{{ item.categoryName }}</option>
-        </select>
-        <select v-model="searchForm.publishStatus" class="filter-select" @change="loadData">
-          <option value="">全部发布状态</option>
-          <option value="published">已发布</option>
-          <option value="pending">待审核</option>
-          <option value="draft">草稿</option>
-          <option value="rejected">已驳回</option>
-        </select>
-        <select v-model="searchForm.status" class="filter-select" @change="loadData">
-          <option value="">全部状态</option>
-          <option value="1">正常</option>
-          <option value="0">禁用</option>
-        </select>
-      </div>
-    </div>
+    
 
     <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>图片</th><th>商品</th><th>分类</th><th>供应商</th><th>价格</th><th>库存</th>
-            <th>发布状态</th><th>状态</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="product in tableData" :key="product.id">
-            <td>
-              <img v-if="product.images?.length" :src="product.images[0]" class="product-thumb" :alt="product.productName" />
-              <div v-else class="product-thumb placeholder">无图</div>
-            </td>
-            <td>
-              <strong>{{ product.productName }}</strong>
-              <div class="cell-sub">{{ product.productCode }} · {{ product.variety || '品种待补充' }}</div>
-            </td>
-            <td><span class="type-badge">{{ product.categoryName || '—' }}</span></td>
-            <td>{{ product.sellerName }}</td>
-            <td class="price-cell">¥{{ money(product.price) }}<span>/{{ product.unit }}</span></td>
-            <td>{{ product.stockQuantity }} {{ product.unit }}</td>
-            <td><span class="status-badge" :class="product.publishStatus === 'published' ? 'active' : 'pending'">{{ publishLabel(product.publishStatus) }}</span></td>
-            <td><span class="status-badge" :class="product.status === 1 ? 'active' : 'inactive'">{{ product.status === 1 ? '正常' : '禁用' }}</span></td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="viewPortal(product)">官网详情</button>
-              <button class="action-btn edit" @click="editProduct(product.id)">编辑</button>
-              <button class="action-btn" :class="product.status === 1 ? 'disable' : 'enable'" @click="toggleStatus(product)">
-                {{ product.status === 1 ? '禁用' : '启用' }}
-              </button>
-            </td>
-          </tr>
-          <tr v-if="!loading && tableData.length === 0">
-            <td colspan="9" class="empty-row">暂无商品，点击右上角“新增商品”发布第一条官网上架商品。</td>
-          </tr>
-        </tbody>
-      </table>
+      <AgriVueTable
+        :columns="columns"
+        :data="tableData"
+        row-key="id"
+        :loading="loading"
+        column-settings-storage-key="mds:cols:product-list"
+        :page="pageNum"
+        :page-size="pageSize"
+        :total="total"
+        @page-change="(next, size) => size !== pageSize ? changeListSize(size) : handleCurrentChange(next)"
+        @refresh="loadData"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="4" :loading="loading" @search="searchList" @reset="resetList">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input v-model="searchForm.keyword" type="text" placeholder="商品名称 / 编码 / 供应商" class="mds-input" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>商品分类</label>
+              <select v-model="searchForm.categoryId" class="mds-select" @change="searchList">
+                        <option value="">全部分类</option>
+                        <option v-for="item in categories" :key="item.id" :value="String(item.id)">{{ item.categoryName }}</option>
+                      </select>
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>发布状态</label>
+              <select v-model="searchForm.publishStatus" class="mds-select" @change="searchList">
+                        <option value="">全部发布状态</option>
+                        <option value="published">已发布</option>
+                        <option value="pending">待审核</option>
+                        <option value="draft">草稿</option>
+                        <option value="rejected">已驳回</option>
+                      </select>
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>商品状态</label>
+              <select v-model="searchForm.status" class="mds-select" @change="searchList">
+                        <option value="">全部状态</option>
+                        <option value="1">正常</option>
+                        <option value="0">禁用</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button class="mds-btn mds-btn--primary" @click="openCreateModal">
+                  <span class="btn-icon">+</span>
+                  <span>新增商品</span>
+                </button>
+        </template>
+        <template #empty>
+          暂无商品，点击右上角“新增商品”发布第一条官网上架商品。
+        </template>
+        <template #cell-images="{ row: product }">
+          <img v-if="product.images?.length" :src="product.images[0]" class="product-thumb" :alt="product.productName" />
+                        <div v-else class="product-thumb placeholder">无图</div>
+        </template>
+        <template #cell-productName="{ row: product }">
+          <div class="mds-cell-inline" :title="`${product.productName}（${product.productCode} · ${product.variety || '品种待补充'}）`">
+                          <strong class="mds-cell-main">{{ product.productName }}</strong>
+                          <span class="mds-cell-sub">{{ product.productCode }}</span>
+                        </div>
+        </template>
+        <template #cell-categoryName="{ row: product }">
+          <span class="type-badge" :title="product.categoryName || '—'">{{ product.categoryName || '—' }}</span>
+        </template>
+        <template #cell-sellerName="{ row: product }">
+          <div class="mds-cell-main" :title="product.sellerName">{{ product.sellerName }}</div>
+        </template>
+        <template #cell-price="{ row: product }">
+          <div class="price-cell">
+            ¥{{ money(product.price) }}<span>/{{ product.unit }}</span>
+          </div>
+        </template>
+        <template #cell-stockQuantity="{ row: product }">
+          <div class="mds-cell-main">{{ product.stockQuantity }} {{ product.unit }}</div>
+        </template>
+        <template #cell-publishStatus="{ row: product }">
+          <span class="status-badge" :class="product.publishStatus === 'published' ? 'active' : 'pending'">{{ publishLabel(product.publishStatus) }}</span>
+        </template>
+        <template #cell-status="{ row: product }">
+          <span class="status-badge" :class="product.status === 1 ? 'active' : 'inactive'">{{ product.status === 1 ? '正常' : '禁用' }}</span>
+        </template>
+        <template #cell-actions="{ row: product }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;官网详情&quot;, onClick: () => viewPortal(product) },
+              { key: '2', label: &quot;编辑&quot;, onClick: () => editProduct(product.id) },
+              { key: '3', label: product.status === 1 ? '禁用' : '启用', onClick: () => toggleStatus(product), danger: product.status === 1 },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
 
-      <div class="pagination">
-        <button class="page-btn" :disabled="pageNum === 1" @click="handleCurrentChange(pageNum - 1)">上一页</button>
-        <span class="page-info">第 {{ pageNum }} / {{ totalPages }} 页 · 共 {{ total }} 条</span>
-        <button class="page-btn" :disabled="pageNum === totalPages" @click="handleCurrentChange(pageNum + 1)">下一页</button>
-      </div>
+      
     </div>
 
     <div v-if="modalVisible" class="modal-overlay" @click="closeModal">
@@ -181,6 +209,8 @@
 </template>
 
 <script setup>
+import { AgriVueTable, AgriVueFilterBar } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
@@ -198,7 +228,7 @@ const tableData = ref([])
 const categories = ref([])
 const sellers = ref([])
 const pageNum = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
 const saving = ref(false)
@@ -370,31 +400,58 @@ onMounted(async () => {
   await loadOptions()
   await loadData()
 })
+
+const columns = [
+  { prop: 'images', label: '图片', minWidth: 174, locked: true, ellipsis: false },
+  { prop: 'productName', label: '商品', width: 128, ellipsis: false },
+  { prop: 'categoryName', label: '分类', width: 128, ellipsis: false },
+  { prop: 'sellerName', label: '供应商', width: 128, ellipsis: false },
+  { prop: 'price', label: '价格', width: 104, kind: 'number', ellipsis: false },
+  { prop: 'stockQuantity', label: '库存', width: 104, kind: 'number', ellipsis: false },
+  { prop: 'publishStatus', label: '发布状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+function searchList() {
+  pageNum.value = 1
+  void loadData()
+}
+function resetList() {
+  Object.assign(searchForm, { keyword: '', categoryId: '', publishStatus: '', status: '' })
+  searchList()
+}
+
+function changeListSize(size) {
+  pageSize.value = size
+  searchList()
+}
 </script>
 
 <style scoped>
-.product-list { padding: 20px; }
-.page-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; gap:16px; }
-.header-left h1 { margin:0; color:#2d3748; font-size:24px; font-weight:650; }
-.header-left p { margin:5px 0 0; color:#8492a6; font-size:13px; }
-.add-btn { display:flex; align-items:center; gap:8px; border:none; border-radius:8px; padding:10px 18px; color:#fff; background:linear-gradient(135deg,#238636,#2ea043); font-size:14px; cursor:pointer; }
-.search-bar { display:flex; gap:12px; margin-bottom:18px; }
+.product-list { padding: 0; }
+.page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:12px; }
+.header-left { display:flex; align-items:baseline; gap:10px; min-width:0; flex:1; }
+.header-left h1 { margin:0; color:#1f2329; font-size:18px; line-height:28px; font-weight:600; white-space:nowrap; }
+.header-left p { margin:0; color:#8f959e; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.add-btn { display:flex; align-items:center; gap:6px; border:none; border-radius:6px; height:32px; padding:0 14px; color:#fff; background:#2d8f4e; font-size:13px; cursor:pointer; flex:none; }
+.search-bar { display:flex; align-items:center; gap:8px; padding:8px 14px; margin-bottom:8px; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
 .search-group { display:flex; flex:1; }
-.search-input,.filter-select,.form-input,.form-select { border:1px solid #e2e8f0; border-radius:8px; background:#fff; box-sizing:border-box; }
-.search-input { flex:1; min-width:0; padding:10px 14px; border-radius:8px 0 0 8px; outline:none; }
-.search-btn { padding:10px 22px; border:1px solid #e2e8f0; border-left:none; border-radius:0 8px 8px 0; color:#238636; background:#fff; cursor:pointer; }
-.filter-group { display:flex; gap:10px; flex-wrap:wrap; }
-.filter-select { min-width:145px; padding:10px 12px; color:#4a5568; }
-.table-card { overflow-x:auto; border-radius:12px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.search-input,.filter-select,.form-input,.form-select { border:1px solid #d7dbe0; border-radius:6px; background:#fff; box-sizing:border-box; }
+.search-input { flex:1; min-width:0; height:32px; padding:0 10px; border-radius:6px 0 0 6px; font-size:13px; outline:none; }
+.search-btn { height:32px; padding:0 16px; border:1px solid #d7dbe0; border-left:none; border-radius:0 6px 6px 0; color:#0f7a45; background:#fff; font-size:13px; cursor:pointer; }
+.filter-group { display:flex; gap:8px; flex-wrap:wrap; }
+.filter-select { min-width:132px; height:32px; padding:0 10px; color:#4a5568; font-size:13px; }
+.table-card { overflow-x:auto; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
 .data-table { width:100%; min-width:1120px; border-collapse:collapse; }
-.data-table th,.data-table td { padding:13px 14px; border-bottom:1px solid #eef2f5; text-align:left; font-size:13px; }
-.data-table th { color:#526173; background:#f8fafc; font-weight:650; }
-.product-thumb { width:58px; height:58px; border-radius:8px; object-fit:cover; background:#f1f5f3; }
-.product-thumb.placeholder { display:grid; place-items:center; color:#9aa7b3; font-size: var(--agri-font-size-micro); }
-.cell-sub { margin-top:4px; color:#8a96a3; font-size: var(--agri-font-size-micro); }
-.price-cell { color:#d33e43; font-weight:700; }
-.price-cell span { margin-left:3px; color:#8a96a3; font-size: var(--agri-font-size-micro); font-weight:400; }
-.type-badge,.status-badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size: var(--agri-font-size-micro); }
+.data-table th,.data-table td { height:48px; padding:5px 10px; border-bottom:1px solid #f0f0f0; text-align:left; font-size:14px; vertical-align:middle; }
+.data-table th { color:#595959; background:#fafafa; font-size:12px; font-weight:600; white-space:nowrap; }
+.product-thumb { width:34px; height:34px; display:block; border-radius:6px; object-fit:cover; background:#f1f5f3; }
+.product-thumb.placeholder { display:grid; place-items:center; color:#9aa7b3; font-size:12px; }
+.cell-sub { color:#8a96a3; font-size:12px; }
+.price-cell { color:#d33e43; font-weight:600; white-space:nowrap; }
+.price-cell span { margin-left:3px; color:#8a96a3; font-size:12px; font-weight:400; }
+.type-badge,.status-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; white-space:nowrap; max-width:120px; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
 .type-badge { color:#238636; background:#eaf7ee; }
 .status-badge.active { color:#238636; background:#eaf7ee; }
 .status-badge.inactive { color:#7a8691; background:#f1f4f6; }

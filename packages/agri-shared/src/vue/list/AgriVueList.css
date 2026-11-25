@@ -19,7 +19,7 @@
   border: 1px solid var(--pc-border, #e8e8e8);
   border-radius: 8px;
   background: #fff;
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
 }
 

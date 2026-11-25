@@ -5,71 +5,82 @@
       subtitle="平台运行参数与配置项：编码、分组、类型与值；停用的参数不会被执行侧读取。"
       source="系统配置 · 参数"
     >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/config'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增参数</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索参数编码 / 名称" />
-        <select v-model="filterGroup" class="mds-select">
-          <option value="all">全部分组</option>
-          <option v-for="group in paramGroups" :key="group" :value="group">{{ group }}</option>
-        </select>
-        <span class="mds-hint">共 {{ filteredParams.length }} / {{ params.length }} 条</span>
-      </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table param-table">
-          <thead>
-            <tr>
-              <th>参数编码</th>
-              <th>参数名称</th>
-              <th>分组</th>
-              <th>参数值</th>
-              <th>类型</th>
-              <th>状态</th>
-              <th>描述</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="8" class="mds-empty">正在加载系统配置…</td>
-            </tr>
-            <tr v-else-if="!filteredParams.length">
-              <td colspan="8">
-                <EmptyState
-                  :title="params.length ? '没有符合条件的参数' : '还没有系统参数'"
-                  :description="params.length ? '调整分组或关键字筛选。' : '新增参数后，执行侧才能读取到配置。'"
-                />
-              </td>
-            </tr>
-            <tr v-for="param in filteredParams" :key="param.id">
-              <td class="mds-mono">{{ param.code }}</td>
-              <td class="mds-name">{{ param.name }}</td>
-              <td><StatusTag v-if="param.group" :text="param.group" tone="info" plain /><span v-else class="mds-muted">—</span></td>
-              <td class="value-cell" :title="param.value">{{ param.value }}</td>
-              <td><StatusTag :text="typeText(param.type)" tone="purple" plain /></td>
-              <td>
-                <StatusTag
-                  :text="param.enabled ? '启用' : '禁用'"
-                  :tone="param.enabled ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="desc-cell" :title="param.description">{{ param.description || '—' }}</td>
-              <td class="mds-actions">
-                <button v-point="'PUT /admin/masterdata/config/{id}'" class="mds-btn mds-btn--link" @click="editParam(param)">编辑</button>
-                <button class="mds-btn mds-btn--link" :disabled="busyId === param.id" @click="toggleParam(param)">
-                  {{ param.enabled ? '禁用' : '启用' }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="filteredParams"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载系统配置…"
+        column-settings-storage-key="mds:cols:system-params"
+        client-pagination
+        v-model:page="listPage1"
+        @refresh="loadData"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyListFilter1" @reset="resetListFilter1">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索参数编码 / 名称" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>分组</label>
+              <select v-model="filterGroup" class="mds-select">
+                        <option value="all">全部分组</option>
+                        <option v-for="group in paramGroups" :key="group" :value="group">{{ group }}</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button v-point="'POST /admin/masterdata/config'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增参数</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            :title="params.length ? '没有符合条件的参数' : '还没有系统参数'"
+                            :description="params.length ? '调整分组或关键字筛选。' : '新增参数后，执行侧才能读取到配置。'"
+                          />
+        </template>
+        <template #cell-name="{ row: param }">
+          <div class="mds-name">
+            {{ param.name }}
+          </div>
+        </template>
+        <template #cell-group="{ row: param }">
+          <StatusTag v-if="param.group" :text="param.group" tone="info" plain /><span v-else class="mds-muted">—</span>
+        </template>
+        <template #cell-value="{ row: param }">
+          <div class="value-cell" :title="param.value">
+            {{ param.value }}
+          </div>
+        </template>
+        <template #cell-type="{ row: param }">
+          <StatusTag :text="typeText(param.type)" tone="purple" plain />
+        </template>
+        <template #cell-enabled="{ row: param }">
+          <StatusTag
+                            :text="param.enabled ? '启用' : '禁用'"
+                            :tone="param.enabled ? 'success' : 'gray'"
+                          />
+        </template>
+        <template #cell-description="{ row: param }">
+          <div class="desc-cell" :title="param.description">
+            {{ param.description || '—' }}
+          </div>
+        </template>
+        <template #cell-actions="{ row: param }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;编辑&quot;, onClick: () => editParam(param), point: 'PUT /admin/masterdata/config/{id}' },
+              { key: '2', label: param.enabled ? '禁用' : '启用', onClick: () => toggleParam(param), disabled: busyId === param.id },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
     </div>
 
     <div v-if="showAddModal" class="mds-mask" @click="closeModal">
@@ -133,7 +144,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { AgriVueTable, AgriVueFilterBar } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
@@ -283,6 +296,32 @@ const saveParam = async () => {
 }
 
 onMounted(loadData)
+
+const columns = [
+  { prop: 'code', label: '参数编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'name', label: '参数名称', width: 128 },
+  { prop: 'group', label: '分组', width: 128, ellipsis: false },
+  { prop: 'value', label: '参数值', width: 128 },
+  { prop: 'type', label: '类型', width: 128, ellipsis: false },
+  { prop: 'enabled', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'description', label: '描述', width: 210 },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+const listPage1 = ref(1)
+function applyListFilter1() {
+  listPage1.value = 1
+}
+
+function resetListFilter1() {
+  filterKeyword.value = ""
+  filterGroup.value = "all"
+  applyListFilter1()
+}
+
+watch(filterKeyword, () => { listPage1.value = 1 })
+
+watch(filterGroup, () => { listPage1.value = 1 })
 </script>
 
 <style scoped>

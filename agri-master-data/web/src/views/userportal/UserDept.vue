@@ -5,11 +5,7 @@
       subtitle="本主体内部的组织部门树与岗位编制；部门决定数据权限范围，岗位决定成员任职归属。"
       source="主数据 · 我的主体"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="loadDepts">刷新</button>
-        <button v-point="'POST /api/user/depts'" class="mds-btn" @click="openDeptCreate">+ 新增部门</button>
-        <button v-point="'POST /api/user/positions'" class="mds-btn mds-btn--primary" @click="openPosCreate">+ 新增岗位</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="查看口径：">
@@ -17,52 +13,56 @@
     </NoticeBar>
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <select v-model="orgId" class="mds-select" style="min-width: 260px" @change="loadDepts">
-          <option value="">全部组织</option>
-          <option v-for="org in orgs" :key="org.id" :value="String(org.id)">{{ org.orgName }}</option>
-        </select>
-        <span class="mds-hint">共 {{ depts.length }} 个部门</span>
-      </div>
+      
 
-      <div class="mds-table-wrap">
-        <table class="mds-table dept-table">
-          <thead>
-            <tr>
-              <th>部门名称</th>
-              <th>部门编码</th>
-              <th>负责人</th>
-              <th>联系电话</th>
-              <th class="mds-num">人数</th>
-              <th>状态</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading"><td colspan="7" class="mds-empty">正在加载部门…</td></tr>
-            <tr v-else-if="!depts.length">
-              <td colspan="7">
-                <EmptyState
-                  icon="🗂️"
-                  title="当前主体还没有部门"
-                  :description="orgs.length ? '该主体下暂无部门档案；部门由主体管理员维护。' : '先有组织节点，才有其下的部门与岗位。'"
-                />
-              </td>
-            </tr>
-            <tr v-for="dept in depts" :key="dept.id">
-              <td class="mds-name">{{ dept.deptName || '—' }}</td>
-              <td class="mds-mono">{{ dept.deptCode || '—' }}</td>
-              <td>{{ dept.manager || '—' }}</td>
-              <td class="mds-mono">{{ dept.contactPhone || '—' }}</td>
-              <td class="mds-num">{{ dept.deptCount ?? '—' }}</td>
-              <td><StatusTag :text="dept.status === '1' || dept.status === 'ACTIVE' ? '启用' : '停用'" :tone="dept.status === '1' || dept.status === 'ACTIVE' ? 'success' : 'gray'" /></td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="openPositions(dept)">岗位</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="listColumns1"
+        :data="depts"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载部门…"
+        column-settings-storage-key="mds:cols:user-dept-1"
+        client-pagination
+        @refresh="loadDepts"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="1" :loading="loading" @search="loadDepts" @reset="resetListFilter1">
+            <div class="agri-vue-filter-field">
+              <label>组织</label>
+              <select v-model="orgId" class="mds-select" @change="loadDepts">
+                        <option value="">全部组织</option>
+                        <option v-for="org in orgs" :key="org.id" :value="String(org.id)">{{ org.orgName }}</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button v-point="'POST /api/user/depts'" class="mds-btn" @click="openDeptCreate">+ 新增部门</button>
+          <button v-point="'POST /api/user/positions'" class="mds-btn mds-btn--primary" @click="openPosCreate">+ 新增岗位</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            icon="🗂️"
+                            title="当前主体还没有部门"
+                            :description="orgs.length ? '该主体下暂无部门档案；部门由主体管理员维护。' : '先有组织节点，才有其下的部门与岗位。'"
+                          />
+        </template>
+        <template #cell-deptName="{ row: dept }">
+          <div class="mds-name">
+            {{ dept.deptName || '—' }}
+          </div>
+        </template>
+        <template #cell-status="{ row: dept }">
+          <StatusTag :text="dept.status === '1' || dept.status === 'ACTIVE' ? '启用' : '停用'" :tone="dept.status === '1' || dept.status === 'ACTIVE' ? 'success' : 'gray'" />
+        </template>
+        <template #cell-actions="{ row: dept }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;岗位&quot;, onClick: () => openPositions(dept) },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
     </div>
 
     <div v-if="currentDept" class="mds-card" style="margin-bottom: 0">
@@ -73,33 +73,31 @@
         </div>
         <button class="mds-btn" @click="currentDept = null">收起</button>
       </div>
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>岗位编码</th>
-              <th>岗位名称</th>
-              <th class="mds-num">级别</th>
-              <th>职责</th>
-              <th class="mds-num">在岗</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!positions.length">
-              <td colspan="6"><EmptyState title="该部门还没有岗位" description="岗位由主体管理员在部门内维护。" /></td>
-            </tr>
-            <tr v-for="position in positions" :key="position.id">
-              <td class="mds-mono">{{ position.positionCode || '—' }}</td>
-              <td class="mds-name">{{ position.positionName || '—' }}</td>
-              <td class="mds-num">{{ position.positionLevel ?? '—' }}</td>
-              <td class="mds-muted">{{ position.positionDesc || '—' }}</td>
-              <td class="mds-num">{{ position.incumbentCount ?? '—' }}</td>
-              <td><StatusTag :text="position.status === '1' || position.status === 'ACTIVE' ? '启用' : '停用'" :tone="position.status === '1' || position.status === 'ACTIVE' ? 'success' : 'gray'" /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="listColumns2"
+        :data="positions"
+        row-key="id"
+        column-settings-storage-key="mds:cols:user-dept-2"
+        client-pagination
+        @refresh="() => currentDept &amp;&amp; openPositions(currentDept)"
+      >
+        <template #empty>
+          <EmptyState title="该部门还没有岗位" description="岗位由主体管理员在部门内维护。" />
+        </template>
+        <template #cell-positionName="{ row: position }">
+          <div class="mds-name">
+            {{ position.positionName || '—' }}
+          </div>
+        </template>
+        <template #cell-positionDesc="{ row: position }">
+          <div class="mds-muted">
+            {{ position.positionDesc || '—' }}
+          </div>
+        </template>
+        <template #cell-status="{ row: position }">
+          <StatusTag :text="position.status === '1' || position.status === 'ACTIVE' ? '启用' : '停用'" :tone="position.status === '1' || position.status === 'ACTIVE' ? 'success' : 'gray'" />
+        </template>
+      </AgriVueTable>
     </div>
     <!-- 新增部门 -->
     <div v-if="deptDialog" class="mds-mask" @click.self="deptDialog = false">
@@ -182,6 +180,8 @@
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
@@ -316,6 +316,30 @@ async function openPositions(dept: DeptRow) {
 onMounted(async () => {
   await Promise.all([loadOrgs(), loadDepts()])
 })
+
+const listColumns1: VueListColumn[] = [
+  { prop: 'deptName', label: '部门名称', minWidth: 174, locked: true },
+  { prop: 'deptCode', label: '部门编码', width: 142, kind: 'code' },
+  { prop: 'manager', label: '负责人', width: 128 },
+  { prop: 'contactPhone', label: '联系电话', width: 142, kind: 'code' },
+  { prop: 'deptCount', label: '人数', width: 104, kind: 'number' },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+const listColumns2: VueListColumn[] = [
+  { prop: 'positionCode', label: '岗位编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'positionName', label: '岗位名称', width: 128 },
+  { prop: 'positionLevel', label: '级别', width: 104, kind: 'number' },
+  { prop: 'positionDesc', label: '职责', width: 128 },
+  { prop: 'incumbentCount', label: '在岗', width: 104, kind: 'number' },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+]
+
+function resetListFilter1() {
+  orgId.value = ""
+  void loadDepts()
+}
 </script>
 
 <style scoped>

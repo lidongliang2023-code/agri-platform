@@ -4,109 +4,86 @@
       title="编码规则管理"
       subtitle="全平台主数据编码的统一规则：前缀 + 日期段 + 流水号（+ 后缀）；续号与冲突由后端生成。"
       source="数据标准 · 编码"
-    >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/standard/code-rule'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增规则</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="试算说明：">
       「试算」按规则真实拼接一个样例（前缀 + 日期 + 序号），不是查已有编码；序号从这里看不出并发占用情况。
     </NoticeBar>
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="searchForm.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="规则名称 / 编码"
-          @keyup.enter="search"
+    <AgriVueTable
+      :columns="columns"
+      :data="tableData"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载编码规则…"
+      column-settings-storage-key="mds:cols:code-rule-list"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="loadData"
+      @update:page="handleCurrentChange"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input
+              v-model="searchForm.keyword"
+              class="mds-input"
+              type="search"
+              placeholder="规则名称 / 编码"
+              @keyup.enter="search"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="searchForm.status" class="mds-select" @change="search">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">禁用</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <button v-point="'POST /admin/masterdata/standard/code-rule'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增规则</button>
+      </template>
+
+      <template #empty>
+        <EmptyState title="暂无编码规则" description="新增规则后，用户 / 组织 / 商品等编码才会按统一规则生成。" />
+      </template>
+
+      <template #cell-ruleName="{ row }">
+        <span class="mds-name">{{ row.ruleName || '—' }}</span>
+      </template>
+      <template #cell-ruleType="{ row }">
+        <StatusTag
+          :text="row.ruleType === 'auto' ? '自动生成' : '手动输入'"
+          :tone="row.ruleType === 'auto' ? 'success' : 'info'"
+          plain
         />
-        <select v-model="searchForm.status" class="mds-select" @change="search">
-          <option value="">全部状态</option>
-          <option value="1">启用</option>
-          <option value="0">禁用</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
-
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>规则编码</th>
-              <th>规则名称</th>
-              <th>编码格式</th>
-              <th>规则类型</th>
-              <th>前缀</th>
-              <th class="mds-num">序号长度</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="9" class="mds-empty">正在加载编码规则…</td>
-            </tr>
-            <tr v-else-if="!tableData.length">
-              <td colspan="9">
-                <EmptyState title="暂无编码规则" description="新增规则后，用户 / 组织 / 商品等编码才会按统一规则生成。" />
-              </td>
-            </tr>
-            <tr v-for="rule in tableData" :key="rule.id">
-              <td class="mds-mono">{{ rule.ruleCode || '—' }}</td>
-              <td class="mds-name">{{ rule.ruleName || '—' }}</td>
-              <td class="mds-mono">{{ rule.rulePattern || '—' }}</td>
-              <td>
-                <StatusTag
-                  :text="rule.ruleType === 'auto' ? '自动生成' : '手动输入'"
-                  :tone="rule.ruleType === 'auto' ? 'success' : 'info'"
-                  plain
-                />
-              </td>
-              <td class="mds-mono">{{ rule.prefix || '—' }}</td>
-              <td class="mds-num">{{ rule.seqLength ?? '—' }}</td>
-              <td>
-                <StatusTag
-                  :text="Number(rule.status) === 1 ? '启用' : '禁用'"
-                  :tone="Number(rule.status) === 1 ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="mds-muted">{{ formatDate(rule.createTime) }}</td>
-              <td class="mds-actions">
-                <button v-point="'POST /admin/masterdata/standard/code-rule/{id}/test'"
-                  class="mds-btn mds-btn--link"
-                  :disabled="busyId === rule.id || rule.ruleType === 'manual'"
-                  :title="rule.ruleType === 'manual' ? '手工录入规则不参与自动生成' : '按规则试算一个样例'"
-                  @click="tryRule(rule)"
-                >试算</button>
-                <button v-point="'PUT /admin/masterdata/standard/code-rule/{id}'" class="mds-btn mds-btn--link" @click="editRule(rule)">编辑</button>
-                <button v-point="'PUT /admin/masterdata/standard/code-rule/{id}'"
-                  class="mds-btn mds-btn--link"
-                  :class="{ 'mds-danger': Number(rule.status) === 1 }"
-                  :disabled="busyId === rule.id"
-                  @click="toggleStatus(rule)"
-                >
-                  {{ Number(rule.status) === 1 ? '禁用' : '启用' }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <PagerBar
-        :page="pageNum"
-        :page-size="pageSize"
-        :total="total"
-        @change="handleCurrentChange"
-        @update:page-size="changePageSize"
-      />
-    </div>
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag
+          :text="Number(row.status) === 1 ? '启用' : '禁用'"
+          :tone="Number(row.status) === 1 ? 'success' : 'gray'"
+        />
+      </template>
+      <template #cell-createTime="{ row }">
+        <span class="mds-muted">{{ formatDate(row.createTime) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'try', label: '试算', point: 'POST /admin/masterdata/standard/code-rule/{id}/test', disabled: busyId === row.id || row.ruleType === 'manual', title: row.ruleType === 'manual' ? '手工录入规则不参与自动生成' : '按规则试算一个样例', onClick: () => tryRule(row) },
+            { key: 'edit', label: '编辑', point: 'PUT /admin/masterdata/standard/code-rule/{id}', onClick: () => editRule(row) },
+            { key: 'toggle', label: Number(row.status) === 1 ? '禁用' : '启用', danger: Number(row.status) === 1, point: 'PUT /admin/masterdata/standard/code-rule/{id}', disabled: busyId === row.id, onClick: () => toggleStatus(row) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
 
     <div v-if="sample" class="mds-card">
       <div class="mds-card-head">
@@ -183,7 +160,20 @@ import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+
+const columns = [
+  { prop: 'ruleCode', label: '规则编码', width: 155, kind: 'code', locked: true },
+  { prop: 'ruleName', label: '规则名称', width: 165 },
+  { prop: 'rulePattern', label: '编码格式', minWidth: 170, kind: 'code' },
+  { prop: 'ruleType', label: '规则类型', width: 105, align: 'center', ellipsis: false },
+  { prop: 'prefix', label: '前缀', width: 96, kind: 'code' },
+  { prop: 'seqLength', label: '序号长度', width: 96, kind: 'number' },
+  { prop: 'status', label: '状态', width: 92, kind: 'status' },
+  { prop: 'createTime', label: '创建时间', width: 120 },
+  { key: 'actions', label: '操作', width: 130, kind: 'action' },
+]
 import {
   createCodeRule,
   getCodeRuleList,
@@ -350,7 +340,7 @@ onMounted(loadData)
   color: var(--mds-brand-deep);
   font-family: var(--mds-mono);
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 1px;
   word-break: break-all;
 }

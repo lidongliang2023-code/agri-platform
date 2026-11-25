@@ -20,10 +20,7 @@
       :subtitle="`账号来自统一认证；组织/部门/岗位由主数据任职档案维护（主体 ${merchantId || '—'}）`"
       source="用户中心 · 主体成员"
     >
-      <template #actions>
-        <button class="mds-btn" @click="router.push('/user/invite')">成员邀请与审批</button>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="两套数据的分工：">
@@ -42,91 +39,86 @@
         </div>
       </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table member-table">
-          <thead>
-            <tr>
-              <th>成员</th>
-              <th>主体内角色</th>
-              <th>组织 / 部门 / 岗位</th>
-              <th>加入时间</th>
-              <th>账号状态</th>
-              <th class="mds-center">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="6" class="mds-empty">正在加载成员…</td>
-            </tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="6">
-                <EmptyState
-                  icon="👥"
-                  title="当前主体还没有成员账号"
-                  description="成员由用户中心的「申请加入 → 负责人审批」产生。到「成员邀请与审批」查看待处理申请。"
-                >
-                  <button class="mds-btn" style="margin-top: 12px" @click="router.push('/user/invite')">
-                    去处理加入申请
-                  </button>
-                </EmptyState>
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.userId">
-              <td>
-                <div class="member-cell">
-                  <span class="avatar">{{ (row.nickname || row.username || '用').slice(0, 1) }}</span>
-                  <div>
-                    <strong>{{ row.nickname || row.username }}</strong>
-                    <small class="mds-hint">{{ row.username }} · {{ row.phone || '未填手机号' }}</small>
-                  </div>
-                </div>
-              </td>
-              <td>
-                <StatusTag
-                  :text="roleText(row.roleInMerchant)"
-                  :tone="row.roleInMerchant === 'owner' ? 'brand' : 'info'"
-                  plain
-                />
-              </td>
-              <td>
-                <div v-if="row.orgName || row.deptName || row.positionName" class="job-cell">
-                  <span class="job-main">{{ row.deptName || row.orgName || '—' }}</span>
-                  <small class="mds-hint">
-                    <template v-if="row.positionName">{{ row.positionName }}</template>
-                    <template v-if="row.orgName && row.deptName"> · {{ row.orgName }}</template>
-                  </small>
-                </div>
-                <span v-else class="mds-hint">未分配</span>
-              </td>
-              <td class="mds-mono">{{ formatTime(row.joinedAt) }}</td>
-              <td>
-                <StatusTag
-                  :text="Number(row.status) === 1 ? '正常' : '停用'"
-                  :tone="Number(row.status) === 1 ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="mds-center">
-                <button
-                  v-point="'PUT /api/user/member-profiles/{platformUserId}'"
-                  class="row-link"
-                  @click="openAssign(row)"
-                >
-                  {{ row.deptId || row.orgId ? '调整' : '分配' }}
-                </button>
-                <button
-                  v-if="row.deptId || row.orgId || row.positionId"
-                  v-point="'DELETE /api/user/member-profiles/{platformUserId}'"
-                  class="row-link row-link--danger"
-                  @click="clearAssign(row)"
-                >
-                  清除
-                </button>
-                <span v-if="!canAssign && !canClear" class="mds-hint">未授权该操作</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="rows.filter(item => !listAppliedKeyword1 || [item.nickname, item.username, item.phone, item.orgName, item.deptName, item.positionName].some(value => String(value ?? '').toLowerCase().includes(listAppliedKeyword1)))"
+        row-key="userId"
+        :loading="loading"
+        loading-text="正在加载成员…"
+        column-settings-storage-key="mds:cols:user-members"
+        client-pagination
+        v-model:page="listPage1"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="1" :loading="loading" @search="applyListFilter1" @reset="resetListFilter1">
+            <div class="agri-vue-filter-field">
+              <label>关键词</label>
+              <input v-model="listKeyword1" class="mds-input" type="search" />
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button class="mds-btn" @click="router.push('/user/invite')">成员邀请与审批</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            icon="👥"
+                            title="当前主体还没有成员账号"
+                            description="成员由用户中心的「申请加入 → 负责人审批」产生。到「成员邀请与审批」查看待处理申请。"
+                          >
+                            <button class="mds-btn" style="margin-top: 12px" @click="router.push('/user/invite')">
+                              去处理加入申请
+                            </button>
+                          </EmptyState>
+        </template>
+        <template #cell-nickname="{ row: row }">
+          <div class="member-cell">
+                            <span class="avatar">{{ (row.nickname || row.username || '用').slice(0, 1) }}</span>
+                            <div>
+                              <strong>{{ row.nickname || row.username }}</strong>
+                              <small class="mds-hint">{{ row.username }} · {{ row.phone || '未填手机号' }}</small>
+                            </div>
+                          </div>
+        </template>
+        <template #cell-roleInMerchant="{ row: row }">
+          <StatusTag
+                            :text="roleText(row.roleInMerchant)"
+                            :tone="row.roleInMerchant === 'owner' ? 'brand' : 'info'"
+                            plain
+                          />
+        </template>
+        <template #cell-orgName="{ row: row }">
+          <div v-if="row.orgName || row.deptName || row.positionName" class="job-cell">
+                            <span class="job-main">{{ row.deptName || row.orgName || '—' }}</span>
+                            <small class="mds-hint">
+                              <template v-if="row.positionName">{{ row.positionName }}</template>
+                              <template v-if="row.orgName && row.deptName"> · {{ row.orgName }}</template>
+                            </small>
+                          </div>
+                          <span v-else class="mds-hint">未分配</span>
+        </template>
+        <template #cell-joinedAt="{ row: row }">
+          <div class="mds-mono">
+            {{ formatTime(row.joinedAt) }}
+          </div>
+        </template>
+        <template #cell-status="{ row: row }">
+          <StatusTag
+                            :text="Number(row.status) === 1 ? '正常' : '停用'"
+                            :tone="Number(row.status) === 1 ? 'success' : 'gray'"
+                          />
+        </template>
+        <template #cell-actions="{ row: row }">
+          <MdsRowActions
+            fallback-text="未授权该操作"
+            :actions="[
+              { key: '1', label: row.deptId || row.orgId ? '调整' : '分配', onClick: () => openAssign(row), point: 'PUT /api/user/member-profiles/{platformUserId}' },
+              { key: '2', label: &quot;清除&quot;, onClick: () => clearAssign(row), hidden: !((row.deptId || row.orgId || row.positionId)), point: 'DELETE /api/user/member-profiles/{platformUserId}', danger: true },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
     </div>
 
     <!-- 分配组织 / 部门 / 岗位 -->
@@ -180,6 +172,8 @@
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/components/ui/PageHeader.vue'
@@ -395,6 +389,29 @@ onMounted(async () => {
   await load()
   await loadDicts()
 })
+
+const columns: VueListColumn[] = [
+  { prop: 'nickname', label: '成员', minWidth: 174, locked: true, ellipsis: false },
+  { prop: 'roleInMerchant', label: '主体内角色', width: 128, ellipsis: false },
+  { prop: 'orgName', label: '组织 / 部门 / 岗位', width: 128, ellipsis: false },
+  { prop: 'joinedAt', label: '加入时间', width: 152, ellipsis: false },
+  { prop: 'status', label: '账号状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+const listKeyword1 = ref('')
+const listAppliedKeyword1 = ref('')
+
+const listPage1 = ref(1)
+function applyListFilter1() {
+  listAppliedKeyword1.value = listKeyword1.value.trim().toLowerCase()
+  listPage1.value = 1
+}
+
+function resetListFilter1() {
+  listKeyword1.value = ''
+  applyListFilter1()
+}
 </script>
 
 <style scoped>

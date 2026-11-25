@@ -4,12 +4,7 @@
       title="认证审核"
       subtitle="企业与个人实名认证台账：本页只做核对，审核动作由用户中心运营端办理。"
       source="只读 · 用户中心主责"
-    >
-      <template #actions>
-        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 认证审核</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="只读视图：">
       批量通过 / 驳回与按行审核已移除，认证结论统一在用户中心运营端录入，避免同一申请出现两套审核记录。
@@ -23,60 +18,62 @@
       <div class="audit-kpi red"><span>今日驳回</span><strong>{{ counts.rejectedToday }}</strong><small>按审核时间统计</small></div>
     </div>
 
-    <div class="search-bar">
-      <div class="filter-group">
-        <button class="type-btn" :class="{ on: typeFilter === 'all' }" @click="typeFilter = 'all'">全部类型</button>
-        <button class="type-btn" :class="{ on: typeFilter === 'enterprise' }" @click="typeFilter = 'enterprise'">企业认证</button>
-        <button class="type-btn" :class="{ on: typeFilter === 'personal' }" @click="typeFilter = 'personal'">个人实名认证</button>
-      </div>
-      <div class="filter-group">
-        <select v-model="statusFilter" class="filter-select">
-          <option value="all">全部状态</option>
-          <option value="pending">待审核</option>
-          <option value="approved">已通过</option>
-          <option value="rejected">已驳回</option>
-        </select>
-      </div>
-      <div class="search-group">
-        <input v-model="keyword" class="search-input" placeholder="搜索主体名称 / 申请编号 / 证件号 / 联系人" />
-        <button class="search-btn" @click="keyword = keyword.trim()">搜索</button>
-      </div>
-    </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="filtered"
+      row-key="key"
+      :loading="loading"
+      empty-text="暂无认证申请"
+      column-settings-storage-key="mds:cols:user-audit"
+      client-pagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      @refresh="loadData"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>认证类型</label>
+            <select v-model="typeFilter" class="mds-select">
+              <option value="all">全部类型</option>
+              <option value="enterprise">企业认证</option>
+              <option value="personal">个人实名认证</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>审核状态</label>
+            <select v-model="statusFilter" class="mds-select">
+              <option value="all">全部状态</option>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">已驳回</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input v-model="keyword" class="mds-input" placeholder="主体名称 / 申请编号 / 证件号 / 联系人" @keyup.enter="search" />
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <div class="audit-toolbar">
-      <span>当前加载 {{ rows.length }} 条 · 筛选后 {{ filtered.length }} 条</span>
-      <span class="spacer"></span>
-      <button class="mds-btn mds-btn--sm" @click="openUserCenter">去用户中心办理审核</button>
-    </div>
+      <template #toolbar-left>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 认证审核</button>
+        <span class="mds-muted" style="font-size: 12px">加载 {{ rows.length }} 条 · 筛选 {{ filtered.length }} 条</span>
+      </template>
 
-    <div class="table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>申请编号</th><th>类型</th><th>主体 / 姓名</th><th>证件 / 信用代码</th>
-            <th>联系人</th><th>手机号</th><th>状态</th><th>提交时间</th><th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in filtered" :key="row.key">
-            <td class="mono">{{ row.no }}</td>
-            <td><span class="type-badge" :class="row.type">{{ row.type === 'enterprise' ? '企业认证' : '个人实名' }}</span></td>
-            <td>{{ row.name }}</td>
-            <td class="mono">{{ row.idNumber }}</td>
-            <td>{{ row.contact }}</td>
-            <td class="mono">{{ row.phone }}</td>
-            <td><span class="status-badge" :class="row.status">{{ statusText(row.status) }}</span></td>
-            <td>{{ formatTime(row.submitTime) }}</td>
-            <td class="action-cell">
-              <button class="action-btn view" @click="detail = row">查看</button>
-            </td>
-          </tr>
-          <tr v-if="!filtered.length">
-            <td colspan="9" class="empty-cell">暂无认证申请</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <template #cell-type="{ row }">
+        <span class="type-badge" :class="row.type">{{ row.type === 'enterprise' ? '企业认证' : '个人实名' }}</span>
+      </template>
+      <template #cell-status="{ row }">
+        <span class="status-badge" :class="row.status">{{ statusText(row.status) }}</span>
+      </template>
+      <template #cell-submitTime="{ row }">
+        {{ formatTime(row.submitTime) }}
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions :actions="[{ key: 'view', label: '查看', onClick: () => (detail = row) }]" />
+      </template>
+    </AgriVueTable>
 
     <div v-if="detail" class="modal-overlay" @click="detail = null">
       <div class="modal-content audit-detail" @click.stop>
@@ -140,26 +137,6 @@
         </div>
       </div>
     </div>
-
-    <div v-if="rejectTargets.length" class="modal-overlay" @click="closeReject">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ rejectTargets.length > 1 ? `批量驳回 ${rejectTargets.length} 笔申请` : '驳回认证申请' }}</h3>
-          <button class="close-btn" @click="closeReject">×</button>
-        </div>
-        <div class="modal-body">
-          <p class="reject-tip">驳回必须说明具体原因；同一原因会应用到本批全部申请。</p>
-          <div class="form-group">
-            <label>审核意见</label>
-            <textarea v-model="rejectReason" rows="4" class="form-textarea" placeholder="例如：营业执照与统一社会信用代码不一致，请重新提交"></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-cancel" @click="closeReject">取消</button>
-          <button class="btn btn-danger" :disabled="saving" @click="submitReject">确认驳回</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -168,29 +145,50 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
 import '@/styles/admin-page.css'
+
+const columns = [
+  { prop: 'no', label: '申请编号', width: 155, kind: 'code', locked: true },
+  { prop: 'type', label: '类型', width: 105, align: 'center', ellipsis: false },
+  { prop: 'name', label: '主体 / 姓名', minWidth: 160 },
+  { prop: 'idNumber', label: '证件 / 信用代码', width: 175, kind: 'code' },
+  { prop: 'contact', label: '联系人', width: 100 },
+  { prop: 'phone', label: '手机号', width: 130, kind: 'code' },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { prop: 'submitTime', label: '提交时间', width: 165 },
+  { key: 'actions', label: '操作', width: 90, kind: 'action' },
+]
 import {
-  auditMerchantCertification,
   getMerchantCertificationDocument,
   getMerchantCertifications,
   getUserIdentities,
-  reviewUserIdentity,
 } from '@/utils/certification'
 
 const rows = ref([])
 const loading = ref(false)
-const saving = ref(false)
 const typeFilter = ref('all')
 const statusFilter = ref('all')
 const keyword = ref('')
-const selectedKeys = ref([])
 const detail = ref(null)
+const page = ref(1)
+const pageSize = ref(20)
+watch([typeFilter, statusFilter, keyword], () => { page.value = 1 })
+const search = () => {
+  keyword.value = keyword.value.trim()
+  page.value = 1
+}
+const reset = () => {
+  typeFilter.value = 'all'
+  statusFilter.value = 'all'
+  keyword.value = ''
+  page.value = 1
+}
 
 function openUserCenter() {
   window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')
 }
-const rejectTargets = ref([])
-const rejectReason = ref('')
 const documentPreviews = ref({})
 const documentLoading = ref(false)
 
@@ -340,154 +338,16 @@ const counts = computed(() => ({
   rejectedToday: rows.value.filter((row) => row.status === 'rejected' && isToday(row.reviewTime)).length,
 }))
 
-const selectableRows = computed(() => filtered.value.filter((row) => row.status === 'pending'))
-const allSelected = computed(() =>
-  selectableRows.value.length > 0 && selectableRows.value.every((row) => selectedKeys.value.includes(row.key)))
-
-const toggleRow = (key) => {
-  selectedKeys.value = selectedKeys.value.includes(key)
-    ? selectedKeys.value.filter((item) => item !== key)
-    : [...selectedKeys.value, key]
-}
-
-const toggleAll = () => {
-  selectedKeys.value = allSelected.value ? [] : selectableRows.value.map((row) => row.key)
-}
-
-const approveItem = async (item) => {
-  const res = item.type === 'enterprise'
-    ? await auditMerchantCertification(item.id, 'approved', '材料齐全，审核通过')
-    : await reviewUserIdentity(item.id, true, '材料齐全，审核通过')
-  if (!isOk(res)) {
-    message.error(res.message || '审核失败')
-    return false
-  }
-  return true
-}
-
-const rejectItem = async (item, reason) => {
-  const res = item.type === 'enterprise'
-    ? await auditMerchantCertification(item.id, 'rejected', reason)
-    : await reviewUserIdentity(item.id, false, reason)
-  if (!isOk(res)) {
-    message.error(res.message || '审核失败')
-    return false
-  }
-  return true
-}
-
-const approveOne = async (item) => {
-  saving.value = true
-  try {
-    if (await approveItem(item)) {
-      message.success(item.type === 'personal'
-        ? '实名认证已通过，个人经营主体认证状态已同步'
-        : '企业认证已通过，经营主体认证状态已生效')
-      detail.value = null
-      await loadData()
-    }
-  } catch {
-    message.error('审核失败')
-  } finally {
-    saving.value = false
-  }
-}
-
-const batchApprove = async () => {
-  const targets = filtered.value.filter((row) => selectedKeys.value.includes(row.key) && row.status === 'pending')
-  if (!targets.length) return
-  if (!window.confirm(`确认通过 ${targets.length} 笔申请？`)) return
-  saving.value = true
-  let success = 0
-  try {
-    for (const item of targets) {
-      if (await approveItem(item)) success += 1
-    }
-    message.success(`已通过并生效 ${success} 笔，失败 ${targets.length - success} 笔`)
-    selectedKeys.value = []
-    await loadData()
-  } finally {
-    saving.value = false
-  }
-}
-
-const openReject = (targets) => {
-  rejectTargets.value = targets
-  rejectReason.value = ''
-}
-
-const closeReject = () => {
-  rejectTargets.value = []
-  rejectReason.value = ''
-}
-
-const batchReject = () => {
-  const targets = filtered.value.filter((row) => selectedKeys.value.includes(row.key) && row.status === 'pending')
-  if (targets.length) openReject(targets)
-}
-
-const submitReject = async () => {
-  if (!rejectReason.value.trim()) {
-    message.warning('驳回必须填写原因')
-    return
-  }
-  saving.value = true
-  let success = 0
-  try {
-    for (const item of rejectTargets.value) {
-      if (await rejectItem(item, rejectReason.value.trim())) success += 1
-    }
-    message.success(`已驳回 ${success} 笔，失败 ${rejectTargets.value.length - success} 笔`)
-    closeReject()
-    detail.value = null
-    selectedKeys.value = []
-    await loadData()
-  } finally {
-    saving.value = false
-  }
-}
-
 onMounted(loadData)
 </script>
 
 <style scoped>
-.audit-kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.audit-kpi {
-  padding: 14px 16px;
-  border: 1px solid #e3eae5;
-  border-radius: 12px;
-  background: #fff;
-}
-
-.audit-kpi span {
-  display: block;
+.audit-inline-summary {
   color: #6b7c72;
-  font-size: 12.5px;
+  font-size: 12px;
+  white-space: nowrap;
+  margin-left: auto;
 }
-
-.audit-kpi strong {
-  display: block;
-  margin-top: 6px;
-  color: #0e5233;
-  font-size: 26px;
-}
-
-.audit-kpi small {
-  display: block;
-  margin-top: 5px;
-  color: #97a3b2;
-  font-size: var(--agri-font-size-micro);
-}
-
-.audit-kpi.tech strong { color: #0b5e86; }
-.audit-kpi.green strong { color: #159a5e; }
-.audit-kpi.red strong { color: #d4380d; }
 
 .type-btn {
   border: 1px solid #e3eae5;
@@ -500,24 +360,10 @@ onMounted(loadData)
 }
 
 .type-btn.on {
-  border-color: #12764a;
-  background: #12764a;
+  border-color: #2d8f4e;
+  background: #2d8f4e;
   color: #fff;
   font-weight: 600;
-}
-
-.audit-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 2px;
-  color: #6b7c72;
-  font-size: 12px;
-  flex-wrap: wrap;
-}
-
-.audit-toolbar .spacer {
-  flex: 1;
 }
 
 .audit-detail {
@@ -528,15 +374,6 @@ onMounted(loadData)
   text-align: center;
   color: #93a29a;
   padding: 32px 0;
-}
-
-.reject-tip {
-  color: #b45309;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12.5px;
 }
 
 .mono {

@@ -4,191 +4,228 @@
       title="全平台组织"
       subtitle="组织属于经营主体内部数据：日常由主体负责人维护，运营端保留跨主体核查、异常处置与应急修正。"
       source="运营监管视图"
-    >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/org'" class="mds-btn" :disabled="!activeSubject" @click="openCreate">+ 新增组织</button>
-        <button class="mds-btn" :disabled="loading" @click="refresh">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="权限边界：">
       组织属于经营主体内部数据，日常维护由主体负责人或主体管理员完成。运营端的变更会纳入操作审计；
       历史组织（未关联统一主体）只读。
     </NoticeBar>
 
-    <div class="mds-card">
-      <div class="mds-card-body subject-bar">
-        <div class="subject-copy">
-          <span class="subject-label">当前主体</span>
-          <strong>{{ activeSubject?.tenantName || '全部经营主体' }}</strong>
-          <small v-if="activeSubject">
-            {{ subjectTypeText(activeSubject.tenantType) }} · {{ activeSubject.tenantCode || '未生成编码' }}
-          </small>
-          <small v-else>跨主体监管视图包含尚未迁移的历史组织数据</small>
-        </div>
-        <select v-model="searchForm.tenantId" class="mds-select" style="min-width: 320px" @change="handleSubjectChange">
-          <option value="">全部经营主体（含历史）</option>
-          <option v-for="subject in subjectOptions" :key="subject.id" :value="String(subject.id)">
-            {{ subject.tenantName }}（{{ subjectTypeText(subject.tenantType) }}）
-          </option>
-        </select>
-      </div>
-    </div>
-
     <StatGrid :items="statItems" />
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model.trim="searchForm.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="搜索组织名称、编码或负责人"
-          @keyup.enter="handleSearch"
-        />
-        <select v-model="searchForm.orgType" class="mds-select">
-          <option value="">全部组织类型</option>
-          <option value="ENTERPRISE">企业组织</option>
-          <option value="COOPERATIVE">合作社</option>
-          <option value="FARM">农场/基地</option>
-          <option value="DEPARTMENT">部门</option>
-          <option value="TEAM">团队</option>
-          <option value="PRODUCTION_UNIT">生产单位</option>
-        </select>
-        <select v-model="searchForm.status" class="mds-select">
-          <option value="">全部状态</option>
-          <option value="1">启用</option>
-          <option value="0">停用</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="handleSearch">查询</button>
-        <button class="mds-btn" @click="resetSearch">重置</button>
-      </div>
+    <AgriVueTable
+      v-if="viewMode === 'table'"
+      :columns="columns"
+      :data="tableData"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载组织档案…"
+      column-settings-storage-key="mds:cols:org-list"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="refresh"
+      @update:page="goPage"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="4" :loading="loading" @search="handleSearch" @reset="resetSearch">
+          <div class="agri-vue-filter-field">
+            <label>经营主体</label>
+            <select v-model="searchForm.tenantId" class="mds-select" @change="handleSubjectChange">
+              <option value="">全部经营主体（含历史）</option>
+              <option v-for="subject in subjectOptions" :key="subject.id" :value="String(subject.id)">
+                {{ subject.tenantName }}（{{ subjectTypeText(subject.tenantType) }}）
+              </option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input
+              v-model.trim="searchForm.keyword"
+              class="mds-input"
+              type="search"
+              placeholder="组织名称 / 编码 / 负责人"
+              @keyup.enter="handleSearch"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>组织类型</label>
+            <select v-model="searchForm.orgType" class="mds-select" @change="handleSearch">
+              <option value="">全部组织类型</option>
+              <option value="ENTERPRISE">企业组织</option>
+              <option value="COOPERATIVE">合作社</option>
+              <option value="FARM">农场/基地</option>
+              <option value="DEPARTMENT">部门</option>
+              <option value="TEAM">团队</option>
+              <option value="PRODUCTION_UNIT">生产单位</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="searchForm.status" class="mds-select" @change="handleSearch">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">停用</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-      <div class="mds-card-head">
-        <div>
-          <h2 class="mds-card-title">组织档案</h2>
-          <p class="mds-card-sub">{{ listSummary }}</p>
-        </div>
-        <div class="view-switch" role="group" aria-label="展示方式">
+      <template #toolbar-left>
+        <button v-point="'POST /admin/masterdata/org'" class="mds-btn mds-btn--primary" :disabled="!activeSubject" @click="openCreate">+ 新增组织</button>
+        <div class="view-switch" role="group" aria-label="展示方式" :title="listSummary">
           <button :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">列表</button>
           <button :class="{ active: viewMode === 'tree' }" @click="viewMode = 'tree'">层级</button>
         </div>
-      </div>
+      </template>
 
-      <div v-if="viewMode === 'table'" class="mds-table-wrap">
-        <table class="mds-table org-table">
-          <thead>
-            <tr>
-              <th>组织</th>
-              <th>所属主体</th>
-              <th>上级 / 层级</th>
-              <th>组织类型</th>
-              <th>负责人</th>
-              <th>状态</th>
-              <th>更新时间</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="8" class="mds-empty">正在加载组织档案…</td>
-            </tr>
-            <tr v-else-if="tableData.length === 0">
-              <td colspan="8">
-                <EmptyState
-                  :title="activeSubject ? '当前主体下暂无符合条件的组织' : '暂无符合条件的组织'"
-                  description="调整关键字或筛选条件后重试；历史组织需先关联统一主体才能维护。"
-                />
-              </td>
-            </tr>
-            <tr v-for="org in tableData" v-else :key="org.id">
-              <td>
-                <button class="link-name" @click="viewDetail(org.id)">{{ org.orgName }}</button>
-                <div class="mds-mono mds-muted">{{ org.orgCode }}</div>
-              </td>
-              <td>
-                <div>{{ org.tenantName || '未匹配主体' }}</div>
-                <StatusTag v-if="org.legacy" text="历史只读" tone="gray" plain />
-                <StatusTag v-else text="统一主体" tone="brand" plain />
-              </td>
-              <td>
-                <div>{{ org.parentName || '一级组织' }}</div>
-                <small class="mds-hint">第 {{ org.orgLevel || 1 }} 级</small>
-              </td>
-              <td><StatusTag :text="orgTypeText(org)" :tone="typeTone(org.orgType)" plain /></td>
-              <td>
-                <div>{{ org.contactPerson || '—' }}</div>
-                <small class="mds-hint">{{ org.contactPhone || '—' }}</small>
-              </td>
-              <td>
-                <StatusTag
-                  :text="Number(org.status) === 1 ? '启用' : '停用'"
-                  :tone="Number(org.status) === 1 ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="mds-muted">{{ formatDateTime(org.updateTime || org.createTime) }}</td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="viewDetail(org.id)">查看</button>
-                <button v-point="'PUT /admin/masterdata/org/{id}'"
-                  class="mds-btn mds-btn--link"
-                  :disabled="org.legacy"
-                  :title="org.legacy ? '历史组织未关联统一主体，只允许查看' : '编辑组织'"
-                  @click="editOrg(org)"
-                >编辑</button>
-                <button v-point="'PUT /admin/masterdata/org/{id}/status'" class="mds-btn mds-btn--link" :disabled="org.legacy" @click="toggleOrgStatus(org)">
-                  {{ Number(org.status) === 1 ? '停用' : '启用' }}
-                </button>
-                <button v-point="'DELETE /admin/masterdata/org/{id}'" class="mds-btn mds-btn--link mds-danger" :disabled="org.legacy" @click="deleteOrgById(org)">
-                  删除
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <template #empty>
+        <EmptyState
+          :title="activeSubject ? '当前主体下暂无符合条件的组织' : '暂无符合条件的组织'"
+          description="调整关键字或筛选条件后重试；历史组织需先关联统一主体才能维护。"
+        />
+      </template>
 
-      <div v-else class="tree-view">
-        <div v-if="treeError" class="mds-empty">{{ treeError }}</div>
-        <div v-else-if="flatTree.length === 0">
-          <EmptyState title="暂无符合条件的分层组织" description="切换主体或调整筛选条件后再看层级视图。" />
+      <template #cell-orgName="{ row }">
+        <div class="mds-cell-inline" :title="`${row.orgName}（${row.orgCode}）`">
+          <button class="link-name mds-cell-main" @click="viewDetail(row.id)">{{ row.orgName }}</button>
+          <span class="mds-mono mds-cell-sub">{{ row.orgCode }}</span>
         </div>
-        <template v-else>
-          <div
-            v-for="node in flatTree"
-            :key="node.id"
-            class="tree-row"
-            :style="{ paddingLeft: `${12 + node.depth * 24}px` }"
-          >
-            <button class="tree-toggle" :disabled="!node.hasChildren" @click="toggleNode(node.id)">
-              {{ node.hasChildren ? (expandedIds.includes(String(node.id)) ? '−' : '+') : '·' }}
-            </button>
-            <div class="tree-main">
-              <button class="link-name" @click="viewDetail(node.id)">{{ node.orgName }}</button>
-              <span class="mds-mono mds-muted">{{ node.orgCode }}</span>
-              <StatusTag :text="orgTypeText(node)" :tone="typeTone(node.orgType)" plain />
-              <StatusTag v-if="node.legacy" text="历史只读" tone="gray" plain />
-            </div>
-            <div class="tree-meta">{{ node.parentName || '一级组织' }} · 第 {{ node.orgLevel || 1 }} 级</div>
-            <div class="tree-person">{{ node.contactPerson || '未设置负责人' }}</div>
-            <StatusTag
-              :text="Number(node.status) === 1 ? '启用' : '停用'"
-              :tone="Number(node.status) === 1 ? 'success' : 'gray'"
-            />
-            <div class="tree-actions">
-              <button class="mds-btn mds-btn--link" @click="viewDetail(node.id)">查看</button>
-              <button v-point="'PUT /admin/masterdata/org/{id}'" class="mds-btn mds-btn--link" :disabled="node.legacy" @click="editOrg(node)">编辑</button>
+      </template>
+      <template #cell-tenantName="{ row }">
+        <div class="mds-cell-inline" :title="`${row.tenantName || '未匹配主体'} · ${row.legacy ? '历史只读' : '统一主体'}`">
+          <span class="mds-cell-main">{{ row.tenantName || '未匹配主体' }}</span>
+          <StatusTag v-if="row.legacy" text="历史" tone="gray" plain />
+        </div>
+      </template>
+      <template #cell-parentName="{ row }">
+        <div class="mds-cell-inline" :title="`${row.parentName || '一级组织'} · 第 ${row.orgLevel || 1} 级`">
+          <span class="mds-cell-main">{{ row.parentName || '一级组织' }}</span>
+          <span class="mds-cell-sub">L{{ row.orgLevel || 1 }}</span>
+        </div>
+      </template>
+      <template #cell-orgType="{ row }">
+        <StatusTag :text="orgTypeText(row)" :tone="typeTone(row.orgType)" plain />
+      </template>
+      <template #cell-contactPerson="{ row }">
+        <div class="mds-cell-inline" :title="`${row.contactPerson || '—'} ${row.contactPhone || ''}`.trim()">
+          <span class="mds-cell-main">{{ row.contactPerson || '—' }}</span>
+          <span v-if="row.contactPhone" class="mds-cell-sub mds-mono">{{ row.contactPhone }}</span>
+        </div>
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag
+          :text="Number(row.status) === 1 ? '启用' : '停用'"
+          :tone="Number(row.status) === 1 ? 'success' : 'gray'"
+        />
+      </template>
+      <template #cell-updateTime="{ row }">
+        <span class="mds-muted">{{ formatDateTime(row.updateTime || row.createTime) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'view', label: '查看', onClick: () => viewDetail(row.id) },
+            { key: 'edit', label: '编辑', point: 'PUT /admin/masterdata/org/{id}', disabled: row.legacy, title: row.legacy ? '历史组织未关联统一主体，只允许查看' : '编辑组织', onClick: () => editOrg(row) },
+            { key: 'toggle', label: Number(row.status) === 1 ? '停用' : '启用', point: 'PUT /admin/masterdata/org/{id}/status', disabled: row.legacy, onClick: () => toggleOrgStatus(row) },
+            { key: 'delete', label: '删除', danger: true, point: 'DELETE /admin/masterdata/org/{id}', disabled: row.legacy, onClick: () => deleteOrgById(row) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
+
+    <div v-else class="agri-vue-list-page">
+      <AgriVueFilterBar :field-count="4" :loading="loading" @search="handleSearch" @reset="resetSearch">
+        <div class="agri-vue-filter-field">
+          <label>经营主体</label>
+          <select v-model="searchForm.tenantId" class="mds-select" @change="handleSubjectChange">
+            <option value="">全部经营主体（含历史）</option>
+            <option v-for="subject in subjectOptions" :key="subject.id" :value="String(subject.id)">
+              {{ subject.tenantName }}（{{ subjectTypeText(subject.tenantType) }}）
+            </option>
+          </select>
+        </div>
+        <div class="agri-vue-filter-field">
+          <label>关键字</label>
+          <input
+            v-model.trim="searchForm.keyword"
+            class="mds-input"
+            type="search"
+            placeholder="组织名称 / 编码 / 负责人"
+            @keyup.enter="handleSearch"
+          />
+        </div>
+        <div class="agri-vue-filter-field">
+          <label>组织类型</label>
+          <select v-model="searchForm.orgType" class="mds-select" @change="handleSearch">
+            <option value="">全部组织类型</option>
+            <option value="ENTERPRISE">企业组织</option>
+            <option value="COOPERATIVE">合作社</option>
+            <option value="FARM">农场/基地</option>
+            <option value="DEPARTMENT">部门</option>
+            <option value="TEAM">团队</option>
+            <option value="PRODUCTION_UNIT">生产单位</option>
+          </select>
+        </div>
+        <div class="agri-vue-filter-field">
+          <label>状态</label>
+          <select v-model="searchForm.status" class="mds-select" @change="handleSearch">
+            <option value="">全部状态</option>
+            <option value="1">启用</option>
+            <option value="0">停用</option>
+          </select>
+        </div>
+      </AgriVueFilterBar>
+
+      <div class="agri-vue-table-card">
+        <div class="agri-vue-toolbar">
+          <div class="agri-vue-toolbar-left">
+            <button v-point="'POST /admin/masterdata/org'" class="mds-btn mds-btn--primary" :disabled="!activeSubject" @click="openCreate">+ 新增组织</button>
+            <div class="view-switch" role="group" aria-label="展示方式" :title="listSummary">
+              <button :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">列表</button>
+              <button :class="{ active: viewMode === 'tree' }" @click="viewMode = 'tree'">层级</button>
             </div>
           </div>
-        </template>
+          <div class="agri-vue-toolbar-right">
+            <button type="button" class="agri-vue-tool-btn" :disabled="loading" @click="refresh">刷新</button>
+          </div>
+        </div>
+        <div class="tree-view">
+          <div v-if="treeError" class="mds-empty">{{ treeError }}</div>
+          <div v-else-if="flatTree.length === 0">
+            <EmptyState title="暂无符合条件的分层组织" description="切换主体或调整筛选条件后再看层级视图。" />
+          </div>
+          <template v-else>
+            <div
+              v-for="node in flatTree"
+              :key="node.id"
+              class="tree-row"
+              :style="{ paddingLeft: `${12 + node.depth * 24}px` }"
+            >
+              <button class="tree-toggle" :disabled="!node.hasChildren" @click="toggleNode(node.id)">
+                {{ node.hasChildren ? (expandedIds.includes(String(node.id)) ? '−' : '+') : '·' }}
+              </button>
+              <div class="tree-main">
+                <button class="link-name" @click="viewDetail(node.id)">{{ node.orgName }}</button>
+                <span class="mds-mono mds-muted">{{ node.orgCode }}</span>
+                <StatusTag :text="orgTypeText(node)" :tone="typeTone(node.orgType)" plain />
+                <StatusTag v-if="node.legacy" text="历史只读" tone="gray" plain />
+              </div>
+              <div class="tree-meta">{{ node.parentName || '一级组织' }} · 第 {{ node.orgLevel || 1 }} 级</div>
+              <div class="tree-person">{{ node.contactPerson || '未设置负责人' }}</div>
+              <StatusTag
+                :text="Number(node.status) === 1 ? '启用' : '停用'"
+                :tone="Number(node.status) === 1 ? 'success' : 'gray'"
+              />
+              <div class="tree-actions">
+                <button class="mds-btn mds-btn--link" @click="viewDetail(node.id)">查看</button>
+                <button v-point="'PUT /admin/masterdata/org/{id}'" class="mds-btn mds-btn--link" :disabled="node.legacy" @click="editOrg(node)">编辑</button>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
-
-      <PagerBar
-        v-if="viewMode === 'table'"
-        :page="pageNum"
-        :page-size="pageSize"
-        :total="total"
-        @change="goPage"
-      />
     </div>
   </div>
 </template>
@@ -202,7 +239,19 @@ import StatGrid from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+
+const columns = [
+  { prop: 'orgName', label: '组织', width: 200, locked: true, ellipsis: false },
+  { prop: 'tenantName', label: '所属主体', width: 170, ellipsis: false },
+  { prop: 'parentName', label: '上级 / 层级', width: 155, ellipsis: false },
+  { prop: 'orgType', label: '组织类型', width: 110, align: 'center', ellipsis: false },
+  { prop: 'contactPerson', label: '负责人', width: 165, ellipsis: false },
+  { prop: 'status', label: '状态', width: 92, kind: 'status' },
+  { prop: 'updateTime', label: '更新时间', width: 148 },
+  { key: 'actions', label: '操作', width: 120, kind: 'action' },
+]
 import {
   deleteOrg,
   getOrgList,
@@ -248,7 +297,13 @@ const ORG_TYPE_TEXT = {
   TEAM: '团队',
   PRODUCTION_UNIT: '生产单位',
 }
-const orgTypeText = (org) => org.orgTypeName || ORG_TYPE_TEXT[org.orgType] || org.orgType || '未分类'
+const orgTypeText = (org) => {
+  const mapped = ORG_TYPE_TEXT[String(org.orgType || '').toUpperCase()]
+  if (mapped) return mapped
+  const rawName = String(org.orgTypeName || '').trim()
+  if (rawName && rawName.toUpperCase() !== String(org.orgType || '').toUpperCase()) return rawName
+  return '未分类'
+}
 const TYPE_TONE = {
   ENTERPRISE: 'info',
   COOPERATIVE: 'cyan',
@@ -398,6 +453,12 @@ function goPage(next) {
   void loadData()
 }
 
+function changePageSize(size) {
+  pageSize.value = size
+  pageNum.value = 1
+  void loadData()
+}
+
 const toggleNode = (id) => {
   const key = String(id)
   expandedIds.value = expandedIds.value.includes(key)
@@ -499,6 +560,15 @@ onMounted(async () => {
   width: 100%;
   color: var(--mds-text-3);
   font-size: 12px;
+}
+
+.org-subject-select {
+  min-width: 210px;
+  max-width: 260px;
+}
+
+.org-view-switch {
+  margin-left: auto;
 }
 
 .view-switch {

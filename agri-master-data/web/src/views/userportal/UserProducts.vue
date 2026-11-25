@@ -5,72 +5,69 @@
       subtitle="本主体的标准商品档案（SPU）：编码、品类、价格与审核/上架状态。"
       source="主数据 · 我的主体"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <input v-model="keyword" class="mds-input" type="search" placeholder="商品名称 / 编码" @keyup.enter="search" />
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table product-table">
-          <thead>
-            <tr>
-              <th>SPU 编码</th>
-              <th>商品名称</th>
-              <th>品类</th>
-              <th>品牌</th>
-              <th class="mds-num">参考价</th>
-              <th>审核状态</th>
-              <th>上架</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading"><td colspan="7" class="mds-empty">正在加载商品…</td></tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="7">
-                <EmptyState
-                  icon="📦"
-                  title="当前主体还没有商品档案"
-                  description="SPU 由主体在商品档案中创建；主数据里暂无属于该主体的商品。"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.id">
-              <td class="mds-mono">{{ row.productCode || '—' }}</td>
-              <td class="mds-name">{{ row.productName || '—' }}</td>
-              <td>{{ row.categoryName || '—' }}</td>
-              <td>{{ row.brand || '—' }}</td>
-              <td class="mds-num">{{ money(row.price) }}</td>
-              <td><StatusTag :text="auditText(row.auditStatus)" :tone="auditTone(row.auditStatus)" /></td>
-              <td>
-                <StatusTag
-                  :text="Number(row.status) === 1 ? '已上架' : '未上架'"
-                  :tone="Number(row.status) === 1 ? 'success' : 'gray'"
-                  plain
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="rows"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载商品…"
+        column-settings-storage-key="mds:cols:user-products"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        @page-change="(next, size) => size !== pageSize ? changePageSize(size) : changePage(next)"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="1" :loading="loading" @search="search" @reset="reset">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input v-model="keyword" class="mds-input" type="search" placeholder="商品名称 / 编码" />
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #empty>
+          <EmptyState
+                            icon="📦"
+                            title="当前主体还没有商品档案"
+                            description="SPU 由主体在商品档案中创建；主数据里暂无属于该主体的商品。"
+                          />
+        </template>
+        <template #cell-productName="{ row: row }">
+          <div class="mds-name">
+            {{ row.productName || '—' }}
+          </div>
+        </template>
+        <template #cell-price="{ row: row }">
+          {{ money(row.price) }}
+        </template>
+        <template #cell-auditStatus="{ row: row }">
+          <StatusTag :text="auditText(row.auditStatus)" :tone="auditTone(row.auditStatus)" />
+        </template>
+        <template #cell-status="{ row: row }">
+          <StatusTag
+                            :text="Number(row.status) === 1 ? '已上架' : '未上架'"
+                            :tone="Number(row.status) === 1 ? 'success' : 'gray'"
+                            plain
+                          />
+        </template>
+      </AgriVueTable>
 
-      <PagerBar :page="page" :page-size="pageSize" :total="total" @change="changePage" @update:page-size="changePageSize" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
 import { onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
 import { userGet } from '@/utils/userApi'
 import { useMeStore } from '@/stores/me'
 
@@ -145,6 +142,16 @@ function changePageSize(size: number) {
 }
 
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'productCode', label: 'SPU 编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'productName', label: '商品名称', width: 128 },
+  { prop: 'categoryName', label: '品类', width: 128 },
+  { prop: 'brand', label: '品牌', width: 128 },
+  { prop: 'price', label: '参考价', width: 104, kind: 'number', ellipsis: false },
+  { prop: 'auditStatus', label: '审核状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'status', label: '上架', width: 104, kind: 'status', ellipsis: false },
+]
 </script>
 
 <style scoped>

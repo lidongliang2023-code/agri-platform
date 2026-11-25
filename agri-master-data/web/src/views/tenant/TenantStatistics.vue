@@ -46,7 +46,7 @@
             <div class="distribution-track"><i :style="{ width: ratio(row.count, summary.totalTenants) + '%' }" /></div>
           </div>
         </div>
-        <p v-if="!typeRows.length" class="empty-inline">暂无数据</p>
+        <p v-if="!typeRows.length" class="empty-inline">暂无主体类型分布数据</p>
       </section>
 
       <section class="card">
@@ -57,30 +57,44 @@
             <div class="distribution-track"><i :class="statusClass(row.name)" :style="{ width: ratio(row.count, summary.totalTenants) + '%' }" /></div>
           </div>
         </div>
-        <p v-if="!verifyRows.length" class="empty-inline">暂无数据</p>
+        <p v-if="!verifyRows.length" class="empty-inline">暂无认证状态分布数据</p>
       </section>
     </div>
 
-    <section class="card ranking-card">
-      <div class="card-head">
-        <div><h2>主体成员活跃度排行</h2><p>按当前主体有效成员数量排序，最多展示前 10 个主体。</p></div>
-        <button class="export" @click="exportRankings">导出 CSV</button>
-      </div>
-      <table>
-        <thead><tr><th>排名</th><th>经营主体</th><th>类型</th><th>成员数</th><th>组织数</th><th>主体状态</th></tr></thead>
-        <tbody>
-          <tr v-if="rankings.length === 0"><td colspan="6" class="empty-cell">暂无主体数据</td></tr>
-          <tr v-for="row in rankings" :key="row.tenantId">
-            <td><span class="rank" :class="{ top: row.rank <= 3 }">{{ row.rank }}</span></td>
-            <td><strong>{{ row.tenantName }}</strong><small>{{ row.tenantId }}</small></td>
-            <td>{{ typeText(row.tenantType) }}</td>
-            <td>{{ display(row.userCount) }}</td>
-            <td>{{ display(row.orgCount) }}</td>
-            <td>{{ row.status || '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <AgriVueTable
+      :columns="rankingColumns"
+      :data="rankings"
+      row-key="tenantId"
+      empty-text="暂无主体数据"
+      column-settings-storage-key="mds:cols:tenant-statistics-rank"
+      client-pagination
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <strong style="font-size: 14px; color: #1f2937">主体成员活跃度排行</strong>
+        <span class="mds-muted" style="font-size: 12px">按当前主体有效成员数量排序（前 10）</span>
+        <button class="mds-btn" @click="exportRankings">导出 CSV</button>
+      </template>
+
+      <template #cell-rank="{ row }">
+        <span class="rank" :class="{ top: row.rank <= 3 }">{{ row.rank }}</span>
+      </template>
+      <template #cell-tenantName="{ row }">
+        <div class="mds-cell-inline" :title="`${row.tenantName}（${row.tenantId}）`">
+          <strong class="mds-cell-main">{{ row.tenantName }}</strong>
+          <span class="mds-cell-sub mds-mono">{{ row.tenantId }}</span>
+        </div>
+      </template>
+      <template #cell-tenantType="{ row }">
+        {{ typeText(row.tenantType) }}
+      </template>
+      <template #cell-userCount="{ row }">
+        {{ display(row.userCount) }}
+      </template>
+      <template #cell-orgCount="{ row }">
+        {{ display(row.orgCount) }}
+      </template>
+    </AgriVueTable>
 
     <section class="scope-card">
       <div>
@@ -98,7 +112,17 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { AgriVueTable } from '@agri/shared/vue/list'
 import { getTenantStatistics } from '../../utils/api'
+
+const rankingColumns = [
+  { prop: 'rank', label: '排名', width: 76, align: 'center', ellipsis: false },
+  { prop: 'tenantName', label: '经营主体', minWidth: 220, locked: true, ellipsis: false },
+  { prop: 'tenantType', label: '类型', width: 110 },
+  { prop: 'userCount', label: '成员数', width: 110, kind: 'number' },
+  { prop: 'orgCount', label: '组织数', width: 110, kind: 'number' },
+  { prop: 'status', label: '主体状态', width: 110, kind: 'status' },
+]
 
 const timeRange = ref('30d')
 const loadError = ref('')
@@ -180,54 +204,52 @@ onMounted(load)
 </script>
 
 <style scoped>
-.stats-page { padding:20px; color:#1f2937; }
-.page-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:18px; }
-.page-head h1 { margin:0 0 5px; font-size:24px; }
-.page-head p { margin:0; color:#6b7280; }
-.page-head select { height:38px; padding:0 12px; border:1px solid #d1d5db; border-radius:8px; background:#fff; }
-.error-banner { margin-bottom:14px; padding:11px 13px; border-radius:8px; background:#fef2f2; color:#b91c1c; }
-.kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
-.kpi-card { display:flex; gap:12px; padding:16px; border:1px solid #e3eae5; border-radius:10px; background:#fff; }
-.kpi-icon { width:40px; height:40px; display:grid; place-items:center; flex:none; border-radius:10px; background:#ecfdf5; font-size:19px; }
-.kpi-card small,.kpi-card strong,.kpi-card p { display:block; }
-.kpi-card small { color:#8a9890; font-size: var(--agri-font-size-micro); }
-.kpi-card strong { margin:4px 0; color:#0f6740; font-size:23px; }
-.kpi-card p { margin:0; color:#9ca3af; font-size: var(--agri-font-size-micro); }
-.chart-grid { display:grid; grid-template-columns:1.3fr .7fr .7fr; gap:14px; margin-bottom:14px; }
-.card { padding:18px; border:1px solid #e3eae5; border-radius:10px; background:#fff; }
-.card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:15px; }
-.card-head h2 { margin:0; font-size:16px; }
-.card-head p { margin:4px 0 0; color:#94a3b8; font-size: var(--agri-font-size-micro); }
-.total-badge { padding:5px 9px; border-radius:999px; background:#ecfdf5; color:#047857; font-size: var(--agri-font-size-micro); }
-.bar-chart { height:220px; display:flex; align-items:flex-end; gap:3px; overflow-x:auto; }
+.stats-page { padding:0; color:#1f2937; }
+.page-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:6px; }
+.page-head > div { display:flex; align-items:baseline; gap:10px; min-width:0; flex:1; }
+.page-head h1 { margin:0; font-size:18px; line-height:28px; white-space:nowrap; }
+.page-head p { margin:0; color:#8f959e; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.page-head select { height:30px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#fff; font-size:12.5px; }
+.error-banner { margin-bottom:8px; padding:6px 12px; border-radius:6px; background:#fef2f2; color:#b91c1c; font-size:12px; }
+.kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:6px; }
+.kpi-card { display:flex; align-items:center; gap:8px; padding:6px 12px; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
+.kpi-icon { width:26px; height:26px; display:grid; place-items:center; flex:none; border-radius:6px; background:#e9f6ef; font-size:14px; }
+.kpi-card > div { display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex:1; min-width:0; }
+.kpi-card small { color:#646a73; font-size:12px; white-space:nowrap; }
+.kpi-card strong { margin:0; color:#0f6740; font-size:18px; line-height:22px; font-family:ui-monospace,Consolas,monospace; }
+.kpi-card p { display:none; }
+.chart-grid { display:grid; grid-template-columns:1.3fr .7fr .7fr; gap:8px; margin-bottom:8px; }
+.card { padding:8px 12px; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
+.card-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+.card-head > div { display:flex; align-items:baseline; gap:8px; min-width:0; }
+.card-head h2 { margin:0; font-size:14px; white-space:nowrap; }
+.card-head p { margin:0; color:#94a3b8; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.total-badge { padding:2px 8px; border-radius:999px; background:#e9f6ef; color:#0f7a45; font-size:12px; white-space:nowrap; }
+.bar-chart { height:88px; display:flex; align-items:flex-end; gap:3px; overflow-x:auto; }
 .bar-cell { min-width:9px; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; flex:1; }
-.bar-value { min-height:16px; color:#64748b; font-size: var(--agri-font-size-micro); }
-.bar-track { width:70%; height:165px; display:flex; align-items:flex-end; }
-.bar-track i { width:100%; min-height:2px; border-radius:4px 4px 0 0; background:linear-gradient(#10b981,#047857); }
-.bar-label { margin-top:5px; color:#94a3b8; font-size: var(--agri-font-size-micro); white-space:nowrap; }
-.distribution-list { display:flex; flex-direction:column; gap:16px; }
-.distribution-head { display:flex; justify-content:space-between; margin-bottom:6px; color:#4b5563; font-size:12px; }
+.bar-value { min-height:14px; color:#64748b; font-size:12px; line-height:1; }
+.bar-track { width:70%; height:56px; display:flex; align-items:flex-end; }
+.bar-track i { width:100%; min-height:2px; border-radius:3px 3px 0 0; background:linear-gradient(#2d8f4e,#0f7a45); }
+.bar-label { margin-top:2px; color:#94a3b8; font-size:12px; line-height:1; white-space:nowrap; }
+.distribution-list { display:flex; flex-direction:column; gap:6px; }
+.distribution-head { display:flex; justify-content:space-between; margin-bottom:2px; color:#4b5563; font-size:12px; line-height:1.2; }
 .distribution-head strong { color:#0f6740; }
-.distribution-track { height:8px; overflow:hidden; border-radius:999px; background:#edf1ee; }
-.distribution-track i { display:block; height:100%; border-radius:999px; background:#10b981; }
+.distribution-track { height:6px; overflow:hidden; border-radius:999px; background:#edf1ee; }
+.distribution-track i { display:block; height:100%; border-radius:999px; background:#2d8f4e; }
 .distribution-track i.warn { background:#f59e0b; }
 .distribution-track i.danger { background:#ef4444; }
 .distribution-track i.draft { background:#94a3b8; }
-.ranking-card { margin-bottom:14px; overflow-x:auto; }
-.export { height:34px; padding:0 13px; border:1px solid #a7d9bf; border-radius:7px; background:#ecfdf5; color:#047857; cursor:pointer; }
-table { width:100%; min-width:850px; border-collapse:collapse; }
-th,td { padding:11px 12px; border-bottom:1px solid #edf0f2; text-align:left; font-size:12.5px; }
-th { background:#f8fafc; color:#64748b; font-size: var(--agri-font-size-micro); }
-td strong,td small { display:block; }
-td small { margin-top:3px; color:#9ca3af; font-family:ui-monospace,Consolas,monospace; font-size: var(--agri-font-size-micro); }
-.rank { width:26px; height:26px; display:grid; place-items:center; border-radius:50%; background:#f1f5f3; color:#64748b; font-size: var(--agri-font-size-micro); }
-.rank.top { background:#fff7e6; color:#b45309; }
-.empty-inline,.empty-cell { padding:28px !important; color:#9ca3af; text-align:center; }
-.scope-card { display:flex; justify-content:space-between; gap:20px; padding:17px; border-radius:10px; background:linear-gradient(120deg,#f8fcf9,#f1f8ff); }
-.scope-card h2 { margin:0 0 5px; font-size:15px; }
-.scope-card p { margin:0; color:#718078; font-size:12px; line-height:1.6; }
-.scope-tags { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
-.scope-tags span { padding:5px 9px; border-radius:999px; background:#fff; color:#64748b; font-size: var(--agri-font-size-micro); }
+.ranking-card { padding:0; margin-bottom:10px; overflow:hidden; }
+.ranking-head { padding:6px 14px; margin-bottom:0; border-bottom:1px solid #f0f2f5; }
+.export { height:28px; padding:0 10px; border:1px solid #a7d9bf; border-radius:6px; background:#e9f6ef; color:#0f7a45; font-size:12px; cursor:pointer; }
+.rank { width:22px; height:22px; display: inline-grid; place-items:center; border-radius:50%; background:#f1f5f3; color:#64748b; font-size:12px; }
+.rank.top { background:#fff7e6; color:#b45309; font-weight:600; }
+.empty-inline,.empty-cell { padding:18px !important; color:#9ca3af; text-align:center; }
+.scope-card { display:flex; justify-content:space-between; align-items:center; gap:14px; padding:10px 14px; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
+.scope-card h2 { margin:0 0 2px; font-size:13px; }
+.scope-card p { margin:0; color:#718078; font-size:12px; line-height:1.4; }
+.scope-tags { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }
+.scope-tags span { padding:3px 8px; border-radius:999px; background:#f2f3f5; color:#64748b; font-size:12px; }
 @media(max-width:1050px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.chart-grid{grid-template-columns:1fr 1fr}.growth-card{grid-column:1/-1}}
-@media(max-width:650px){.page-head,.scope-card{flex-direction:column}.kpi-grid,.chart-grid{grid-template-columns:1fr}.growth-card{grid-column:auto}}
+@media(max-width:650px){.page-head,.scope-card{flex-direction:column;align-items:flex-start}.kpi-grid,.chart-grid{grid-template-columns:1fr}.growth-card{grid-column:auto}}
 </style>

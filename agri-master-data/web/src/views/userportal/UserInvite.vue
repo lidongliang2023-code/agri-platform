@@ -19,10 +19,7 @@
       :subtitle="`加入申请由用户中心受理，本页负责审批（主体 ${merchantId || '—'}）`"
       source="用户中心 · 加入申请"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-        <button class="mds-btn mds-btn--primary" @click="openUserCenter">去用户中心邀请</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="邀请怎么发出去：">
@@ -50,39 +47,38 @@
           description="对方提交申请后，这里会出现待处理记录；也可以把本页的主体 ID 发给对方。"
         />
       </div>
-      <div v-else class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>申请人</th>
-              <th>申请角色</th>
-              <th>申请说明</th>
-              <th>提交时间</th>
-              <th class="mds-center">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in pending" :key="row.id">
-              <td>
-                <strong>{{ row.applicantName || row.applicantUserId }}</strong>
-              </td>
-              <td>
-                <StatusTag :text="roleText(row.requestedRole)" tone="info" plain />
-              </td>
-              <td>{{ row.message || '—' }}</td>
-              <td class="mds-mono">{{ formatTime(row.createdAt) }}</td>
-              <td class="mds-center">
-                <button class="wb-link" :disabled="acting === row.id" @click="review(row, true)">
-                  通过
-                </button>
-                <button class="wb-link wb-link--danger" :disabled="acting === row.id" @click="review(row, false)">
-                  驳回
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="pending"
+        row-key="id"
+        :loading="loading"
+        column-settings-storage-key="mds:cols:user-invite"
+        client-pagination
+        @refresh="load"
+      >
+        <template #toolbar-left>
+          <button class="mds-btn mds-btn--primary" @click="openUserCenter">去用户中心邀请</button>
+        </template>
+        <template #cell-applicantName="{ row: row }">
+          <strong>{{ row.applicantName || row.applicantUserId }}</strong>
+        </template>
+        <template #cell-requestedRole="{ row: row }">
+          <StatusTag :text="roleText(row.requestedRole)" tone="info" plain />
+        </template>
+        <template #cell-createdAt="{ row: row }">
+          <div class="mds-mono">
+            {{ formatTime(row.createdAt) }}
+          </div>
+        </template>
+        <template #cell-actions="{ row: row }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;通过&quot;, onClick: () => review(row, true), disabled: acting === row.id },
+              { key: '2', label: &quot;驳回&quot;, onClick: () => review(row, false), disabled: acting === row.id, danger: true },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
       <p v-if="tip" class="wb-tip" style="padding: 10px 18px">{{ tip }}</p>
     </div>
 
@@ -113,6 +109,8 @@
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageHeader from '@/components/ui/PageHeader.vue'
@@ -207,6 +205,14 @@ function openUserCenter() {
 }
 
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'applicantName', label: '申请人', minWidth: 174, locked: true, ellipsis: false },
+  { prop: 'requestedRole', label: '申请角色', width: 128, ellipsis: false },
+  { prop: 'message', label: '申请说明', width: 210 },
+  { prop: 'createdAt', label: '提交时间', width: 152, ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
 </script>
 
 <style scoped>

@@ -4,12 +4,7 @@
       title="身份管理"
       subtitle="平台个人实名身份台账：跨模块核对实名结果，审核动作由用户中心运营端办理。"
       source="只读 · 用户中心主责"
-    >
-      <template #actions>
-        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 实名审核</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="只读视图：">
       通过 / 驳回在本页<b>已移除</b> —— 同一动作在用户中心运营端有入口，两边都能改会让审核记录出现两套口径。
@@ -23,59 +18,56 @@
       <div class="audit-kpi"><span>草稿</span><strong>{{ counts.draft }}</strong><small>未提交，不占待办</small></div>
     </div>
 
-    <div class="search-bar">
-      <div class="filter-group">
-        <select v-model="statusFilter" class="filter-select">
-          <option value="all">全部状态</option>
-          <option value="pending">待审核</option>
-          <option value="approved">已通过</option>
-          <option value="rejected">已驳回</option>
-          <option value="draft">草稿</option>
-        </select>
-      </div>
-      <div class="search-group">
-        <input v-model="keyword" class="search-input" placeholder="搜索姓名 / 身份编号 / 联系电话" />
-      </div>
-    </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="filtered"
+      row-key="id"
+      :loading="loading"
+      empty-text="没有符合条件的身份记录"
+      column-settings-storage-key="mds:cols:uc-identity-list"
+      client-pagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      @refresh="loadData"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="statusFilter" class="mds-select">
+              <option value="all">全部状态</option>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">已驳回</option>
+              <option value="draft">草稿</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input v-model="keyword" class="mds-input" placeholder="姓名 / 身份编号 / 联系电话" @keyup.enter="search" />
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <div class="uc-table-wrap">
-      <table class="uc-table">
-        <thead>
-          <tr>
-            <th>身份编号</th>
-            <th>姓名</th>
-            <th>证件号</th>
-            <th>联系电话</th>
-            <th>核验</th>
-            <th>状态</th>
-            <th>提交时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading"><td colspan="8" class="uc-td-empty">正在加载…</td></tr>
-          <tr v-else-if="filtered.length === 0"><td colspan="8" class="uc-td-empty">没有符合条件的身份记录</td></tr>
-          <tr v-for="row in filtered" :key="row.id">
-            <td class="uc-mono">{{ row.identityNo || '—' }}</td>
-            <td>{{ row.realName || '—' }}</td>
-            <td class="uc-mono">{{ row.idNoMasked || '—' }}</td>
-            <td>{{ row.contactPhone || '—' }}</td>
-            <td>
-              <span class="uc-chip" :class="row.policeVerified ? 'ok' : ''">公安</span>
-              <span class="uc-chip" :class="row.livenessVerified ? 'ok' : ''">活体</span>
-            </td>
-            <td><span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span></td>
-            <td>{{ row.submitTime || '—' }}</td>
-            <td>
-              <template v-if="row.status === 'pending'">
-                <button class="mds-btn mds-btn--link" @click="openUserCenter">去用户中心审核</button>
-              </template>
-              <span v-else class="uc-muted">{{ row.reviewerName || '—' }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <template #toolbar-left>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 实名审核</button>
+      </template>
+
+      <template #cell-verify="{ row }">
+        <span class="uc-chip" :class="row.policeVerified ? 'ok' : ''">公安</span>
+        <span class="uc-chip" :class="row.livenessVerified ? 'ok' : ''">活体</span>
+      </template>
+      <template #cell-status="{ row }">
+        <span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          v-if="row.status === 'pending'"
+          :actions="[{ key: 'audit', label: '去用户中心审核', onClick: openUserCenter }]"
+        />
+        <span v-else class="uc-muted">{{ row.reviewerName || '—' }}</span>
+      </template>
+    </AgriVueTable>
 
     <p class="uc-foot">
       说明：数据来自 <code>/api/v1/admin/user-identities</code>。证件号由服务端掩码返回，
@@ -85,11 +77,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
 import '@/styles/admin-page.css'
+
+const columns: VueListColumn[] = [
+  { prop: 'identityNo', label: '身份编号', width: 155, kind: 'code', locked: true },
+  { prop: 'realName', label: '姓名', width: 110 },
+  { prop: 'idNoMasked', label: '证件号', width: 175, kind: 'code' },
+  { prop: 'contactPhone', label: '联系电话', width: 130, kind: 'code' },
+  { key: 'verify', label: '核验', width: 120, align: 'center', ellipsis: false },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { prop: 'submitTime', label: '提交时间', width: 160 },
+  { key: 'actions', label: '操作', width: 135, kind: 'action' },
+]
 import { getUserIdentities } from '@/utils/certification'
 
 interface Row {
@@ -109,6 +114,18 @@ const loading = ref(false)
 const statusFilter = ref('all')
 const keyword = ref('')
 const rows = ref<Row[]>([])
+const page = ref(1)
+const pageSize = ref(20)
+watch([statusFilter, keyword], () => { page.value = 1 })
+function search() {
+  keyword.value = keyword.value.trim()
+  page.value = 1
+}
+function reset() {
+  statusFilter.value = 'all'
+  keyword.value = ''
+  page.value = 1
+}
 
 function openUserCenter(): void {
   window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')

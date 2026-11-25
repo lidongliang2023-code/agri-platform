@@ -4,12 +4,7 @@
       title="供应商主数据"
       subtitle="上游供货主体的唯一维护入口：建档、等级与停用；证照与供应品类在交易撮合侧引用。"
       source="客商主数据 · 全平台共享"
-    >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/customer/supplier'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增供应商</button>
-        <button class="mds-btn" :disabled="loading" @click="reloadAll">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <StatGrid :items="statItems" />
 
@@ -18,104 +13,97 @@
       <code>credit_code</code>（统一社会信用代码）承载 —— 原来表单里的「营业执照号」填了不会落库，已替换。
     </NoticeBar>
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="searchForm.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="供应商名称 / 编码 / 联系人"
-          @keyup.enter="search"
+    <AgriVueTable
+      :columns="columns"
+      :data="tableData"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载供应商…"
+      column-settings-storage-key="mds:cols:supplier-list"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="reloadAll"
+      @update:page="handleCurrentChange"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="4" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input
+              v-model="searchForm.keyword"
+              class="mds-input"
+              type="search"
+              placeholder="供应商名称 / 编码 / 联系人"
+              @keyup.enter="search"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>供应商类型</label>
+            <select v-model="searchForm.supplierType" class="mds-select" @change="search">
+              <option value="">全部类型</option>
+              <option value="manufacturer">生产厂家</option>
+              <option value="dealer">经销商</option>
+              <option value="agent">代理商</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>等级</label>
+            <select v-model="searchForm.level" class="mds-select" @change="search">
+              <option value="">全部等级</option>
+              <option value="A">A 级</option>
+              <option value="B">B 级</option>
+              <option value="C">C 级</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="searchForm.status" class="mds-select" @change="search">
+              <option value="">全部状态</option>
+              <option value="1">正常</option>
+              <option value="0">禁用</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <button v-point="'POST /admin/masterdata/customer/supplier'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增供应商</button>
+      </template>
+
+      <template #empty>
+        <EmptyState title="暂无符合条件的供应商" description="调整关键字或筛选条件；也可以直接新增供应商。" />
+      </template>
+
+      <template #cell-supplierName="{ row }">
+        <span class="mds-name">{{ row.supplierName || '—' }}</span>
+      </template>
+      <template #cell-supplierType="{ row }">
+        <StatusTag :text="getTypeLabel(row.supplierType)" tone="cyan" plain />
+      </template>
+      <template #cell-level="{ row }">
+        <StatusTag :text="row.level || '—'" :tone="levelTone(row.level)" plain />
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag
+          :text="Number(row.status) === 1 ? '正常' : '禁用'"
+          :tone="Number(row.status) === 1 ? 'success' : 'gray'"
         />
-        <select v-model="searchForm.supplierType" class="mds-select" @change="search">
-          <option value="">全部类型</option>
-          <option value="manufacturer">生产厂家</option>
-          <option value="dealer">经销商</option>
-          <option value="agent">代理商</option>
-        </select>
-        <select v-model="searchForm.level" class="mds-select" @change="search">
-          <option value="">全部等级</option>
-          <option value="A">A 级</option>
-          <option value="B">B 级</option>
-          <option value="C">C 级</option>
-        </select>
-        <select v-model="searchForm.status" class="mds-select" @change="search">
-          <option value="">全部状态</option>
-          <option value="1">正常</option>
-          <option value="0">禁用</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
-
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>供应商编码</th>
-              <th>供应商名称</th>
-              <th>类型</th>
-              <th class="mds-center">等级</th>
-              <th>联系人</th>
-              <th>联系电话</th>
-              <th>信用代码</th>
-              <th>地址</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="11" class="mds-empty">正在加载供应商…</td>
-            </tr>
-            <tr v-else-if="!tableData.length">
-              <td colspan="11">
-                <EmptyState title="暂无符合条件的供应商" description="调整关键字或筛选条件；也可以直接新增供应商。" />
-              </td>
-            </tr>
-            <tr v-for="supplier in tableData" :key="supplier.id">
-              <td class="mds-mono">{{ supplier.supplierCode || '—' }}</td>
-              <td class="mds-name">{{ supplier.supplierName || '—' }}</td>
-              <td><StatusTag :text="getTypeLabel(supplier.supplierType)" tone="cyan" plain /></td>
-              <td class="mds-center">
-                <StatusTag :text="supplier.level || '—'" :tone="levelTone(supplier.level)" plain />
-              </td>
-              <td>{{ supplier.contactPerson || '—' }}</td>
-              <td class="mds-mono">{{ supplier.contactPhone || '—' }}</td>
-              <td class="mds-mono">{{ supplier.creditCode || '—' }}</td>
-              <td class="address-cell">{{ supplier.address || '—' }}</td>
-              <td>
-                <StatusTag
-                  :text="Number(supplier.status) === 1 ? '正常' : '禁用'"
-                  :tone="Number(supplier.status) === 1 ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="mds-muted">{{ formatDate(supplier.createTime) }}</td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="viewDetail(supplier.id)">详情</button>
-                <button v-point="'PUT /admin/masterdata/customer/supplier/{id}'" class="mds-btn mds-btn--link" @click="editSupplier(supplier)">编辑</button>
-                <button
-                  class="mds-btn mds-btn--link"
-                  :class="{ 'mds-danger': Number(supplier.status) === 1 }"
-                  @click="toggleStatus(supplier)"
-                >
-                  {{ Number(supplier.status) === 1 ? '禁用' : '启用' }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <PagerBar
-        :page="pageNum"
-        :page-size="pageSize"
-        :total="total"
-        @change="handleCurrentChange"
-        @update:page-size="changePageSize"
-      />
-    </div>
+      </template>
+      <template #cell-createTime="{ row }">
+        <span class="mds-muted">{{ formatDate(row.createTime) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'detail', label: '详情', onClick: () => viewDetail(row.id) },
+            { key: 'edit', label: '编辑', point: 'PUT /admin/masterdata/customer/supplier/{id}', onClick: () => editSupplier(row) },
+            { key: 'toggle', label: Number(row.status) === 1 ? '禁用' : '启用', danger: Number(row.status) === 1, onClick: () => toggleStatus(row) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
 
     <div v-if="detail" class="mds-card">
       <div class="mds-card-head">
@@ -219,7 +207,22 @@ import StatGrid from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+
+const columns = [
+  { prop: 'supplierCode', label: '供应商编码', width: 140, kind: 'code' },
+  { prop: 'supplierName', label: '供应商名称', width: 180, locked: true },
+  { prop: 'supplierType', label: '类型', width: 105, align: 'center', ellipsis: false },
+  { prop: 'level', label: '等级', width: 80, align: 'center', ellipsis: false },
+  { prop: 'contactPerson', label: '联系人', width: 105 },
+  { prop: 'contactPhone', label: '联系电话', width: 130, kind: 'code' },
+  { prop: 'creditCode', label: '信用代码', width: 170, kind: 'code' },
+  { prop: 'address', label: '地址', minWidth: 160 },
+  { prop: 'status', label: '状态', width: 92, kind: 'status' },
+  { prop: 'createTime', label: '创建时间', width: 118 },
+  { key: 'actions', label: '操作', width: 130, kind: 'action' },
+]
 import {
   createSupplier,
   getCustomerStatistics,

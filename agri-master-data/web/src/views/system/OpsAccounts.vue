@@ -5,90 +5,86 @@
       subtitle="平台运营团队的账号目录与角色权限码：账号主档在平台认证中心，角色与权限码同源。"
       source="统一认证 · 平台账号 / 角色"
     >
-      <template #actions>
-        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 账号管理</button>
-        <button class="mds-btn" :disabled="loading" @click="loadUsers">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <StatGrid :items="stats" />
 
     <NoticeBar tone="info" title="只读视图：">
-      账号的新建、冻结 / 解冻、重置密码与角色绑定都在用户中心运营端办理；
-      本页读取平台 <code>/api/v1/admin/uc/users</code> 与 <code>/api/v1/admin/roles</code>，
-      用于核对「谁在运营、持有什么权限码」，避免在多个入口各改一份。
+      账号新建、冻结/解冻、重置密码与角色绑定由用户中心运营端办理；本页只做平台账号目录与权限码核对。
     </NoticeBar>
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="filters.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="搜索用户名 / 昵称 / 手机号"
-          @keyup.enter="search"
-        />
-        <select v-model="filters.roleCode" class="mds-select" @change="search">
-          <option value="">全部角色</option>
-          <option v-for="role in roles" :key="role.code" :value="role.code">{{ role.name }}（{{ role.code }}）</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>账号</th>
-              <th>昵称</th>
-              <th>手机号</th>
-              <th>角色</th>
-              <th>实名</th>
-              <th>状态</th>
-              <th>创建时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="7" class="mds-empty">正在加载运营账号…</td>
-            </tr>
-            <tr v-else-if="!users.length">
-              <td colspan="7">
-                <EmptyState
-                  :title="loadError || '没有匹配的账号'"
-                  :description="loadError ? '当前账号没有读取平台账号目录的权限（需要 SUPER_ADMIN），或认证中心不可达。' : '调整关键字或角色筛选后重试。'"
-                />
-              </td>
-            </tr>
-            <tr v-for="user in users" :key="user.id">
-              <td class="mds-name">{{ user.username }}</td>
-              <td>{{ user.nickname || '—' }}</td>
-              <td class="mds-mono">{{ user.phone || '—' }}</td>
-              <td>
-                <template v-if="user.roles?.length">
-                  <span v-for="code in user.roles" :key="code" class="role-chip">{{ code }}</span>
-                </template>
-                <span v-else class="mds-muted">未绑定角色</span>
-              </td>
-              <td><StatusTag :text="realnameText(user.realnameStatus)" :tone="realnameTone(user.realnameStatus)" /></td>
-              <td>
-                <StatusTag
-                  :text="user.frozen ? '已冻结' : Number(user.status) === 1 ? '正常' : '停用'"
-                  :tone="user.frozen || Number(user.status) !== 1 ? 'danger' : 'success'"
-                />
-              </td>
-              <td class="mds-muted">{{ formatDate(user.createdAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <PagerBar
+      
+      <AgriVueTable
+        :columns="listColumns1"
+        :data="users"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载运营账号…"
+        column-settings-storage-key="mds:cols:ops-accounts-1"
         :page="page"
         :page-size="pageSize"
         :total="total"
-        @change="changePage"
-        @update:page-size="changePageSize"
-      />
+        @page-change="(next, size) => size !== pageSize ? changePageSize(size) : changePage(next)"
+        @refresh="loadUsers"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="2" :loading="loading" @search="search" @reset="reset">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input
+                        v-model="filters.keyword"
+                        class="mds-input"
+                        type="search"
+                        placeholder="搜索用户名 / 昵称 / 手机号"
+                      />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>角色</label>
+              <select v-model="filters.roleCode" class="mds-select" @change="search">
+                        <option value="">全部角色</option>
+                        <option v-for="role in roles" :key="role.code" :value="role.code">{{ role.name }}（{{ role.code }}）</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button class="mds-btn" @click="openUserCenter">前往用户中心 · 账号管理</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            :title="loadError || '没有匹配的账号'"
+                            :description="loadError ? '当前账号没有读取平台账号目录的权限（需要 SUPER_ADMIN），或认证中心不可达。' : '调整关键字或角色筛选后重试。'"
+                          />
+        </template>
+        <template #cell-username="{ row: user }">
+          <div class="mds-name">
+            {{ user.username }}
+          </div>
+        </template>
+        <template #cell-roles="{ row: user }">
+          <template v-if="user.roles?.length">
+                            <span v-for="code in user.roles" :key="code" class="role-chip">{{ code }}</span>
+                          </template>
+                          <span v-else class="mds-muted">未绑定角色</span>
+        </template>
+        <template #cell-realnameStatus="{ row: user }">
+          <StatusTag :text="realnameText(user.realnameStatus)" :tone="realnameTone(user.realnameStatus)" />
+        </template>
+        <template #cell-frozen="{ row: user }">
+          <StatusTag
+                            :text="user.frozen ? '已冻结' : Number(user.status) === 1 ? '正常' : '停用'"
+                            :tone="user.frozen || Number(user.status) !== 1 ? 'danger' : 'success'"
+                          />
+        </template>
+        <template #cell-createdAt="{ row: user }">
+          <div class="mds-muted">
+            {{ formatDate(user.createdAt) }}
+          </div>
+        </template>
+      </AgriVueTable>
+      
     </div>
 
     <div class="mds-card">
@@ -99,40 +95,37 @@
         </div>
         <span class="mds-tag mds-tag--plain">{{ roles.length }} 个角色</span>
       </div>
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>角色编码</th>
-              <th>角色名称</th>
-              <th class="mds-num">权限码数</th>
-              <th>权限码</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!roles.length">
-              <td colspan="4">
-                <EmptyState title="没有读取到角色目录" description="需要平台超管权限；也可在用户中心运营端的「角色管理」查看。" />
-              </td>
-            </tr>
-            <tr v-for="role in roles" :key="role.code">
-              <td class="mds-mono">{{ role.code }}</td>
-              <td class="mds-name">{{ role.name }}</td>
-              <td class="mds-num">{{ role.codes.length }}</td>
-              <td>
-                <span v-for="code in role.codes.slice(0, 8)" :key="code" class="perm-chip">{{ code }}</span>
-                <span v-if="role.codes.length > 8" class="mds-muted">等 {{ role.codes.length }} 项</span>
-                <span v-if="!role.codes.length" class="mds-muted">—</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="listColumns2"
+        :data="roles"
+        row-key="code"
+        column-settings-storage-key="mds:cols:ops-accounts-2"
+        client-pagination
+        @refresh="loadRoles"
+      >
+        <template #empty>
+          <EmptyState title="没有读取到角色目录" description="需要平台超管权限；也可在用户中心运营端的「角色管理」查看。" />
+        </template>
+        <template #cell-name="{ row: role }">
+          <div class="mds-name">
+            {{ role.name }}
+          </div>
+        </template>
+        <template #cell-codes="{ row: role }">
+          {{ role.codes.length }}
+        </template>
+        <template #cell-codes2="{ row: role }">
+          <span v-for="code in role.codes.slice(0, 8)" :key="code" class="perm-chip">{{ code }}</span>
+                          <span v-if="role.codes.length > 8" class="mds-muted">等 {{ role.codes.length }} 项</span>
+                          <span v-if="!role.codes.length" class="mds-muted">—</span>
+        </template>
+      </AgriVueTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
@@ -140,7 +133,6 @@ import StatGrid, { type StatItem } from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
 import { getPlatformOpsUsers, getPlatformRoles } from '@/utils/api'
 
 interface OpsUser {
@@ -279,6 +271,23 @@ function openUserCenter() {
 onMounted(async () => {
   await Promise.all([loadRoles(), loadUsers()])
 })
+
+const listColumns1: VueListColumn[] = [
+  { prop: 'username', label: '账号', minWidth: 174, locked: true },
+  { prop: 'nickname', label: '昵称', width: 128 },
+  { prop: 'phone', label: '手机号', width: 142, kind: 'code' },
+  { prop: 'roles', label: '角色', width: 128, ellipsis: false },
+  { prop: 'realnameStatus', label: '实名', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'frozen', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'createdAt', label: '创建时间', width: 152, ellipsis: false },
+]
+
+const listColumns2: VueListColumn[] = [
+  { prop: 'code', label: '角色编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'name', label: '角色名称', width: 128 },
+  { prop: 'codes', label: '权限码数', width: 104, kind: 'number', ellipsis: false },
+  { key: 'codes2', prop: 'codes', label: '权限码', width: 210, ellipsis: false },
+]
 </script>
 
 <style scoped>
@@ -287,7 +296,7 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   height: 20px;
-  margin: 0 6px 4px 0;
+  margin: 0 4px 0 0;
   padding: 0 7px;
   border-radius: 4px;
   background: #e9f6ef;

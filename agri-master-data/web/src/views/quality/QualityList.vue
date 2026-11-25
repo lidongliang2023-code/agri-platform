@@ -4,97 +4,90 @@
       title="质量监控"
       subtitle="数据质量问题的实时清单：按严重级别与状态筛选，查看详情并登记处置结果。"
       source="数据治理 · 质量问题"
-    >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="reloadAll">刷新</button>
-        <button class="mds-btn mds-btn--primary" @click="router.push('/quality/issue')">问题工单</button>
-      </template>
-    </PageHeader>
+    />
 
     <StatGrid :items="statItems" />
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="keyword"
-          class="mds-input"
-          type="search"
-          placeholder="当前页内搜索问题描述（后端无全文检索）"
-          @keyup.enter="() => {}"
+    <AgriVueTable
+      :columns="columns"
+      :data="visibleRows"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载质量问题…"
+      column-settings-storage-key="mds:cols:quality-list"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="reloadAll"
+      @update:page="changePage"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字（当前页）</label>
+            <input
+              v-model="keyword"
+              class="mds-input"
+              type="search"
+              placeholder="当前页内搜索问题描述"
+              @keyup.enter="search"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>严重级别</label>
+            <select v-model="severity" class="mds-select" @change="search">
+              <option value="">全部级别</option>
+              <option value="high">严重</option>
+              <option value="medium">警告</option>
+              <option value="low">提示</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="status" class="mds-select" @change="search">
+              <option value="">全部状态</option>
+              <option value="pending">待处理</option>
+              <option value="processing">处理中</option>
+              <option value="resolved">已解决</option>
+              <option value="ignored">已忽略</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <button class="mds-btn mds-btn--primary" @click="router.push('/quality/issue')">问题工单</button>
+      </template>
+
+      <template #empty>
+        <EmptyState
+          :title="rows.length ? '当前页没有匹配的问题' : '暂无质量问题'"
+          :description="rows.length ? '关键词只过滤当前页；清空后翻页查看其他页。' : '检测任务产出问题后，这里会出现记录。'"
         />
-        <select v-model="severity" class="mds-select" @change="search">
-          <option value="">全部级别</option>
-          <option value="high">严重</option>
-          <option value="medium">警告</option>
-          <option value="low">提示</option>
-        </select>
-        <select v-model="status" class="mds-select" @change="search">
-          <option value="">全部状态</option>
-          <option value="pending">待处理</option>
-          <option value="processing">处理中</option>
-          <option value="resolved">已解决</option>
-          <option value="ignored">已忽略</option>
-        </select>
-        <span class="mds-hint">共 {{ total }} 条</span>
-      </div>
+      </template>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table monitor-table">
-          <thead>
-            <tr>
-              <th>问题编码</th>
-              <th>级别</th>
-              <th>问题类型</th>
-              <th>问题描述</th>
-              <th>关联数据</th>
-              <th>检测时间</th>
-              <th>状态</th>
-              <th>处理人</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="9" class="mds-empty">正在加载质量问题…</td>
-            </tr>
-            <tr v-else-if="!visibleRows.length">
-              <td colspan="9">
-                <EmptyState
-                  :title="rows.length ? '当前页没有匹配的问题' : '暂无质量问题'"
-                  :description="rows.length ? '关键词只过滤当前页；清空后翻页查看其他页。' : '检测任务产出问题后，这里会出现记录。'"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in visibleRows" :key="row.id">
-              <td class="mds-mono">{{ row.issueCode }}</td>
-              <td><StatusTag :text="severityText(row.severity)" :tone="severityTone(row.severity)" /></td>
-              <td>{{ row.issueType || '—' }}</td>
-              <td class="desc-cell" :title="row.description">{{ row.description || '—' }}</td>
-              <td class="mds-muted">{{ row.affectedData || '—' }}</td>
-              <td class="mds-muted time-cell">{{ formatTime(row.createTime) }}</td>
-              <td><StatusTag :text="statusText(row.status)" :tone="statusTone(row.status)" /></td>
-              <td>{{ row.handler || '—' }}</td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="openDetail(row)">详情</button>
-                <button
-                  class="mds-btn mds-btn--link"
-                  :disabled="busyId === row.id || row.status === 'resolved' || row.status === 'ignored'"
-                  @click="openHandle(row)"
-                >处理</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <PagerBar
-        :page="pageNum"
-        :page-size="pageSize"
-        :total="total"
-        @change="changePage"
-        @update:page-size="changePageSize"
-      />
-    </div>
+      <template #cell-severity="{ row }">
+        <StatusTag :text="severityText(row.severity)" :tone="severityTone(row.severity)" />
+      </template>
+      <template #cell-affectedData="{ row }">
+        <span class="mds-muted">{{ row.affectedData || '—' }}</span>
+      </template>
+      <template #cell-createTime="{ row }">
+        <span class="mds-muted time-cell">{{ formatTime(row.createTime) }}</span>
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag :text="statusText(row.status)" :tone="statusTone(row.status)" />
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'detail', label: '详情', onClick: () => openDetail(row as IssueRow) },
+            { key: 'handle', label: '处理', disabled: busyId === row.id || row.status === 'resolved' || row.status === 'ignored', onClick: () => openHandle(row as IssueRow) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
 
     <!-- 详情 -->
     <div v-if="detail" class="mds-mask" @click="detail = null">
@@ -183,7 +176,27 @@ import PageHeader from '@/components/ui/PageHeader.vue'
 import StatGrid from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
+
+const columns: VueListColumn[] = [
+  { prop: 'issueCode', label: '问题编码', width: 145, kind: 'code', locked: true },
+  { prop: 'severity', label: '级别', width: 88, kind: 'status' },
+  { prop: 'issueType', label: '问题类型', width: 120 },
+  { prop: 'description', label: '问题描述', minWidth: 220 },
+  { prop: 'affectedData', label: '关联数据', width: 150 },
+  { prop: 'createTime', label: '检测时间', width: 150 },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { prop: 'handler', label: '处理人', width: 100 },
+  { key: 'actions', label: '操作', width: 115, kind: 'action' },
+]
+
+function reset() {
+  keyword.value = ''
+  severity.value = ''
+  status.value = ''
+  search()
+}
 import { getQualityDetail, getQualityList, getQualityStatistics, handleQualityIssue } from '../../utils/api'
 
 interface IssueRow {

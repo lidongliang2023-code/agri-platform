@@ -1,26 +1,33 @@
 <template>
-  <div class="mds-pager">
-    <span>共 {{ total }} 条</span>
-    <select :value="pageSize" @change="onSizeChange">
-      <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }} 条/页</option>
-    </select>
-    <button class="mds-pager__btn" :disabled="page <= 1" @click="emit('change', page - 1)">上一页</button>
-    <span>第 {{ page }} / {{ totalPages }} 页</span>
-    <button class="mds-pager__btn" :disabled="page >= totalPages" @click="emit('change', page + 1)">下一页</button>
-  </div>
+  <AgriVuePagination
+    :page="page"
+    :page-size="pageSize"
+    :total="total"
+    :selected-count="selectedCount"
+    :unit="unit"
+    :page-size-options="pageSizeOptions"
+    @update:page="emit('change', $event)"
+    @update:page-size="onSizeChange"
+  />
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { AgriVuePagination } from '@agri/shared/vue/list'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     page: number
     pageSize: number
     total: number
+    selectedCount?: number
+    unit?: string
     pageSizeOptions?: number[]
   }>(),
-  { pageSizeOptions: () => [10, 20, 50] },
+  {
+    selectedCount: 0,
+    unit: '条',
+    pageSizeOptions: () => [10, 20, 50, 100],
+  },
 )
 
 const emit = defineEmits<{
@@ -28,10 +35,7 @@ const emit = defineEmits<{
   'update:pageSize': [size: number]
 }>()
 
-const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.pageSize)))
-
-function onSizeChange(event: Event) {
-  const size = Number((event.target as HTMLSelectElement).value)
+function onSizeChange(size: number) {
   emit('update:pageSize', size)
   emit('change', 1)
 }

@@ -4,101 +4,94 @@
       title="检测任务"
       subtitle="质量检测任务的调度与执行记录。规则引擎尚未实现：这里的「执行」只登记一次巡检，不做真实规则计算。"
       source="数据治理 · 检测任务"
-    >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/quality/tasks'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新建任务</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <StatGrid :items="statItems" />
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索任务名称" />
-        <select v-model="filterStatus" class="mds-select">
-          <option value="all">全部状态</option>
-          <option value="scheduled">待执行</option>
-          <option value="running">执行中</option>
-          <option value="completed">已完成</option>
-          <option value="failed">失败</option>
-          <option value="paused">已暂停</option>
-        </select>
-        <span class="mds-hint">共 {{ filteredTasks.length }} / {{ tasks.length }} 条 · 任务列表一次加载，不走分页</span>
-      </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="filteredTasks"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载检测任务…"
+      column-settings-storage-key="mds:cols:quality-task"
+      client-pagination
+      @refresh="loadData"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="() => {}" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>任务名称</label>
+            <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索任务名称" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="filterStatus" class="mds-select">
+              <option value="all">全部状态</option>
+              <option value="scheduled">待执行</option>
+              <option value="running">执行中</option>
+              <option value="completed">已完成</option>
+              <option value="failed">失败</option>
+              <option value="paused">已暂停</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table task-table">
-          <thead>
-            <tr>
-              <th>任务名称</th>
-              <th>检测规则</th>
-              <th>执行类型</th>
-              <th>下次执行</th>
-              <th>状态</th>
-              <th>最近执行</th>
-              <th>成功率</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="8" class="mds-empty">正在加载检测任务…</td>
-            </tr>
-            <tr v-else-if="!filteredTasks.length">
-              <td colspan="8">
-                <EmptyState
-                  :title="tasks.length ? '没有符合条件的任务' : '还没有检测任务'"
-                  :description="tasks.length ? '调整状态或关键字筛选。' : '新建任务并关联至少一条质量规则。'"
-                />
-              </td>
-            </tr>
-            <tr v-for="task in filteredTasks" :key="task.id">
-              <td>
-                <div class="task-name">
-                  <span>{{ taskIcon(task.type) }}</span>
-                  <span class="mds-name">{{ task.name }}</span>
-                </div>
-                <div class="mds-hint mds-mono">{{ task.code }}</div>
-              </td>
-              <td>
-                <template v-if="task.ruleNames?.length">
-                  <StatusTag v-for="name in task.ruleNames" :key="name" :text="name" tone="gray" plain />
-                </template>
-                <span v-else class="mds-muted">未关联规则</span>
-              </td>
-              <td><StatusTag :text="typeText(task.type)" :tone="typeTone(task.type)" plain /></td>
-              <td class="mds-muted">{{ task.nextRunTime || '—' }}</td>
-              <td><StatusTag :text="statusText(task.status)" :tone="statusTone(task.status)" /></td>
-              <td class="mds-muted">{{ task.lastRunTime || '—' }}</td>
-              <td>
-                <div class="rate">
-                  <div class="rate-bar">
-                    <div
-                      class="rate-fill"
-                      :class="rateClass(task.successRate)"
-                      :style="{ width: (task.successRate ?? 0) + '%' }"
-                    />
-                  </div>
-                  <span>{{ task.successRate == null ? '—' : task.successRate + '%' }}</span>
-                </div>
-              </td>
-              <td class="mds-actions">
-                <button v-point="'POST /admin/masterdata/quality/tasks/{id}/run'"
-                  class="mds-btn mds-btn--link"
-                  :disabled="busyId === task.id || task.status === 'running'"
-                  @click="runTask(task)"
-                >执行</button>
-                <button v-point="'PUT /admin/masterdata/quality/tasks/{id}'" class="mds-btn mds-btn--link" @click="editTask(task)">编辑</button>
-                <button v-point="'DELETE /admin/masterdata/quality/tasks/{id}'" class="mds-btn mds-btn--link mds-danger" :disabled="busyId === task.id" @click="deleteTask(task)">
-                  删除
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <template #toolbar-left>
+        <button v-point="'POST /admin/masterdata/quality/tasks'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新建任务</button>
+      </template>
+
+      <template #empty>
+        <EmptyState
+          :title="tasks.length ? '没有符合条件的任务' : '还没有检测任务'"
+          :description="tasks.length ? '调整状态或关键字筛选。' : '新建任务并关联至少一条质量规则。'"
+        />
+      </template>
+
+      <template #cell-name="{ row }">
+        <div class="task-name">
+          <span>{{ taskIcon(row.type) }}</span>
+          <span class="mds-name">{{ row.name }}</span>
+        </div>
+        <div class="mds-hint mds-mono">{{ row.code }}</div>
+      </template>
+      <template #cell-ruleNames="{ row }">
+        <template v-if="row.ruleNames?.length">
+          <StatusTag v-for="name in row.ruleNames" :key="name" :text="name" tone="gray" plain />
+        </template>
+        <span v-else class="mds-muted">未关联规则</span>
+      </template>
+      <template #cell-type="{ row }">
+        <StatusTag :text="typeText(row.type)" :tone="typeTone(row.type)" plain />
+      </template>
+      <template #cell-nextRunTime="{ row }">
+        <span class="mds-muted">{{ row.nextRunTime || '—' }}</span>
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag :text="statusText(row.status)" :tone="statusTone(row.status)" />
+      </template>
+      <template #cell-lastRunTime="{ row }">
+        <span class="mds-muted">{{ row.lastRunTime || '—' }}</span>
+      </template>
+      <template #cell-successRate="{ row }">
+        <div class="rate">
+          <div class="rate-bar">
+            <div class="rate-fill" :class="rateClass(row.successRate)" :style="{ width: (row.successRate ?? 0) + '%' }" />
+          </div>
+          <span>{{ row.successRate == null ? '—' : row.successRate + '%' }}</span>
+        </div>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'run', label: '执行', point: 'POST /admin/masterdata/quality/tasks/{id}/run', disabled: busyId === row.id || row.status === 'running', onClick: () => runTask(row) },
+            { key: 'edit', label: '编辑', point: 'PUT /admin/masterdata/quality/tasks/{id}', onClick: () => editTask(row) },
+            { key: 'delete', label: '删除', danger: true, point: 'DELETE /admin/masterdata/quality/tasks/{id}', disabled: busyId === row.id, onClick: () => deleteTask(row) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
 
     <div v-if="showAddModal" class="mds-mask" @click="closeAddModal">
       <div class="mds-modal" @click.stop>
@@ -176,6 +169,24 @@ import PageHeader from '@/components/ui/PageHeader.vue'
 import StatGrid from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+
+const columns = [
+  { prop: 'name', label: '任务名称', width: 200, locked: true, ellipsis: false },
+  { prop: 'ruleNames', label: '检测规则', minWidth: 180, ellipsis: false },
+  { prop: 'type', label: '执行类型', width: 105, align: 'center', ellipsis: false },
+  { prop: 'nextRunTime', label: '下次执行', width: 150 },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { prop: 'lastRunTime', label: '最近执行', width: 150 },
+  { prop: 'successRate', label: '成功率', width: 125, align: 'right', ellipsis: false },
+  { key: 'actions', label: '操作', width: 120, kind: 'action' },
+]
+
+function resetFilter() {
+  filterKeyword.value = ''
+  filterStatus.value = 'all'
+}
 import {
   createQualityTask,
   deleteQualityTask,

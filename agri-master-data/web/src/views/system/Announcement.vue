@@ -5,10 +5,7 @@
       subtitle="平台公告的起草、发布与下线；发布后的公告面向全平台展示。"
       source="系统配置 · 公告"
     >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/announcement'" class="mds-btn mds-btn--primary" @click="openCreate">+ 发布公告</button>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="状态口径：">
@@ -16,82 +13,90 @@
     </NoticeBar>
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <input v-model="keyword" class="mds-input" type="search" placeholder="标题 / 正文关键词" @keyup.enter="search" />
-        <select v-model="filterStatus" class="mds-select" @change="search">
-          <option value="">全部状态</option>
-          <option value="draft">草稿</option>
-          <option value="published">已发布</option>
-          <option value="offline">已下线</option>
-        </select>
-        <select v-model="filterType" class="mds-select" @change="search">
-          <option value="">全部类型</option>
-          <option value="info">通知公告</option>
-          <option value="warning">重要提醒</option>
-          <option value="maintenance">系统维护</option>
-          <option value="emergency">紧急通知</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table announcement-table">
-          <thead>
-            <tr>
-              <th>标题</th>
-              <th>类型</th>
-              <th>状态</th>
-              <th>发布人</th>
-              <th>发布时间</th>
-              <th>到期时间</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="7" class="mds-empty">正在加载公告…</td>
-            </tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="7">
-                <EmptyState
-                  icon="📢"
-                  title="没有符合条件的公告"
-                  :description="rows.length === 0 ? '还没有发布过公告；点击右上角「发布公告」起草第一条。' : '调整筛选条件后重试。'"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.id">
-              <td>
-                <div class="mds-name">{{ row.title }}</div>
-                <div class="mds-hint content-cell" :title="row.content">{{ row.content }}</div>
-              </td>
-              <td><StatusTag :text="typeText(row.type)" :tone="typeTone(row.type)" plain /></td>
-              <td><StatusTag :text="statusText(row.status)" :tone="statusTone(row.status)" /></td>
-              <td>{{ row.author || '—' }}</td>
-              <td class="mds-muted time-cell">{{ formatTime(row.publishTime) }}</td>
-              <td class="mds-muted time-cell">{{ row.expireTime ? formatTime(row.expireTime) : '长期' }}</td>
-              <td class="mds-actions">
-                <button v-point="'PUT /admin/masterdata/announcement/{id}'" class="mds-btn mds-btn--link" @click="openEdit(row)">编辑</button>
-                <button v-point="'PUT /admin/masterdata/announcement/{id}/publish'"
-                  v-if="row.status !== 'published'"
-                  class="mds-btn mds-btn--link"
-                  :disabled="busyId === row.id"
-                  @click="publish(row)"
-                >发布</button>
-                <button v-point="'PUT /admin/masterdata/announcement/{id}/offline'"
-                  v-else
-                  class="mds-btn mds-btn--link mds-danger"
-                  :disabled="busyId === row.id"
-                  @click="offline(row)"
-                >下线</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="rows"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载公告…"
+        column-settings-storage-key="mds:cols:announcement"
+        :page="page"
+        :page-size="pageSize"
+        :total="total"
+        @page-change="(next, size) => size !== pageSize ? changePageSize(size) : changePage(next)"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="3" :loading="loading" @search="search" @reset="reset">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input v-model="keyword" class="mds-input" type="search" placeholder="标题 / 正文关键词" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>状态</label>
+              <select v-model="filterStatus" class="mds-select" @change="search">
+                        <option value="">全部状态</option>
+                        <option value="draft">草稿</option>
+                        <option value="published">已发布</option>
+                        <option value="offline">已下线</option>
+                      </select>
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>类型</label>
+              <select v-model="filterType" class="mds-select" @change="search">
+                        <option value="">全部类型</option>
+                        <option value="info">通知公告</option>
+                        <option value="warning">重要提醒</option>
+                        <option value="maintenance">系统维护</option>
+                        <option value="emergency">紧急通知</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button v-point="'POST /admin/masterdata/announcement'" class="mds-btn mds-btn--primary" @click="openCreate">+ 发布公告</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            icon="📢"
+                            title="没有符合条件的公告"
+                            :description="rows.length === 0 ? '还没有发布过公告；点击右上角「发布公告」起草第一条。' : '调整筛选条件后重试。'"
+                          />
+        </template>
+        <template #cell-title="{ row: row }">
+          <div class="mds-cell-inline" :title="`${row.title} — ${row.content}`">
+                            <span class="mds-name mds-cell-main">{{ row.title }}</span>
+                            <span class="mds-cell-sub content-cell">{{ row.content }}</span>
+                          </div>
+        </template>
+        <template #cell-type="{ row: row }">
+          <StatusTag :text="typeText(row.type)" :tone="typeTone(row.type)" plain />
+        </template>
+        <template #cell-status="{ row: row }">
+          <StatusTag :text="statusText(row.status)" :tone="statusTone(row.status)" />
+        </template>
+        <template #cell-publishTime="{ row: row }">
+          <div class="mds-muted time-cell">
+            {{ formatTime(row.publishTime) }}
+          </div>
+        </template>
+        <template #cell-expireTime="{ row: row }">
+          <div class="mds-muted time-cell">
+            {{ row.expireTime ? formatTime(row.expireTime) : '长期' }}
+          </div>
+        </template>
+        <template #cell-actions="{ row: row }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;编辑&quot;, onClick: () => openEdit(row), point: 'PUT /admin/masterdata/announcement/{id}' },
+              { key: '2', label: &quot;发布&quot;, onClick: () => publish(row), hidden: !((row.status !== 'published')), point: 'PUT /admin/masterdata/announcement/{id}/publish', disabled: busyId === row.id },
+              { key: '3', label: &quot;下线&quot;, onClick: () => offline(row), hidden: !((!(row.status !== 'published'))), point: 'PUT /admin/masterdata/announcement/{id}/offline', disabled: busyId === row.id, danger: true },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
 
-      <PagerBar :page="page" :page-size="pageSize" :total="total" @change="changePage" @update:page-size="changePageSize" />
     </div>
 
     <div v-if="showModal" class="mds-mask" @click="closeModal">
@@ -144,13 +149,14 @@
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
 import {
   createAnnouncement,
   getAnnouncementPage,
@@ -341,6 +347,16 @@ async function offline(row: AnnouncementRow) {
 }
 
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'title', label: '标题', minWidth: 174, locked: true, ellipsis: false },
+  { prop: 'type', label: '类型', width: 128, ellipsis: false },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { prop: 'author', label: '发布人', width: 128 },
+  { prop: 'publishTime', label: '发布时间', width: 152, ellipsis: false },
+  { prop: 'expireTime', label: '到期时间', width: 152, ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
 </script>
 
 <style scoped>

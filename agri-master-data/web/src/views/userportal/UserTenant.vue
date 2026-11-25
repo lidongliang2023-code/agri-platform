@@ -5,9 +5,7 @@
       subtitle="当前主体信息与主数据用量计数；套餐额度与账单由订阅计费引擎维护，本页只做只读展示。"
       source="主数据 · 我的主体"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="说明：">
@@ -62,28 +60,33 @@
       </div>
       <div class="mds-card-body mds-card-body--flush">
         <div v-if="!summary" class="mds-empty">正在加载用量…</div>
-        <table v-else class="mds-table">
-          <thead>
-            <tr>
-              <th>统计项</th>
-              <th class="mds-num">当前数量</th>
-              <th>数据来源</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in usageRows" :key="row.name">
-              <td class="mds-name">{{ row.name }}</td>
-              <td class="mds-num">{{ row.value }}</td>
-              <td class="mds-muted">{{ row.source }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <AgriVueTable
+          :columns="columns"
+          :data="usageRows"
+          row-key="name"
+          :loading="loading"
+          column-settings-storage-key="mds:cols:user-tenant"
+          client-pagination
+          @refresh="load"
+        >
+          <template #cell-name="{ row: row }">
+            <div class="mds-name">
+              {{ row.name }}
+            </div>
+          </template>
+          <template #cell-source="{ row: row }">
+            <div class="mds-muted">
+              {{ row.source }}
+            </div>
+          </template>
+        </AgriVueTable>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
 import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
@@ -148,4 +151,10 @@ async function load() {
 }
 
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'name', label: '统计项', minWidth: 174, locked: true },
+  { prop: 'value', label: '当前数量', width: 104, kind: 'number' },
+  { prop: 'source', label: '数据来源', width: 128 },
+]
 </script>

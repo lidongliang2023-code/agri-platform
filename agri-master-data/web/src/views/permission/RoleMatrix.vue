@@ -22,286 +22,290 @@
       失败的角色列显示「?」，不按「未授权」渲染 —— 把读取失败画成「无权限」会让人误删真实授权。
     </NoticeBar>
 
-    <div class="mds-card request-queue">
-      <div class="mds-card-head">
-        <div>
-          <h2 class="mds-card-title">授权申请</h2>
-          <p class="mds-card-sub">
-            横幅上「申请授权」提交到这里。<b>同意即真的写授权</b>：该点授给申请人当前绑定的角色，
-            他刷新页面后按钮就回来了；<b>驳回必须写原因</b> —— 不写原因的驳回只会让申请人再提一遍。
-          </p>
-        </div>
-        <div class="mds-head-actions">
-          <select v-model="requestStatus" class="mds-select" @change="loadRequests">
-            <option value="PENDING">待处理</option>
-            <option value="APPROVED">已同意</option>
-            <option value="REJECTED">已驳回</option>
-            <option value="">全部</option>
-          </select>
-          <span class="mds-tag mds-tag--plain">{{ requests.length }} 条</span>
-          <button class="mds-btn" :disabled="requestLoading" @click="loadRequests">刷新</button>
-        </div>
-      </div>
-
-      <div v-if="requestError" class="mds-card-body">
-        <NoticeBar tone="danger" title="授权申请读取失败：">{{ requestError }}</NoticeBar>
-      </div>
-
-      <div v-else-if="!requestLoading && !requests.length" class="mds-card-body">
-        <EmptyState
-          icon="📥"
-          title="这一档没有授权申请"
-          description="申请来自「部分操作已隐藏」横幅：账号被权限点拦掉的按钮会计入清单，本人从这里发起申请，运营端在这里处理。"
-        />
-      </div>
-
-      <div v-else class="mds-table-wrap" style="max-height: 360px; overflow: auto">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>申请人</th>
-              <th>申请的权限点</th>
-              <th>来自页面</th>
-              <th>理由</th>
-              <th class="mds-center">状态</th>
-              <th class="mds-center">处理</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="requestLoading">
-              <td colspan="6" class="mds-empty">正在读取授权申请…</td>
-            </tr>
-            <template v-for="req in requests" :key="req.id">
-              <tr>
-                <td>
-                  <span class="mds-name">{{ req.applicantName || req.applicant }}</span>
-                  <div class="mds-hint mds-mono">{{ req.applicant }}</div>
-                </td>
-                <td>
-                  <span class="mds-mono">{{ req.permCode }}</span>
-                  <div v-if="req.permName" class="mds-hint">{{ req.permName }}</div>
-                </td>
-                <td class="mds-muted mds-mono">{{ req.pagePath || '-' }}</td>
-                <td class="mds-muted">{{ req.reason || '（未填理由）' }}</td>
-                <td class="mds-center">
-                  <span class="mds-tag" :class="statusTone(req.status)">{{ statusText(req.status) }}</span>
-                </td>
-                <td class="mds-center">
-                  <template v-if="req.status === 'PENDING'">
-                    <button
-                      class="mds-btn mds-btn--sm"
-                      v-point="'PUT /admin/masterdata/permission/requests/{id}/handle'"
-                      :disabled="handlingId !== ''"
-                      @click="handle(req, true)"
-                    >同意</button>
-                    <button
-                      class="mds-btn mds-btn--sm"
-                      v-point="'PUT /admin/masterdata/permission/requests/{id}/handle'"
-                      :disabled="handlingId !== ''"
-                      @click="startReject(req)"
-                    >驳回</button>
-                  </template>
-                  <div v-else class="mds-hint">
-                    {{ req.handler || '-' }}
-                    <div>{{ req.handleRemark || '' }}</div>
-                  </div>
-                </td>
-              </tr>
-              <tr v-if="rejectingId === req.id">
-                <td colspan="6">
-                  <div class="reject-form">
-                    <input
-                      v-model="rejectRemark"
-                      class="mds-input"
-                      type="text"
-                      maxlength="200"
-                      placeholder="驳回原因（必填，会显示给申请人）"
-                      @keyup.enter="handle(req, false)"
-                    />
-                    <button class="mds-btn mds-btn--primary mds-btn--sm" :disabled="handlingId !== ''" @click="handle(req, false)">
-                      确认驳回
-                    </button>
-                    <button class="mds-btn mds-btn--sm" @click="startReject(null)">取消</button>
-                  </div>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
     <div class="mds-card">
-      <div class="mds-filter">
-        <input v-model="keyword" class="mds-input" type="search" placeholder="搜索角色名称 / 编码" />
-        <select v-model="onlyGranted" class="mds-select">
-          <option value="">全部权限点</option>
-          <option value="granted">只看已被授予</option>
-        </select>
-      </div>
-
-      <!-- 权限点目录为空时不要渲染一张只有表头的矩阵：那看起来像"权限都丢了"，
-           实际是 agri_md_menu 还没有数据。 -->
-      <div v-if="!loading && !matrixRows.length" class="mds-card-body">
-        <EmptyState
-          icon="🔐"
-          title="权限点目录为空，暂时无法生成矩阵"
-          description="矩阵的行来自主数据后端的菜单 / 权限点表（agri_md_menu）。该表随服务启动由 data-menu-catalog.sql 写入运营端 9 组 / 43 个页面；若仍为空，说明目录脚本没有执行成功，先查后端启动日志。"
+      <div class="mds-tabs">
+        <button
+          type="button"
+          class="mds-tab"
+          :class="{ 'is-active': activeMatrixTab === 'menu' }"
+          @click="activeMatrixTab = 'menu'"
         >
-          <div class="mds-head-actions" style="justify-content: center; margin-top: 14px">
-            <button class="mds-btn" @click="router.push('/permission/role')">去角色与权限点</button>
-            <button class="mds-btn" :disabled="loading" @click="load">重新计算</button>
-          </div>
-        </EmptyState>
+          页面权限矩阵<span class="mds-tab__count">{{ visibleRows.length }}</span>
+        </button>
+        <button
+          type="button"
+          class="mds-tab"
+          :class="{ 'is-active': activeMatrixTab === 'point' }"
+          @click="activeMatrixTab = 'point'"
+        >
+          接口权限点（按钮 / API）<span class="mds-tab__count">{{ visiblePointRows.length }}</span>
+        </button>
+        <button
+          type="button"
+          class="mds-tab"
+          :class="{ 'is-active': activeMatrixTab === 'request' }"
+          @click="activeMatrixTab = 'request'"
+        >
+          授权申请<span class="mds-tab__count">{{ requests.length }}</span>
+        </button>
       </div>
 
-      <div v-else class="mds-table-wrap" style="max-height: 640px; overflow: auto">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>功能模块</th>
-              <th>权限点</th>
-              <th v-for="role in visibleRoles" :key="role.id" class="mds-center" :title="role.roleCode">
-                {{ role.roleName }}
-                <div class="mds-hint">{{ role.roleCode }}</div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td :colspan="visibleRoles.length + 2" class="mds-empty">正在读取角色与权限点…</td>
-            </tr>
-            <tr v-else-if="!visibleRows.length">
-              <td :colspan="visibleRoles.length + 2">
-                <EmptyState
-                  title="没有匹配的权限点"
-                  description="调整筛选条件；或到角色与权限点页维护权限点目录。"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in visibleRows" :key="row.id">
-              <td class="mds-muted">{{ row.group }}</td>
-              <td>
-                <span class="mds-name">{{ row.name }}</span>
-                <div v-if="row.perms" class="mds-hint mds-mono">{{ row.perms }}</div>
-              </td>
-              <td v-for="role in visibleRoles" :key="role.id" class="mds-center">
-                <button
-                  v-if="canToggle(role)"
-                  class="mark mark--toggle"
-                  :class="{ 'is-busy': savingKey === cellKey(row.id, role.id) }"
-                  :disabled="savingKey !== ''"
-                  :title="row.granted[role.id] === true ? '点击取消授权' : '点击授予权限'"
-                  @click="toggleGrant(row, role)"
-                >
-                  {{ row.granted[role.id] === true ? '●' : '—' }}
-                </button>
-                <span v-else-if="row.granted[role.id] === true" class="mark mark--yes">●</span>
-                <span v-else-if="row.granted[role.id] === 'error'" class="mark mark--error" title="角色明细读取失败">?</span>
-                <span v-else class="mark mark--no">—</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="mds-hint" style="padding: 0 18px 14px">
-        说明：这张矩阵的行是<b>页面级</b>权限点（菜单节点）；下一张是<b>接口级</b>权限点（写操作端点）。
-        数据范围（全部 / 本租户 / 本组织 / 本人）在角色详情内维护，不体现在这两张功能权限矩阵里。
-        编辑授权是覆盖式保存：每次提交该角色当前的完整权限点集合。
-      </p>
-    </div>
+      <!-- 页签 1：页面权限矩阵 -->
+      <div v-if="activeMatrixTab === 'menu'" style="padding: 12px 14px">
+        <AgriVueTable
+          :columns="menuMatrixColumns"
+          :data="visibleRows"
+          row-key="id"
+          :loading="loading"
+          loading-text="正在读取角色与权限点…"
+          column-settings-storage-key="mds:cols:role-matrix-menu"
+          client-pagination
+          v-model:page="menuPage"
+          v-model:page-size="menuPageSize"
+          @refresh="load"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="2" :loading="loading" @search="menuPage = 1" @reset="resetMenuFilter">
+              <div class="agri-vue-filter-field">
+                <label>角色搜索</label>
+                <input v-model="keyword" class="mds-input" type="search" placeholder="角色名称 / 编码" />
+              </div>
+              <div class="agri-vue-filter-field">
+                <label>授权状态</label>
+                <select v-model="onlyGranted" class="mds-select">
+                  <option value="">全部权限点</option>
+                  <option value="granted">只看已被授予</option>
+                </select>
+              </div>
+            </AgriVueFilterBar>
+          </template>
 
-    <div class="mds-card">
-      <div class="mds-card-head">
-        <div>
-          <h2 class="mds-card-title">接口权限点（按钮级 / API 级）</h2>
-          <p class="mds-card-sub">
-            目录由后端真实端点映射同步（只登记 POST / PUT / DELETE / PATCH —— 读接口一旦被收紧就会把别人的列表页整片锁死）；
-            <b>勾上即收紧</b>：该端点从此只有持有它的角色能调，取消最后一个持有者则回到"未纳管"。
-          </p>
-        </div>
-        <div class="mds-head-actions">
-          <span class="mds-tag mds-tag--plain">{{ visiblePointRows.length }} / {{ pointRows.length }} 条</span>
-          <button class="mds-btn" v-point="'POST /admin/masterdata/permission/points/sync'" :disabled="syncing || loading" @click="syncCatalog">
-            {{ syncing ? '同步中…' : '同步端点目录' }}
+          <template #toolbar-left>
+            <span class="mds-hint">页面级权限点（菜单节点）· 覆盖式保存</span>
+          </template>
+
+          <template #empty>
+            <EmptyState
+              v-if="!matrixRows.length"
+              icon="🔐"
+              title="权限点目录为空，暂时无法生成矩阵"
+              description="矩阵的行来自主数据后端的菜单 / 权限点表（agri_md_menu）。"
+            >
+              <div class="mds-head-actions" style="justify-content: center; margin-top: 14px">
+                <button class="mds-btn" @click="router.push('/permission/role')">去角色与权限点</button>
+                <button class="mds-btn" :disabled="loading" @click="load">重新计算</button>
+              </div>
+            </EmptyState>
+            <EmptyState
+              v-else
+              title="没有匹配的权限点"
+              description="调整筛选条件；或到角色与权限点页维护权限点目录。"
+            />
+          </template>
+
+          <template #cell-group="{ row }">
+            <span class="mds-muted">{{ row.group }}</span>
+          </template>
+          <template #cell-name="{ row }">
+            <div class="mds-cell-inline" :title="`${row.name}${row.perms ? '（' + row.perms + '）' : ''}`">
+              <span class="mds-name mds-cell-main">{{ row.name }}</span>
+              <span v-if="row.perms" class="mds-cell-sub mds-mono">{{ row.perms }}</span>
+            </div>
+          </template>
+          <template v-for="role in visibleRoles" :key="role.id" #[`cell-role_${role.id}`]="{ row }">
+            <button
+              v-if="canToggle(role)"
+              class="mark mark--toggle"
+              :class="{ 'is-busy': savingKey === cellKey(row.id, role.id) }"
+              :disabled="savingKey !== ''"
+              :title="row.granted[role.id] === true ? '点击取消授权' : '点击授予权限'"
+              @click="toggleGrant(row as MatrixRow, role)"
+            >
+              {{ row.granted[role.id] === true ? '●' : '—' }}
+            </button>
+            <span v-else-if="row.granted[role.id] === true" class="mark mark--yes">●</span>
+            <span v-else-if="row.granted[role.id] === 'error'" class="mark mark--error" title="角色明细读取失败">?</span>
+            <span v-else class="mark mark--no">—</span>
+          </template>
+        </AgriVueTable>
+      </div>
+
+      <!-- 页签 2：接口权限点 -->
+      <div v-else-if="activeMatrixTab === 'point'" style="padding: 12px 14px">
+        <AgriVueTable
+          :columns="pointMatrixColumns"
+          :data="visiblePointRows"
+          row-key="id"
+          :loading="loading"
+          loading-text="正在读取接口权限点…"
+          column-settings-storage-key="mds:cols:role-matrix-point"
+          client-pagination
+          v-model:page="pointPage"
+          v-model:page-size="pointPageSize"
+          @refresh="load"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="1" :loading="loading" @search="pointPage = 1" @reset="resetPointFilter">
+              <div class="agri-vue-filter-field">
+                <label>接口关键字</label>
+                <input v-model="pointKeyword" class="mds-input" type="search" placeholder="搜索接口路径 / 操作名称" />
+              </div>
+            </AgriVueFilterBar>
+          </template>
+
+          <template #toolbar-left>
+            <button class="mds-btn mds-btn--primary" v-point="'POST /admin/masterdata/permission/points/sync'" :disabled="syncing || loading" @click="syncCatalog">
+              {{ syncing ? '同步中…' : '同步端点目录' }}
+            </button>
+            <span class="mds-tag mds-tag--plain">{{ visiblePointRows.length }} / {{ pointRows.length }} 条</span>
+            <span class="mds-hint">只登记写操作端点；勾上即收紧</span>
+          </template>
+
+          <template #empty>
+            <EmptyState
+              v-if="!pointRows.length"
+              icon="🔌"
+              title="接口权限点目录为空"
+              description="点工具栏「同步端点目录」从当前应用的实际端点映射生成。"
+            />
+            <EmptyState
+              v-else
+              title="没有匹配的接口权限点"
+              description="调整搜索词，或点「同步端点目录」刷新目录。"
+            />
+          </template>
+
+          <template #cell-group="{ row }">
+            <span class="mds-muted">{{ row.group }}</span>
+          </template>
+          <template #cell-name="{ row }">
+            <div class="mds-cell-inline" :title="`${row.name}${row.perms ? '（' + row.perms + '）' : ''}`">
+              <span class="mds-name mds-cell-main">{{ row.name }}</span>
+              <span v-if="row.perms" class="mds-cell-sub mds-mono">{{ row.perms }}</span>
+            </div>
+          </template>
+          <template v-for="role in visibleRoles" :key="role.id" #[`cell-role_${role.id}`]="{ row }">
+            <button
+              v-if="canTogglePoint(role)"
+              class="mark mark--toggle"
+              :class="{ 'is-busy': savingKey === cellKey(row.id, role.id) }"
+              :disabled="savingKey !== ''"
+              :title="row.granted[role.id] === true ? '点击取消授权（该端点可能回到未纳管）' : '点击授予：勾上后此端点只对持有者开放'"
+              @click="togglePointGrant(row as MatrixRow, role)"
+            >
+              {{ row.granted[role.id] === true ? '●' : '—' }}
+            </button>
+            <span v-else-if="row.granted[role.id] === true" class="mark mark--yes">●</span>
+            <span v-else-if="row.granted[role.id] === 'error'" class="mark mark--error" title="角色明细读取失败">?</span>
+            <span v-else class="mark mark--no">—</span>
+          </template>
+        </AgriVueTable>
+      </div>
+
+      <!-- 页签 3：授权申请 -->
+      <div v-else style="padding: 12px 14px">
+        <NoticeBar v-if="requestError" tone="danger" title="授权申请读取失败：">{{ requestError }}</NoticeBar>
+
+        <AgriVueTable
+          :columns="requestColumns"
+          :data="requests"
+          row-key="id"
+          :loading="requestLoading"
+          loading-text="正在读取授权申请…"
+          column-settings-storage-key="mds:cols:role-matrix-requests"
+          client-pagination
+          @refresh="loadRequests"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="1" :loading="requestLoading" @search="loadRequests" @reset="resetRequestFilter">
+              <div class="agri-vue-filter-field">
+                <label>申请状态</label>
+                <select v-model="requestStatus" class="mds-select" @change="loadRequests">
+                  <option value="PENDING">待处理</option>
+                  <option value="APPROVED">已同意</option>
+                  <option value="REJECTED">已驳回</option>
+                  <option value="">全部</option>
+                </select>
+              </div>
+            </AgriVueFilterBar>
+          </template>
+
+          <template #toolbar-left>
+            <span class="mds-tag mds-tag--plain">{{ requests.length }} 条</span>
+            <span class="mds-hint">同意即写入申请人角色授权；驳回需填原因</span>
+          </template>
+
+          <template #empty>
+            <EmptyState
+              icon="📥"
+              title="这一档没有授权申请"
+              description="申请来自「部分操作已隐藏」横幅：账号被权限点拦掉的按钮会计入清单，本人从这里发起申请，运营端在这里处理。"
+            />
+          </template>
+
+          <template #cell-applicant="{ row }">
+            <div class="mds-cell-inline" :title="`${row.applicantName || row.applicant}（${row.applicant}）`">
+              <span class="mds-name mds-cell-main">{{ row.applicantName || row.applicant }}</span>
+              <span class="mds-cell-sub mds-mono">{{ row.applicant }}</span>
+            </div>
+          </template>
+          <template #cell-permCode="{ row }">
+            <div class="mds-cell-inline" :title="`${row.permCode} ${row.permName || ''}`.trim()">
+              <span class="mds-mono mds-cell-main">{{ row.permCode }}</span>
+              <span v-if="row.permName" class="mds-cell-sub">{{ row.permName }}</span>
+            </div>
+          </template>
+          <template #cell-pagePath="{ row }">
+            <span class="mds-muted mds-mono">{{ row.pagePath || '-' }}</span>
+          </template>
+          <template #cell-reason="{ row }">
+            <span class="mds-muted">{{ row.reason || '（未填理由）' }}</span>
+          </template>
+          <template #cell-status="{ row }">
+            <span class="mds-tag" :class="statusTone(row.status)">{{ statusText(row.status) }}</span>
+          </template>
+          <template #cell-actions="{ row }">
+            <MdsRowActions
+              v-if="row.status === 'PENDING'"
+              :actions="[
+                { key: 'approve', label: '同意', point: 'PUT /admin/masterdata/permission/requests/{id}/handle', disabled: handlingId !== '', onClick: () => handle(row as RequestRow, true) },
+                { key: 'reject', label: '驳回', danger: true, point: 'PUT /admin/masterdata/permission/requests/{id}/handle', disabled: handlingId !== '', onClick: () => startReject(row as RequestRow) },
+              ]"
+            />
+            <span v-else class="mds-hint">{{ row.handler || '-' }} {{ row.handleRemark || '' }}</span>
+          </template>
+        </AgriVueTable>
+
+        <div v-if="rejectingRequest" class="reject-form" style="margin-top: 10px">
+          <span class="mds-hint">驳回「{{ rejectingRequest.applicantName || rejectingRequest.applicant }}」的 {{ rejectingRequest.permCode }}：</span>
+          <input
+            v-model="rejectRemark"
+            class="mds-input"
+            type="text"
+            maxlength="200"
+            placeholder="驳回原因（必填，会显示给申请人）"
+            @keyup.enter="handle(rejectingRequest, false)"
+          />
+          <button class="mds-btn mds-btn--primary mds-btn--sm" :disabled="handlingId !== ''" @click="handle(rejectingRequest, false)">
+            确认驳回
           </button>
+          <button class="mds-btn mds-btn--sm" @click="startReject(null)">取消</button>
         </div>
       </div>
-
-      <div class="mds-filter">
-        <input v-model="pointKeyword" class="mds-input" type="search" placeholder="搜索接口路径 / 操作名称" />
-      </div>
-
-      <div v-if="!loading && !pointRows.length" class="mds-card-body">
-        <EmptyState
-          icon="🔌"
-          title="接口权限点目录为空"
-          description="点右上角「同步端点目录」从当前应用的实际端点映射生成。目录不手工维护，所以它只可能是「还没同步」，不可能是「少了几条」。"
-        />
-      </div>
-
-      <div v-else class="mds-table-wrap" style="max-height: 520px; overflow: auto">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>功能模块</th>
-              <th>端点</th>
-              <th v-for="role in visibleRoles" :key="role.id" class="mds-center" :title="role.roleCode">
-                {{ role.roleName }}
-                <div class="mds-hint">{{ role.roleCode }}</div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td :colspan="visibleRoles.length + 2" class="mds-empty">正在读取接口权限点…</td>
-            </tr>
-            <tr v-else-if="!visiblePointRows.length">
-              <td :colspan="visibleRoles.length + 2">
-                <EmptyState title="没有匹配的接口权限点" description="调整搜索词，或点「同步端点目录」刷新目录。" />
-              </td>
-            </tr>
-            <tr v-for="row in visiblePointRows" :key="row.id">
-              <td class="mds-muted">{{ row.group }}</td>
-              <td>
-                <span class="mds-name">{{ row.name }}</span>
-                <div v-if="row.perms" class="mds-hint">{{ row.perms }}</div>
-              </td>
-              <td v-for="role in visibleRoles" :key="role.id" class="mds-center">
-                <button
-                  v-if="canTogglePoint(role)"
-                  class="mark mark--toggle"
-                  :class="{ 'is-busy': savingKey === cellKey(row.id, role.id) }"
-                  :disabled="savingKey !== ''"
-                  :title="row.granted[role.id] === true ? '点击取消授权（该端点可能回到未纳管）' : '点击授予：勾上后此端点只对持有者开放'"
-                  @click="togglePointGrant(row, role)"
-                >
-                  {{ row.granted[role.id] === true ? '●' : '—' }}
-                </button>
-                <span v-else-if="row.granted[role.id] === true" class="mark mark--yes">●</span>
-                <span v-else-if="row.granted[role.id] === 'error'" class="mark mark--error" title="角色明细读取失败">?</span>
-                <span v-else class="mark mark--no">—</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="mds-hint" style="padding: 0 18px 14px">
-        平台超管（权限码含 *）不受这张矩阵约束，避免把自己关在门外；
-        主体侧账号通过用户名桥接到本地角色，未绑定任何本地角色的账号在已收紧的端点上会被拒绝。
-      </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatGrid, { type StatItem } from '@/components/ui/StatGrid.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
 import { usePointStore } from '@/stores/points'
 import {
   assignRoleMenus,
@@ -371,6 +375,7 @@ interface RequestRow {
 }
 
 const loading = ref(false)
+const activeMatrixTab = ref<'menu' | 'point' | 'request'>('menu')
 // 注意：本页已经有一个 `points`（权限点目录数组），这里必须用别的名字，否则同名声明直接编译失败
 const pointGuard = usePointStore()
 const roles = ref<RoleRow[]>([])
@@ -466,6 +471,64 @@ const visiblePointRows = computed(() => {
     (row) => row.name.toLowerCase().includes(kw) || (row.perms ?? '').toLowerCase().includes(kw),
   )
 })
+
+const menuPage = ref(1)
+const menuPageSize = ref(20)
+const pointPage = ref(1)
+const pointPageSize = ref(20)
+watch([keyword, onlyGranted], () => { menuPage.value = 1 })
+watch(pointKeyword, () => { pointPage.value = 1 })
+
+const menuMatrixColumns = computed<VueListColumn[]>(() => [
+  { prop: 'group', label: '功能模块', width: 140, locked: true },
+  { prop: 'name', label: '权限点', width: 220, locked: true, ellipsis: false },
+  ...visibleRoles.value.map((role) => ({
+    key: `role_${role.id}`,
+    label: role.roleName,
+    width: 110,
+    align: 'center' as const,
+    ellipsis: false,
+  })),
+])
+
+const pointMatrixColumns = computed<VueListColumn[]>(() => [
+  { prop: 'group', label: '功能模块', width: 140, locked: true },
+  { prop: 'name', label: '端点', width: 260, locked: true, ellipsis: false },
+  ...visibleRoles.value.map((role) => ({
+    key: `role_${role.id}`,
+    label: role.roleName,
+    width: 110,
+    align: 'center' as const,
+    ellipsis: false,
+  })),
+])
+
+const requestColumns: VueListColumn[] = [
+  { prop: 'applicant', label: '申请人', width: 165, locked: true, ellipsis: false },
+  { prop: 'permCode', label: '申请的权限点', width: 240, ellipsis: false },
+  { prop: 'pagePath', label: '来自页面', width: 160, kind: 'code' },
+  { prop: 'reason', label: '理由', minWidth: 160 },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { key: 'actions', label: '操作', width: 130, kind: 'action' },
+]
+
+const rejectingRequest = computed(() => requests.value.find((req) => req.id === rejectingId.value) ?? null)
+
+function resetMenuFilter() {
+  keyword.value = ''
+  onlyGranted.value = ''
+  menuPage.value = 1
+}
+
+function resetPointFilter() {
+  pointKeyword.value = ''
+  pointPage.value = 1
+}
+
+function resetRequestFilter() {
+  requestStatus.value = 'PENDING'
+  void loadRequests()
+}
 
 const partial = computed(() => roles.value.some((role) => role.failed))
 
@@ -688,7 +751,7 @@ async function togglePointGrant(row: MatrixRow, role: RoleRow) {
 <style scoped>
 .mark {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .mark--yes {
@@ -711,7 +774,7 @@ async function togglePointGrant(row: MatrixRow, role: RoleRow) {
   background: #fff;
   cursor: pointer;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   color: #8a919b;
   line-height: 1;
 }

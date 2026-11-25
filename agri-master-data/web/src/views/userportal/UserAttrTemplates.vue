@@ -5,9 +5,7 @@
       subtitle="按品类查看属性集合：哪些属性必填、哪些参与 SKU 规格组合。模板由平台 / 主体管理员维护。"
       source="主数据 · 品类属性"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="loadAttributes">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="口径：">
@@ -15,52 +13,57 @@
     </NoticeBar>
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <select v-model="categoryId" class="mds-select" style="min-width: 280px" @change="loadAttributes">
-          <option value="">请选择品类</option>
-          <option v-for="category in categories" :key="category.id" :value="String(category.id)">
-            {{ category.categoryName }}
-          </option>
-        </select>
-        <span class="mds-hint">共 {{ attributes.length }} 个属性</span>
-      </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>属性编码</th>
-              <th>属性名称</th>
-              <th>类型</th>
-              <th>单位 / 取值</th>
-              <th class="mds-center">必填</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading"><td colspan="6" class="mds-empty">正在加载属性…</td></tr>
-            <tr v-else-if="!categories.length">
-              <td colspan="6"><EmptyState icon="🧩" title="还没有可用品类" description="品类目录为空，属性模板无从挂载。可先到「我的品类」查看。" /></td>
-            </tr>
-            <tr v-else-if="!attributes.length">
-              <td colspan="6"><EmptyState icon="🧩" title="该品类还没有属性" description="模板为空时，商品无法做规格组合。" /></td>
-            </tr>
-            <tr v-for="row in attributes" :key="row.id">
-              <td class="mds-mono">{{ row.attributeCode }}</td>
-              <td class="mds-name">{{ row.attributeName }}</td>
-              <td>{{ typeText(row.attributeType) }}</td>
-              <td>{{ row.options || row.unit || '—' }}</td>
-              <td class="mds-center">{{ Number(row.isRequired) === 1 ? '是' : '否' }}</td>
-              <td><StatusTag :text="Number(row.status) === 1 ? '启用' : '停用'" :tone="Number(row.status) === 1 ? 'success' : 'gray'" /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="attributes"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载属性…"
+        column-settings-storage-key="mds:cols:user-attr-templates"
+        client-pagination
+        @refresh="loadAttributes"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="1" :loading="loading" @search="loadAttributes" @reset="resetListFilter1">
+            <div class="agri-vue-filter-field">
+              <label>品类</label>
+              <select v-model="categoryId" class="mds-select" @change="loadAttributes">
+                        <option value="">请选择品类</option>
+                        <option v-for="category in categories" :key="category.id" :value="String(category.id)">
+                          {{ category.categoryName }}
+                        </option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #empty>
+          <EmptyState icon="🧩" title="还没有可用品类" description="品类目录为空，属性模板无从挂载。可先到「我的品类」查看。" />
+        </template>
+        <template #cell-attributeName="{ row: row }">
+          <div class="mds-name">
+            {{ row.attributeName }}
+          </div>
+        </template>
+        <template #cell-attributeType="{ row: row }">
+          {{ typeText(row.attributeType) }}
+        </template>
+        <template #cell-options="{ row: row }">
+          {{ row.options || row.unit || '—' }}
+        </template>
+        <template #cell-isRequired="{ row: row }">
+          {{ Number(row.isRequired) === 1 ? '是' : '否' }}
+        </template>
+        <template #cell-status="{ row: row }">
+          <StatusTag :text="Number(row.status) === 1 ? '启用' : '停用'" :tone="Number(row.status) === 1 ? 'success' : 'gray'" />
+        </template>
+      </AgriVueTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
 import { onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
@@ -129,4 +132,18 @@ onMounted(async () => {
   await loadCategories()
   await loadAttributes()
 })
+
+const columns: VueListColumn[] = [
+  { prop: 'attributeCode', label: '属性编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'attributeName', label: '属性名称', width: 128 },
+  { prop: 'attributeType', label: '类型', width: 128, ellipsis: false },
+  { prop: 'options', label: '单位 / 取值', width: 128, ellipsis: false },
+  { prop: 'isRequired', label: '必填', width: 128, align: 'center', ellipsis: false },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+]
+
+function resetListFilter1() {
+  categoryId.value = ""
+  void loadAttributes()
+}
 </script>

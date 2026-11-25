@@ -4,12 +4,7 @@
       title="黑名单管理"
       subtitle="平台级联合惩戒名单：失信用户 / 客户 / 供应商的登记、证据留档与解除。"
       source="主数据 · 平台惩戒"
-    >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/blacklist'" class="mds-btn mds-btn--primary" @click="openCreate">+ 加入黑名单</button>
-        <button class="mds-btn" :disabled="loading" @click="reloadAll">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="warning" title="生效范围：">
       本页维护名单与「是否生效」的判定接口；下游交易 / 金融是否拦截，取决于各自在下单前调用校验。
@@ -18,87 +13,88 @@
 
     <StatGrid :items="statItems" />
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input v-model="keyword" class="mds-input" type="search" placeholder="对象名称 / ID / 原因" @keyup.enter="search" />
-        <select v-model="filterType" class="mds-select" @change="search">
-          <option value="">全部对象类型</option>
-          <option value="user">个人用户</option>
-          <option value="customer">客户</option>
-          <option value="supplier">供应商</option>
-        </select>
-        <select v-model="filterStatus" class="mds-select" @change="search">
-          <option value="active">生效中</option>
-          <option value="released">已解除</option>
-          <option value="">全部状态</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载黑名单…"
+      column-settings-storage-key="mds:cols:blacklist"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="reloadAll"
+      @update:page="changePage"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input v-model="keyword" class="mds-input" type="search" placeholder="对象名称 / ID / 原因" @keyup.enter="search" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>对象类型</label>
+            <select v-model="filterType" class="mds-select" @change="search">
+              <option value="">全部对象类型</option>
+              <option value="user">个人用户</option>
+              <option value="customer">客户</option>
+              <option value="supplier">供应商</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="filterStatus" class="mds-select" @change="search">
+              <option value="active">生效中</option>
+              <option value="released">已解除</option>
+              <option value="">全部状态</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table blacklist-table">
-          <thead>
-            <tr>
-              <th>对象</th>
-              <th>类型</th>
-              <th>拉黑原因</th>
-              <th>证据 / 依据</th>
-              <th>生效时间</th>
-              <th>期限</th>
-              <th>状态</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="8" class="mds-empty">正在加载黑名单…</td>
-            </tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="8">
-                <EmptyState
-                  icon="⛔"
-                  title="没有符合条件的黑名单记录"
-                  :description="filterStatus === 'active' ? '当前没有生效中的惩戒记录。' : '调整筛选条件后重试。'"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.id">
-              <td>
-                <div class="mds-name">{{ row.targetName }}</div>
-                <div class="mds-hint mds-mono">{{ row.targetId || '未关联ID' }}</div>
-              </td>
-              <td><StatusTag :text="typeText(row.targetType)" :tone="typeTone(row.targetType)" plain /></td>
-              <td>{{ row.reason || '—' }}</td>
-              <td class="evidence-cell" :title="row.evidence || ''">{{ row.evidence || '—' }}</td>
-              <td class="mds-muted time-cell">{{ formatTime(row.startTime) }}</td>
-              <td>
-                <StatusTag v-if="!row.expireTime" text="永久" tone="danger" plain />
-                <span v-else class="mds-muted time-cell">{{ formatTime(row.expireTime) }}</span>
-              </td>
-              <td>
-                <StatusTag
-                  :text="row.status === 'active' ? '生效中' : '已解除'"
-                  :tone="row.status === 'active' ? 'danger' : 'gray'"
-                />
-              </td>
-              <td class="mds-actions">
-                <button
-                  v-if="row.status === 'active'"
-                  v-point="'PUT /admin/masterdata/blacklist/{id}/release'"
-                  class="mds-btn mds-btn--link"
-                  :disabled="busyId === row.id"
-                  @click="openRelease(row)"
-                >解除</button>
-                <span v-else class="mds-hint">{{ row.releaseReason || '已解除' }}</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <template #toolbar-left>
+        <button v-point="'POST /admin/masterdata/blacklist'" class="mds-btn mds-btn--primary" @click="openCreate">+ 加入黑名单</button>
+      </template>
 
-      <PagerBar :page="page" :page-size="pageSize" :total="total" @change="changePage" @update:page-size="changePageSize" />
-    </div>
+      <template #empty>
+        <EmptyState
+          icon="⛔"
+          title="没有符合条件的黑名单记录"
+          :description="filterStatus === 'active' ? '当前没有生效中的惩戒记录。' : '调整筛选条件后重试。'"
+        />
+      </template>
+
+      <template #cell-targetName="{ row }">
+        <div class="mds-name">{{ row.targetName }}</div>
+        <div class="mds-hint mds-mono">{{ row.targetId || '未关联ID' }}</div>
+      </template>
+      <template #cell-targetType="{ row }">
+        <StatusTag :text="typeText(row.targetType)" :tone="typeTone(row.targetType)" plain />
+      </template>
+      <template #cell-startTime="{ row }">
+        <span class="mds-muted time-cell">{{ formatTime(row.startTime) }}</span>
+      </template>
+      <template #cell-expireTime="{ row }">
+        <StatusTag v-if="!row.expireTime" text="永久" tone="danger" plain />
+        <span v-else class="mds-muted time-cell">{{ formatTime(row.expireTime) }}</span>
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag
+          :text="row.status === 'active' ? '生效中' : '已解除'"
+          :tone="row.status === 'active' ? 'danger' : 'gray'"
+        />
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          v-if="row.status === 'active'"
+          :actions="[
+            { key: 'release', label: '解除', point: 'PUT /admin/masterdata/blacklist/{id}/release', disabled: busyId === row.id, onClick: () => openRelease(row as BlacklistRow) },
+          ]"
+        />
+        <span v-else class="mds-hint">{{ row.releaseReason || '已解除' }}</span>
+      </template>
+    </AgriVueTable>
 
     <!-- 新增 -->
     <div v-if="showCreate" class="mds-mask" @click="showCreate = false">
@@ -186,7 +182,19 @@ import StatGrid from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
+
+const columns: VueListColumn[] = [
+  { prop: 'targetName', label: '对象', width: 180, locked: true, ellipsis: false },
+  { prop: 'targetType', label: '类型', width: 100, align: 'center', ellipsis: false },
+  { prop: 'reason', label: '拉黑原因', width: 170 },
+  { prop: 'evidence', label: '证据 / 依据', minWidth: 200 },
+  { prop: 'startTime', label: '生效时间', width: 150 },
+  { prop: 'expireTime', label: '期限', width: 130, ellipsis: false },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { key: 'actions', label: '操作', width: 110, kind: 'action' },
+]
 import { createBlacklist, getBlacklistPage, releaseBlacklist } from '@/utils/api'
 
 interface BlacklistRow {

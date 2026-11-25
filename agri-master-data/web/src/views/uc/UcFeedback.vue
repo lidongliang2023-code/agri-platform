@@ -4,12 +4,7 @@
       title="意见反馈处理"
       subtitle="用户提交的功能建议 / 问题报错 / 投诉举报台账；回复与关闭由用户中心运营端办理。"
       source="只读 · 用户中心主责"
-    >
-      <template #actions>
-        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 反馈处理</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="只读视图：">
       回复入口已移到用户中心运营端；本页保留反馈内容、状态与处理结果的核对能力。
@@ -22,65 +17,77 @@
       <div class="audit-kpi red"><span>已关闭</span><strong>{{ counts.closed }}</strong><small>不再跟进</small></div>
     </div>
 
-    <div class="search-bar">
-      <div class="filter-group">
-        <select v-model="statusFilter" class="filter-select" @change="loadData">
-          <option value="all">全部状态</option>
-          <option value="pending">待处理</option>
-          <option value="replied">已回复</option>
-          <option value="closed">已关闭</option>
-        </select>
-        <select v-model="typeFilter" class="filter-select" @change="loadData">
-          <option value="all">全部类型</option>
-          <option value="suggestion">功能建议</option>
-          <option value="bug">问题报错</option>
-          <option value="complaint">投诉举报</option>
-          <option value="other">其他</option>
-        </select>
-      </div>
-    </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      empty-text="没有符合条件的反馈"
+      column-settings-storage-key="mds:cols:uc-feedback"
+      client-pagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      @refresh="loadData"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="loadData" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>处理状态</label>
+            <select v-model="statusFilter" class="mds-select" @change="loadData">
+              <option value="all">全部状态</option>
+              <option value="pending">待处理</option>
+              <option value="replied">已回复</option>
+              <option value="closed">已关闭</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>反馈类型</label>
+            <select v-model="typeFilter" class="mds-select" @change="loadData">
+              <option value="all">全部类型</option>
+              <option value="suggestion">功能建议</option>
+              <option value="bug">问题报错</option>
+              <option value="complaint">投诉举报</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <div class="uc-table-wrap">
-      <table class="uc-table">
-        <thead>
-          <tr>
-            <th>提交人</th>
-            <th>类型</th>
-            <th>标题 / 内容</th>
-            <th>联系方式</th>
-            <th>状态</th>
-            <th>提交时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading"><td colspan="7" class="uc-td-empty">正在加载…</td></tr>
-          <tr v-else-if="rows.length === 0"><td colspan="7" class="uc-td-empty">没有符合条件的反馈</td></tr>
-          <tr v-for="row in rows" :key="row.id">
-            <td>{{ row.submitterName || row.userId }}</td>
-            <td><span class="uc-tag">{{ typeLabel(row.feedbackType) }}</span></td>
-            <td class="uc-fb-cell">
-              <strong>{{ row.title }}</strong>
-              <p>{{ row.content }}</p>
-              <small v-if="row.pagePath" class="uc-muted">来源 {{ row.pagePath }}</small>
-              <div v-if="row.replyContent" class="uc-fb-reply">
-                <span>{{ row.replierName || '平台运营' }} 回复</span>
-                <p>{{ row.replyContent }}</p>
-              </div>
-            </td>
-            <td>{{ row.contact || '—' }}</td>
-            <td><span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span></td>
-            <td>{{ (row.submitTime || '').replace('T', ' ').slice(0, 16) }}</td>
-            <td>
-              <button v-if="row.status !== 'closed'" class="mds-btn mds-btn--link" @click="openUserCenter">
-                去用户中心回复
-              </button>
-              <span v-else class="uc-muted">已关闭</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <template #toolbar-left>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 反馈处理</button>
+      </template>
+
+      <template #cell-submitterName="{ row }">
+        {{ row.submitterName || row.userId }}
+      </template>
+      <template #cell-feedbackType="{ row }">
+        <span class="uc-tag">{{ typeLabel(row.feedbackType) }}</span>
+      </template>
+      <template #cell-title="{ row }">
+        <div class="uc-fb-cell">
+          <strong>{{ row.title }}</strong>
+          <p>{{ row.content }}</p>
+          <small v-if="row.pagePath" class="uc-muted">来源 {{ row.pagePath }}</small>
+          <div v-if="row.replyContent" class="uc-fb-reply">
+            <span>{{ row.replierName || '平台运营' }} 回复</span>
+            <p>{{ row.replyContent }}</p>
+          </div>
+        </div>
+      </template>
+      <template #cell-status="{ row }">
+        <span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span>
+      </template>
+      <template #cell-submitTime="{ row }">
+        {{ (row.submitTime || '').replace('T', ' ').slice(0, 16) || '—' }}
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          v-if="row.status !== 'closed'"
+          :actions="[{ key: 'reply', label: '去用户中心回复', onClick: openUserCenter }]"
+        />
+        <span v-else class="uc-muted">已关闭</span>
+      </template>
+    </AgriVueTable>
 
     <!-- 回复弹窗 -->
     <div v-if="replyTarget" class="uc-fb-mask" @click.self="closeReply">
@@ -110,11 +117,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
 import '@/styles/admin-page.css'
+
+const columns: VueListColumn[] = [
+  { prop: 'submitterName', label: '提交人', width: 120, locked: true },
+  { prop: 'feedbackType', label: '类型', width: 100, align: 'center', ellipsis: false },
+  { prop: 'title', label: '标题 / 内容', minWidth: 280, ellipsis: false },
+  { prop: 'contact', label: '联系方式', width: 140 },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { prop: 'submitTime', label: '提交时间', width: 150 },
+  { key: 'actions', label: '操作', width: 135, kind: 'action' },
+]
 import request from '@/utils/request'
 import { refreshAccessToken } from '@/utils/sso'
 
@@ -138,6 +157,15 @@ const saving = ref('')
 const statusFilter = ref('pending')
 const typeFilter = ref('all')
 const rows = ref<Row[]>([])
+const page = ref(1)
+const pageSize = ref(20)
+watch([statusFilter, typeFilter], () => { page.value = 1 })
+function reset() {
+  statusFilter.value = 'all'
+  typeFilter.value = 'all'
+  page.value = 1
+  void loadData()
+}
 
 function openUserCenter() {
   window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')

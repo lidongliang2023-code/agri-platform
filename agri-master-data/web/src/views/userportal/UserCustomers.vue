@@ -5,53 +5,57 @@
       subtitle="本主体的客户档案：类型、等级、联系人与状态。数据按主体隔离。"
       source="主数据 · 我的主体"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <div class="mds-card">
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>客户编码</th>
-              <th>客户名称</th>
-              <th>类型</th>
-              <th class="mds-center">等级</th>
-              <th>联系人</th>
-              <th>联系电话</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading"><td colspan="7" class="mds-empty">正在加载客户…</td></tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="7">
-                <EmptyState
-                  icon="🤝"
-                  title="当前主体还没有客户档案"
-                  description="主数据里没有属于该主体的客户记录；客户建档请到运营端或等待业务同步。"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.id">
-              <td class="mds-mono">{{ row.customerCode || '—' }}</td>
-              <td class="mds-name">{{ row.customerName || '—' }}</td>
-              <td><StatusTag :text="row.customerType === 'individual' ? '个人客户' : '企业客户'" :tone="row.customerType === 'individual' ? 'brand' : 'info'" plain /></td>
-              <td class="mds-center"><StatusTag :text="row.level || '—'" :tone="levelTone(row.level)" plain /></td>
-              <td>{{ row.contactName || '—' }}</td>
-              <td class="mds-mono">{{ row.contactPhone || '—' }}</td>
-              <td><StatusTag :text="Number(row.status) === 1 ? '正常' : '禁用'" :tone="Number(row.status) === 1 ? 'success' : 'gray'" /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="rows.filter(item => !listAppliedKeyword1 || [item.customerCode, item.customerName, item.contactName].some(value => String(value ?? '').toLowerCase().includes(listAppliedKeyword1)))"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载客户…"
+        column-settings-storage-key="mds:cols:user-customers"
+        client-pagination
+        v-model:page="listPage1"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="1" :loading="loading" @search="applyListFilter1" @reset="resetListFilter1">
+            <div class="agri-vue-filter-field">
+              <label>客户</label>
+              <input v-model="listKeyword1" class="mds-input" type="search" />
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #empty>
+          <EmptyState
+                            icon="🤝"
+                            title="当前主体还没有客户档案"
+                            description="主数据里没有属于该主体的客户记录；客户建档请到运营端或等待业务同步。"
+                          />
+        </template>
+        <template #cell-customerName="{ row: row }">
+          <div class="mds-name">
+            {{ row.customerName || '—' }}
+          </div>
+        </template>
+        <template #cell-customerType="{ row: row }">
+          <StatusTag :text="row.customerType === 'individual' ? '个人客户' : '企业客户'" :tone="row.customerType === 'individual' ? 'brand' : 'info'" plain />
+        </template>
+        <template #cell-level="{ row: row }">
+          <StatusTag :text="row.level || '—'" :tone="levelTone(row.level)" plain />
+        </template>
+        <template #cell-status="{ row: row }">
+          <StatusTag :text="Number(row.status) === 1 ? '正常' : '禁用'" :tone="Number(row.status) === 1 ? 'success' : 'gray'" />
+        </template>
+      </AgriVueTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
 import { onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
@@ -100,4 +104,28 @@ async function load() {
 }
 
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'customerCode', label: '客户编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'customerName', label: '客户名称', width: 128 },
+  { prop: 'customerType', label: '类型', width: 128, ellipsis: false },
+  { prop: 'level', label: '等级', width: 128, align: 'center', ellipsis: false },
+  { prop: 'contactName', label: '联系人', width: 128 },
+  { prop: 'contactPhone', label: '联系电话', width: 142, kind: 'code' },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+]
+
+const listKeyword1 = ref('')
+const listAppliedKeyword1 = ref('')
+
+const listPage1 = ref(1)
+function applyListFilter1() {
+  listAppliedKeyword1.value = listKeyword1.value.trim().toLowerCase()
+  listPage1.value = 1
+}
+
+function resetListFilter1() {
+  listKeyword1.value = ''
+  applyListFilter1()
+}
 </script>

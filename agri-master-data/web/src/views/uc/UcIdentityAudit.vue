@@ -4,12 +4,7 @@
       title="身份申请审核"
       subtitle="用户申请开通业务身份的台账：本页只做核对，审核动作由用户中心运营端办理。"
       source="只读 · 用户中心主责"
-    >
-      <template #actions>
-        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 身份审核</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="只读视图：">
       通过 / 驳回在本页已移除，审核统一在用户中心运营端办理；本页保留台账与状态核对能力。
@@ -22,53 +17,61 @@
       <div class="audit-kpi red"><span>已驳回</span><strong>{{ counts.rejected }}</strong><small>材料不合格</small></div>
     </div>
 
-    <div class="search-bar">
-      <div class="filter-group">
-        <select v-model="statusFilter" class="filter-select" @change="loadData">
-          <option value="all">全部状态</option>
-          <option value="pending">待审核</option>
-          <option value="approved">已通过</option>
-          <option value="rejected">已驳回</option>
-          <option value="cancelled">已撤回</option>
-        </select>
-      </div>
-    </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      empty-text="没有符合条件的身份申请"
+      column-settings-storage-key="mds:cols:uc-identity-audit"
+      client-pagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      @refresh="loadData"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="loadData" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>审核状态</label>
+            <select v-model="statusFilter" class="mds-select" @change="loadData">
+              <option value="all">全部状态</option>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">已驳回</option>
+              <option value="cancelled">已撤回</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <div class="uc-table-wrap">
-      <table class="uc-table">
-        <thead>
-          <tr>
-            <th>申请人</th>
-            <th>申请身份</th>
-            <th>主体名称</th>
-            <th>信用代码</th>
-            <th>联系人</th>
-            <th>状态</th>
-            <th>提交时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading"><td colspan="8" class="uc-td-empty">正在加载…</td></tr>
-          <tr v-else-if="rows.length === 0"><td colspan="8" class="uc-td-empty">没有符合条件的身份申请</td></tr>
-          <tr v-for="row in rows" :key="row.id">
-            <td>{{ row.applicantName || row.userId }}</td>
-            <td>{{ identityLabel(row.identityType) }}</td>
-            <td>{{ row.subjectName || '—' }}</td>
-            <td class="uc-mono">{{ row.creditCode || '—' }}</td>
-            <td>{{ row.contactName || '—' }}<br /><small class="uc-muted">{{ row.contactPhone || '' }}</small></td>
-            <td><span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span></td>
-            <td>{{ (row.applyTime || '').replace('T', ' ').slice(0, 16) }}</td>
-            <td>
-              <template v-if="row.status === 'pending'">
-                <button class="mds-btn mds-btn--link" @click="openUserCenter">去用户中心审核</button>
-              </template>
-              <span v-else class="uc-muted">{{ row.reviewerName || '—' }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <template #toolbar-left>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 身份审核</button>
+      </template>
+
+      <template #cell-applicantName="{ row }">
+        {{ row.applicantName || row.userId }}
+      </template>
+      <template #cell-identityType="{ row }">
+        {{ identityLabel(row.identityType) }}
+      </template>
+      <template #cell-contactName="{ row }">
+        <div>{{ row.contactName || '—' }}</div>
+        <small v-if="row.contactPhone" class="uc-muted">{{ row.contactPhone }}</small>
+      </template>
+      <template #cell-status="{ row }">
+        <span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span>
+      </template>
+      <template #cell-applyTime="{ row }">
+        {{ (row.applyTime || '').replace('T', ' ').slice(0, 16) || '—' }}
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          v-if="row.status === 'pending'"
+          :actions="[{ key: 'audit', label: '去用户中心审核', onClick: openUserCenter }]"
+        />
+        <span v-else class="uc-muted">{{ row.reviewerName || '—' }}</span>
+      </template>
+    </AgriVueTable>
 
     <p class="uc-foot">
       说明：审核只改申请单状态，**不会**自动改主体绑定或 RBAC 权限 ——
@@ -79,11 +82,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
 import '@/styles/admin-page.css'
+
+const columns: VueListColumn[] = [
+  { prop: 'applicantName', label: '申请人', width: 120, locked: true },
+  { prop: 'identityType', label: '申请身份', width: 120 },
+  { prop: 'subjectName', label: '主体名称', minWidth: 160 },
+  { prop: 'creditCode', label: '信用代码', width: 175, kind: 'code' },
+  { prop: 'contactName', label: '联系人', width: 140, ellipsis: false },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { prop: 'applyTime', label: '提交时间', width: 150 },
+  { key: 'actions', label: '操作', width: 135, kind: 'action' },
+]
 import request from '@/utils/request'
 import { refreshAccessToken } from '@/utils/sso'
 
@@ -104,6 +120,14 @@ interface Row {
 const loading = ref(false)
 const statusFilter = ref('pending')
 const rows = ref<Row[]>([])
+const page = ref(1)
+const pageSize = ref(20)
+watch(statusFilter, () => { page.value = 1 })
+function reset() {
+  statusFilter.value = 'all'
+  page.value = 1
+  void loadData()
+}
 
 function openUserCenter(): void {
   window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')

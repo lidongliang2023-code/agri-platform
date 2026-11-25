@@ -4,12 +4,7 @@
       title="入驻与生命周期"
       subtitle="经营主体（租户）的生命周期视图：认证状态从统一认证与用户中心回填，本页负责启用、停用与状态总览。"
       source="统一认证 · 经营主体主档"
-    >
-      <template #actions>
-        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 认证审核</button>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="职责边界：">
       主体注册在统一认证中心、实名与资质审核在用户中心运营端办理；本页不提供审核动作，
@@ -18,119 +13,111 @@
 
     <StatGrid :items="stats" />
 
-    <div class="mds-card">
-      <div class="mds-card-head">
-        <div>
-          <h2 class="mds-card-title">生命周期状态机</h2>
-          <p class="mds-card-sub">状态取自主体主档的 verifyStatus（认证）与 status（启用/停用）两个真实字段</p>
+    <div
+      class="mds-card lifecycle-bar"
+      title="状态取自主体主档的 verifyStatus（认证）与 status（启用/停用）；停用后主体仍保留全部主数据与历史记录，可随时重新启用。"
+    >
+      <span class="lifecycle-bar__label">生命周期</span>
+      <div class="mds-steps">
+        <div class="mds-step is-done">
+          <span class="mds-step__no">1</span>注册主体
         </div>
-      </div>
-      <div class="mds-card-body">
-        <div class="mds-steps">
-          <div class="mds-step is-done">
-            <span class="mds-step__no">1</span>注册主体
-          </div>
-          <span class="mds-step__line" />
-          <div class="mds-step" :class="{ 'is-current': pendingCount > 0, 'is-done': pendingCount === 0 }">
-            <span class="mds-step__no">2</span>实名 / 资质审核
-          </div>
-          <span class="mds-step__line" />
-          <div class="mds-step" :class="{ 'is-done': verifiedCount > 0 }">
-            <span class="mds-step__no">3</span>认证通过
-          </div>
-          <span class="mds-step__line" />
-          <div class="mds-step" :class="{ 'is-current': activeCount > 0 }">
-            <span class="mds-step__no">4</span>启用运行
-          </div>
-          <span class="mds-step__line" />
-          <div class="mds-step">
-            <span class="mds-step__no">5</span>停用 / 归档
-          </div>
+        <span class="mds-step__line" />
+        <div class="mds-step" :class="{ 'is-current': pendingCount > 0, 'is-done': pendingCount === 0 }">
+          <span class="mds-step__no">2</span>实名 / 资质审核
         </div>
-        <p class="mds-hint" style="margin: 12px 0 0">
-          停用后主体仍保留全部主数据与历史记录，可随时重新启用；审核驳回由用户中心发起整改，不在本页重置。
-        </p>
+        <span class="mds-step__line" />
+        <div class="mds-step" :class="{ 'is-done': verifiedCount > 0 }">
+          <span class="mds-step__no">3</span>认证通过
+        </div>
+        <span class="mds-step__line" />
+        <div class="mds-step" :class="{ 'is-current': activeCount > 0 }">
+          <span class="mds-step__no">4</span>启用运行
+        </div>
+        <span class="mds-step__line" />
+        <div class="mds-step">
+          <span class="mds-step__no">5</span>停用 / 归档
+        </div>
       </div>
     </div>
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="filters.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="搜索主体名称 / 编码 / 联系人"
-          @keyup.enter="search"
+    <AgriVueTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载经营主体…"
+      column-settings-storage-key="mds:cols:tenant-audit"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="load"
+      @update:page="changePage"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input
+              v-model="filters.keyword"
+              class="mds-input"
+              type="search"
+              placeholder="搜索主体名称 / 编码 / 联系人"
+              @keyup.enter="search"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>生命周期状态</label>
+            <select v-model="filters.status" class="mds-select" @change="search">
+              <option value="">全部生命周期状态</option>
+              <option value="1">启用</option>
+              <option value="0">停用</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>主体类型</label>
+            <select v-model="filters.type" class="mds-select" @change="search">
+              <option value="">全部主体类型</option>
+              <option value="ENTERPRISE">企业主体</option>
+              <option value="INDIVIDUAL">个人主体</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 认证审核</button>
+      </template>
+
+      <template #empty>
+        <EmptyState title="暂无经营主体" description="调整筛选条件后重试；主体由统一认证注册产生，不会在本模块新建。" />
+      </template>
+
+      <template #cell-tenantName="{ row }">
+        <span class="mds-name">{{ row.tenantName || '—' }}</span>
+      </template>
+      <template #cell-tenantType="{ row }">
+        {{ row.tenantType === 'INDIVIDUAL' ? '个人主体' : '企业主体' }}
+      </template>
+      <template #cell-verifyStatus="{ row }">
+        <StatusTag :text="verifyText(row.verifyStatus)" :tone="verifyTone(row.verifyStatus)" />
+      </template>
+      <template #cell-lifecycle="{ row }">
+        <StatusTag :text="lifecycleText(row as TenantRow)" :tone="lifecycleTone(row as TenantRow)" />
+      </template>
+      <template #cell-createTime="{ row }">
+        <span class="mds-muted">{{ formatDate(row.createTime) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'detail', label: '详情', onClick: () => openDetail(row.id) },
+            { key: 'toggle', label: isEnabled(row as TenantRow) ? '停用' : '启用', danger: isEnabled(row as TenantRow), disabled: busyId === row.id, point: 'PUT /admin/masterdata/subject/{id}/status', onClick: () => toggleStatus(row as TenantRow) },
+          ]"
         />
-        <select v-model="filters.status" class="mds-select" @change="search">
-          <option value="">全部生命周期状态</option>
-          <option value="1">启用</option>
-          <option value="0">停用</option>
-        </select>
-        <select v-model="filters.type" class="mds-select" @change="search">
-          <option value="">全部主体类型</option>
-          <option value="ENTERPRISE">企业主体</option>
-          <option value="INDIVIDUAL">个人主体</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>主体名称</th>
-              <th>主体编码</th>
-              <th>类型</th>
-              <th>联系人</th>
-              <th>联系电话</th>
-              <th>认证状态</th>
-              <th>生命周期</th>
-              <th>创建时间</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="9" class="mds-empty">正在加载经营主体…</td>
-            </tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="9">
-                <EmptyState title="暂无经营主体" description="调整筛选条件后重试；主体由统一认证注册产生，不会在本模块新建。" />
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.id">
-              <td class="mds-name">{{ row.tenantName || '—' }}</td>
-              <td class="mds-mono">{{ row.tenantCode || '—' }}</td>
-              <td>{{ row.tenantType === 'INDIVIDUAL' ? '个人主体' : '企业主体' }}</td>
-              <td>{{ row.contactPerson || '—' }}</td>
-              <td class="mds-mono">{{ row.contactPhone || '—' }}</td>
-              <td><StatusTag :text="verifyText(row.verifyStatus)" :tone="verifyTone(row.verifyStatus)" /></td>
-              <td><StatusTag :text="lifecycleText(row)" :tone="lifecycleTone(row)" /></td>
-              <td class="mds-muted">{{ formatDate(row.createTime) }}</td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="openDetail(row.id)">详情</button>
-                <button v-point="'PUT /admin/masterdata/subject/{id}/status'"
-                  class="mds-btn mds-btn--link"
-                  :class="{ 'mds-danger': isEnabled(row) }"
-                  :disabled="busyId === row.id"
-                  @click="toggleStatus(row)"
-                >
-                  {{ isEnabled(row) ? '停用' : '启用' }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <PagerBar
-        :page="page"
-        :page-size="pageSize"
-        :total="total"
-        @change="changePage"
-        @update:page-size="changePageSize"
-      />
-    </div>
+      </template>
+    </AgriVueTable>
   </div>
 </template>
 
@@ -143,7 +130,20 @@ import StatGrid, { type StatItem } from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
+
+const columns: VueListColumn[] = [
+  { prop: 'tenantName', label: '主体名称', width: 180, locked: true },
+  { prop: 'tenantCode', label: '主体编码', width: 140, kind: 'code' },
+  { prop: 'tenantType', label: '类型', width: 100 },
+  { prop: 'contactPerson', label: '联系人', width: 105 },
+  { prop: 'contactPhone', label: '联系电话', width: 130, kind: 'code' },
+  { prop: 'verifyStatus', label: '认证状态', width: 105, kind: 'status' },
+  { key: 'lifecycle', label: '生命周期', width: 105, kind: 'status' },
+  { prop: 'createTime', label: '创建时间', width: 148 },
+  { key: 'actions', label: '操作', width: 120, kind: 'action' },
+]
 import { getTenantList, getTenantStatistics, updateTenantStatus } from '@/utils/api'
 
 interface TenantRow {
@@ -328,3 +328,30 @@ onMounted(() => {
   void loadSummary()
 })
 </script>
+
+<style scoped>
+.lifecycle-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px;
+}
+
+.lifecycle-bar__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mds-text-2);
+  white-space: nowrap;
+  flex: none;
+}
+
+.lifecycle-bar :deep(.mds-steps) {
+  margin-bottom: 0;
+  gap: 6px;
+}
+
+.lifecycle-bar :deep(.mds-step__no) {
+  width: 20px;
+  height: 20px;
+}
+</style>

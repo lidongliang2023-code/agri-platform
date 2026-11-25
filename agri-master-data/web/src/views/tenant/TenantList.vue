@@ -4,110 +4,96 @@
       title="租户列表"
       subtitle="经营主体（租户）主档查询：注册信息、认证状态与生命周期；主体由统一认证注册产生。"
       source="统一认证 · 经营主体主档"
+    />
+
+    <AgriVueTable
+      :columns="columns"
+      :data="subjects"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载经营主体…"
+      column-settings-storage-key="mds:cols:tenant-list"
+      :page="currentPage"
+      :page-size="pageSize"
+      :total="totalCount"
+      @refresh="loadSubjects"
+      @update:page="goPage"
+      @update:page-size="changePageSize"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="loadSubjects">刷新</button>
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="handleSearch" @reset="resetSearch">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input
+              v-model="searchForm.keyword"
+              type="search"
+              class="mds-input"
+              placeholder="主体名称 / 编码 / 信用代码 / 联系人 / 电话"
+              @keyup.enter="handleSearch"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>主体类型</label>
+            <select v-model="searchForm.tenantType" class="mds-select" @change="handleSearch">
+              <option value="">全部主体类型</option>
+              <option value="ENTERPRISE">企业主体</option>
+              <option value="INDIVIDUAL">个人主体</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>主体状态</label>
+            <select v-model="searchForm.status" class="mds-select" @change="handleSearch">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">停用</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
         <button class="mds-btn mds-btn--primary" @click="router.push('/subject/audit')">入驻与生命周期</button>
       </template>
-    </PageHeader>
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="searchForm.keyword"
-          type="search"
-          class="mds-input"
-          placeholder="搜索主体名称、编码、信用代码、联系人或电话"
-          @keyup.enter="handleSearch"
+      <template #empty>
+        <EmptyState title="暂无符合条件的经营主体" description="调整关键字或筛选条件后重试。" />
+      </template>
+
+      <template #cell-tenantType="{ row }">
+        <StatusTag
+          :text="subjectTypeText(row.tenantType)"
+          :tone="row.tenantType === 'INDIVIDUAL' ? 'info' : 'brand'"
+          plain
         />
-        <select v-model="searchForm.tenantType" class="mds-select" @change="handleSearch">
-          <option value="">全部主体类型</option>
-          <option value="ENTERPRISE">企业主体</option>
-          <option value="INDIVIDUAL">个人主体</option>
-        </select>
-        <select v-model="searchForm.status" class="mds-select" @change="handleSearch">
-          <option value="">全部状态</option>
-          <option value="1">启用</option>
-          <option value="0">停用</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="handleSearch">查询</button>
-        <button class="mds-btn" @click="resetSearch">重置</button>
-      </div>
-
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>主体类型</th>
-              <th>主体名称</th>
-              <th>主体编码</th>
-              <th>信用代码 / 证件号</th>
-              <th>行业 / 经营类型</th>
-              <th>联系人</th>
-              <th>联系电话</th>
-              <th>认证状态</th>
-              <th>主体状态</th>
-              <th>创建时间</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="11" class="mds-empty">正在加载经营主体…</td>
-            </tr>
-            <tr v-else-if="subjects.length === 0">
-              <td colspan="11">
-                <EmptyState title="暂无符合条件的经营主体" description="调整关键字或筛选条件后重试。" />
-              </td>
-            </tr>
-            <tr v-for="subject in subjects" :key="subject.id">
-              <td>
-                <StatusTag
-                  :text="subjectTypeText(subject.tenantType)"
-                  :tone="subject.tenantType === 'INDIVIDUAL' ? 'info' : 'brand'"
-                  plain
-                />
-              </td>
-              <td class="mds-name">{{ subject.tenantName || '—' }}</td>
-              <td class="mds-mono">{{ subject.tenantCode || '—' }}</td>
-              <td class="mds-mono">
-                {{ subject.tenantType === 'INDIVIDUAL' ? subject.idNoMasked || '—' : subject.creditCode || '—' }}
-              </td>
-              <td>{{ subject.tenantType === 'INDIVIDUAL' ? subject.businessType || '—' : subject.industry || '—' }}</td>
-              <td>{{ subject.contactPerson || '—' }}</td>
-              <td class="mds-mono">{{ subject.contactPhone || '—' }}</td>
-              <td><StatusTag :text="verifyText(subject.verifyStatus)" :tone="verifyTone(subject.verifyStatus)" /></td>
-              <td>
-                <StatusTag
-                  :text="isEnabled(subject) ? '启用' : '停用'"
-                  :tone="isEnabled(subject) ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="mds-muted">{{ formatDate(subject.createTime) }}</td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="viewSubject(subject.id)">查看</button>
-                <button class="mds-btn mds-btn--link" @click="editSubject(subject.id)">编辑</button>
-                <button v-point="'PUT /admin/masterdata/subject/{id}/status'"
-                  class="mds-btn mds-btn--link"
-                  :class="{ 'mds-danger': isEnabled(subject) }"
-                  @click="toggleStatus(subject)"
-                >
-                  {{ isEnabled(subject) ? '停用' : '启用' }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <PagerBar
-        :page="currentPage"
-        :page-size="pageSize"
-        :total="totalCount"
-        @change="goPage"
-        @update:page-size="changePageSize"
-      />
-    </div>
+      </template>
+      <template #cell-tenantName="{ row }">
+        <span class="mds-name">{{ row.tenantName || '—' }}</span>
+      </template>
+      <template #cell-creditCode="{ row }">
+        <span class="mds-mono">{{ row.tenantType === 'INDIVIDUAL' ? row.idNoMasked || '—' : row.creditCode || '—' }}</span>
+      </template>
+      <template #cell-industry="{ row }">
+        {{ row.tenantType === 'INDIVIDUAL' ? row.businessType || '—' : row.industry || '—' }}
+      </template>
+      <template #cell-verifyStatus="{ row }">
+        <StatusTag :text="verifyText(row.verifyStatus)" :tone="verifyTone(row.verifyStatus)" />
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag :text="isEnabled(row) ? '启用' : '停用'" :tone="isEnabled(row) ? 'success' : 'gray'" />
+      </template>
+      <template #cell-createTime="{ row }">
+        <span class="mds-muted">{{ formatDate(row.createTime) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'view', label: '查看', onClick: () => viewSubject(row.id) },
+            { key: 'edit', label: '编辑', onClick: () => editSubject(row.id) },
+            { key: 'toggle', label: isEnabled(row) ? '停用' : '启用', danger: isEnabled(row), point: 'PUT /admin/masterdata/subject/{id}/status', onClick: () => toggleStatus(row) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
   </div>
 </template>
 
@@ -118,7 +104,22 @@ import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+
+const columns = [
+  { prop: 'tenantType', label: '主体类型', width: 105, align: 'center', ellipsis: false },
+  { prop: 'tenantName', label: '主体名称', width: 180, locked: true },
+  { prop: 'tenantCode', label: '主体编码', width: 140, kind: 'code' },
+  { prop: 'creditCode', label: '信用代码 / 证件号', width: 175, kind: 'code' },
+  { prop: 'industry', label: '行业 / 经营类型', width: 130 },
+  { prop: 'contactPerson', label: '联系人', width: 100 },
+  { prop: 'contactPhone', label: '联系电话', width: 130, kind: 'code' },
+  { prop: 'verifyStatus', label: '认证状态', width: 100, kind: 'status' },
+  { prop: 'status', label: '主体状态', width: 96, kind: 'status' },
+  { prop: 'createTime', label: '创建时间', width: 145 },
+  { key: 'actions', label: '操作', width: 130, kind: 'action' },
+]
 import { getTenantList, updateTenantStatus } from '../../utils/api'
 
 const router = useRouter()

@@ -54,8 +54,7 @@
               <p class="mds-card-sub">未选择品类时显示全部属性</p>
             </div>
             <div class="mds-head-actions">
-              <input v-model="keyword" class="mds-input mds-input--sm" placeholder="搜索属性名称 / 编码" />
-              <button v-point="'POST /api/product/attribute'" class="mds-btn mds-btn--primary mds-btn--sm" @click="startCreate">新增属性</button>
+
             </div>
           </div>
 
@@ -118,55 +117,69 @@
             </div>
           </div>
 
-          <div class="mds-table-wrap">
-            <table class="mds-table">
-              <thead>
-                <tr>
-                  <th>属性编码</th>
-                  <th>属性名称</th>
-                  <th>类型</th>
-                  <th>单位 / 取值</th>
-                  <th class="mds-center">必填</th>
-                  <th>所属品类</th>
-                  <th class="mds-num">排序</th>
-                  <th>状态</th>
-                  <th class="mds-actions">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="loading">
-                  <td colspan="9" class="mds-empty">正在加载属性模板…</td>
-                </tr>
-                <tr v-else-if="!visibleAttributes.length">
-                  <td colspan="9">
-                    <EmptyState
-                      title="该品类暂无属性"
-                      description="属性模板为空时，商品无法进行规格组合；点击右上角「新增属性」开始维护。"
-                    />
-                  </td>
-                </tr>
-                <tr v-for="item in visibleAttributes" :key="item.id">
-                  <td class="mds-mono">{{ item.attributeCode }}</td>
-                  <td class="mds-name">{{ item.attributeName }}</td>
-                  <td>{{ typeText(item.attributeType) }}</td>
-                  <td>
-                    <span v-if="item.options" class="mds-muted">{{ item.options }}</span>
-                    <span v-else>{{ item.unit || '—' }}</span>
-                  </td>
-                  <td class="mds-center">{{ item.isRequired === 1 ? '是' : '否' }}</td>
-                  <td class="mds-muted">{{ item.categoryName || categoryName(item.categoryId) }}</td>
-                  <td class="mds-num">{{ item.sortOrder ?? 0 }}</td>
-                  <td>
-                    <StatusTag :text="item.status === 1 ? '启用' : '停用'" :tone="item.status === 1 ? 'success' : 'gray'" />
-                  </td>
-                  <td class="mds-actions">
-                    <button v-point="'PUT /api/product/attribute/{id}'" class="mds-btn mds-btn--link" @click="startEdit(item)">编辑</button>
-                    <button v-point="'DELETE /api/product/attribute/{id}'" class="mds-btn mds-btn--link" :disabled="busyId === item.id" @click="remove(item)">删除</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <AgriVueTable
+            :columns="columns"
+            :data="visibleAttributes"
+            row-key="id"
+            :loading="loading"
+            loading-text="正在加载属性模板…"
+            column-settings-storage-key="mds:cols:product-template"
+            client-pagination
+            v-model:page="listPage1"
+            @refresh="loadAttributes"
+          >
+            <template #filter>
+              <AgriVueFilterBar :field-count="1" :loading="loading" @search="applyListFilter1" @reset="resetListFilter1">
+                <div class="agri-vue-filter-field">
+                  <label>属性名称 / 编码</label>
+                  <input v-model="keyword" class="mds-input" placeholder="搜索属性名称 / 编码" />
+                </div>
+              </AgriVueFilterBar>
+            </template>
+            <template #toolbar-left>
+              <button v-point="'POST /api/product/attribute'" class="mds-btn mds-btn--primary" @click="startCreate">新增属性</button>
+            </template>
+            <template #empty>
+              <EmptyState
+                                    title="该品类暂无属性"
+                                    description="属性模板为空时，商品无法进行规格组合；点击右上角「新增属性」开始维护。"
+                                  />
+            </template>
+            <template #cell-attributeName="{ row: item }">
+              <div class="mds-name">
+                {{ item.attributeName }}
+              </div>
+            </template>
+            <template #cell-attributeType="{ row: item }">
+              {{ typeText(item.attributeType) }}
+            </template>
+            <template #cell-options="{ row: item }">
+              <span v-if="item.options" class="mds-muted">{{ item.options }}</span>
+                                  <span v-else>{{ item.unit || '—' }}</span>
+            </template>
+            <template #cell-isRequired="{ row: item }">
+              {{ item.isRequired === 1 ? '是' : '否' }}
+            </template>
+            <template #cell-categoryName="{ row: item }">
+              <div class="mds-muted">
+                {{ item.categoryName || categoryName(item.categoryId) }}
+              </div>
+            </template>
+            <template #cell-sortOrder="{ row: item }">
+              {{ item.sortOrder ?? 0 }}
+            </template>
+            <template #cell-status="{ row: item }">
+              <StatusTag :text="item.status === 1 ? '启用' : '停用'" :tone="item.status === 1 ? 'success' : 'gray'" />
+            </template>
+            <template #cell-actions="{ row: item }">
+              <MdsRowActions
+                :actions="[
+                  { key: '1', label: &quot;编辑&quot;, onClick: () => startEdit(item), point: 'PUT /api/product/attribute/{id}' },
+                  { key: '2', label: &quot;删除&quot;, onClick: () => remove(item), point: 'DELETE /api/product/attribute/{id}', disabled: busyId === item.id },
+                ]"
+              />
+            </template>
+          </AgriVueTable>
         </div>
       </div>
     </div>
@@ -174,7 +187,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
@@ -393,4 +408,28 @@ onMounted(async () => {
   }
   await loadAttributes()
 })
+
+const columns: VueListColumn[] = [
+  { prop: 'attributeCode', label: '属性编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'attributeName', label: '属性名称', width: 128 },
+  { prop: 'attributeType', label: '类型', width: 128, ellipsis: false },
+  { prop: 'options', label: '单位 / 取值', width: 128, ellipsis: false },
+  { prop: 'isRequired', label: '必填', width: 128, align: 'center', ellipsis: false },
+  { prop: 'categoryName', label: '所属品类', width: 128, ellipsis: false },
+  { prop: 'sortOrder', label: '排序', width: 104, kind: 'number', ellipsis: false },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+const listPage1 = ref(1)
+function applyListFilter1() {
+  listPage1.value = 1
+}
+
+function resetListFilter1() {
+  keyword.value = ""
+  applyListFilter1()
+}
+
+watch(keyword, () => { listPage1.value = 1 })
 </script>

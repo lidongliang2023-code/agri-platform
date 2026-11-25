@@ -4,11 +4,7 @@
       title="操作审计"
       subtitle="追踪运营端写操作的操作人、来源、请求、结果与失败原因；日志只追加，不可编辑或删除。"
       source="只追加审计流水"
-    >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="loadData">{{ loading ? '刷新中…' : '刷新日志' }}</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="审计口径：">
       记录运营端全部新增、修改、删除与状态变更，成功与失败都留痕；查询操作不写入，避免淹没真正的业务变更。
@@ -16,105 +12,106 @@
 
     <StatGrid :items="statItems" />
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model.trim="searchForm.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="操作人 / 描述 / 目标 ID / 请求路径"
-          @keyup.enter="handleSearch"
-        />
-        <select v-model="searchForm.operationType" class="mds-select" @change="handleSearch">
-          <option value="">全部操作类型</option>
-          <option value="create">新增</option>
-          <option value="update">修改</option>
-          <option value="delete">删除</option>
-          <option value="other">其他</option>
-        </select>
-        <select v-model="searchForm.module" class="mds-select" style="min-width: 170px" @change="handleSearch">
-          <option value="">全部模块</option>
-          <option v-for="item in moduleOptions" :key="item" :value="item">{{ item }}</option>
-        </select>
-        <select v-model="searchForm.result" class="mds-select" @change="handleSearch">
-          <option value="">全部结果</option>
-          <option value="success">成功</option>
-          <option value="fail">失败</option>
-        </select>
-        <label class="date-field">
-          <span>起</span>
-          <input v-model="searchForm.startTime" type="date" />
-        </label>
-        <label class="date-field">
-          <span>止</span>
-          <input v-model="searchForm.endTime" type="date" />
-        </label>
-        <button class="mds-btn mds-btn--primary" @click="handleSearch">查询</button>
-        <button class="mds-btn" @click="resetSearch">重置</button>
-      </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="logs"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载审计流水…"
+      column-settings-storage-key="mds:cols:permission-log"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="loadData"
+      @update:page="goPage"
+      @update:page-size="handlePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="6" :loading="loading" @search="handleSearch" @reset="resetSearch">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input
+              v-model.trim="searchForm.keyword"
+              class="mds-input"
+              type="search"
+              placeholder="操作人 / 描述 / 目标 ID / 请求路径"
+              @keyup.enter="handleSearch"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>操作类型</label>
+            <select v-model="searchForm.operationType" class="mds-select" @change="handleSearch">
+              <option value="">全部操作类型</option>
+              <option value="create">新增</option>
+              <option value="update">修改</option>
+              <option value="delete">删除</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>业务模块</label>
+            <select v-model="searchForm.module" class="mds-select" @change="handleSearch">
+              <option value="">全部模块</option>
+              <option v-for="item in moduleOptions" :key="item" :value="item">{{ item }}</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>执行结果</label>
+            <select v-model="searchForm.result" class="mds-select" @change="handleSearch">
+              <option value="">全部结果</option>
+              <option value="success">成功</option>
+              <option value="fail">失败</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>开始日期</label>
+            <input v-model="searchForm.startTime" class="mds-input" type="date" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>结束日期</label>
+            <input v-model="searchForm.endTime" class="mds-input" type="date" />
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table audit-table">
-          <thead>
-            <tr>
-              <th>操作时间</th>
-              <th>操作人 / 来源</th>
-              <th>操作</th>
-              <th>模块</th>
-              <th>目标</th>
-              <th>请求</th>
-              <th>结果</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="8" class="mds-empty">正在加载审计流水…</td>
-            </tr>
-            <tr v-else-if="!logs.length">
-              <td colspan="8">
-                <EmptyState title="暂无符合条件的操作日志" description="调整筛选条件或时间范围后重试；查询操作本身不写日志。" />
-              </td>
-            </tr>
-            <tr v-for="log in logs" :key="log.id">
-              <td class="time-cell">{{ formatDateTime(log.createTime) }}</td>
-              <td>
-                <div>{{ log.username || '未登录' }}</div>
-                <small class="mds-mono mds-muted">{{ formatIp(log.ipAddress) }}</small>
-              </td>
-              <td>
-                <StatusTag :text="operationText(log.operationType)" :tone="operationTone(log.operationType)" plain />
-                <div class="desc-cell">{{ log.operationDesc || '未填写操作描述' }}</div>
-              </td>
-              <td>{{ log.module || '—' }}</td>
-              <td class="mds-mono">{{ log.targetId || '—' }}</td>
-              <td>
-                <StatusTag :text="log.requestMethod || '—'" tone="gray" plain />
-                <small class="uri-text">{{ log.requestUri || '—' }}</small>
-              </td>
-              <td>
-                <StatusTag
-                  :text="log.result === 'success' ? '成功' : '失败'"
-                  :tone="log.result === 'success' ? 'success' : 'danger'"
-                />
-                <small class="mds-muted">{{ log.durationMs ?? '—' }} ms</small>
-              </td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="selectedLog = log">详情</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <template #empty>
+        <EmptyState title="暂无符合条件的操作日志" description="调整筛选条件或时间范围后重试；查询操作本身不写日志。" />
+      </template>
 
-      <PagerBar
-        :page="pageNum"
-        :page-size="pageSize"
-        :total="total"
-        @change="goPage"
-        @update:page-size="handlePageSize"
-      />
-    </div>
+      <template #cell-createTime="{ row }">
+        <span class="time-cell">{{ formatDateTime(row.createTime) }}</span>
+      </template>
+      <template #cell-username="{ row }">
+        <div class="mds-cell-inline" :title="`${row.username || '未登录'}（${formatIp(row.ipAddress)}）`">
+          <span class="mds-cell-main">{{ row.username || '未登录' }}</span>
+          <span class="mds-mono mds-cell-sub">{{ formatIp(row.ipAddress) }}</span>
+        </div>
+      </template>
+      <template #cell-operationDesc="{ row }">
+        <div class="mds-cell-inline" :title="`${operationText(row.operationType)} · ${row.operationDesc || '未填写操作描述'}`">
+          <StatusTag :text="operationText(row.operationType)" :tone="operationTone(row.operationType)" plain />
+          <span class="mds-cell-main desc-cell">{{ row.operationDesc || '未填写操作描述' }}</span>
+        </div>
+      </template>
+      <template #cell-requestUri="{ row }">
+        <div class="mds-cell-inline" :title="`${row.requestMethod || '—'} ${row.requestUri || '—'}`">
+          <StatusTag :text="row.requestMethod || '—'" tone="gray" plain />
+          <span class="uri-text">{{ row.requestUri || '—' }}</span>
+        </div>
+      </template>
+      <template #cell-result="{ row }">
+        <div class="mds-cell-inline" :title="`${row.result === 'success' ? '成功' : '失败'} · ${row.durationMs ?? '—'} ms`">
+          <StatusTag
+            :text="row.result === 'success' ? '成功' : '失败'"
+            :tone="row.result === 'success' ? 'success' : 'danger'"
+          />
+          <span class="mds-cell-sub">{{ row.durationMs ?? '—' }}ms</span>
+        </div>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions :actions="[{ key: 'detail', label: '详情', onClick: () => (selectedLog = row) }]" />
+      </template>
+    </AgriVueTable>
 
     <div v-if="selectedLog" class="mds-mask" @click="selectedLog = null">
       <section class="mds-modal mds-modal--wide" @click.stop>
@@ -169,7 +166,19 @@ import StatGrid from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+
+const columns = [
+  { prop: 'createTime', label: '操作时间', width: 155, locked: true },
+  { prop: 'username', label: '操作人 / 来源', width: 165, ellipsis: false },
+  { prop: 'operationDesc', label: '操作描述', minWidth: 210, ellipsis: false },
+  { prop: 'module', label: '模块', width: 120 },
+  { prop: 'targetId', label: '目标', width: 130, kind: 'code' },
+  { prop: 'requestUri', label: '请求', width: 210, ellipsis: false },
+  { prop: 'result', label: '结果', width: 120, kind: 'status' },
+  { key: 'actions', label: '操作', width: 88, kind: 'action' },
+]
 import {
   getOperationLogModules,
   getOperationLogSummary,
@@ -313,20 +322,20 @@ onMounted(async () => {
 }
 
 .desc-cell {
-  max-width: 240px;
-  margin-top: 5px;
-  line-height: 1.45;
+  max-width: 220px;
+  margin-top: 0;
   color: var(--mds-text-2);
 }
 
 .uri-text {
-  display: block;
-  max-width: 260px;
-  margin-top: 4px;
+  display: inline-block;
+  max-width: 220px;
+  margin-top: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--mds-mono);
+  font-size: 12px;
   color: var(--mds-text-3);
 }
 

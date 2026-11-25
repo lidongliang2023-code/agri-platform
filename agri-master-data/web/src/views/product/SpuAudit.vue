@@ -5,10 +5,7 @@
       subtitle="平台标准库 SPU 准入：按品类合规、属性完整与图文规范复核。审核只改 audit_status，不等于上架。"
       source="主数据 · SPU 审核"
     >
-      <template #actions>
-        <button class="mds-btn" @click="router.push('/product/catalog')">品类标准</button>
-        <button class="mds-btn" :disabled="loading" @click="reloadAll">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <StatGrid :items="statItems" />
@@ -19,91 +16,89 @@
     </NoticeBar>
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="filters.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="搜索 SPU 编码 / 商品名称"
-          @keyup.enter="search"
-        />
-        <select v-model="filters.auditStatus" class="mds-select" @change="search">
-          <option value="PENDING">待审核</option>
-          <option value="APPROVED">已通过</option>
-          <option value="REJECTED">已驳回</option>
-          <option value="">全部审核状态</option>
-        </select>
-        <select v-model="filters.categoryId" class="mds-select" @change="search">
-          <option value="">全部品类</option>
-          <option v-for="item in categories" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>SPU 编码</th>
-              <th>商品名称</th>
-              <th>品类</th>
-              <th>品牌 / 规格</th>
-              <th class="mds-num">参考价</th>
-              <th>归属主体</th>
-              <th>提交时间</th>
-              <th>审核状态</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="9" class="mds-empty">正在加载 SPU…</td>
-            </tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="9">
-                <EmptyState
-                  title="没有符合条件的 SPU"
-                  :description="`当前筛选：${auditLabel(filters.auditStatus) || '全部状态'}。审核状态存于 agri_md_product.audit_status。`"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.id">
-              <td class="mds-mono">{{ row.productCode || '—' }}</td>
-              <td class="mds-name">{{ row.productName || '—' }}</td>
-              <td>{{ row.categoryName || '—' }}</td>
-              <td>
-                <div>{{ row.brand || '—' }}</div>
-                <div class="mds-hint">{{ specText(row.specJson) }}</div>
-              </td>
-              <td class="mds-num">{{ money(row.price) }}</td>
-              <td class="mds-mono">{{ row.tenantId || '—' }}</td>
-              <td class="mds-muted">{{ formatDate(row.createTime) }}</td>
-              <td><StatusTag :text="auditLabel(row.auditStatus)" :tone="auditTone(row.auditStatus)" /></td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="openDetail(row.id)">详情</button>
-                <button
-                  class="mds-btn mds-btn--link"
-                  :disabled="busyId === row.id || row.auditStatus === 'APPROVED'"
-                  @click="decide(row, 'APPROVED')"
-                >通过</button>
-                <button
-                  class="mds-btn mds-btn--link mds-danger"
-                  :disabled="busyId === row.id || row.auditStatus === 'REJECTED'"
-                  @click="decide(row, 'REJECTED')"
-                >驳回</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <PagerBar
+      <AgriVueTable
+        :columns="columns"
+        :data="rows"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载 SPU…"
+        column-settings-storage-key="mds:cols:spu-audit"
         :page="page"
         :page-size="pageSize"
         :total="total"
-        @change="changePage"
-        @update:page-size="changePageSize"
-      />
+        @page-change="(next, size) => size !== pageSize ? changePageSize(size) : changePage(next)"
+        @refresh="reloadAll"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="3" :loading="loading" @search="search" @reset="reset">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input
+                        v-model="filters.keyword"
+                        class="mds-input"
+                        type="search"
+                        placeholder="搜索 SPU 编码 / 商品名称"
+                      />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>审核状态</label>
+              <select v-model="filters.auditStatus" class="mds-select" @change="search">
+                        <option value="PENDING">待审核</option>
+                        <option value="APPROVED">已通过</option>
+                        <option value="REJECTED">已驳回</option>
+                        <option value="">全部审核状态</option>
+                      </select>
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>品类</label>
+              <select v-model="filters.categoryId" class="mds-select" @change="search">
+                        <option value="">全部品类</option>
+                        <option v-for="item in categories" :key="item.id" :value="String(item.id)">{{ item.name }}</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button class="mds-btn" @click="router.push('/product/catalog')">品类标准</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            title="没有符合条件的 SPU"
+                            :description="`当前筛选：${auditLabel(filters.auditStatus) || '全部状态'}。审核状态存于 agri_md_product.audit_status。`"
+                          />
+        </template>
+        <template #cell-productName="{ row: row }">
+          <div class="mds-name">
+            {{ row.productName || '—' }}
+          </div>
+        </template>
+        <template #cell-brand="{ row: row }">
+          <div>{{ row.brand || '—' }}</div>
+                          <div class="mds-hint">{{ specText(row.specJson) }}</div>
+        </template>
+        <template #cell-price="{ row: row }">
+          {{ money(row.price) }}
+        </template>
+        <template #cell-createTime="{ row: row }">
+          <div class="mds-muted">
+            {{ formatDate(row.createTime) }}
+          </div>
+        </template>
+        <template #cell-auditStatus="{ row: row }">
+          <StatusTag :text="auditLabel(row.auditStatus)" :tone="auditTone(row.auditStatus)" />
+        </template>
+        <template #cell-actions="{ row: row }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;详情&quot;, onClick: () => openDetail(row.id) },
+              { key: '2', label: &quot;通过&quot;, onClick: () => decide(row, 'APPROVED'), disabled: busyId === row.id || row.auditStatus === 'APPROVED' },
+              { key: '3', label: &quot;驳回&quot;, onClick: () => decide(row, 'REJECTED'), disabled: busyId === row.id || row.auditStatus === 'REJECTED', danger: true },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
+      
     </div>
 
     <div v-if="detail" class="mds-card">
@@ -146,6 +141,8 @@
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
@@ -154,7 +151,6 @@ import StatGrid, { type StatItem } from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
 import {
   auditProduct,
   getProductCategoryTree,
@@ -364,4 +360,16 @@ onMounted(async () => {
   await loadCategories()
   await Promise.all([loadList(), loadStats()])
 })
+
+const columns: VueListColumn[] = [
+  { prop: 'productCode', label: 'SPU 编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'productName', label: '商品名称', width: 128 },
+  { prop: 'categoryName', label: '品类', width: 128 },
+  { prop: 'brand', label: '品牌 / 规格', width: 128, ellipsis: false },
+  { prop: 'price', label: '参考价', width: 104, kind: 'number', ellipsis: false },
+  { prop: 'tenantId', label: '归属主体', width: 128 },
+  { prop: 'createTime', label: '提交时间', width: 152, ellipsis: false },
+  { prop: 'auditStatus', label: '审核状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
 </script>

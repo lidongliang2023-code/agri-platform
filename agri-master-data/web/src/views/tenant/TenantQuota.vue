@@ -15,61 +15,74 @@
       <div><span>高用量</span><strong class="warn">{{ highUsageCount }}</strong><small>任一资源使用率 ≥ 80%</small></div>
     </div>
 
-    <div class="search-bar">
-      <input v-model="filters.keyword" placeholder="搜索主体名称、编码、信用代码或手机号" @keyup.enter="search" />
-      <select v-model="filters.tenantType" @change="search">
-        <option value="">全部主体类型</option>
-        <option value="ENTERPRISE">企业主体</option>
-        <option value="INDIVIDUAL">个人主体</option>
-      </select>
-      <button class="primary" @click="search">查询</button>
-      <button @click="reset">重置</button>
-    </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载配额数据…"
+      empty-text="暂无主体配额数据"
+      column-settings-storage-key="mds:cols:tenant-quota"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="totalCount"
+      @refresh="load"
+      @update:page="goPage"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input v-model="filters.keyword" class="mds-input" placeholder="主体名称 / 编码 / 信用代码 / 手机号" @keyup.enter="search" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>主体类型</label>
+            <select v-model="filters.tenantType" class="mds-select" @change="search">
+              <option value="">全部主体类型</option>
+              <option value="ENTERPRISE">企业主体</option>
+              <option value="INDIVIDUAL">个人主体</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <div class="table-card">
-      <table>
-        <thead>
-          <tr>
-            <th>经营主体</th>
-            <th>类型</th>
-            <th>用户</th>
-            <th>组织</th>
-            <th>商品</th>
-            <th>存储</th>
-            <th>API</th>
-            <th>配置状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading"><td colspan="9" class="empty">正在加载配额数据…</td></tr>
-          <tr v-else-if="rows.length === 0"><td colspan="9" class="empty">暂无主体配额数据</td></tr>
-          <tr v-for="row in rows" :key="row.id">
-            <td>
-              <div class="subject-name">{{ row.name }}</div>
-              <div class="subject-code">{{ row.code }}</div>
-            </td>
-            <td><span class="type-badge" :class="row.type === 'INDIVIDUAL' ? 'personal' : 'enterprise'">{{ typeText(row.type) }}</span></td>
-            <td><usage-cell :used="row.userUsed" :limit="row.userLimit" unit="" /></td>
-            <td><usage-cell :used="row.orgUsed" :limit="row.orgLimit" unit="" /></td>
-            <td><usage-cell :used="row.productUsed" :limit="row.productLimit" unit="" /></td>
-            <td><usage-cell :used="row.storageUsed" :limit="row.storageLimit" unit="GB" /></td>
-            <td><usage-cell :used="row.apiUsed" :limit="row.apiLimit" unit="" /></td>
-            <td><span class="quota-state" :class="row.hasQuota ? 'ok' : 'off'">{{ row.hasQuota ? '已配置' : '未配置' }}</span></td>
-            <td class="actions">
-              <button @click="viewDetail(row.id)">详情</button>
-              <button class="edit" @click="editQuota(row.id)">{{ row.hasQuota ? '编辑配额' : '配置配额' }}</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div class="pagination">
-        <span>共 {{ totalCount }} 条</span>
-        <button :disabled="pageNum <= 1" @click="changePage(-1)">上一页</button>
-        <span>第 {{ pageNum }} / {{ totalPages }} 页</span>
-        <button :disabled="pageNum >= totalPages" @click="changePage(1)">下一页</button>
-      </div>
-    </div>
+      <template #cell-name="{ row }">
+        <div class="mds-cell-inline" :title="`${row.name}（${row.code}）`">
+          <span class="subject-name mds-cell-main">{{ row.name }}</span>
+          <span class="subject-code mds-cell-sub">{{ row.code }}</span>
+        </div>
+      </template>
+      <template #cell-type="{ row }">
+        <span class="type-badge" :class="row.type === 'INDIVIDUAL' ? 'personal' : 'enterprise'">{{ typeText(row.type) }}</span>
+      </template>
+      <template #cell-userUsed="{ row }">
+        <usage-cell :used="row.userUsed" :limit="row.userLimit" unit="" />
+      </template>
+      <template #cell-orgUsed="{ row }">
+        <usage-cell :used="row.orgUsed" :limit="row.orgLimit" unit="" />
+      </template>
+      <template #cell-productUsed="{ row }">
+        <usage-cell :used="row.productUsed" :limit="row.productLimit" unit="" />
+      </template>
+      <template #cell-storageUsed="{ row }">
+        <usage-cell :used="row.storageUsed" :limit="row.storageLimit" unit="GB" />
+      </template>
+      <template #cell-apiUsed="{ row }">
+        <usage-cell :used="row.apiUsed" :limit="row.apiLimit" unit="" />
+      </template>
+      <template #cell-hasQuota="{ row }">
+        <span class="quota-state" :class="row.hasQuota ? 'ok' : 'off'">{{ row.hasQuota ? '已配置' : '未配置' }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'detail', label: '详情', onClick: () => viewDetail(row.id) },
+            { key: 'edit', label: row.hasQuota ? '编辑配额' : '配置配额', onClick: () => editQuota(row.id) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
   </div>
 </template>
 
@@ -77,17 +90,30 @@
 import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { getTenantQuotaOverview } from '../../utils/api'
 
-const PAGE_SIZE = 20
 const GB = 1024 ** 3
 const router = useRouter()
 const loading = ref(false)
 const rows = ref([])
 const pageNum = ref(1)
+const pageSize = ref(20)
 const totalCount = ref(0)
-const totalPages = ref(1)
 const filters = reactive({ keyword: '', tenantType: '' })
+
+const columns = [
+  { prop: 'name', label: '经营主体', width: 200, locked: true, ellipsis: false },
+  { prop: 'type', label: '类型', width: 96, align: 'center', ellipsis: false },
+  { prop: 'userUsed', label: '用户', width: 120, align: 'left', ellipsis: false },
+  { prop: 'orgUsed', label: '组织', width: 120, align: 'left', ellipsis: false },
+  { prop: 'productUsed', label: '商品', width: 120, align: 'left', ellipsis: false },
+  { prop: 'storageUsed', label: '存储', width: 130, align: 'left', ellipsis: false },
+  { prop: 'apiUsed', label: 'API', width: 120, align: 'left', ellipsis: false },
+  { prop: 'hasQuota', label: '配置状态', width: 96, kind: 'status' },
+  { key: 'actions', label: '操作', width: 135, kind: 'action' },
+]
 
 const UsageCell = defineComponent({
   props: { used: Number, limit: Number, unit: { type: String, default: '' } },
@@ -129,7 +155,7 @@ const load = async () => {
   try {
     const response = await getTenantQuotaOverview({
       pageNum: pageNum.value,
-      pageSize: PAGE_SIZE,
+      pageSize: pageSize.value,
       keyword: filters.keyword || undefined,
       tenantType: filters.tenantType || undefined,
     })
@@ -141,11 +167,9 @@ const load = async () => {
       type: item.tenantType,
     }))
     totalCount.value = Number(response.data?.total ?? 0)
-    totalPages.value = Math.max(1, Math.ceil(totalCount.value / PAGE_SIZE))
   } catch (error) {
     rows.value = []
     totalCount.value = 0
-    totalPages.value = 1
     message.error(error instanceof Error ? error.message : '配额列表加载失败')
   } finally {
     loading.value = false
@@ -154,10 +178,13 @@ const load = async () => {
 
 const search = () => { pageNum.value = 1; void load() }
 const reset = () => { Object.assign(filters, { keyword: '', tenantType: '' }); search() }
-const changePage = (delta) => {
-  const next = pageNum.value + delta
-  if (next < 1 || next > totalPages.value) return
+const goPage = (next) => {
   pageNum.value = next
+  void load()
+}
+const changePageSize = (size) => {
+  pageSize.value = size
+  pageNum.value = 1
   void load()
 }
 const viewDetail = (id) => router.push(`/subject/quota/${id}`)
@@ -167,44 +194,46 @@ onMounted(load)
 </script>
 
 <style scoped>
-.quota-page { padding:20px; color:#1f2937; }
-.page-head { display:flex; justify-content:space-between; gap:16px; margin-bottom:18px; }
-.page-head h1 { margin:0 0 5px; font-size:24px; }
-.page-head p { margin:0; color:#6b7280; }
-.source-tag { align-self:flex-start; padding:7px 12px; border-radius:999px; background:#ecfdf5; color:#047857; font-size:12px; white-space:nowrap; }
-.summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
-.summary-grid div { padding:15px; border:1px solid #e3eae5; border-radius:10px; background:#fff; }
-.summary-grid span,.summary-grid small { display:block; color:#8a9890; font-size: var(--agri-font-size-micro); }
-.summary-grid strong { display:block; margin:6px 0; color:#0f6740; font-size:24px; }
+.quota-page { padding:0; color:#1f2937; }
+.page-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.page-head > div { display:flex; align-items:baseline; gap:10px; min-width:0; flex:1; }
+.page-head h1 { margin:0; font-size:18px; line-height:28px; white-space:nowrap; }
+.page-head p { margin:0; color:#8f959e; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.source-tag { padding:4px 10px; border-radius:999px; background:#e9f6ef; color:#0f7a45; font-size:12px; white-space:nowrap; flex:none; }
+.summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-bottom:8px; }
+.summary-grid div { display:flex; align-items:baseline; justify-content:space-between; gap:8px; padding:7px 14px; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
+.summary-grid span { display:block; color:#646a73; font-size:12px; white-space:nowrap; }
+.summary-grid small { display:none; }
+.summary-grid strong { display:block; margin:0; color:#0f6740; font-size:18px; line-height:24px; font-family:ui-monospace,Consolas,monospace; }
 .summary-grid .warn { color:#b45309; }
-.search-bar { display:flex; flex-wrap:wrap; gap:9px; padding:14px; margin-bottom:14px; border-radius:10px; background:#fff; }
-.search-bar input { flex:1; min-width:300px; height:38px; padding:0 12px; border:1px solid #d1d5db; border-radius:8px; }
-.search-bar select { min-width:145px; height:38px; padding:0 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; }
-.search-bar button { height:38px; padding:0 17px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#4b5563; cursor:pointer; }
-.search-bar button.primary { border:0; background:#10b981; color:#fff; }
-.table-card { overflow:auto; border-radius:10px; background:#fff; }
+.search-bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 14px; margin-bottom:8px; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
+.search-bar input { flex:1; min-width:260px; height:32px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; }
+.search-bar select { min-width:136px; height:32px; padding:0 10px; border:1px solid #d1d5db; border-radius:6px; background:#fff; font-size:13px; }
+.search-bar button { height:32px; padding:0 14px; border:1px solid #d1d5db; border-radius:6px; background:#fff; color:#4b5563; font-size:13px; cursor:pointer; }
+.search-bar button.primary { border:0; background:#2d8f4e; color:#fff; }
+.table-card { overflow:auto; border:1px solid #e5e8ec; border-radius:8px; background:#fff; }
 table { width:100%; min-width:1180px; border-collapse:collapse; }
-th,td { padding:12px 14px; border-bottom:1px solid #edf0f2; text-align:left; vertical-align:middle; }
-th { background:#f8fafc; color:#4b5563; font-size:12px; }
+th,td { height:48px; padding:5px 10px; border-bottom:1px solid #f0f0f0; text-align:left; vertical-align:middle; }
+th { background:#fafafa; color:#595959; font-size:12px; font-weight:600; }
 .subject-name { font-weight:600; }
-.subject-code { margin-top:3px; color:#94a3b8; font-family:ui-monospace,Consolas,monospace; font-size: var(--agri-font-size-micro); }
-.type-badge,.quota-state { padding:3px 9px; border-radius:999px; font-size: var(--agri-font-size-micro); white-space:nowrap; }
-.type-badge.enterprise,.quota-state.ok { background:#ecfdf5; color:#047857; }
+.subject-code { color:#94a3b8; font-family:ui-monospace,Consolas,monospace; font-size:12px; }
+.type-badge,.quota-state { padding:2px 8px; border-radius:999px; font-size:12px; white-space:nowrap; }
+.type-badge.enterprise,.quota-state.ok { background:#e9f6ef; color:#0f7a45; }
 .type-badge.personal { background:#eff6ff; color:#1d4ed8; }
 .quota-state.off { background:#fff7ed; color:#c2410c; }
 .actions { white-space:nowrap; }
-.actions button { margin-right:6px; padding:5px 9px; border:0; border-radius:6px; background:#f3f4f6; color:#4b5563; cursor:pointer; }
-.actions button.edit { background:#ecfdf5; color:#047857; }
-.pagination { display:flex; justify-content:flex-end; align-items:center; gap:10px; padding:15px; color:#6b7280; font-size:12.5px; }
-.pagination button { padding:6px 11px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; }
+.actions button { margin-right:6px; padding:4px 8px; border:0; border-radius:6px; background:#f3f4f6; color:#4b5563; cursor:pointer; }
+.actions button.edit { background:#e9f6ef; color:#0f7a45; }
+.pagination { display:flex; justify-content:flex-end; align-items:center; gap:10px; padding:10px 14px; color:#6b7280; font-size:12.5px; }
+.pagination button { padding:5px 11px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer; }
 .pagination button:disabled { opacity:.45; cursor:not-allowed; }
-.empty { padding:40px !important; text-align:center !important; color:#9ca3af !important; }
-:deep(.usage) { min-width:128px; }
-:deep(.usage-text) { margin-bottom:4px; color:#64748b; font-size: var(--agri-font-size-micro); }
-:deep(.bar) { height:7px; overflow:hidden; border-radius:999px; background:#e8eeea; }
-:deep(.bar i) { display:block; height:100%; border-radius:999px; background:#10b981; }
+.empty { padding:32px !important; text-align:center !important; color:#9ca3af !important; }
+:deep(.usage) { display:flex; flex-direction:column; justify-content:center; gap:3px; min-width:96px; max-width:130px; }
+:deep(.usage-text) { color:#64748b; font-size:12px; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+:deep(.bar) { height:4px; overflow:hidden; border-radius:999px; background:#e8eeea; }
+:deep(.bar i) { display:block; height:100%; border-radius:999px; background:#2d8f4e; }
 :deep(.bar i.danger) { background:#ef4444; }
-:deep(.unconfigured) { color:#94a3b8; font-size: var(--agri-font-size-micro); }
+:deep(.unconfigured) { color:#94a3b8; font-size:12px; white-space:nowrap; }
 @media(max-width:900px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.page-head{flex-direction:column}.summary-grid{grid-template-columns:1fr}.search-bar input{min-width:100%}}
+@media(max-width:600px){.page-head{flex-direction:column;align-items:flex-start}.summary-grid{grid-template-columns:1fr}.search-bar input{min-width:100%}}
 </style>

@@ -5,10 +5,7 @@
       subtitle="本主体下的组织节点：企业、合作社、农场与部门。数据按主体隔离，只显示当前主体。"
       source="主数据 · 我的主体"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-        <button v-point="'POST /api/user/orgs'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增组织</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="当前口径：">
@@ -28,51 +25,45 @@
         <span class="mds-tag mds-tag--plain">{{ flat.length }} 个</span>
       </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>组织名称</th>
-              <th>编码</th>
-              <th>类型</th>
-              <th>负责人</th>
-              <th>联系电话</th>
-              <th>状态</th>
-              <th class="mds-center">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="7" class="mds-empty">正在加载组织…</td>
-            </tr>
-            <tr v-else-if="!flat.length">
-              <td colspan="7">
-                <EmptyState
-                  icon="🏢"
-                  title="当前主体还没有组织档案"
-                  description="主数据里没有属于该主体的组织节点。可以到运营端开通 / 同步组织，或联系平台管理员初始化。"
-                />
-              </td>
-            </tr>
-            <tr v-for="org in flat" :key="org.id">
-              <td>
-                <span class="mds-name" :style="{ paddingLeft: `${org.depth * 18}px` }">{{ org.orgName || '—' }}</span>
-              </td>
-              <td class="mds-mono">{{ org.orgCode || '—' }}</td>
-              <td><StatusTag :text="typeText(org.orgType)" :tone="typeTone(org.orgType)" plain /></td>
-              <td>{{ org.contactPerson || '—' }}</td>
-              <td class="mds-mono">{{ org.contactPhone || '—' }}</td>
-              <td>
-                <StatusTag :text="Number(org.status) === 1 ? '启用' : '停用'" :tone="Number(org.status) === 1 ? 'success' : 'gray'" />
-              </td>
-              <td class="mds-center">
-                <button v-point="'PUT /api/user/orgs/{id}'" class="org-link" @click="openEdit(org)">编辑</button>
-                <span v-if="!points.can('PUT /api/user/orgs/{id}')" class="mds-hint">未授权该操作</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="flat"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载组织…"
+        column-settings-storage-key="mds:cols:user-orgs"
+        client-pagination
+        :selectable="false"
+        @refresh="load"
+      >
+        <template #toolbar-left>
+          <button v-point="'POST /api/user/orgs'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增组织</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            icon="🏢"
+                            title="当前主体还没有组织档案"
+                            description="主数据里没有属于该主体的组织节点。可以到运营端开通 / 同步组织，或联系平台管理员初始化。"
+                          />
+        </template>
+        <template #cell-depth="{ row: org }">
+          <span class="mds-name" :style="{ paddingLeft: `${org.depth * 18}px` }">{{ org.orgName || '—' }}</span>
+        </template>
+        <template #cell-orgType="{ row: org }">
+          <StatusTag :text="typeText(org.orgType)" :tone="typeTone(org.orgType)" plain />
+        </template>
+        <template #cell-status="{ row: org }">
+          <StatusTag :text="Number(org.status) === 1 ? '启用' : '停用'" :tone="Number(org.status) === 1 ? 'success' : 'gray'" />
+        </template>
+        <template #cell-actions="{ row: org }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;编辑&quot;, onClick: () => openEdit(org), point: 'PUT /api/user/orgs/{id}' },
+            ]"
+            fallback-text="未授权该操作"
+          />
+        </template>
+      </AgriVueTable>
     </div>
     <!-- 新增 / 编辑组织 -->
     <div v-if="dialogOpen" class="mds-mask" @click.self="dialogOpen = false">
@@ -126,6 +117,8 @@
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatGrid from '@/components/ui/StatGrid.vue'
@@ -285,4 +278,14 @@ async function load() {
 
 // 权限点清单由 main.ts 在启动续签后读一次，页面只管读结果（v-point 与这里的占位判断都用它）
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'depth', label: '组织名称', minWidth: 174, locked: true, ellipsis: false },
+  { prop: 'orgCode', label: '编码', width: 142, kind: 'code' },
+  { prop: 'orgType', label: '类型', width: 128, ellipsis: false },
+  { prop: 'contactPerson', label: '负责人', width: 128 },
+  { prop: 'contactPhone', label: '联系电话', width: 142, kind: 'code' },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
 </script>

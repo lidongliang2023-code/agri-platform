@@ -4,12 +4,7 @@
       title="隐私与数据申请"
       subtitle="用户提交的数据导出 / 账号注销申请台账；办理动作由用户中心运营端执行。"
       source="只读 · 用户中心主责"
-    >
-      <template #actions>
-        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 隐私申请</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="只读视图：">
       办结 / 驳回入口已移到用户中心运营端；本页保留申请内容、处理说明与状态的核对能力。
@@ -22,68 +17,78 @@
       <div class="audit-kpi red"><span>未通过</span><strong>{{ counts.rejected }}</strong><small>不具备办理条件</small></div>
     </div>
 
-    <div class="search-bar">
-      <div class="filter-group">
-        <select v-model="statusFilter" class="filter-select" @change="loadData">
-          <option value="all">全部状态</option>
-          <option value="pending">待处理</option>
-          <option value="processing">处理中</option>
-          <option value="completed">已办结</option>
-          <option value="rejected">未通过</option>
-          <option value="cancelled">已撤回</option>
-        </select>
-        <select v-model="typeFilter" class="filter-select" @change="loadData">
-          <option value="all">全部类型</option>
-          <option value="export">数据导出</option>
-          <option value="deletion">账号注销</option>
-        </select>
-      </div>
-    </div>
+    <AgriVueTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      empty-text="没有符合条件的申请"
+      column-settings-storage-key="mds:cols:uc-privacy"
+      client-pagination
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      @refresh="loadData"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="loadData" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>办理状态</label>
+            <select v-model="statusFilter" class="mds-select" @change="loadData">
+              <option value="all">全部状态</option>
+              <option value="pending">待处理</option>
+              <option value="processing">处理中</option>
+              <option value="completed">已办结</option>
+              <option value="rejected">未通过</option>
+              <option value="cancelled">已撤回</option>
+            </select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>申请类型</label>
+            <select v-model="typeFilter" class="mds-select" @change="loadData">
+              <option value="all">全部类型</option>
+              <option value="export">数据导出</option>
+              <option value="deletion">账号注销</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <div class="uc-table-wrap">
-      <table class="uc-table">
-        <thead>
-          <tr>
-            <th>申请人</th>
-            <th>类型</th>
-            <th>理由 / 范围</th>
-            <th>状态</th>
-            <th>提交时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading"><td colspan="6" class="uc-td-empty">正在加载…</td></tr>
-          <tr v-else-if="rows.length === 0"><td colspan="6" class="uc-td-empty">没有符合条件的申请</td></tr>
-          <tr v-for="row in rows" :key="row.id">
-            <td>
-              {{ row.applicantName || row.userId }}
-              <br /><small class="uc-muted">{{ row.applicantPhone || '' }}</small>
-            </td>
-            <td>
-              <span class="uc-tag" :class="row.requestType">{{ typeLabel(row.requestType) }}</span>
-            </td>
-            <td class="uc-pv-cell">
-              <p v-if="row.reason">{{ row.reason }}</p>
-              <p v-else class="uc-muted">未填写理由</p>
-              <small v-if="row.scope" class="uc-muted">范围：{{ row.scope }}</small>
-              <div v-if="row.handleRemark" class="uc-pv-reply">
-                <span>{{ row.handlerName || '平台运营' }} 处理</span>
-                <p>{{ row.handleRemark }}</p>
-              </div>
-            </td>
-            <td><span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span></td>
-            <td>{{ (row.submitTime || '').replace('T', ' ').slice(0, 16) }}</td>
-            <td>
-              <template v-if="row.status === 'pending' || row.status === 'processing'">
-                <button class="mds-btn mds-btn--link" @click="openUserCenter">去用户中心办理</button>
-              </template>
-              <span v-else class="uc-muted">{{ row.handlerName || '—' }}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <template #toolbar-left>
+        <button class="mds-btn" @click="openUserCenter">前往用户中心 · 隐私申请</button>
+      </template>
+
+      <template #cell-applicantName="{ row }">
+        <div>{{ row.applicantName || row.userId }}</div>
+        <small v-if="row.applicantPhone" class="uc-muted">{{ row.applicantPhone }}</small>
+      </template>
+      <template #cell-requestType="{ row }">
+        <span class="uc-tag" :class="row.requestType">{{ typeLabel(row.requestType) }}</span>
+      </template>
+      <template #cell-reason="{ row }">
+        <div class="uc-pv-cell">
+          <p v-if="row.reason">{{ row.reason }}</p>
+          <p v-else class="uc-muted">未填写理由</p>
+          <small v-if="row.scope" class="uc-muted">范围：{{ row.scope }}</small>
+          <div v-if="row.handleRemark" class="uc-pv-reply">
+            <span>{{ row.handlerName || '平台运营' }} 处理</span>
+            <p>{{ row.handleRemark }}</p>
+          </div>
+        </div>
+      </template>
+      <template #cell-status="{ row }">
+        <span class="uc-status" :class="row.status">{{ statusText(row.status) }}</span>
+      </template>
+      <template #cell-submitTime="{ row }">
+        {{ (row.submitTime || '').replace('T', ' ').slice(0, 16) || '—' }}
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          v-if="row.status === 'pending' || row.status === 'processing'"
+          :actions="[{ key: 'handle', label: '去用户中心办理', onClick: openUserCenter }]"
+        />
+        <span v-else class="uc-muted">{{ row.handlerName || '—' }}</span>
+      </template>
+    </AgriVueTable>
 
     <!-- 办理弹窗 -->
     <div v-if="target" class="uc-pv-mask" @click.self="closeHandle">
@@ -122,11 +127,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
 import '@/styles/admin-page.css'
+
+const columns: VueListColumn[] = [
+  { prop: 'applicantName', label: '申请人', width: 145, locked: true, ellipsis: false },
+  { prop: 'requestType', label: '类型', width: 105, align: 'center', ellipsis: false },
+  { prop: 'reason', label: '理由 / 范围', minWidth: 280, ellipsis: false },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { prop: 'submitTime', label: '提交时间', width: 150 },
+  { key: 'actions', label: '操作', width: 135, kind: 'action' },
+]
 import request from '@/utils/request'
 import { refreshAccessToken } from '@/utils/sso'
 
@@ -149,6 +165,15 @@ const saving = ref('')
 const statusFilter = ref('pending')
 const typeFilter = ref('all')
 const rows = ref<Row[]>([])
+const page = ref(1)
+const pageSize = ref(20)
+watch([statusFilter, typeFilter], () => { page.value = 1 })
+function reset() {
+  statusFilter.value = 'all'
+  typeFilter.value = 'all'
+  page.value = 1
+  void loadData()
+}
 
 function openUserCenter() {
   window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')

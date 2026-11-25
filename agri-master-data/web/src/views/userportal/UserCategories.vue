@@ -5,9 +5,7 @@
       subtitle="平台标准品类（全租户共享，只读）与本主体自定义分类（仅本主体可见）。"
       source="主数据 · 我的主体"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="口径：">
@@ -17,47 +15,40 @@
     <StatGrid :items="statItems" />
 
     <div class="mds-card">
-      <div class="mds-table-wrap">
-        <table class="mds-table category-table">
-          <thead>
-            <tr>
-              <th>分类名称</th>
-              <th>分类编码</th>
-              <th>归属</th>
-              <th>状态</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading"><td colspan="4" class="mds-empty">正在加载品类…</td></tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="4">
-                <EmptyState
-                  icon="🌳"
-                  title="当前主体还没有可用品类"
-                  description="平台标准品类尚未初始化（种子数据绑在演示租户上），主数据里也没有本主体自定义分类。"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in flat" :key="row.id">
-              <td>
-                <span class="mds-name" :style="{ paddingLeft: `${row.depth * 16}px` }">{{ row.categoryName }}</span>
-              </td>
-              <td class="mds-mono">{{ row.categoryCode || '—' }}</td>
-              <td>
-                <StatusTag :text="row.custom ? '本主体自定义' : '平台标准'" :tone="row.custom ? 'brand' : 'info'" plain />
-              </td>
-              <td>
-                <StatusTag :text="Number(row.status) === 1 ? '启用' : '停用'" :tone="Number(row.status) === 1 ? 'success' : 'gray'" />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="flat"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载品类…"
+        column-settings-storage-key="mds:cols:user-categories"
+        client-pagination
+        :selectable="false"
+        @refresh="load"
+      >
+        <template #empty>
+          <EmptyState
+                            icon="🌳"
+                            title="当前主体还没有可用品类"
+                            description="平台标准品类尚未初始化（种子数据绑在演示租户上），主数据里也没有本主体自定义分类。"
+                          />
+        </template>
+        <template #cell-depth="{ row: row }">
+          <span class="mds-name" :style="{ paddingLeft: `${row.depth * 16}px` }">{{ row.categoryName }}</span>
+        </template>
+        <template #cell-custom="{ row: row }">
+          <StatusTag :text="row.custom ? '本主体自定义' : '平台标准'" :tone="row.custom ? 'brand' : 'info'" plain />
+        </template>
+        <template #cell-status="{ row: row }">
+          <StatusTag :text="Number(row.status) === 1 ? '启用' : '停用'" :tone="Number(row.status) === 1 ? 'success' : 'gray'" />
+        </template>
+      </AgriVueTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
 import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatGrid from '@/components/ui/StatGrid.vue'
@@ -129,6 +120,13 @@ async function load() {
 }
 
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'depth', label: '分类名称', minWidth: 174, locked: true, ellipsis: false },
+  { prop: 'categoryCode', label: '分类编码', width: 142, kind: 'code' },
+  { prop: 'custom', label: '归属', width: 128, ellipsis: false },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+]
 </script>
 
 <style scoped>

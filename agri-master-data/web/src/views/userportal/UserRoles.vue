@@ -5,10 +5,7 @@
       subtitle="本主体可见的角色：平台共享角色（由平台维护）与本主体自定义角色。成员与权限由本主体的租户管理员维护。"
       source="主数据 · 我的主体"
     >
-      <template #actions>
-        <button class="mds-btn" :disabled="loading" @click="load">刷新</button>
-        <button v-point="'POST /api/user/roles'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增角色</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="info" title="口径：">
@@ -19,63 +16,70 @@
     <StatGrid :items="statItems" />
 
     <div class="mds-card">
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>角色名称</th>
-              <th>角色编码</th>
-              <th>类型</th>
-              <th>数据范围</th>
-              <th class="mds-num">级别</th>
-              <th>状态</th>
-              <th class="mds-center">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading"><td colspan="7" class="mds-empty">正在加载角色…</td></tr>
-            <tr v-else-if="!rows.length">
-              <td colspan="7">
-                <EmptyState
-                  icon="🔑"
-                  title="当前主体还没有可用角色"
-                  description="平台角色目录为空或均未对租户开放；可在右上角新增本主体业务角色。"
-                />
-              </td>
-            </tr>
-            <tr v-for="row in rows" :key="row.id">
-              <td class="mds-name">{{ row.roleName || '—' }}</td>
-              <td class="mds-mono">{{ row.roleCode || '—' }}</td>
-              <td>
-                <StatusTag
-                  :text="row.tenantId ? '本主体自定义' : '平台共享'"
-                  :tone="row.tenantId ? 'brand' : 'info'"
-                  plain
-                />
-              </td>
-              <td>{{ scopeText(row.dataScope) }}</td>
-              <td class="mds-num">{{ row.roleLevel ?? '—' }}</td>
-              <td>
-                <StatusTag
-                  :text="Number(row.status) === 1 ? '启用' : '停用'"
-                  :tone="Number(row.status) === 1 ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="mds-center">
-                <template v-if="roleEditable(row)">
-                  <button v-point="'PUT /api/user/roles/{id}'" class="org-link" @click="openEdit(row)">编辑</button>
-                  <button v-point="'GET /api/user/roles/{id}/members'" class="org-link" @click="openMembers(row)">成员</button>
-                  <button v-point="'GET /api/user/roles/grantable-permissions'" class="org-link" @click="openPermissions(row)">权限</button>
-                  <button v-point="'DELETE /api/user/roles/{id}'" class="org-link org-link--danger" @click="removeRole(row)">删除</button>
-                </template>
-                <!-- 隐藏的原因要分开说：内置/共享是角色本身不可改，缺权限点是这个账号没被授权 -->
-                <span v-if="roleEditable(row) && !points.can('PUT /api/user/roles/{id}')" class="mds-hint">未授权该操作</span>
-                <span v-if="!roleEditable(row)" class="mds-hint">内置/共享</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="rows.filter(item => !listAppliedKeyword1 || [item.roleName, item.roleCode].some(value => String(value ?? '').toLowerCase().includes(listAppliedKeyword1)))"
+        row-key="id"
+        :loading="loading"
+        loading-text="正在加载角色…"
+        column-settings-storage-key="mds:cols:user-roles"
+        client-pagination
+        v-model:page="listPage1"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="1" :loading="loading" @search="applyListFilter1" @reset="resetListFilter1">
+            <div class="agri-vue-filter-field">
+              <label>角色</label>
+              <input v-model="listKeyword1" class="mds-input" type="search" />
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button v-point="'POST /api/user/roles'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增角色</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            icon="🔑"
+                            title="当前主体还没有可用角色"
+                            description="平台角色目录为空或均未对租户开放；可在右上角新增本主体业务角色。"
+                          />
+        </template>
+        <template #cell-roleName="{ row: row }">
+          <div class="mds-name">
+            {{ row.roleName || '—' }}
+          </div>
+        </template>
+        <template #cell-tenantId="{ row: row }">
+          <StatusTag
+                            :text="row.tenantId ? '本主体自定义' : '平台共享'"
+                            :tone="row.tenantId ? 'brand' : 'info'"
+                            plain
+                          />
+        </template>
+        <template #cell-dataScope="{ row: row }">
+          {{ scopeText(row.dataScope) }}
+        </template>
+        <template #cell-status="{ row: row }">
+          <StatusTag
+                            :text="Number(row.status) === 1 ? '启用' : '停用'"
+                            :tone="Number(row.status) === 1 ? 'success' : 'gray'"
+                          />
+        </template>
+        <template #cell-actions="{ row: row }">
+          <MdsRowActions
+            v-if="roleEditable(row)"
+            fallback-text="未授权该操作"
+            :actions="[
+              { key: '1', label: &quot;编辑&quot;, onClick: () => openEdit(row), hidden: !((roleEditable(row))), point: 'PUT /api/user/roles/{id}' },
+              { key: '2', label: &quot;成员&quot;, onClick: () => openMembers(row), hidden: !((roleEditable(row))), point: 'GET /api/user/roles/{id}/members' },
+              { key: '3', label: &quot;权限&quot;, onClick: () => openPermissions(row), hidden: !((roleEditable(row))), point: 'GET /api/user/roles/grantable-permissions' },
+              { key: '4', label: &quot;删除&quot;, onClick: () => removeRole(row), hidden: !((roleEditable(row))), point: 'DELETE /api/user/roles/{id}', danger: true },
+            ]"
+          />
+          <span v-if="!roleEditable(row)" class="mds-hint">内置/共享</span>
+        </template>
+      </AgriVueTable>
     </div>
 
     <!-- 新增 / 编辑角色 -->
@@ -218,6 +222,8 @@
 </template>
 
 <script setup lang="ts">
+import { AgriVueTable, AgriVueFilterBar, type VueListColumn } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
 import { computed, onMounted, ref } from 'vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatGrid from '@/components/ui/StatGrid.vue'
@@ -504,6 +510,30 @@ async function load() {
 }
 
 onMounted(load)
+
+const columns: VueListColumn[] = [
+  { prop: 'roleName', label: '角色名称', minWidth: 174, locked: true },
+  { prop: 'roleCode', label: '角色编码', width: 142, kind: 'code' },
+  { prop: 'tenantId', label: '类型', width: 128, ellipsis: false },
+  { prop: 'dataScope', label: '数据范围', width: 128, ellipsis: false },
+  { prop: 'roleLevel', label: '级别', width: 104, kind: 'number' },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+const listKeyword1 = ref('')
+const listAppliedKeyword1 = ref('')
+
+const listPage1 = ref(1)
+function applyListFilter1() {
+  listAppliedKeyword1.value = listKeyword1.value.trim().toLowerCase()
+  listPage1.value = 1
+}
+
+function resetListFilter1() {
+  listKeyword1.value = ''
+  applyListFilter1()
+}
 </script>
 
 <style scoped>

@@ -84,6 +84,8 @@ export interface VueRowActionItem {
   danger?: boolean
   disabled?: boolean
   hidden?: boolean
+  /** 悬停提示文案。 */
+  title?: string
   /** 确认文案（传入时点击会先走确认回调或内置确认）。 */
   confirm?: string
   onClick?: () => void

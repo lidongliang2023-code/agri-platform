@@ -5,10 +5,7 @@
       subtitle="省 / 市 / 区县 / 街道四级行政区划主数据，供地址标准化与主体注册选择。"
       source="主数据 · 地址域"
     >
-      <template #actions>
-        <button v-point="'POST /api/master-data/address/regions'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增区划</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
+      
     </PageHeader>
 
     <NoticeBar tone="warning" title="数据现状与接口边界：">
@@ -19,68 +16,76 @@
     <StatGrid :items="statItems" />
 
     <div class="mds-card">
-      <div class="mds-filter">
-        <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索区划名称 / 编码" />
-        <select v-model="filterLevel" class="mds-select">
-          <option value="all">全部层级</option>
-          <option value="1">省级</option>
-          <option value="2">市级</option>
-          <option value="3">区县</option>
-          <option value="4">街道 / 乡镇</option>
-        </select>
-        <span class="mds-hint">共 {{ filteredRegions.length }} / {{ regions.length }} 条</span>
-      </div>
 
-      <div class="mds-table-wrap">
-        <table class="mds-table region-table">
-          <thead>
-            <tr>
-              <th>区划编码</th>
-              <th>区划名称</th>
-              <th>层级</th>
-              <th>上级编码</th>
-              <th>拼音</th>
-              <th>状态</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="7" class="mds-empty">正在加载行政区划…</td>
-            </tr>
-            <tr v-else-if="!filteredRegions.length">
-              <td colspan="7">
-                <EmptyState
-                  :title="regions.length ? '没有符合条件的区划' : '暂无行政区划数据'"
-                  :description="regions.length ? '调整层级或关键字筛选。' : '表内 0 行：先新增省级区划，再逐级补充下级。'"
-                >
-                  <button v-point="'POST /api/master-data/address/regions'" v-if="!regions.length" class="mds-btn" style="margin-top: 12px" @click="openCreate">
-                    + 新增第一条区划
-                  </button>
-                </EmptyState>
-              </td>
-            </tr>
-            <tr v-for="region in filteredRegions" :key="region.regionId">
-              <td class="mds-mono">{{ region.regionCode || '—' }}</td>
-              <td class="mds-name">
-                <span :style="{ paddingLeft: `${(Number(region.level) - 1) * 14}px` }">{{ region.regionName }}</span>
-              </td>
-              <td><StatusTag :text="levelText(region.level)" tone="info" plain /></td>
-              <td class="mds-mono">{{ region.parentCode || '—' }}</td>
-              <td class="mds-muted">{{ region.pinyin || '—' }}</td>
-              <td>
-                <StatusTag
-                  :text="region.status === '0' || region.status === 'disabled' ? '停用' : '启用'"
-                  :tone="region.status === '0' || region.status === 'disabled' ? 'gray' : 'success'"
-                />
-              </td>
-              <td class="mds-actions">
-                <button v-point="'PUT /api/master-data/address/regions/{regionId}'" class="mds-btn mds-btn--link" @click="editRegion(region)">编辑</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AgriVueTable
+        :columns="columns"
+        :data="filteredRegions"
+        row-key="regionId"
+        :loading="loading"
+        loading-text="正在加载行政区划…"
+        column-settings-storage-key="mds:cols:region-list"
+        client-pagination
+        v-model:page="listPage1"
+        @refresh="loadData"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyListFilter1" @reset="resetListFilter1">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <input v-model="filterKeyword" class="mds-input" type="search" placeholder="搜索区划名称 / 编码" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>层级</label>
+              <select v-model="filterLevel" class="mds-select">
+                        <option value="all">全部层级</option>
+                        <option value="1">省级</option>
+                        <option value="2">市级</option>
+                        <option value="3">区县</option>
+                        <option value="4">街道 / 乡镇</option>
+                      </select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <button v-point="'POST /api/master-data/address/regions'" class="mds-btn mds-btn--primary" @click="openCreate">+ 新增区划</button>
+        </template>
+        <template #empty>
+          <EmptyState
+                            :title="regions.length ? '没有符合条件的区划' : '暂无行政区划数据'"
+                            :description="regions.length ? '调整层级或关键字筛选。' : '表内 0 行：先新增省级区划，再逐级补充下级。'"
+                          >
+                            <button v-point="'POST /api/master-data/address/regions'" v-if="!regions.length" class="mds-btn" style="margin-top: 12px" @click="openCreate">
+                              + 新增第一条区划
+                            </button>
+                          </EmptyState>
+        </template>
+        <template #cell-level="{ row: region }">
+          <div class="mds-name">
+            <span :style="{ paddingLeft: `${(Number(region.level) - 1) * 14}px` }">{{ region.regionName }}</span>
+          </div>
+        </template>
+        <template #cell-level2="{ row: region }">
+          <StatusTag :text="levelText(region.level)" tone="info" plain />
+        </template>
+        <template #cell-pinyin="{ row: region }">
+          <div class="mds-muted">
+            {{ region.pinyin || '—' }}
+          </div>
+        </template>
+        <template #cell-status="{ row: region }">
+          <StatusTag
+                            :text="region.status === '0' || region.status === 'disabled' ? '停用' : '启用'"
+                            :tone="region.status === '0' || region.status === 'disabled' ? 'gray' : 'success'"
+                          />
+        </template>
+        <template #cell-actions="{ row: region }">
+          <MdsRowActions
+            :actions="[
+              { key: '1', label: &quot;编辑&quot;, onClick: () => editRegion(region), point: 'PUT /api/master-data/address/regions/{regionId}' },
+            ]"
+          />
+        </template>
+      </AgriVueTable>
     </div>
 
     <div v-if="showModal" class="mds-mask" @click="closeModal">
@@ -137,7 +142,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { AgriVueTable, AgriVueFilterBar } from '@agri/shared/vue/list'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatGrid from '@/components/ui/StatGrid.vue'
@@ -276,6 +283,31 @@ const saveRegion = async () => {
 }
 
 onMounted(loadData)
+
+const columns = [
+  { prop: 'regionCode', label: '区划编码', minWidth: 142, locked: true, kind: 'code' },
+  { prop: 'level', label: '区划名称', width: 128, ellipsis: false },
+  { key: 'level2', prop: 'level', label: '层级', width: 104, kind: 'number', ellipsis: false },
+  { prop: 'parentCode', label: '上级编码', width: 142, kind: 'code' },
+  { prop: 'pinyin', label: '拼音', width: 128 },
+  { prop: 'status', label: '状态', width: 104, kind: 'status', ellipsis: false },
+  { key: 'actions', label: '操作', width: 138, kind: 'action', ellipsis: false },
+]
+
+const listPage1 = ref(1)
+function applyListFilter1() {
+  listPage1.value = 1
+}
+
+function resetListFilter1() {
+  filterKeyword.value = ""
+  filterLevel.value = "all"
+  applyListFilter1()
+}
+
+watch(filterKeyword, () => { listPage1.value = 1 })
+
+watch(filterLevel, () => { listPage1.value = 1 })
 </script>
 
 <style scoped>

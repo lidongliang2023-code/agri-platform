@@ -4,87 +4,79 @@
       title="数据字典"
       subtitle="平台级标准枚举（共享）与租户扩展枚举（隔离），支撑各业务模块的字段取值规范。"
       source="数据标准 · 字典"
-    >
-      <template #actions>
-        <button v-point="'POST /admin/masterdata/standard/dict'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增字典</button>
-        <button class="mds-btn" :disabled="loading" @click="loadData">刷新</button>
-      </template>
-    </PageHeader>
+    />
 
     <NoticeBar tone="info" title="维护口径：">
       字典项的值（itemValue）一旦被业务引用，只允许停用、不建议物理删除；改值会使历史数据对不上。
     </NoticeBar>
 
-    <div class="mds-card">
-      <div class="mds-filter">
-        <input
-          v-model="searchForm.keyword"
-          class="mds-input"
-          type="search"
-          placeholder="字典名称 / 编码"
-          @keyup.enter="search"
+    <AgriVueTable
+      :columns="columns"
+      :data="tableData"
+      row-key="id"
+      :loading="loading"
+      loading-text="正在加载字典…"
+      column-settings-storage-key="mds:cols:dict-list"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      @refresh="loadData"
+      @update:page="handleCurrentChange"
+      @update:page-size="changePageSize"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <input
+              v-model="searchForm.keyword"
+              class="mds-input"
+              type="search"
+              placeholder="字典名称 / 编码"
+              @keyup.enter="search"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <select v-model="searchForm.status" class="mds-select" @change="search">
+              <option value="">全部状态</option>
+              <option value="1">启用</option>
+              <option value="0">禁用</option>
+            </select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <button v-point="'POST /admin/masterdata/standard/dict'" class="mds-btn mds-btn--primary" @click="openCreateModal">+ 新增字典</button>
+      </template>
+
+      <template #empty>
+        <EmptyState title="暂无符合条件的字典" description="调整关键字或状态筛选；也可以直接新增字典。" />
+      </template>
+
+      <template #cell-dictName="{ row }">
+        <span class="mds-name">{{ row.dictName || '—' }}</span>
+      </template>
+      <template #cell-status="{ row }">
+        <StatusTag
+          :text="Number(row.status) === 1 ? '启用' : '禁用'"
+          :tone="Number(row.status) === 1 ? 'success' : 'gray'"
         />
-        <select v-model="searchForm.status" class="mds-select" @change="search">
-          <option value="">全部状态</option>
-          <option value="1">启用</option>
-          <option value="0">禁用</option>
-        </select>
-        <button class="mds-btn mds-btn--primary" @click="search">查询</button>
-        <button class="mds-btn" @click="reset">重置</button>
-      </div>
-
-      <div class="mds-table-wrap">
-        <table class="mds-table">
-          <thead>
-            <tr>
-              <th>字典编码</th>
-              <th>字典名称</th>
-              <th>字典类型</th>
-              <th>描述</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th class="mds-actions">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="7" class="mds-empty">正在加载字典…</td>
-            </tr>
-            <tr v-else-if="!tableData.length">
-              <td colspan="7">
-                <EmptyState title="暂无符合条件的字典" description="调整关键字或状态筛选；也可以直接新增字典。" />
-              </td>
-            </tr>
-            <tr v-for="dict in tableData" :key="dict.id">
-              <td class="mds-mono">{{ dict.dictCode || '—' }}</td>
-              <td class="mds-name">{{ dict.dictName || '—' }}</td>
-              <td>{{ dict.dictType || '—' }}</td>
-              <td class="desc-cell">{{ dict.description || '—' }}</td>
-              <td>
-                <StatusTag
-                  :text="Number(dict.status) === 1 ? '启用' : '禁用'"
-                  :tone="Number(dict.status) === 1 ? 'success' : 'gray'"
-                />
-              </td>
-              <td class="mds-muted">{{ formatDate(dict.createTime) }}</td>
-              <td class="mds-actions">
-                <button class="mds-btn mds-btn--link" @click="viewItems(dict)">字典项</button>
-                <button v-point="'PUT /admin/masterdata/standard/dict/{id}'" class="mds-btn mds-btn--link" @click="editDict(dict)">编辑</button>
-                <button v-point="'DELETE /admin/masterdata/standard/dict/{id}'" class="mds-btn mds-btn--link mds-danger" @click="deleteDict(dict.id)">删除</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <PagerBar
-        :page="pageNum"
-        :page-size="pageSize"
-        :total="total"
-        @change="handleCurrentChange"
-        @update:page-size="changePageSize"
-      />
-    </div>
+      </template>
+      <template #cell-createTime="{ row }">
+        <span class="mds-muted">{{ formatDate(row.createTime) }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <MdsRowActions
+          :actions="[
+            { key: 'items', label: '字典项', onClick: () => viewItems(row) },
+            { key: 'edit', label: '编辑', point: 'PUT /admin/masterdata/standard/dict/{id}', onClick: () => editDict(row) },
+            { key: 'delete', label: '删除', danger: true, point: 'DELETE /admin/masterdata/standard/dict/{id}', onClick: () => deleteDict(row.id) },
+          ]"
+        />
+      </template>
+    </AgriVueTable>
 
     <!-- 新增 / 编辑字典 -->
     <div v-if="modalVisible" class="mds-mask" @click="closeModal">
@@ -95,13 +87,15 @@
         </div>
         <div class="mds-card-body">
           <div class="mds-form">
-            <label class="mds-field">
+            <label class="mds-field" :class="{ 'is-error': fieldErrors.dictCode }">
               <span class="mds-field__label mds-required">字典编码</span>
-              <input v-model="form.dictCode" class="mds-input" :disabled="Boolean(form.id)" placeholder="如 user_identity_type" />
+              <input data-field="dictCode" v-model="form.dictCode" class="mds-input" :disabled="Boolean(form.id)" placeholder="如 user_identity_type" />
+              <small v-if="fieldErrors.dictCode" class="mds-field__error">{{ fieldErrors.dictCode }}</small>
             </label>
-            <label class="mds-field">
+            <label class="mds-field" :class="{ 'is-error': fieldErrors.dictName }">
               <span class="mds-field__label mds-required">字典名称</span>
-              <input v-model="form.dictName" class="mds-input" placeholder="如 用户身份类型" />
+              <input data-field="dictName" v-model="form.dictName" class="mds-input" placeholder="如 用户身份类型" />
+              <small v-if="fieldErrors.dictName" class="mds-field__error">{{ fieldErrors.dictName }}</small>
             </label>
             <label class="mds-field">
               <span class="mds-field__label">字典类型</span>
@@ -189,13 +183,15 @@
         </div>
         <div class="mds-card-body">
           <div class="mds-form">
-            <label class="mds-field">
+            <label class="mds-field" :class="{ 'is-error': fieldErrors.itemValue }">
               <span class="mds-field__label mds-required">值（code）</span>
-              <input v-model="itemForm.itemValue" class="mds-input" placeholder="如 L4" />
+              <input data-field="itemValue" v-model="itemForm.itemValue" class="mds-input" placeholder="如 L4" />
+              <small v-if="fieldErrors.itemValue" class="mds-field__error">{{ fieldErrors.itemValue }}</small>
             </label>
-            <label class="mds-field">
+            <label class="mds-field" :class="{ 'is-error': fieldErrors.itemLabel }">
               <span class="mds-field__label mds-required">标签</span>
-              <input v-model="itemForm.itemLabel" class="mds-input" placeholder="如 企业任职用户" />
+              <input data-field="itemLabel" v-model="itemForm.itemLabel" class="mds-input" placeholder="如 企业任职用户" />
+              <small v-if="fieldErrors.itemLabel" class="mds-field__error">{{ fieldErrors.itemLabel }}</small>
             </label>
             <label class="mds-field">
               <span class="mds-field__label">排序</span>
@@ -222,13 +218,24 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import PagerBar from '@/components/ui/PagerBar.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable } from '@agri/shared/vue/list'
+
+const columns = [
+  { prop: 'dictCode', label: '字典编码', width: 170, kind: 'code', locked: true },
+  { prop: 'dictName', label: '字典名称', width: 170 },
+  { prop: 'dictType', label: '字典类型', width: 120 },
+  { prop: 'description', label: '描述', minWidth: 220 },
+  { prop: 'status', label: '状态', width: 92, kind: 'status' },
+  { prop: 'createTime', label: '创建时间', width: 120 },
+  { key: 'actions', label: '操作', width: 130, kind: 'action' },
+]
 import {
   createDict,
   createDictItem,
@@ -246,6 +253,7 @@ const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
 const saving = ref(false)
+const fieldErrors = reactive({ dictCode: '', dictName: '', itemValue: '', itemLabel: '' })
 const modalVisible = ref(false)
 const itemsModalVisible = ref(false)
 const itemModalVisible = ref(false)
@@ -314,12 +322,17 @@ function changePageSize(size) {
   void loadData()
 }
 
+const clearFieldErrors = () => Object.keys(fieldErrors).forEach((key) => { fieldErrors[key] = '' })
+const focusField = async (key) => { await nextTick(); document.querySelector(`[data-field="${key}"]`)?.focus() }
+
 const openCreateModal = () => {
   Object.assign(form, { id: null, dictCode: '', dictName: '', dictType: '', description: '', status: 1 })
+  clearFieldErrors()
   modalVisible.value = true
 }
 
 const editDict = (row) => {
+  clearFieldErrors()
   Object.assign(form, {
     id: row.id,
     dictCode: row.dictCode ?? '',
@@ -336,10 +349,10 @@ const closeModal = () => {
 }
 
 const saveDict = async () => {
-  if (!form.dictCode.trim() || !form.dictName.trim()) {
-    message.warning('字典编码与名称为必填')
-    return
-  }
+  fieldErrors.dictCode = form.dictCode.trim() ? '' : '字典编码不能为空'
+  fieldErrors.dictName = form.dictName.trim() ? '' : '字典名称不能为空'
+  const firstError = fieldErrors.dictCode ? 'dictCode' : fieldErrors.dictName ? 'dictName' : ''
+  if (firstError) { await focusField(firstError); return }
   saving.value = true
   try {
     const payload = { ...form }
@@ -388,10 +401,14 @@ const closeItemsModal = () => {
 
 const openItemCreateModal = () => {
   Object.assign(itemForm, { id: null, itemValue: '', itemLabel: '', sortOrder: 1, status: 1 })
+  fieldErrors.itemValue = ''
+  fieldErrors.itemLabel = ''
   itemModalVisible.value = true
 }
 
 const editDictItem = (row) => {
+  fieldErrors.itemValue = ''
+  fieldErrors.itemLabel = ''
   Object.assign(itemForm, {
     id: row.id,
     itemValue: row.itemValue ?? '',
@@ -408,10 +425,10 @@ const closeItemModal = () => {
 }
 
 const saveDictItem = async () => {
-  if (!itemForm.itemValue.trim() || !itemForm.itemLabel.trim()) {
-    message.warning('值与标签为必填')
-    return
-  }
+  fieldErrors.itemValue = itemForm.itemValue.trim() ? '' : '值不能为空'
+  fieldErrors.itemLabel = itemForm.itemLabel.trim() ? '' : '标签不能为空'
+  const firstError = fieldErrors.itemValue ? 'itemValue' : fieldErrors.itemLabel ? 'itemLabel' : ''
+  if (firstError) { await focusField(firstError); return }
   saving.value = true
   const payload = {
     itemName: itemForm.itemLabel,
@@ -449,7 +466,18 @@ const deleteDictItem = async (id) => {
 
 const formatDate = (date) => (date ? String(date).replace('T', ' ').split(' ')[0] : '—')
 
-onMounted(loadData)
+const handleKeydown = (event) => {
+  if (event.key !== 'Escape') return
+  if (itemModalVisible.value) closeItemModal()
+  else if (itemsModalVisible.value) closeItemsModal()
+  else if (modalVisible.value) closeModal()
+}
+
+onMounted(() => {
+  loadData()
+  window.addEventListener('keydown', handleKeydown)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 </script>
 
 <style scoped>

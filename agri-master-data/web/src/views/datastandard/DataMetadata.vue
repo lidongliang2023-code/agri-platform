@@ -32,169 +32,171 @@
       </div>
 
       <!-- 格式与校验规则 -->
-      <template v-if="activeTab === 'format'">
-        <div class="mds-filter">
-          <input v-model="formatKeyword" class="mds-input" type="search" placeholder="格式编码 / 名称" />
-          <select v-model="formatStatus" class="mds-select">
-            <option value="">全部状态</option>
-            <option value="DRAFT">草稿</option>
-            <option value="PUBLISHED">已发布</option>
-            <option value="DISABLED">已停用</option>
-          </select>
-          <button v-point="'POST /admin/masterdata/standard/format'" class="mds-btn mds-btn--primary mds-btn--sm" @click="openFormatCreate">+ 新增格式</button>
-        </div>
-        <div class="mds-table-wrap">
-          <table class="mds-table standard-table">
-            <thead>
-              <tr>
-                <th>格式编码</th>
-                <th>格式名称</th>
-                <th>数据类型</th>
-                <th>校验规则</th>
-                <th class="mds-num">长度范围</th>
-                <th>默认值</th>
-                <th>状态</th>
-                <th class="mds-actions">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="loading">
-                <td colspan="8" class="mds-empty">正在加载格式标准…</td>
-              </tr>
-              <tr v-else-if="!filteredFormats.length">
-                <td colspan="8">
-                  <EmptyState title="没有符合条件的格式标准" description="调整筛选条件，或点击右上角新增一条。" />
-                </td>
-              </tr>
-              <tr v-for="item in filteredFormats" :key="item.id">
-                <td class="mds-mono">{{ item.formatCode }}</td>
-                <td class="mds-name">{{ item.formatName || '—' }}</td>
-                <td>{{ item.dataType || '—' }}</td>
-                <td class="mds-mono rule-cell" :title="item.validationRule || ''">{{ item.validationRule || '—' }}</td>
-                <td class="mds-num">{{ lengthText(item) }}</td>
-                <td>{{ item.defaultValue || '—' }}</td>
-                <td><StatusTag :text="formatStatusText(item.status)" :tone="formatStatusTone(item.status)" /></td>
-                <td class="mds-actions">
-                  <button v-point="'PUT /admin/masterdata/standard/format/{id}'" class="mds-btn mds-btn--link" @click="openFormatEdit(item)">编辑</button>
-                  <button v-point="'PUT /admin/masterdata/standard/format/{id}/status'"
-                    v-if="item.status !== 'PUBLISHED'"
-                    class="mds-btn mds-btn--link"
-                    :disabled="busyId === item.id"
-                    @click="changeFormatStatus(item, 'PUBLISHED')"
-                  >发布</button>
-                  <button v-point="'PUT /admin/masterdata/standard/format/{id}/status'"
-                    v-else
-                    class="mds-btn mds-btn--link mds-danger"
-                    :disabled="busyId === item.id"
-                    @click="changeFormatStatus(item, 'DISABLED')"
-                  >停用</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
+      <div v-if="activeTab === 'format'" style="padding: 12px 14px">
+        <AgriVueTable
+          :columns="formatColumns"
+          :data="filteredFormats"
+          row-key="id"
+          :loading="loading"
+          loading-text="正在加载格式标准…"
+          column-settings-storage-key="mds:cols:data-metadata-format"
+          client-pagination
+          @refresh="loadFormats"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="2" :loading="loading" @search="() => {}" @reset="resetFormatFilter">
+              <div class="agri-vue-filter-field">
+                <label>关键字</label>
+                <input v-model="formatKeyword" class="mds-input" type="search" placeholder="格式编码 / 名称" />
+              </div>
+              <div class="agri-vue-filter-field">
+                <label>状态</label>
+                <select v-model="formatStatus" class="mds-select">
+                  <option value="">全部状态</option>
+                  <option value="DRAFT">草稿</option>
+                  <option value="PUBLISHED">已发布</option>
+                  <option value="DISABLED">已停用</option>
+                </select>
+              </div>
+            </AgriVueFilterBar>
+          </template>
+
+          <template #toolbar-left>
+            <button v-point="'POST /admin/masterdata/standard/format'" class="mds-btn mds-btn--primary" @click="openFormatCreate">+ 新增格式</button>
+          </template>
+
+          <template #empty>
+            <EmptyState title="没有符合条件的格式标准" description="调整筛选条件，或点击新增一条。" />
+          </template>
+
+          <template #cell-formatName="{ row }">
+            <span class="mds-name">{{ row.formatName || '—' }}</span>
+          </template>
+          <template #cell-length="{ row }">
+            {{ lengthText(row as FormatRow) }}
+          </template>
+          <template #cell-status="{ row }">
+            <StatusTag :text="formatStatusText(row.status)" :tone="formatStatusTone(row.status)" />
+          </template>
+          <template #cell-actions="{ row }">
+            <MdsRowActions
+              :actions="[
+                { key: 'edit', label: '编辑', point: 'PUT /admin/masterdata/standard/format/{id}', onClick: () => openFormatEdit(row as FormatRow) },
+                row.status !== 'PUBLISHED'
+                  ? { key: 'publish', label: '发布', point: 'PUT /admin/masterdata/standard/format/{id}/status', disabled: busyId === row.id, onClick: () => changeFormatStatus(row as FormatRow, 'PUBLISHED') }
+                  : { key: 'disable', label: '停用', danger: true, point: 'PUT /admin/masterdata/standard/format/{id}/status', disabled: busyId === row.id, onClick: () => changeFormatStatus(row as FormatRow, 'DISABLED') },
+              ]"
+            />
+          </template>
+        </AgriVueTable>
+      </div>
 
       <!-- 标准变更审批 -->
-      <template v-else-if="activeTab === 'change'">
-        <div class="mds-filter">
-          <select v-model="changeStatus" class="mds-select" @change="loadChanges">
-            <option value="PENDING">待审批</option>
-            <option value="APPROVED">已通过</option>
-            <option value="REJECTED">已驳回</option>
-            <option value="">全部状态</option>
-          </select>
-          <span class="mds-hint">共 {{ changeTotal }} 条</span>
-          <button v-point="'POST /admin/masterdata/standard/change-approve'" class="mds-btn mds-btn--primary mds-btn--sm" @click="openChangeCreate">+ 新建变更申请</button>
-        </div>
-        <div class="mds-table-wrap">
-          <table class="mds-table standard-table">
-            <thead>
-              <tr>
-                <th>变更类型</th>
-                <th>对象</th>
-                <th>变更前 → 变更后</th>
-                <th>申请人</th>
-                <th>申请时间</th>
-                <th>状态</th>
-                <th class="mds-actions">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!changes.length">
-                <td colspan="7"><EmptyState title="没有符合条件的变更申请" description="调整状态筛选，或新建一条变更申请。" /></td>
-              </tr>
-              <tr v-for="item in changes" :key="item.id">
-                <td>{{ item.changeType || '—' }}</td>
-                <td class="mds-name">{{ item.formatName || '—' }}</td>
-                <td class="rule-cell" :title="`${item.description || ''}`">
-                  {{ item.description || '—' }}
-                </td>
-                <td>{{ item.applicant || '—' }}</td>
-                <td class="mds-muted time-cell">{{ formatTime(item.applyTime) }}</td>
-                <td><StatusTag :text="changeStatusText(item.status)" :tone="changeStatusTone(item.status)" /></td>
-                <td class="mds-actions">
-                  <template v-if="item.status === 'PENDING'">
-                    <button v-point="'PUT /admin/masterdata/standard/change-approve/{id}'" class="mds-btn mds-btn--link" :disabled="busyId === item.id" @click="decide(item, 'APPROVED')">通过</button>
-                    <button class="mds-btn mds-btn--link mds-danger" :disabled="busyId === item.id" @click="decide(item, 'REJECTED')">驳回</button>
-                  </template>
-                  <span v-else class="mds-hint">{{ item.remark || '—' }}</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
+      <div v-else-if="activeTab === 'change'" style="padding: 12px 14px">
+        <AgriVueTable
+          :columns="changeColumns"
+          :data="changes"
+          row-key="id"
+          column-settings-storage-key="mds:cols:data-metadata-change"
+          client-pagination
+          @refresh="loadChanges"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="1" @search="loadChanges" @reset="resetChangeFilter">
+              <div class="agri-vue-filter-field">
+                <label>审批状态</label>
+                <select v-model="changeStatus" class="mds-select" @change="loadChanges">
+                  <option value="PENDING">待审批</option>
+                  <option value="APPROVED">已通过</option>
+                  <option value="REJECTED">已驳回</option>
+                  <option value="">全部状态</option>
+                </select>
+              </div>
+            </AgriVueFilterBar>
+          </template>
+
+          <template #toolbar-left>
+            <button v-point="'POST /admin/masterdata/standard/change-approve'" class="mds-btn mds-btn--primary" @click="openChangeCreate">+ 新建变更申请</button>
+            <span class="mds-hint">共 {{ changeTotal }} 条</span>
+          </template>
+
+          <template #empty>
+            <EmptyState title="没有符合条件的变更申请" description="调整状态筛选，或新建一条变更申请。" />
+          </template>
+
+          <template #cell-formatName="{ row }">
+            <span class="mds-name">{{ row.formatName || '—' }}</span>
+          </template>
+          <template #cell-applyTime="{ row }">
+            <span class="mds-muted time-cell">{{ formatTime(row.applyTime) }}</span>
+          </template>
+          <template #cell-status="{ row }">
+            <StatusTag :text="changeStatusText(row.status)" :tone="changeStatusTone(row.status)" />
+          </template>
+          <template #cell-actions="{ row }">
+            <MdsRowActions
+              v-if="row.status === 'PENDING'"
+              :actions="[
+                { key: 'approve', label: '通过', point: 'PUT /admin/masterdata/standard/change-approve/{id}', disabled: busyId === row.id, onClick: () => decide(row as ChangeRow, 'APPROVED') },
+                { key: 'reject', label: '驳回', danger: true, disabled: busyId === row.id, onClick: () => decide(row as ChangeRow, 'REJECTED') },
+              ]"
+            />
+            <span v-else class="mds-hint">{{ row.remark || '—' }}</span>
+          </template>
+        </AgriVueTable>
+      </div>
 
       <!-- 元数据目录 -->
-      <template v-else>
-        <div class="mds-filter">
-          <input v-model="metaKeyword" class="mds-input" type="search" placeholder="中文名 / 英文标识" @keyup.enter="loadMetadata" />
-          <select v-model="metaType" class="mds-select" @change="loadMetadata">
-            <option value="">全部类型</option>
-            <option value="BUSINESS">业务元数据</option>
-            <option value="TECHNICAL">技术元数据</option>
-            <option value="MANAGEMENT">管理元数据</option>
-          </select>
-          <span class="mds-hint">共 {{ metadata.length }} 条</span>
-          <button v-point="'POST /admin/masterdata/standard/metadata'" class="mds-btn mds-btn--primary mds-btn--sm" @click="openMetaCreate">+ 新增元数据</button>
-        </div>
-        <div class="mds-table-wrap">
-          <table class="mds-table standard-table">
-            <thead>
-              <tr>
-                <th>中文名称</th>
-                <th>英文标识</th>
-                <th>类型</th>
-                <th>主题域</th>
-                <th>数据类型</th>
-                <th>必填</th>
-                <th>来源表</th>
-                <th>版本</th>
-                <th class="mds-actions">操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!metadata.length">
-                <td colspan="9"><EmptyState title="元数据目录为空" description="新增或导入元数据后，这里会显示字段级目录。" /></td>
-              </tr>
-              <tr v-for="item in metadata" :key="item.id">
-                <td class="mds-name">{{ item.name }}</td>
-                <td class="mds-mono">{{ item.nameEn || '—' }}</td>
-                <td>{{ metaTypeText(item.metadataType) }}</td>
-                <td>{{ item.domainName || '—' }}</td>
-                <td class="mds-mono">{{ item.dataType || '—' }}</td>
-                <td>{{ item.required || '—' }}</td>
-                <td class="mds-mono">{{ item.sourceTable || '—' }}</td>
-                <td>{{ item.version || '—' }}</td>
-                <td class="mds-actions">
-                  <button v-point="'PUT /admin/masterdata/standard/metadata/{id}'" class="mds-btn mds-btn--link" @click="openMetaEdit(item)">编辑</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </template>
+      <div v-else style="padding: 12px 14px">
+        <AgriVueTable
+          :columns="metaColumns"
+          :data="metadata"
+          row-key="id"
+          column-settings-storage-key="mds:cols:data-metadata-catalog"
+          client-pagination
+          @refresh="loadMetadata"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="2" @search="loadMetadata" @reset="resetMetaFilter">
+              <div class="agri-vue-filter-field">
+                <label>关键字</label>
+                <input v-model="metaKeyword" class="mds-input" type="search" placeholder="中文名 / 英文标识" @keyup.enter="loadMetadata" />
+              </div>
+              <div class="agri-vue-filter-field">
+                <label>元数据类型</label>
+                <select v-model="metaType" class="mds-select" @change="loadMetadata">
+                  <option value="">全部类型</option>
+                  <option value="BUSINESS">业务元数据</option>
+                  <option value="TECHNICAL">技术元数据</option>
+                  <option value="MANAGEMENT">管理元数据</option>
+                </select>
+              </div>
+            </AgriVueFilterBar>
+          </template>
+
+          <template #toolbar-left>
+            <button v-point="'POST /admin/masterdata/standard/metadata'" class="mds-btn mds-btn--primary" @click="openMetaCreate">+ 新增元数据</button>
+          </template>
+
+          <template #empty>
+            <EmptyState title="元数据目录为空" description="新增或导入元数据后，这里会显示字段级目录。" />
+          </template>
+
+          <template #cell-name="{ row }">
+            <span class="mds-name">{{ row.name }}</span>
+          </template>
+          <template #cell-metadataType="{ row }">
+            {{ metaTypeText(row.metadataType) }}
+          </template>
+          <template #cell-actions="{ row }">
+            <MdsRowActions
+              :actions="[
+                { key: 'edit', label: '编辑', point: 'PUT /admin/masterdata/standard/metadata/{id}', onClick: () => openMetaEdit(row as MetadataRow) },
+              ]"
+            />
+          </template>
+        </AgriVueTable>
+      </div>
     </div>
 
     <!-- 格式弹窗 -->
@@ -382,6 +384,41 @@ import StatGrid from '@/components/ui/StatGrid.vue'
 import StatusTag from '@/components/ui/StatusTag.vue'
 import NoticeBar from '@/components/ui/NoticeBar.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import MdsRowActions from '@/components/ui/MdsRowActions.vue'
+import { AgriVueFilterBar, AgriVueTable, type VueListColumn } from '@agri/shared/vue/list'
+
+const formatColumns: VueListColumn[] = [
+  { prop: 'formatCode', label: '格式编码', width: 145, kind: 'code', locked: true },
+  { prop: 'formatName', label: '格式名称', width: 160 },
+  { prop: 'dataType', label: '数据类型', width: 100 },
+  { prop: 'validationRule', label: '校验规则', minWidth: 200, kind: 'code' },
+  { key: 'length', label: '长度范围', width: 110, kind: 'number' },
+  { prop: 'defaultValue', label: '默认值', width: 110 },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { key: 'actions', label: '操作', width: 120, kind: 'action' },
+]
+
+const changeColumns: VueListColumn[] = [
+  { prop: 'changeType', label: '变更类型', width: 120 },
+  { prop: 'formatName', label: '对象', width: 165, locked: true },
+  { prop: 'description', label: '变更前 → 变更后', minWidth: 220 },
+  { prop: 'applicant', label: '申请人', width: 110 },
+  { prop: 'applyTime', label: '申请时间', width: 150 },
+  { prop: 'status', label: '状态', width: 96, kind: 'status' },
+  { key: 'actions', label: '操作', width: 120, kind: 'action' },
+]
+
+const metaColumns: VueListColumn[] = [
+  { prop: 'name', label: '中文名称', width: 155, locked: true },
+  { prop: 'nameEn', label: '英文标识', width: 155, kind: 'code' },
+  { prop: 'metadataType', label: '类型', width: 110 },
+  { prop: 'domainName', label: '主题域', width: 120 },
+  { prop: 'dataType', label: '数据类型', width: 110, kind: 'code' },
+  { prop: 'required', label: '必填', width: 80, align: 'center' },
+  { prop: 'sourceTable', label: '来源表', minWidth: 160, kind: 'code' },
+  { prop: 'version', label: '版本', width: 85 },
+  { key: 'actions', label: '操作', width: 90, kind: 'action' },
+]
 import {
   approveStandardChange,
   createDataFormat,
@@ -587,6 +624,22 @@ async function loadMetadata() {
 function reloadAll() {
   void loadFormats()
   void loadChanges()
+  void loadMetadata()
+}
+
+function resetFormatFilter() {
+  formatKeyword.value = ''
+  formatStatus.value = ''
+}
+
+function resetChangeFilter() {
+  changeStatus.value = 'PENDING'
+  void loadChanges()
+}
+
+function resetMetaFilter() {
+  metaKeyword.value = ''
+  metaType.value = ''
   void loadMetadata()
 }
 

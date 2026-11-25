@@ -41,7 +41,7 @@
                   aria-label="全选当前页"
                   :checked="isAllPageSelected"
                   :indeterminate.prop="isSomePageSelected"
-                  :disabled="!data.length"
+                  :disabled="!displayData.length"
                   @change="toggleAllCurrentPage"
                 />
               </th>
@@ -61,13 +61,13 @@
                 {{ loadingText }}
               </td>
             </tr>
-            <tr v-else-if="!data.length">
+            <tr v-else-if="!displayData.length">
               <td :colspan="totalColSpan" class="agri-vue-table-empty">
                 <slot name="empty">{{ emptyText }}</slot>
               </td>
             </tr>
             <tr
-              v-for="(row, rowIndex) in data"
+              v-for="(row, rowIndex) in displayData"
               v-else
               :key="resolveRowKey(row, rowIndex)"
               :class="{ 'is-selected': isRowSelected(row, rowIndex) }"
@@ -103,15 +103,15 @@
 
       <AgriVuePagination
         v-if="showPagination"
-        :page="page"
-        :page-size="pageSize"
+        :page="activePage"
+        :page-size="activePageSize"
         :total="resolvedTotal"
         :selected-count="selectedKeyList.length"
         :unit="totalUnit"
         :page-size-options="pageSizeOptions"
-        @update:page="emit('update:page', $event)"
-        @update:page-size="emit('update:pageSize', $event)"
-        @change="(p, s) => emit('page-change', p, s)"
+        @update:page="handlePageUpdate"
+        @update:page-size="handlePageSizeUpdate"
+        @change="handlePageChange"
       />
     </div>
   </div>
@@ -126,13 +126,14 @@ import {
   DEFAULT_SELECTION_COLUMN_WIDTH,
   DEFAULT_VUE_PAGE_SIZE,
   DEFAULT_VUE_PAGE_SIZES,
+  clampPage,
   readCellValue,
   type NormalizedVueColumn,
   type VueListColumn,
 } from './vueListUtils'
 import './AgriVueList.css'
 
-type RowRecord = Record<string, unknown>
+type RowRecord = Record<string, any>
 
 const props = withDefaults(
   defineProps<{
@@ -152,6 +153,8 @@ const props = withDefaults(
     lockedColumnKeys?: string[]
     minTableWidth?: number | string
     showPagination?: boolean
+    /** 开启客户端自动分页切片（适合接口一次返回全量数据的台账）。 */
+    clientPagination?: boolean
     page?: number
     pageSize?: number
     total?: number
@@ -173,8 +176,9 @@ const props = withDefaults(
     lockedColumnKeys: undefined,
     minTableWidth: undefined,
     showPagination: true,
-    page: 1,
-    pageSize: DEFAULT_VUE_PAGE_SIZE,
+    clientPagination: false,
+    page: undefined,
+    pageSize: undefined,
     total: undefined,
     totalUnit: '条',
     pageSizeOptions: () => [...DEFAULT_VUE_PAGE_SIZES],
@@ -202,6 +206,64 @@ const {
   lockedKeys: props.lockedColumnKeys,
 })
 
+const internalPage = ref<number>(props.page ?? 1)
+const internalPageSize = ref<number>(props.pageSize ?? DEFAULT_VUE_PAGE_SIZE)
+
+watch(
+  () => props.page,
+  (val) => {
+    if (val !== undefined) internalPage.value = val
+  },
+)
+watch(
+  () => props.pageSize,
+  (val) => {
+    if (val !== undefined) internalPageSize.value = val
+  },
+)
+
+const resolvedTotal = computed(() => (props.total !== undefined ? props.total : props.data.length))
+const activePageSize = computed(() => props.pageSize ?? internalPageSize.value)
+const activePage = computed(() => {
+  const raw = props.page ?? internalPage.value
+  return props.clientPagination ? clampPage(raw, resolvedTotal.value, activePageSize.value) : raw
+})
+
+watch(
+  () => props.data.length,
+  (len) => {
+    if (!props.clientPagination) return
+    const clamped = clampPage(internalPage.value, len, activePageSize.value)
+    if (clamped !== internalPage.value) {
+      internalPage.value = clamped
+      emit('update:page', clamped)
+    }
+  },
+)
+
+const displayData = computed(() => {
+  if (!props.clientPagination || !props.showPagination) return props.data
+  const start = (activePage.value - 1) * activePageSize.value
+  return props.data.slice(start, start + activePageSize.value)
+})
+
+function handlePageUpdate(nextPage: number) {
+  internalPage.value = nextPage
+  emit('update:page', nextPage)
+}
+
+function handlePageSizeUpdate(nextSize: number) {
+  internalPageSize.value = nextSize
+  internalPage.value = 1
+  emit('update:pageSize', nextSize)
+}
+
+function handlePageChange(nextPage: number, nextSize: number) {
+  internalPage.value = nextPage
+  internalPageSize.value = nextSize
+  emit('page-change', nextPage, nextSize)
+}
+
 const internalSelected = ref<string[]>([])
 const selectedKeyList = computed<string[]>(() =>
   props.selectedKeys !== undefined ? [...props.selectedKeys] : internalSelected.value,
@@ -221,7 +283,7 @@ function resolveRowKey(row: RowRecord, index: number): string {
   return raw != null && raw !== '' ? String(raw) : String(index)
 }
 
-const currentPageKeys = computed(() => props.data.map((row, idx) => resolveRowKey(row, idx)))
+const currentPageKeys = computed(() => displayData.value.map((row, idx) => resolveRowKey(row, idx)))
 
 const isAllPageSelected = computed(
   () => currentPageKeys.value.length > 0 && currentPageKeys.value.every((k) => selectedKeySet.value.has(k)),
@@ -269,12 +331,21 @@ function toggleAllCurrentPage() {
 }
 
 const totalColSpan = computed(() => visibleColumns.value.length + (props.selectable ? 1 : 0))
-const resolvedTotal = computed(() => (props.total !== undefined ? props.total : props.data.length))
+
+const computedMinWidth = computed(() => {
+  if (props.minTableWidth != null) {
+    return typeof props.minTableWidth === 'number' ? `${props.minTableWidth}px` : props.minTableWidth
+  }
+  const sum = visibleColumns.value.reduce(
+    (acc, col) => acc + (col.resolvedWidth ?? col.resolvedMinWidth ?? 120),
+    props.selectable ? props.selectionWidth : 0,
+  )
+  return sum > 0 ? `${sum}px` : undefined
+})
 
 const tableStyle = computed(() => {
-  if (props.minTableWidth == null) return undefined
-  const width = typeof props.minTableWidth === 'number' ? `${props.minTableWidth}px` : props.minTableWidth
-  return { minWidth: width }
+  if (!computedMinWidth.value) return undefined
+  return { minWidth: computedMinWidth.value }
 })
 
 function colStyle(col: NormalizedVueColumn) {
@@ -307,4 +378,13 @@ function formatPlainText(row: RowRecord, col: NormalizedVueColumn, index: number
   if (value === null || value === undefined || value === '') return '—'
   return String(value)
 }
+
+function clearSelection() {
+  updateSelection([])
+}
+
+defineExpose({
+  clearSelection,
+  resetColumns,
+})
 </script>
