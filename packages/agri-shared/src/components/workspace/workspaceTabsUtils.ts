@@ -4,8 +4,8 @@ export interface WorkspaceTabMeta {
   form?: boolean
 }
 
-const DEFAULT_FORM_LABEL_RE = /新增|新建|编辑|创建|发布/
-const DEFAULT_FORM_KEY_RE = /\/(create|new|edit|publish)(\/|\?|$)|[?&]tab=publish(&|$)/i
+const DEFAULT_FORM_LABEL_RE = /新增|新建|编辑|创建|发布|申请/
+const DEFAULT_FORM_KEY_RE = /\/(create|new|edit|publish|apply|product-add|activity-create|loan-apply)(\/|\?|$)|[?&]tab=publish(&|$)/i
 
 /** 识别可能包含未提交表单内容的页签，关闭前用于弹出二次确认。 */
 export function isFormWorkspaceTab(key: string, label: string): boolean {

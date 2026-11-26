@@ -148,6 +148,15 @@
           </button>
         </template>
       </AgriVueTopHeader>
+      <AgriVueWorkspaceTabs
+        :active-key="route.fullPath"
+        :active-path="route.fullPath"
+        :active-label="currentPageLabel"
+        home-key="/dashboard"
+        home-label="运营大盘"
+        storage-key="agri-mdm:workspace-tabs"
+        @navigate="(path) => $router.push(path)"
+      />
       <div class="content-wrapper">
         <PointHiddenNotice />
         <router-view />
@@ -161,7 +170,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { revokePlatformSession } from '@/utils/sso'
-import { AgriVueTopHeader } from '@agri/shared/vue/workspace'
+import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
 import BrandMark from '@/components/BrandMark.vue'
 import MenuIcon from '@/components/MenuIcon.vue'
 import PointHiddenNotice from '@/components/ui/PointHiddenNotice.vue'

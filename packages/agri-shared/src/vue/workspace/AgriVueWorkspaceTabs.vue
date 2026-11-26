@@ -211,11 +211,12 @@ const pendingCloseKeys = ref<string[] | null>(null)
 const hidden = computed(() => props.hideTabBar || isMobile.value)
 
 function makeTab(key: string, label: string, path: string): RouteWorkspaceTabMeta {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return {
     key,
     label,
     path,
-    form: isFormWorkspaceTab(`/${path}`, label),
+    form: isFormWorkspaceTab(normalizedPath, label),
   }
 }
 
@@ -237,6 +238,18 @@ const tabs = ref<RouteWorkspaceTabMeta[]>(
     props.maxTabs,
     [props.homeKey],
   ),
+)
+
+watch(
+  () => props.storageKey,
+  (nextStorageKey) => {
+    tabs.value = upsertWorkspaceTab(
+      readStoredTabs(nextStorageKey),
+      makeTab(props.activeKey, props.activeLabel, props.activePath || props.activeKey),
+      props.maxTabs,
+      [props.homeKey],
+    )
+  },
 )
 
 watch(

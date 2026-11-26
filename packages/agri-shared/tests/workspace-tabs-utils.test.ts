@@ -20,6 +20,9 @@ describe('workspaceTabsUtils', () => {
     expect(isFormWorkspaceTab('/production/farms/create', '农场详情')).toBe(true)
     expect(isFormWorkspaceTab('/member/buyer?tab=publish', '采购需求')).toBe(true)
     expect(isFormWorkspaceTab('/production/farms', '新增农场')).toBe(true)
+    expect(isFormWorkspaceTab('/borrower/loan-apply', '融资申请')).toBe(true)
+    expect(isFormWorkspaceTab('/supply/product-add', '新增供货商品')).toBe(true)
+    expect(isFormWorkspaceTab('/activity-create', '营销活动')).toBe(true)
     expect(isFormWorkspaceTab('/admin/trade/order', '订单监管')).toBe(false)
   })
 

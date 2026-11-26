@@ -59,6 +59,15 @@
           </div>
         </template>
       </AgriVueTopHeader>
+      <AgriVueWorkspaceTabs
+        :active-key="route.fullPath"
+        :active-path="route.fullPath"
+        :active-label="String(route.meta.title || '融资工作台')"
+        home-key="/borrower/home"
+        home-label="融资工作台"
+        storage-key="agri-finance-borrower:workspace-tabs"
+        @navigate="(path) => $router.push(path)"
+      />
 
       <main class="finance-content">
         <router-view />
@@ -82,7 +91,7 @@ import {
   TrendCharts,
   Wallet,
 } from '@element-plus/icons-vue'
-import { AgriVueTopHeader } from '@agri/shared/vue/workspace'
+import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
 import { financeApi, financeUser } from '@/api/finance'
 import { logoutFinance } from '@/auth'
 

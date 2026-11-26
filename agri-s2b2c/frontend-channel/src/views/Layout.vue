@@ -151,6 +151,15 @@
           </el-dropdown>
         </template>
       </AgriVueTopHeader>
+      <AgriVueWorkspaceTabs
+        :active-key="route.fullPath"
+        :active-path="route.fullPath"
+        :active-label="pageTitle"
+        home-key="/"
+        home-label="经营看板"
+        storage-key="agri-s2b2c-channel:workspace-tabs"
+        @navigate="(path) => $router.push(path)"
+      />
       <div class="content">
         <div v-if="!profileReady" class="profile-state">正在读取渠道档案…</div>
         <router-view v-else-if="channelApproved || (route.path === '/apply' && canApply)" />
@@ -176,7 +185,7 @@ import {
   HomeFilled, Goods, ShoppingCart, User, Wallet, TrendCharts, Promotion, Box,
   MagicStick, Setting, Compass, Bell, ArrowDown, ArrowUp,
 } from '@element-plus/icons-vue'
-import { AgriVueTopHeader } from '@agri/shared/vue/workspace'
+import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
 import { logoutUnified, unifiedSession } from '../../../frontend-shared/unified-auth'
 import { channelApi } from '../api'
 
@@ -249,8 +258,8 @@ const pageTitle = computed(() => {
     '/profile': '店铺信息',
     '/apply': '入驻申请'
   }
-  if (route.path.startsWith('/orders/')) return '订单详情'
-  if (route.path.startsWith('/customers/')) return '客户画像'
+  if (route.path.startsWith('/orders/')) return `订单详情 · ${route.params.id ?? ''}`.replace(/ · $/, '')
+  if (route.path.startsWith('/customers/')) return `客户画像 · ${route.params.id ?? ''}`.replace(/ · $/, '')
   if (route.path.startsWith('/gap/')) return '能力未接入'
   return titles[route.path] || '商家工作台'
 })

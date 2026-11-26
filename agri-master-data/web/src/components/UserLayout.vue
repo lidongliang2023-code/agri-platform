@@ -64,6 +64,15 @@
           </button>
         </template>
       </AgriVueTopHeader>
+      <AgriVueWorkspaceTabs
+        :active-key="route.fullPath"
+        :active-path="route.fullPath"
+        :active-label="currentLabel"
+        home-key="/user/workbench"
+        home-label="企业工作台"
+        storage-key="agri-mdm-user:workspace-tabs"
+        @navigate="(path) => $router.push(path)"
+      />
 
       <div class="user-content">
         <PointHiddenNotice />
@@ -76,7 +85,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { AgriVueTopHeader, readSidebarCollapsed, writeSidebarCollapsed } from '@agri/shared/vue/workspace'
+import { AgriVueTopHeader, AgriVueWorkspaceTabs, readSidebarCollapsed, writeSidebarCollapsed } from '@agri/shared/vue/workspace'
 import BrandMark from '@/components/BrandMark.vue'
 import MenuIcon from '@/components/MenuIcon.vue'
 import PointHiddenNotice from '@/components/ui/PointHiddenNotice.vue'

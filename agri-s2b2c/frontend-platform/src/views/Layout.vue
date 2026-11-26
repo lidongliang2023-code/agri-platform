@@ -145,6 +145,15 @@
           </el-dropdown>
         </template>
       </AgriVueTopHeader>
+      <AgriVueWorkspaceTabs
+        :active-key="route.fullPath"
+        :active-path="route.fullPath"
+        :active-label="pageTitle"
+        home-key="/"
+        home-label="运营大盘"
+        storage-key="agri-s2b2c-platform:workspace-tabs"
+        @navigate="(path) => $router.push(path)"
+      />
       <div class="content">
         <router-view />
       </div>
@@ -160,7 +169,7 @@ import {
   HomeFilled, UserFilled, Goods, ShoppingCart, Promotion, Money, Warning, TrendCharts,
   MagicStick, Compass, ArrowDown, ArrowUp,
 } from '@element-plus/icons-vue'
-import { AgriVueTopHeader } from '@agri/shared/vue/workspace'
+import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
 import { logoutUnified, unifiedSession } from '../../../frontend-shared/unified-auth'
 
 const route = useRoute()
@@ -236,10 +245,28 @@ const pageTitle = computed(() => {
     '/boundary': '模块边界与协同说明',
     '/growth': '增长与风控',
   }
+  const supplyTitles = {
+    '/supply/products': '货源商品维护',
+    '/supply/product-add': '新增供货商品',
+    '/supply/supply-pool': '可投放货源',
+    '/supply/listing-config': '投放与授权规则',
+    '/supply/distributors': '渠道授权网络',
+    '/supply/recruit': '渠道招募',
+    '/supply/orders': '供货履约',
+    '/supply/todo': '供货待办',
+    '/supply/revenue': '供货收入与对账',
+    '/supply/analytics': '货源动销分析',
+    '/supply/notice-settings': '供货消息设置',
+  }
+  if (supplyTitles[route.path]) return supplyTitles[route.path]
+  if (route.path.startsWith('/supply/product-edit/')) return `编辑供货商品 · ${route.params.id ?? ''}`.replace(/ · $/, '')
+  if (route.path.startsWith('/supply/distributor-detail/')) return `渠道详情 · ${route.params.id ?? ''}`.replace(/ · $/, '')
+  if (route.path.startsWith('/supply/order-detail/')) return `供货订单 · ${route.params.id ?? ''}`.replace(/ · $/, '')
   if (route.path.startsWith('/supply')) return '平台供货运营'
-  if (route.name === 'SupplierDetail') return '货源档案详情'
-  if (route.name === 'ChannelPartnerDetail') return '商家详情'
-  if (route.name === 'ProductDetail') return '商品详情'
+  if (route.name === 'SupplierDetail') return `货源档案详情 · ${route.params.id ?? ''}`.replace(/ · $/, '')
+  if (route.name === 'ChannelPartnerDetail') return `商家详情 · ${route.params.id ?? ''}`.replace(/ · $/, '')
+  if (route.name === 'ProductDetail') return `商品详情 · ${route.params.id ?? ''}`.replace(/ · $/, '')
+  if (route.name === 'OrderDetail') return `订单详情 · ${route.params.id ?? ''}`.replace(/ · $/, '')
   if (route.path.startsWith('/gap/')) return '能力未接入'
   return titles[route.path] || '平台运营工作台'
 })

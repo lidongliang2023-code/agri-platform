@@ -56,6 +56,15 @@
           </div>
         </template>
       </AgriVueTopHeader>
+      <AgriVueWorkspaceTabs
+        :active-key="route.fullPath"
+        :active-path="route.fullPath"
+        :active-label="activeTabLabel"
+        :home-key="homePath"
+        :home-label="homeLabel"
+        :storage-key="'agri-finance-' + role + ':workspace-tabs'"
+        @navigate="(path) => $router.push(path)"
+      />
       <main class="finance-content"><router-view /></main>
     </div>
     <button v-if="navOpen" class="finance-nav-mask" type="button" aria-label="关闭菜单" @click="navOpen = false" />
@@ -82,7 +91,7 @@ import {
   TrendCharts,
   Warning,
 } from '@element-plus/icons-vue'
-import { AgriVueTopHeader } from '@agri/shared/vue/workspace'
+import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
 import { fundProvider, operationsApi, operationUser } from '@/api/operations'
 import { hasFinancePermission, logoutFinance } from '@/auth'
 
@@ -119,6 +128,11 @@ onBeforeUnmount(() => {
 })
 const role = computed(() => route.path.startsWith('/fund') ? 'fund' : 'admin')
 const homePath = computed(() => role.value === 'fund' ? '/fund/workbench' : '/admin/workbench')
+const homeLabel = computed(() => role.value === 'fund' ? '资金工作台' : '运营工作台')
+const activeTabLabel = computed(() => {
+  const base = String(route.meta.title || homeLabel.value)
+  return route.params.assetId ? `${base} · ${route.params.assetId}` : base
+})
 const displayUser = computed(() => role.value === 'fund' ? fundProvider : operationUser)
 
 const navigation = computed(() => role.value === 'fund' ? {
