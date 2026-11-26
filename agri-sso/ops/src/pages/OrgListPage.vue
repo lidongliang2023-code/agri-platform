@@ -24,75 +24,90 @@
       </div>
     </div>
 
-    <section class="surface-card list-card">
-      <div class="list-toolbar">
-        <a-input
-          v-model:value="draft"
-          placeholder="搜组织名称 / 编码 / 信用代码"
-          style="width: 260px"
-          @press-enter="submitSearch"
-        />
-        <a-button type="primary" @click="submitSearch">搜索</a-button>
-        <a-select
-          :value="type"
-          style="width: 160px"
-          :options="typeOptions"
-          @change="(val: string) => { type = val; pageNum = 1 }"
-        />
-        <a-select
-          :value="verifyStatus"
-          style="width: 150px"
-          :options="verifyOptions"
-          @change="(val: string) => { verifyStatus = val; pageNum = 1 }"
-        />
-        <a-button v-if="filtered" type="link" @click="resetFilters">清空筛选</a-button>
-      </div>
+    <ErrorBlock v-if="error" :message="error" @retry="load" />
 
-      <ErrorBlock v-if="error" :message="error" @retry="load" />
-      <a-table
-        v-else
-        class="agri-list-table"
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :scroll="{ x: 1180 }"
-        :columns="columns"
-        :pagination="{
-          current: pageNum,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          showTotal: (count: number) => `共 ${count} 家组织`,
-          onChange: handlePageChange,
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <div v-if="column.key === 'name'">
-            <b>{{ text }}</b>
-            <div class="small muted">{{ record.code }} · {{ record.creditCode || '未填信用代码' }}</div>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      total-unit="家组织"
+      column-settings-storage-key="uc-ops:orgs"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="submitSearch" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="搜组织名称 / 编码 / 信用代码"
+              @press-enter="submitSearch"
+            />
           </div>
-          <template v-else-if="column.key === 'type'">{{ ORG_TYPE_LABEL[text] ?? text ?? '—' }}</template>
-          <template v-else-if="column.key === 'industry'">{{ text || '—' }}</template>
-          <template v-else-if="column.key === 'address'">{{ text || '未填写' }}</template>
-          <div v-else-if="column.key === 'contactName'">
-            {{ text || '—' }}
-            <div class="small muted">{{ record.contactPhone || '—' }}</div>
+          <div class="agri-vue-filter-field">
+            <label>组织类型</label>
+            <a-select
+              v-model:value="type"
+              :options="typeOptions"
+              @change="pageNum = 1"
+            />
           </div>
-          <template v-else-if="column.key === 'memberCount'">{{ text ? `${text} 人` : '—' }}</template>
-          <StatusTag v-else-if="column.key === 'verifyStatus'" :status="text" />
-          <a-button v-else-if="column.key === 'action'" size="small" type="link" @click="app.navigate('org-detail', String(record.id))">
-            详情
-          </a-button>
-        </template>
-      </a-table>
-    </section>
+          <div class="agri-vue-filter-field">
+            <label>认证状态</label>
+            <a-select
+              v-model:value="verifyStatus"
+              :options="verifyOptions"
+              @change="pageNum = 1"
+            />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-name="{ value, record }">
+        <div>
+          <b>{{ value }}</b>
+          <div class="small muted">{{ record.code }} · {{ record.creditCode || '未填信用代码' }}</div>
+        </div>
+      </template>
+      <template #cell-type="{ value }">
+        {{ ORG_TYPE_LABEL[String(value ?? '')] ?? value ?? '—' }}
+      </template>
+      <template #cell-industry="{ value }">{{ value || '—' }}</template>
+      <template #cell-address="{ value }">{{ value || '未填写' }}</template>
+      <template #cell-contactName="{ value, record }">
+        <div>
+          {{ value || '—' }}
+          <div class="small muted">{{ record.contactPhone || '—' }}</div>
+        </div>
+      </template>
+      <template #cell-memberCount="{ value }">{{ value ? `${value} 人` : '—' }}</template>
+      <template #cell-verifyStatus="{ value }">
+        <StatusTag :status="String(value ?? '')" />
+      </template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions
+          :actions="[{ key: 'detail', label: '详情', onClick: () => app.navigate('org-detail', String(record.id)) }]"
+        />
+      </template>
+    </AgriAntdvListTable>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  AgriVueRowActions,
+  type VueListColumn,
+} from '@agri/shared/vue/antdv'
 import { useAppStore } from '../app-context'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
@@ -124,15 +139,15 @@ const verifyOptions = [
   { label: '已驳回', value: 'rejected' },
 ]
 
-const columns = [
-  { title: '组织', dataIndex: 'name', key: 'name' },
-  { title: '类型', dataIndex: 'type', key: 'type', width: 120 },
-  { title: '行业', dataIndex: 'industry', key: 'industry', width: 120 },
-  { title: '所在地', dataIndex: 'address', key: 'address', width: 190 },
-  { title: '联系人', dataIndex: 'contactName', key: 'contactName', width: 150 },
-  { title: '成员', dataIndex: 'memberCount', key: 'memberCount', width: 80 },
-  { title: '认证', dataIndex: 'verifyStatus', key: 'verifyStatus', width: 100 },
-  { title: '操作', key: 'action', width: 100 },
+const columns: VueListColumn[] = [
+  { key: 'name', prop: 'name', label: '组织', minWidth: 220 },
+  { key: 'type', prop: 'type', label: '类型', width: 120 },
+  { key: 'industry', prop: 'industry', label: '行业', width: 120 },
+  { key: 'address', prop: 'address', label: '所在地', width: 190 },
+  { key: 'contactName', prop: 'contactName', label: '联系人', width: 150 },
+  { key: 'memberCount', prop: 'memberCount', label: '成员数', width: 90 },
+  { key: 'verifyStatus', prop: 'verifyStatus', label: '认证', width: 100 },
+  { key: 'action', label: '操作', width: 100, fixed: 'right' },
 ]
 
 function load() {
@@ -157,19 +172,23 @@ watch([pageNum, pageSize, keyword, type, verifyStatus], load, { immediate: true 
 
 const certified = computed(() => rows.value.filter((row) => row.verifyStatus === 'approved').length)
 const pending = computed(() => rows.value.filter((row) => row.verifyStatus === 'pending').length)
-const filtered = computed(() => Boolean(keyword.value || type.value || verifyStatus.value))
 
 function submitSearch() {
-  keyword.value = draft.value.trim()
+  const next = draft.value.trim()
+  const same = keyword.value === next && pageNum.value === 1
+  keyword.value = next
   pageNum.value = 1
+  if (same) load()
 }
 
 function resetFilters() {
+  const same = !draft.value && !keyword.value && !type.value && !verifyStatus.value && pageNum.value === 1
   draft.value = ''
   keyword.value = ''
   type.value = ''
   verifyStatus.value = ''
   pageNum.value = 1
+  if (same) load()
 }
 
 function handlePageChange(next: number, nextSize: number) {

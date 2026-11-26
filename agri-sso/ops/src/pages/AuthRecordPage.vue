@@ -8,42 +8,46 @@
 
     <ErrorBlock v-if="error" :message="error" @retry="load" />
 
-    <section class="surface-card">
-      <div class="chip-row" style="margin-bottom: 14px">
-        <a-input
-          v-model:value="draft"
-          placeholder="搜用户 / 应用名"
-          style="width: 240px"
-          @press-enter="submitSearch"
-        />
-        <a-button type="primary" @click="submitSearch">搜索</a-button>
-      </div>
-      <a-table
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :columns="columns"
-        :pagination="{
-          current: pageNum,
-          pageSize: 20,
-          total,
-          showTotal: (count: number) => `共 ${count} 条`,
-          onChange: (next: number) => { pageNum = next },
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <template v-if="column.key === 'createdAt'">{{ formatTime(text) }}</template>
-          <template v-else-if="column.key === 'userName'">{{ text || `用户 ${record.userId}` }}</template>
-          <template v-else-if="column.key === 'appName'">{{ text || '—' }}</template>
-          <a-tag v-else-if="column.key === 'action'" :class="`soft-tag tone-${text === 'grant' ? 'green' : 'up'}`">
-            {{ text === 'grant' ? '授权' : '撤回' }}
-          </a-tag>
-          <span v-else-if="column.key === 'scopes'" class="small">{{ text || '—' }}</span>
-          <template v-else-if="column.key === 'ip'">{{ text || '—' }}</template>
-        </template>
-      </a-table>
-    </section>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      column-settings-storage-key="uc-ops:auth-records"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="submitSearch" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="搜用户 / 应用名"
+              @press-enter="submitSearch"
+            />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-createdAt="{ value }">{{ formatTime(String(value ?? '')) }}</template>
+      <template #cell-userName="{ value, record }">{{ value || `用户 ${record.userId}` }}</template>
+      <template #cell-appName="{ value }">{{ value || '—' }}</template>
+      <template #cell-action="{ value }">
+        <a-tag :class="`soft-tag tone-${value === 'grant' ? 'green' : 'up'}`">
+          {{ value === 'grant' ? '授权' : '撤回' }}
+        </a-tag>
+      </template>
+      <template #cell-scopes="{ value }">
+        <span class="small">{{ value || '—' }}</span>
+      </template>
+      <template #cell-ip="{ value }">{{ value || '—' }}</template>
+    </AgriAntdvListTable>
 
     <section class="surface-card">
       <SectionHeading kicker="说明" title="这张表和用户端「授权管理」的关系" />
@@ -58,6 +62,11 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  type VueListColumn,
+} from '@agri/shared/vue/antdv'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
 import PageTitle from '../components/PageTitle.vue'
@@ -68,24 +77,25 @@ import type { AuthRecord } from '../types'
 const rows = ref<AuthRecord[]>([])
 const total = ref(0)
 const pageNum = ref(1)
+const pageSize = ref(20)
 const keyword = ref('')
 const draft = ref('')
 const loading = ref(true)
 const error = ref('')
 
-const columns = [
-  { title: '时间', dataIndex: 'createdAt', key: 'createdAt', width: 160 },
-  { title: '用户', dataIndex: 'userName', key: 'userName', width: 160 },
-  { title: '应用', dataIndex: 'appName', key: 'appName' },
-  { title: '动作', dataIndex: 'action', key: 'action', width: 100 },
-  { title: '授权范围', dataIndex: 'scopes', key: 'scopes' },
-  { title: 'IP', dataIndex: 'ip', key: 'ip', width: 140 },
+const columns: VueListColumn[] = [
+  { key: 'createdAt', prop: 'createdAt', label: '时间', width: 160 },
+  { key: 'userName', prop: 'userName', label: '用户', width: 160 },
+  { key: 'appName', prop: 'appName', label: '应用', minWidth: 180 },
+  { key: 'action', prop: 'action', label: '动作', width: 100 },
+  { key: 'scopes', prop: 'scopes', label: '授权范围', minWidth: 200 },
+  { key: 'ip', prop: 'ip', label: 'IP', width: 140 },
 ]
 
 function load() {
   loading.value = true
   error.value = ''
-  ucApi.authRecords({ pageNum: pageNum.value, pageSize: 20, keyword: keyword.value || undefined })
+  ucApi.authRecords({ pageNum: pageNum.value, pageSize: pageSize.value, keyword: keyword.value || undefined })
     .then((data) => {
       rows.value = data.records
       total.value = data.total
@@ -94,10 +104,26 @@ function load() {
     .finally(() => { loading.value = false })
 }
 
-watch([pageNum, keyword], load, { immediate: true })
+watch([pageNum, pageSize, keyword], load, { immediate: true })
 
 function submitSearch() {
-  keyword.value = draft.value.trim()
+  const next = draft.value.trim()
+  const same = keyword.value === next && pageNum.value === 1
+  keyword.value = next
   pageNum.value = 1
+  if (same) load()
+}
+
+function resetFilters() {
+  const same = !draft.value && !keyword.value && pageNum.value === 1
+  draft.value = ''
+  keyword.value = ''
+  pageNum.value = 1
+  if (same) load()
+}
+
+function handlePageChange(next: number, nextSize: number) {
+  pageSize.value = nextSize
+  pageNum.value = next
 }
 </script>

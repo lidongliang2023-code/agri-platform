@@ -4,11 +4,7 @@
       eyebrow="角色权限"
       title="角色管理"
       description="平台级角色的名称、成员、授权与启停。组织级角色归主数据域，不在此处维护"
-    >
-      <template #actions>
-        <a-button type="primary" @click="openCreate">新建角色</a-button>
-      </template>
-    </PageTitle>
+    />
 
     <div class="grid-3">
       <div class="stat-tile">
@@ -28,100 +24,100 @@
       </div>
     </div>
 
-    <section class="surface-card list-card">
-      <div class="list-toolbar">
-        <a-input
-          v-model:value="draft"
-          placeholder="搜角色编码 / 名称 / 说明"
-          style="width: 260px"
-          @press-enter="submitSearch"
-        />
-        <a-button type="primary" @click="submitSearch">搜索</a-button>
-        <a-select
-          :value="statusFilter"
-          style="width: 140px"
-          :options="statusOptions"
-          @change="(val: string) => { statusFilter = val; pageNum = 1 }"
-        />
-        <a-button v-if="keyword || statusFilter" type="link" @click="clearFilters">清空筛选</a-button>
-      </div>
+    <ErrorBlock v-if="error" :message="error" @retry="loadRoles" />
 
-      <ErrorBlock v-if="error" :message="error" @retry="loadRoles" />
-      <a-table
-        v-else
-        class="agri-list-table"
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :columns="columns"
-        :data-source="paged"
-        :scroll="{ x: 1180 }"
-        :pagination="{
-          current: pageNum,
-          pageSize,
-          total: filtered.length,
-          showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          showTotal: (count: number) => `共 ${count} 个角色`,
-          onChange: handlePageChange,
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <div v-if="column.key === 'name'">
-            <b>{{ text || roleText(record.code) }}</b>
-            <div class="small muted">{{ record.code }}</div>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="filtered"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      :page="pageNum"
+      :page-size="pageSize"
+      total-unit="个角色"
+      column-settings-storage-key="uc-ops:roles"
+      @page-change="handlePageChange"
+      @refresh="loadRoles"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="submitSearch" @reset="clearFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="搜角色编码 / 名称 / 说明"
+              @press-enter="submitSearch"
+            />
           </div>
-          <a-tag v-else-if="column.key === 'level'" class="soft-tag">平台级</a-tag>
-          <template v-else-if="column.key === 'memberCount'">{{ text ? `${text} 人` : '0 人' }}</template>
-          <template v-else-if="column.key === 'permCount'">{{ permCountText(record.permissions) }}</template>
-          <template v-else-if="column.key === 'permissions'">
-            <a-tag v-if="parsePermissions(text).includes('*')" class="soft-tag tone-green">全部权限</a-tag>
-            <span v-else-if="!parsePermissions(text).length" class="small muted">未配置</span>
-            <a-popover
-              v-else
-              trigger="click"
-              placement="topLeft"
-              :title="`全部权限（${parsePermissions(text).length} 项）`"
-            >
-              <template #content>
-                <div class="tag-row" style="max-width: 360px; max-height: 260px; overflow: auto">
-                  <a-tag v-for="code in parsePermissions(text)" :key="code" class="soft-tag">{{ permissionLabel(code) }}</a-tag>
-                </div>
-              </template>
-              <div class="tag-row" style="cursor: pointer" :title="parsePermissions(text).map(permissionLabel).join('、')">
-                <a-tag v-for="code in parsePermissions(text).slice(0, 3)" :key="code" class="soft-tag">{{ permissionLabel(code) }}</a-tag>
-                <a-tag v-if="parsePermissions(text).length > 3" class="soft-tag">等 {{ parsePermissions(text).length }} 项</a-tag>
-              </div>
-            </a-popover>
+          <div class="agri-vue-filter-field">
+            <label>启用状态</label>
+            <a-select
+              v-model:value="statusFilter"
+              :options="statusOptions"
+              @change="pageNum = 1"
+            />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <a-button type="primary" @click="openCreate">新建角色</a-button>
+      </template>
+
+      <template #cell-name="{ value, record }">
+        <div>
+          <b>{{ value || roleText(String(record.code ?? '')) }}</b>
+          <div class="small muted">{{ record.code }}</div>
+        </div>
+      </template>
+      <template #cell-level>
+        <a-tag class="soft-tag">平台级</a-tag>
+      </template>
+      <template #cell-memberCount="{ value }">{{ value ? `${value} 人` : '0 人' }}</template>
+      <template #cell-permCount="{ record }">{{ permCountText(String(record.permissions ?? '')) }}</template>
+      <template #cell-permissions="{ value }">
+        <a-tag v-if="parsePermissions(String(value ?? '')).includes('*')" class="soft-tag tone-green">全部权限</a-tag>
+        <span v-else-if="!parsePermissions(String(value ?? '')).length" class="small muted">未配置</span>
+        <a-popover
+          v-else
+          trigger="click"
+          placement="topLeft"
+          :title="`全部权限（${parsePermissions(String(value ?? '')).length} 项）`"
+        >
+          <template #content>
+            <div class="tag-row" style="max-width: 360px; max-height: 260px; overflow: auto">
+              <a-tag v-for="code in parsePermissions(String(value ?? ''))" :key="code" class="soft-tag">
+                {{ permissionLabel(code) }}
+              </a-tag>
+            </div>
           </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag v-if="text === 'disabled'" class="soft-tag">已停用</a-tag>
-            <a-tag v-else class="soft-tag tone-green">启用中</a-tag>
-          </template>
-          <template v-else-if="column.key === 'updatedAt'">{{ formatTime(text ?? record.createdAt) }}</template>
-          <a-space v-else-if="column.key === 'action'" :size="4" wrap>
-            <a-button size="small" type="primary" ghost @click="app.navigate('perm-matrix', undefined, { code: record.code })">
-              配置权限
-            </a-button>
-            <a-button size="small" type="link" @click="openDetail(record as RoleRecord)">详情</a-button>
-            <a-button size="small" type="link" @click="openEdit(record as RoleRecord)">编辑</a-button>
-            <a-button size="small" type="link" @click="toggleStatus(record as RoleRecord)">
-              {{ (record.status || 'enabled') === 'disabled' ? '启用' : '停用' }}
-            </a-button>
-            <a-popconfirm
-              title="删除角色"
-              description="删除后该角色的权限配置一并失效，且无法恢复。"
-              ok-text="确认删除"
-              cancel-text="取消"
-              :ok-button-props="{ danger: true }"
-              @confirm="removeRole(record as RoleRecord)"
-            >
-              <a-button size="small" type="link" danger>删除</a-button>
-            </a-popconfirm>
-          </a-space>
-        </template>
-      </a-table>
-    </section>
+          <div
+            class="tag-row"
+            style="cursor: pointer"
+            :title="parsePermissions(String(value ?? '')).map(permissionLabel).join('、')"
+          >
+            <a-tag v-for="code in parsePermissions(String(value ?? '')).slice(0, 3)" :key="code" class="soft-tag">
+              {{ permissionLabel(code) }}
+            </a-tag>
+            <a-tag v-if="parsePermissions(String(value ?? '')).length > 3" class="soft-tag">
+              等 {{ parsePermissions(String(value ?? '')).length }} 项
+            </a-tag>
+          </div>
+        </a-popover>
+      </template>
+      <template #cell-status="{ value }">
+        <a-tag v-if="value === 'disabled'" class="soft-tag">已停用</a-tag>
+        <a-tag v-else class="soft-tag tone-green">启用中</a-tag>
+      </template>
+      <template #cell-updatedAt="{ value, record }">
+        {{ formatTime(String(value ?? record.createdAt ?? '')) }}
+      </template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions :actions="rowActions(record as RoleRecord)" />
+      </template>
+    </AgriAntdvListTable>
 
     <a-modal
       :open="Boolean(modalMode)"
@@ -191,7 +187,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { message, type FormInstance } from 'ant-design-vue'
+import { Modal, message, type FormInstance } from 'ant-design-vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  AgriVueRowActions,
+  type VueListColumn,
+  type VueRowActionItem,
+} from '@agri/shared/vue/antdv'
 import { useAppStore } from '../app-context'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
@@ -230,15 +233,15 @@ const statusOptions = [
   { label: '已停用', value: 'disabled' },
 ]
 
-const columns = [
-  { title: '角色名称 / 编码', dataIndex: 'name', key: 'name' },
-  { title: '适用层级', key: 'level', width: 110 },
-  { title: '成员数', dataIndex: 'memberCount', key: 'memberCount', width: 90 },
-  { title: '权限', key: 'permCount', width: 90 },
-  { title: '权限预览', dataIndex: 'permissions', key: 'permissions' },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
-  { title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt', width: 150 },
-  { title: '操作', key: 'action', width: 220 },
+const columns: VueListColumn[] = [
+  { key: 'name', prop: 'name', label: '角色名称 / 编码', minWidth: 200 },
+  { key: 'level', label: '适用层级', width: 110 },
+  { key: 'memberCount', prop: 'memberCount', label: '成员数', width: 90 },
+  { key: 'permCount', label: '权限', width: 90 },
+  { key: 'permissions', prop: 'permissions', label: '权限预览', minWidth: 220 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'updatedAt', prop: 'updatedAt', label: '更新时间', width: 160 },
+  { key: 'action', label: '操作', width: 150, fixed: 'right' },
 ]
 
 function loadRoles() {
@@ -262,7 +265,6 @@ const filtered = computed(() =>
 )
 
 const enabledCount = computed(() => roles.value.filter((role) => (role.status || 'enabled') === 'enabled').length)
-const paged = computed(() => filtered.value.slice((pageNum.value - 1) * pageSize.value, pageNum.value * pageSize.value))
 
 function permCountText(raw: string): string {
   const list = parsePermissions(raw)
@@ -282,12 +284,42 @@ function clearFilters() {
 }
 
 function handlePageChange(next: number, nextSize: number) {
-  if (nextSize && nextSize !== pageSize.value) {
-    pageSize.value = nextSize
-    pageNum.value = 1
-  } else {
-    pageNum.value = next
-  }
+  pageSize.value = nextSize
+  pageNum.value = next
+}
+
+function rowActions(role: RoleRecord): VueRowActionItem[] {
+  return [
+    {
+      key: 'perm',
+      label: '配置权限',
+      onClick: () => app.navigate('perm-matrix', undefined, { code: role.code }),
+    },
+    { key: 'detail', label: '详情', onClick: () => openDetail(role) },
+    { key: 'edit', label: '编辑', onClick: () => openEdit(role) },
+    {
+      key: 'toggle',
+      label: (role.status || 'enabled') === 'disabled' ? '启用' : '停用',
+      onClick: () => void toggleStatus(role),
+    },
+    {
+      key: 'delete',
+      label: '删除',
+      danger: true,
+      onClick: () => confirmRemove(role),
+    },
+  ]
+}
+
+function confirmRemove(role: RoleRecord) {
+  Modal.confirm({
+    title: '删除角色',
+    content: '删除后该角色的权限配置一并失效，且无法恢复。',
+    okText: '确认删除',
+    cancelText: '取消',
+    okButtonProps: { danger: true },
+    onOk: () => removeRole(role),
+  })
 }
 
 function openCreate() {

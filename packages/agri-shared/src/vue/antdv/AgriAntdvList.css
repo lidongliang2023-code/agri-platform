@@ -51,3 +51,17 @@
   opacity: 1 !important;
 }
 
+.agri-antdv-list-page .agri-vue-filter-grid :is(.ant-input, .ant-input-affix-wrapper, .ant-select, .ant-picker, .ant-input-number) {
+  width: 100% !important;
+  min-width: 0;
+}
+
+.agri-antdv-list-page .agri-vue-status-cell :is(.ant-tag, .soft-tag) {
+  margin-inline-end: 0;
+}
+
+.agri-antdv-list-page .ant-table-cell-fix-right {
+  white-space: nowrap;
+}
+
+

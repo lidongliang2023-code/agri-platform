@@ -4,60 +4,60 @@
       eyebrow="合规服务"
       title="隐私请求处理"
       description="数据导出与账号注销申请 · 法规要求 15 个工作日内答复，本页按提交时间正序排列"
-    >
-      <template #actions>
-        <a-select
-          :value="status"
-          style="width: 150px"
-          :options="statusOptions"
-          @change="(val: string) => { status = val; pageNum = 1 }"
-        />
-      </template>
-    </PageTitle>
+    />
 
     <ErrorBlock v-if="error" :message="error" @retry="load" />
 
-    <section class="surface-card">
-      <a-table
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :scroll="{ x: 1080 }"
-        :columns="columns"
-        :pagination="{
-          current: pageNum,
-          pageSize: 20,
-          total,
-          showTotal: (count: number) => `共 ${count} 件`,
-          onChange: (next: number) => { pageNum = next },
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <template v-if="column.key === 'createdAt'">{{ formatTime(text) }}</template>
-          <a-tag v-else-if="column.key === 'requestType'" class="soft-tag">{{ REQUEST_TYPE_LABEL[text] ?? text }}</a-tag>
-          <template v-else-if="column.key === 'userId'">用户 {{ text }}</template>
-          <div v-else-if="column.key === 'reason'">
-            {{ text || '—' }}
-            <div v-if="record.scope" class="small muted">范围：{{ record.scope }}</div>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      total-unit="件"
+      column-settings-storage-key="uc-ops:privacy-requests"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="load" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>处理状态</label>
+            <a-select
+              v-model:value="status"
+              :options="statusOptions"
+              @change="pageNum = 1"
+            />
           </div>
-          <StatusTag v-else-if="column.key === 'status'" :status="text" />
-          <template v-else-if="column.key === 'handlerName'">{{ text || '—' }}</template>
-          <template v-else-if="column.key === 'action'">
-            <a-button
-              v-if="['pending', 'processing'].includes(record.status)"
-              size="small"
-              type="primary"
-              ghost
-              @click="openHandle(record as PrivacyRecord)"
-            >
-              处理
-            </a-button>
-            <span v-else class="small muted">{{ formatTime(record.handleTime) }}</span>
-          </template>
-        </template>
-      </a-table>
-    </section>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-createdAt="{ value }">{{ formatTime(String(value ?? '')) }}</template>
+      <template #cell-requestType="{ value }">
+        <a-tag class="soft-tag">{{ REQUEST_TYPE_LABEL[String(value ?? '')] ?? value }}</a-tag>
+      </template>
+      <template #cell-userId="{ value }">用户 {{ value }}</template>
+      <template #cell-reason="{ value, record }">
+        <div>
+          {{ value || '—' }}
+          <div v-if="record.scope" class="small muted">范围：{{ record.scope }}</div>
+        </div>
+      </template>
+      <template #cell-status="{ value }">
+        <StatusTag :status="String(value ?? '')" />
+      </template>
+      <template #cell-handlerName="{ value }">{{ value || '—' }}</template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions
+          v-if="['pending', 'processing'].includes(String(record.status ?? ''))"
+          :actions="[{ key: 'handle', label: '处理', onClick: () => openHandle(record as PrivacyRecord) }]"
+        />
+        <span v-else class="small muted">{{ formatTime(String(record.handleTime ?? '')) }}</span>
+      </template>
+    </AgriAntdvListTable>
 
     <section class="surface-card">
       <SectionHeading kicker="边界说明" title="这张表只记录流转，不假装已经执行" />
@@ -99,6 +99,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  AgriVueRowActions,
+  type VueListColumn,
+} from '@agri/shared/vue/antdv'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
 import PageTitle from '../components/PageTitle.vue'
@@ -120,19 +126,20 @@ const statusOptions = [
   { label: '全部', value: '' },
 ]
 
-const columns = [
-  { title: '提交时间', dataIndex: 'createdAt', key: 'createdAt', width: 160 },
-  { title: '类型', dataIndex: 'requestType', key: 'requestType', width: 120 },
-  { title: '申请人', dataIndex: 'userId', key: 'userId', width: 200 },
-  { title: '理由 / 范围', dataIndex: 'reason', key: 'reason' },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 110 },
-  { title: '处理人', dataIndex: 'handlerName', key: 'handlerName', width: 110 },
-  { title: '操作', key: 'action', width: 100 },
+const columns: VueListColumn[] = [
+  { key: 'createdAt', prop: 'createdAt', label: '提交时间', width: 160 },
+  { key: 'requestType', prop: 'requestType', label: '类型', width: 120 },
+  { key: 'userId', prop: 'userId', label: '申请人', width: 180 },
+  { key: 'reason', prop: 'reason', label: '理由 / 范围', minWidth: 220 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+  { key: 'handlerName', prop: 'handlerName', label: '处理人', width: 110 },
+  { key: 'action', label: '操作', width: 100, fixed: 'right' },
 ]
 
 const rows = ref<PrivacyRecord[]>([])
 const total = ref(0)
 const pageNum = ref(1)
+const pageSize = ref(20)
 const status = ref('pending')
 const loading = ref(true)
 const error = ref('')
@@ -143,7 +150,7 @@ const remark = ref('')
 function load() {
   loading.value = true
   error.value = ''
-  ucApi.privacyRequests({ pageNum: pageNum.value, pageSize: 20, status: status.value || undefined })
+  ucApi.privacyRequests({ pageNum: pageNum.value, pageSize: pageSize.value, status: status.value || undefined })
     .then((data) => {
       rows.value = data.records
       total.value = data.total
@@ -152,7 +159,19 @@ function load() {
     .finally(() => { loading.value = false })
 }
 
-watch([pageNum, status], load, { immediate: true })
+watch([pageNum, pageSize, status], load, { immediate: true })
+
+function resetFilters() {
+  const same = status.value === 'pending' && pageNum.value === 1
+  status.value = 'pending'
+  pageNum.value = 1
+  if (same) load()
+}
+
+function handlePageChange(next: number, nextSize: number) {
+  pageSize.value = nextSize
+  pageNum.value = next
+}
 
 function openHandle(row: PrivacyRecord) {
   target.value = row

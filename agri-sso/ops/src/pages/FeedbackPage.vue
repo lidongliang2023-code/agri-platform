@@ -4,66 +4,69 @@
       eyebrow="合规服务"
       title="反馈处理"
       :description="`${total} 条反馈 · 回复后用户端「意见反馈」与消息中心同时可见`"
-    >
-      <template #actions>
-        <a-select
-          :value="status"
-          style="width: 140px"
-          :options="statusOptions"
-          @change="(val: string) => { status = val; pageNum = 1 }"
-        />
-        <a-select
-          :value="type"
-          style="width: 130px"
-          :options="typeOptions"
-          @change="(val: string) => { type = val; pageNum = 1 }"
-        />
-      </template>
-    </PageTitle>
+    />
 
     <ErrorBlock v-if="error" :message="error" @retry="load" />
 
-    <section class="surface-card">
-      <a-table
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :scroll="{ x: 1060 }"
-        :columns="columns"
-        :pagination="{
-          current: pageNum,
-          pageSize: 20,
-          total,
-          showTotal: (count: number) => `共 ${count} 条`,
-          onChange: (next: number) => { pageNum = next },
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <template v-if="column.key === 'createdAt'">{{ formatTime(text) }}</template>
-          <a-tag v-else-if="column.key === 'feedbackType'" class="soft-tag">{{ FEEDBACK_TYPE_LABEL[text] ?? text }}</a-tag>
-          <div v-else-if="column.key === 'title'">
-            <b>{{ text }}</b>
-            <div class="small muted">{{ String(record.content || '').slice(0, 60) }}</div>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      column-settings-storage-key="uc-ops:feedbacks"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="load" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>处理状态</label>
+            <a-select
+              v-model:value="status"
+              :options="statusOptions"
+              @change="pageNum = 1"
+            />
           </div>
-          <template v-else-if="column.key === 'contact'">{{ text || '—' }}</template>
-          <span v-else-if="column.key === 'pagePath'" class="small muted">{{ text || '—' }}</span>
-          <StatusTag v-else-if="column.key === 'status'" :status="text" />
-          <template v-else-if="column.key === 'action'">
-            <a-button
-              v-if="record.status !== 'closed'"
-              size="small"
-              type="primary"
-              ghost
-              @click="openReply(record as FeedbackRecord)"
-            >
-              {{ record.status === 'replied' ? '再回复' : '回复' }}
-            </a-button>
-            <span v-else class="small muted">已关闭</span>
-          </template>
-        </template>
-      </a-table>
-    </section>
+          <div class="agri-vue-filter-field">
+            <label>反馈类型</label>
+            <a-select
+              v-model:value="type"
+              :options="typeOptions"
+              @change="pageNum = 1"
+            />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-createdAt="{ value }">{{ formatTime(String(value ?? '')) }}</template>
+      <template #cell-feedbackType="{ value }">
+        <a-tag class="soft-tag">{{ FEEDBACK_TYPE_LABEL[String(value ?? '')] ?? value }}</a-tag>
+      </template>
+      <template #cell-title="{ value, record }">
+        <div>
+          <b>{{ value }}</b>
+          <div class="small muted">{{ String(record.content || '').slice(0, 60) }}</div>
+        </div>
+      </template>
+      <template #cell-contact="{ value }">{{ value || '—' }}</template>
+      <template #cell-pagePath="{ value }">
+        <span class="small muted">{{ value || '—' }}</span>
+      </template>
+      <template #cell-status="{ value }">
+        <StatusTag :status="String(value ?? '')" />
+      </template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions
+          v-if="record.status !== 'closed'"
+          :actions="[{ key: 'reply', label: record.status === 'replied' ? '再回复' : '回复', onClick: () => openReply(record as FeedbackRecord) }]"
+        />
+        <span v-else class="small muted">已关闭</span>
+      </template>
+    </AgriAntdvListTable>
 
     <a-modal
       :open="Boolean(target)"
@@ -88,6 +91,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  AgriVueRowActions,
+  type VueListColumn,
+} from '@agri/shared/vue/antdv'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
 import PageTitle from '../components/PageTitle.vue'
@@ -114,19 +123,20 @@ const typeOptions = [
   ...Object.entries(FEEDBACK_TYPE_LABEL).map(([value, label]) => ({ value, label })),
 ]
 
-const columns = [
-  { title: '提交时间', dataIndex: 'createdAt', key: 'createdAt', width: 160 },
-  { title: '类型', dataIndex: 'feedbackType', key: 'feedbackType', width: 100 },
-  { title: '标题 / 内容', dataIndex: 'title', key: 'title' },
-  { title: '联系方式', dataIndex: 'contact', key: 'contact', width: 150 },
-  { title: '来源页面', dataIndex: 'pagePath', key: 'pagePath', width: 160 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
-  { title: '操作', key: 'action', width: 100 },
+const columns: VueListColumn[] = [
+  { key: 'createdAt', prop: 'createdAt', label: '提交时间', width: 160 },
+  { key: 'feedbackType', prop: 'feedbackType', label: '类型', width: 100 },
+  { key: 'title', prop: 'title', label: '标题 / 内容', minWidth: 220 },
+  { key: 'contact', prop: 'contact', label: '联系方式', width: 150 },
+  { key: 'pagePath', prop: 'pagePath', label: '来源页面', width: 160 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'action', label: '操作', width: 100, fixed: 'right' },
 ]
 
 const rows = ref<FeedbackRecord[]>([])
 const total = ref(0)
 const pageNum = ref(1)
+const pageSize = ref(20)
 const status = ref('pending')
 const type = ref('')
 const loading = ref(true)
@@ -140,7 +150,7 @@ function load() {
   error.value = ''
   ucApi.feedbacks({
     pageNum: pageNum.value,
-    pageSize: 20,
+    pageSize: pageSize.value,
     status: status.value || undefined,
     type: type.value || undefined,
   })
@@ -152,7 +162,20 @@ function load() {
     .finally(() => { loading.value = false })
 }
 
-watch([pageNum, status, type], load, { immediate: true })
+watch([pageNum, pageSize, status, type], load, { immediate: true })
+
+function resetFilters() {
+  const same = status.value === 'pending' && !type.value && pageNum.value === 1
+  status.value = 'pending'
+  type.value = ''
+  pageNum.value = 1
+  if (same) load()
+}
+
+function handlePageChange(next: number, nextSize: number) {
+  pageSize.value = nextSize
+  pageNum.value = next
+}
 
 function openReply(row: FeedbackRecord) {
   target.value = row

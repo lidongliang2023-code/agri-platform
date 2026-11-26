@@ -5,104 +5,125 @@
       <span class="uc-dense-head-meta">全平台注册账号 {{ total }} 个 · 支持按身份、实名状态、账号状态筛选</span>
     </div>
 
-    <section class="surface-card uc-dense-card">
-      <div class="chip-row uc-dense-filter">
-        <a-input
-          v-model:value="draft"
-          placeholder="搜账号 / 昵称 / 手机号"
-          style="width: 220px"
-          @press-enter="submitSearch"
-        />
-        <a-button type="primary" @click="submitSearch">搜索</a-button>
-        <a-select
-          :value="roleCode"
-          style="width: 160px"
-          :options="[{ label: '全部身份', value: '' }, ...roles]"
-          @change="(val: string) => { roleCode = val; pageNum = 1 }"
-        />
-        <a-select
-          :value="realnameStatus"
-          style="width: 130px"
-          :options="REALNAME_OPTIONS"
-          @change="(val: string) => { realnameStatus = val; pageNum = 1 }"
-        />
-        <a-select
-          :value="status === undefined ? '' : String(status)"
-          style="width: 120px"
-          :options="STATUS_OPTIONS"
-          @change="handleStatusChange"
-        />
-      </div>
+    <ErrorBlock v-if="error" :message="error" @retry="loadUsers" />
 
-      <ErrorBlock v-if="error" :message="error" @retry="loadUsers" />
-      <a-table
-        v-else
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :columns="columns"
-        :data-source="rows"
-        :scroll="{ x: 1120 }"
-        :pagination="{
-          current: pageNum,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          showTotal: (count: number) => `共 ${count} 个账号`,
-          onChange: handlePageChange,
-        }"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'username'">
-            <div class="uc-dense-inline-cell" :title="`${record.nickname || record.username}（${record.username} · ${record.phone || '未绑定手机'}）`">
-              <b class="uc-dense-primary">{{ record.nickname || record.username }}</b>
-              <span class="small muted uc-dense-secondary">{{ record.username }} · {{ record.phone || '未绑定手机' }}</span>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'roles'">
-            <span v-if="!record.roles?.length" class="small muted">无角色</span>
-            <div v-else class="tag-row uc-dense-nowrap" :title="record.roles.map((c: string) => roleText(c)).join('、')">
-              <a-tag class="soft-tag">{{ roleText(record.roles[0]) }}</a-tag>
-              <a-tag v-if="record.roles.length > 1" class="soft-tag">+{{ record.roles.length - 1 }}</a-tag>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'realnameStatus'">
-            <div class="uc-dense-inline-cell" :title="record.realName || undefined">
-              <StatusTag :status="record.realnameStatus" />
-              <span v-if="record.realName" class="small muted uc-dense-secondary">{{ record.realName }}</span>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'orgCount'">
-            <span v-if="record.orgCount === 0" class="small muted">未绑定</span>
-            <div v-else class="uc-dense-inline-cell" :title="`${record.orgCount} 个：${(record.orgNames || []).join('、') || '—'}`">
-              <b class="uc-dense-count">{{ record.orgCount }} 个</b>
-              <span class="small muted uc-dense-secondary">{{ (record.orgNames || []).join('、') || '—' }}</span>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <div class="tag-row uc-dense-nowrap">
-              <StatusTag :status="record.status === 1 ? 'success' : 'frozen'" />
-              <a-tag v-if="record.frozen" class="soft-tag tone-up">{{ record.freezeType ?? '冻结' }}</a-tag>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'createdAt'">
-            {{ formatTime(record.createdAt) }}
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <a-button size="small" type="link" @click="app.navigate('user-detail', record.id)">详情</a-button>
-            <a-button size="small" type="link" :danger="record.status === 1" @click="toggleStatus(record as UserRow)">
-              {{ record.status === 1 ? '停用' : '启用' }}
-            </a-button>
-          </template>
-        </template>
-      </a-table>
-    </section>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      total-unit="个账号"
+      column-settings-storage-key="uc-ops:users"
+      @page-change="handlePageChange"
+      @refresh="loadUsers"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="4" :loading="loading" @search="submitSearch" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="搜账号 / 昵称 / 手机号"
+              @press-enter="submitSearch"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>业务身份</label>
+            <a-select
+              v-model:value="roleCode"
+              :options="[{ label: '全部身份', value: '' }, ...roles]"
+              @change="pageNum = 1"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>实名状态</label>
+            <a-select
+              v-model:value="realnameStatus"
+              :options="REALNAME_OPTIONS"
+              @change="pageNum = 1"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>账号状态</label>
+            <a-select
+              :value="status === undefined ? '' : String(status)"
+              :options="STATUS_OPTIONS"
+              @change="handleStatusChange"
+            />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-username="{ record }">
+        <div
+          class="uc-dense-inline-cell"
+          :title="`${record.nickname || record.username}（${record.username} · ${record.phone || '未绑定手机'}）`"
+        >
+          <b class="uc-dense-primary">{{ record.nickname || record.username }}</b>
+          <span class="small muted uc-dense-secondary">{{ record.username }} · {{ record.phone || '未绑定手机' }}</span>
+        </div>
+      </template>
+      <template #cell-roles="{ record }">
+        <span v-if="!(record.roles as string[] | undefined)?.length" class="small muted">无角色</span>
+        <div
+          v-else
+          class="tag-row uc-dense-nowrap"
+          :title="(record.roles as string[]).map((c: string) => roleText(c)).join('、')"
+        >
+          <a-tag class="soft-tag">{{ roleText((record.roles as string[])[0]) }}</a-tag>
+          <a-tag v-if="(record.roles as string[]).length > 1" class="soft-tag">
+            +{{ (record.roles as string[]).length - 1 }}
+          </a-tag>
+        </div>
+      </template>
+      <template #cell-realnameStatus="{ record }">
+        <div class="uc-dense-inline-cell" :title="String(record.realName || '') || undefined">
+          <StatusTag :status="String(record.realnameStatus ?? '')" />
+          <span v-if="record.realName" class="small muted uc-dense-secondary">{{ record.realName }}</span>
+        </div>
+      </template>
+      <template #cell-orgCount="{ record }">
+        <span v-if="record.orgCount === 0" class="small muted">未绑定</span>
+        <div
+          v-else
+          class="uc-dense-inline-cell"
+          :title="`${record.orgCount} 个：${((record.orgNames as string[]) || []).join('、') || '—'}`"
+        >
+          <b class="uc-dense-count">{{ record.orgCount }} 个</b>
+          <span class="small muted uc-dense-secondary">{{ ((record.orgNames as string[]) || []).join('、') || '—' }}</span>
+        </div>
+      </template>
+      <template #cell-status="{ record }">
+        <div class="tag-row uc-dense-nowrap">
+          <StatusTag :status="record.status === 1 ? 'success' : 'frozen'" />
+          <a-tag v-if="record.frozen" class="soft-tag tone-up">{{ record.freezeType ?? '冻结' }}</a-tag>
+        </div>
+      </template>
+      <template #cell-createdAt="{ value }">
+        {{ formatTime(String(value ?? '')) }}
+      </template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions :actions="rowActions(record as UserRow)" />
+      </template>
+    </AgriAntdvListTable>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  AgriVueRowActions,
+  type VueListColumn,
+  type VueRowActionItem,
+} from '@agri/shared/vue/antdv'
 import { useAppStore } from '../app-context'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
@@ -123,14 +144,14 @@ const STATUS_OPTIONS = [
   { label: '停用', value: '0' },
 ]
 
-const columns = [
-  { title: '账号', dataIndex: 'username', key: 'username', width: 260, ellipsis: true },
-  { title: '身份', dataIndex: 'roles', key: 'roles', width: 180, ellipsis: true },
-  { title: '实名', dataIndex: 'realnameStatus', key: 'realnameStatus', width: 145, ellipsis: true },
-  { title: '所属组织', dataIndex: 'orgCount', key: 'orgCount', width: 200, ellipsis: true },
-  { title: '账号状态', dataIndex: 'status', key: 'status', width: 130 },
-  { title: '注册时间', dataIndex: 'createdAt', key: 'createdAt', width: 156, ellipsis: true },
-  { title: '操作', key: 'action', width: 140, fixed: 'right' as const },
+const columns: VueListColumn[] = [
+  { key: 'username', prop: 'username', label: '账号', width: 260, ellipsis: true },
+  { key: 'roles', prop: 'roles', label: '身份', width: 180, ellipsis: true },
+  { key: 'realnameStatus', prop: 'realnameStatus', label: '实名', width: 145, ellipsis: true },
+  { key: 'orgCount', prop: 'orgCount', label: '所属组织', width: 200, ellipsis: true },
+  { key: 'status', prop: 'status', label: '账号状态', width: 130 },
+  { key: 'createdAt', prop: 'createdAt', label: '注册时间', width: 160, ellipsis: true },
+  { key: 'action', label: '操作', width: 130, fixed: 'right' },
 ]
 
 const app = useAppStore()
@@ -180,18 +201,45 @@ function loadUsers() {
 watch([pageNum, pageSize, keyword, roleCode, realnameStatus, status], loadUsers, { immediate: true })
 
 function submitSearch() {
-  keyword.value = draft.value.trim()
+  const next = draft.value.trim()
+  const same = keyword.value === next && pageNum.value === 1
+  keyword.value = next
   pageNum.value = 1
+  if (same) loadUsers()
 }
 
-function handleStatusChange(val: string) {
-  status.value = val === '' ? undefined : Number(val)
+function resetFilters() {
+  const same = !keyword.value && !draft.value && !roleCode.value && !realnameStatus.value && status.value === undefined && pageNum.value === 1
+  draft.value = ''
+  keyword.value = ''
+  roleCode.value = ''
+  realnameStatus.value = ''
+  status.value = undefined
+  pageNum.value = 1
+  if (same) loadUsers()
+}
+
+function handleStatusChange(val: unknown) {
+  const str = String(val ?? '')
+  status.value = str === '' ? undefined : Number(str)
   pageNum.value = 1
 }
 
 function handlePageChange(nextPage: number, nextSize: number) {
-  pageNum.value = nextPage
   pageSize.value = nextSize
+  pageNum.value = nextPage
+}
+
+function rowActions(row: UserRow): VueRowActionItem[] {
+  return [
+    { key: 'detail', label: '详情', onClick: () => app.navigate('user-detail', row.id) },
+    {
+      key: 'toggle',
+      label: row.status === 1 ? '停用' : '启用',
+      danger: row.status === 1,
+      onClick: () => toggleStatus(row),
+    },
+  ]
 }
 
 function toggleStatus(row: UserRow) {

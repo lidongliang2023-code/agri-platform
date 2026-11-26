@@ -4,46 +4,82 @@
       eyebrow="消息中心"
       title="消息模板"
       :description="`${rows.length} 个模板 · 覆盖 ${sceneCount} 类场景 · 支持 {变量} 占位符`"
-    >
-      <template #actions>
-        <a-select v-model:value="scene" style="width: 160px" :options="sceneFilterOptions" />
-        <a-button type="primary" @click="openCreate">＋ 新建模板</a-button>
-      </template>
-    </PageTitle>
+    />
 
     <ErrorBlock v-if="error" :message="error" @retry="load" />
 
-    <section class="surface-card">
-      <a-table
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :scroll="{ x: 1100 }"
-        :columns="columns"
-        :pagination="false"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <div v-if="column.key === 'code'">
-            <b>{{ record.title }}</b>
-            <div class="small muted">{{ text }}</div>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="filteredRows"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      :page="pageNum"
+      :page-size="pageSize"
+      total-unit="个模板"
+      column-settings-storage-key="uc-ops:message-templates"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="submitSearch" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="搜模板编码 / 标题 / 内容"
+              @press-enter="submitSearch"
+            />
           </div>
-          <a-tag v-else-if="column.key === 'scene'" class="soft-tag">{{ SCENE_LABEL[text] ?? text }}</a-tag>
-          <span v-else-if="column.key === 'channels'" class="small">{{ channelText(text) }}</span>
-          <span v-else-if="column.key === 'content'" class="small" style="color: #53665a">
-            {{ String(text || '').slice(0, 60) }}{{ String(text || '').length > 60 ? '…' : '' }}
-          </span>
-          <div v-else-if="column.key === 'variables'" class="tag-row">
-            <a-tag v-for="v in splitVars(text)" :key="v" class="soft-tag tone-purple">{{ '{' + v + '}' }}</a-tag>
-            <span v-if="!text" class="small muted">无</span>
+          <div class="agri-vue-filter-field">
+            <label>业务场景</label>
+            <a-select
+              v-model:value="scene"
+              :options="sceneFilterOptions"
+              @change="pageNum = 1"
+            />
           </div>
-          <StatusTag v-else-if="column.key === 'status'" :status="text" />
-          <a-button v-else-if="column.key === 'action'" size="small" type="link" @click="openEdit(record as MessageTemplate)">
-            编辑
-          </a-button>
-        </template>
-      </a-table>
-    </section>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <a-button type="primary" @click="openCreate">＋ 新建模板</a-button>
+      </template>
+
+      <template #cell-code="{ value, record }">
+        <div>
+          <b>{{ record.title }}</b>
+          <div class="small muted">{{ value }}</div>
+        </div>
+      </template>
+      <template #cell-scene="{ value }">
+        <a-tag class="soft-tag">{{ SCENE_LABEL[String(value ?? '')] ?? value }}</a-tag>
+      </template>
+      <template #cell-channels="{ value }">
+        <span class="small">{{ channelText(String(value ?? '')) }}</span>
+      </template>
+      <template #cell-content="{ value }">
+        <span class="small" style="color: #53665a">
+          {{ String(value || '').slice(0, 60) }}{{ String(value || '').length > 60 ? '…' : '' }}
+        </span>
+      </template>
+      <template #cell-variables="{ value }">
+        <div class="tag-row">
+          <a-tag v-for="v in splitVars(String(value ?? ''))" :key="v" class="soft-tag tone-purple">{{ '{' + v + '}' }}</a-tag>
+          <span v-if="!value" class="small muted">无</span>
+        </div>
+      </template>
+      <template #cell-status="{ value }">
+        <StatusTag :status="String(value ?? '')" />
+      </template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions
+          :actions="[{ key: 'edit', label: '编辑', onClick: () => openEdit(record as MessageTemplate) }]"
+        />
+      </template>
+    </AgriAntdvListTable>
 
     <a-modal
       v-model:open="creating"
@@ -83,6 +119,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  AgriVueRowActions,
+  type VueListColumn,
+} from '@agri/shared/vue/antdv'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
 import PageTitle from '../components/PageTitle.vue'
@@ -93,18 +135,22 @@ import type { MessageTemplate } from '../types'
 const sceneOptions = Object.entries(SCENE_LABEL).map(([value, label]) => ({ value, label }))
 const sceneFilterOptions = [{ label: '全部场景', value: '' }, ...sceneOptions]
 
-const columns = [
-  { title: '模板', dataIndex: 'code', key: 'code', width: 210 },
-  { title: '场景', dataIndex: 'scene', key: 'scene', width: 110 },
-  { title: '渠道', dataIndex: 'channels', key: 'channels', width: 190 },
-  { title: '内容预览', dataIndex: 'content', key: 'content' },
-  { title: '变量', dataIndex: 'variables', key: 'variables', width: 200 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 90 },
-  { title: '操作', key: 'action', width: 90 },
+const columns: VueListColumn[] = [
+  { key: 'code', prop: 'code', label: '模板', width: 210 },
+  { key: 'scene', prop: 'scene', label: '场景', width: 110 },
+  { key: 'channels', prop: 'channels', label: '渠道', width: 190 },
+  { key: 'content', prop: 'content', label: '内容预览', minWidth: 220 },
+  { key: 'variables', prop: 'variables', label: '变量', width: 200 },
+  { key: 'status', prop: 'status', label: '状态', width: 90 },
+  { key: 'action', label: '操作', width: 90, fixed: 'right' },
 ]
 
 const rows = ref<MessageTemplate[]>([])
 const scene = ref('')
+const draft = ref('')
+const keyword = ref('')
+const pageNum = ref(1)
+const pageSize = ref(20)
 const loading = ref(true)
 const error = ref('')
 const editing = ref<MessageTemplate | null>(null)
@@ -124,6 +170,14 @@ const formState = reactive({
 
 const sceneCount = computed(() => new Set(rows.value.map((r) => r.scene)).size)
 
+const filteredRows = computed(() => {
+  const kw = keyword.value.toLowerCase()
+  if (!kw) return rows.value
+  return rows.value.filter((item) =>
+    `${item.code} ${item.title} ${item.content ?? ''}`.toLowerCase().includes(kw),
+  )
+})
+
 function splitVars(val?: string | null): string[] {
   return (val || '').split(',').map((s) => s.trim()).filter(Boolean)
 }
@@ -138,6 +192,25 @@ function load() {
 }
 
 watch(scene, load, { immediate: true })
+
+function submitSearch() {
+  keyword.value = draft.value.trim()
+  pageNum.value = 1
+}
+
+function resetFilters() {
+  const same = !scene.value && !draft.value && !keyword.value && pageNum.value === 1
+  draft.value = ''
+  keyword.value = ''
+  scene.value = ''
+  pageNum.value = 1
+  if (same) load()
+}
+
+function handlePageChange(next: number, nextSize: number) {
+  pageSize.value = nextSize
+  pageNum.value = next
+}
 
 function openCreate() {
   editing.value = null

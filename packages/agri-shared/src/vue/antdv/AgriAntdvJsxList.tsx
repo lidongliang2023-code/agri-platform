@@ -33,6 +33,7 @@ export interface JsxListColumn {
   className?: string
   sorter?: boolean | ((a: any, b: any) => number) | { compare?: (a: any, b: any) => number; multiple?: number }
   render?: (value: any, record: any, index: number) => VNodeChild
+  customRender?: (args: { text: any; value: any; record: any; index: number; column: any }) => VNodeChild
 }
 export interface JsxListSelection {
   selectedRowKeys?: (string | number)[]
@@ -103,7 +104,12 @@ export const AgriAntdvJsxList = defineComponent({
       for (const [name, slot] of Object.entries(slots)) if (slot) cellSlots[name] = slot
       props.columns.forEach((column, index) => {
         const key = normalized.value[index].key
-        if (column.render) cellSlots[`cell-${key}`] = ({ value, record, index: rowIndex }) => column.render!(value, record, rowIndex)
+        if (column.render) {
+          cellSlots[`cell-${key}`] = ({ value, record, index: rowIndex }) => column.render!(value, record, rowIndex)
+        } else if (column.customRender) {
+          cellSlots[`cell-${key}`] = ({ value, record, index: rowIndex, column: antCol }) =>
+            column.customRender!({ text: value, value, record, index: rowIndex, column: antCol })
+        }
         if (column.title != null && typeof column.title !== 'string' && typeof column.title !== 'number') {
           cellSlots[`header-${key}`] = () => (typeof column.title === 'function' ? column.title({}) : column.title)
         }

@@ -4,61 +4,83 @@
       eyebrow="第三方授权"
       title="第三方应用"
       :description="`已登记 ${total} 个应用 · 当前页待审 ${pendingCount} 个 · 审核通过后用户才能在其授权页看到`"
-    >
-      <template #actions>
-        <a-select
-          :value="status"
-          style="width: 150px"
-          :options="statusOptions"
-          @change="(val: string) => { status = val; pageNum = 1 }"
-        />
-        <a-button type="primary" @click="createOpen = true">＋ 登记应用</a-button>
-      </template>
-    </PageTitle>
+    />
 
     <ErrorBlock v-if="error" :message="error" @retry="load" />
 
-    <section class="surface-card">
-      <a-table
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :scroll="{ x: 1240 }"
-        :columns="columns"
-        :pagination="{
-          current: pageNum,
-          pageSize: 20,
-          total,
-          showTotal: (count: number) => `共 ${count} 个应用`,
-          onChange: (next: number) => { pageNum = next },
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <div v-if="column.key === 'appName'">
-            <b>{{ text }}</b>
-            <div class="small muted">{{ record.appKey }}</div>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      total-unit="个应用"
+      column-settings-storage-key="uc-ops:auth-apps"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="submitSearch" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="搜应用名称 / 标识 / 申请方"
+              @press-enter="submitSearch"
+            />
           </div>
-          <template v-else-if="column.key === 'appType'">{{ APP_TYPE_LABEL[text] ?? text }}</template>
-          <template v-else-if="column.key === 'applicant'">{{ text || '—' }}</template>
-          <div v-else-if="column.key === 'scopes'" class="tag-row">
-            <a-tag v-for="scope in splitScopes(text)" :key="scope" class="soft-tag">{{ scope }}</a-tag>
-            <span v-if="!text" class="small muted">—</span>
+          <div class="agri-vue-filter-field">
+            <label>上架状态</label>
+            <a-select
+              v-model:value="status"
+              :options="statusOptions"
+              @change="pageNum = 1"
+            />
           </div>
-          <div v-else-if="column.key === 'callCount'">
-            {{ text?.toLocaleString() ?? 0 }}
-            <div v-if="record.lastCallAt" class="small muted">{{ formatTime(record.lastCallAt) }}</div>
-          </div>
-          <StatusTag v-else-if="column.key === 'status'" :status="text" />
-          <template v-else-if="column.key === 'action'">
-            <a-button v-if="record.status === 'pending'" size="small" type="primary" ghost @click="reviewTarget = record as ThirdPartyApp">
-              审核
-            </a-button>
-            <span v-else class="small muted">{{ record.reviewerName || '—' }}</span>
-          </template>
-        </template>
-      </a-table>
-    </section>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <a-button type="primary" @click="createOpen = true">＋ 登记应用</a-button>
+      </template>
+
+      <template #cell-appName="{ value, record }">
+        <div>
+          <b>{{ value }}</b>
+          <div class="small muted">{{ record.appKey }}</div>
+        </div>
+      </template>
+      <template #cell-appType="{ value }">
+        {{ APP_TYPE_LABEL[String(value ?? '')] ?? value }}
+      </template>
+      <template #cell-applicant="{ value }">{{ value || '—' }}</template>
+      <template #cell-scopes="{ value }">
+        <div class="tag-row">
+          <a-tag v-for="scope in splitScopes(String(value ?? ''))" :key="scope" class="soft-tag">{{ scope }}</a-tag>
+          <span v-if="!value" class="small muted">—</span>
+        </div>
+      </template>
+      <template #cell-callCount="{ value, record }">
+        <div>
+          {{ Number(value ?? 0).toLocaleString() }}
+          <div v-if="record.lastCallAt" class="small muted">{{ formatTime(String(record.lastCallAt)) }}</div>
+        </div>
+      </template>
+      <template #cell-status="{ value }">
+        <StatusTag :status="String(value ?? '')" />
+      </template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions
+          v-if="record.status === 'pending'"
+          :actions="[{ key: 'review', label: '审核', onClick: () => { reviewTarget = record as ThirdPartyApp } }]"
+        />
+        <span v-else class="small muted">{{ record.reviewerName || '—' }}</span>
+      </template>
+    </AgriAntdvListTable>
 
     <a-modal
       v-model:open="createOpen"
@@ -116,6 +138,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  AgriVueRowActions,
+  type VueListColumn,
+} from '@agri/shared/vue/antdv'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
 import PageTitle from '../components/PageTitle.vue'
@@ -138,19 +166,22 @@ const statusOptions = [
   { label: '已下架', value: 'offline' },
 ]
 
-const columns = [
-  { title: '应用', dataIndex: 'appName', key: 'appName' },
-  { title: '类型', dataIndex: 'appType', key: 'appType', width: 110 },
-  { title: '申请方', dataIndex: 'applicant', key: 'applicant', width: 160 },
-  { title: '授权范围', dataIndex: 'scopes', key: 'scopes' },
-  { title: '调用量', dataIndex: 'callCount', key: 'callCount', width: 120 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
-  { title: '操作', key: 'action', width: 110 },
+const columns: VueListColumn[] = [
+  { key: 'appName', prop: 'appName', label: '应用', minWidth: 200 },
+  { key: 'appType', prop: 'appType', label: '类型', width: 110 },
+  { key: 'applicant', prop: 'applicant', label: '申请方', width: 160 },
+  { key: 'scopes', prop: 'scopes', label: '授权范围', minWidth: 200 },
+  { key: 'callCount', prop: 'callCount', label: '调用量', width: 130 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'action', label: '操作', width: 110, fixed: 'right' },
 ]
 
 const rows = ref<ThirdPartyApp[]>([])
 const total = ref(0)
 const pageNum = ref(1)
+const pageSize = ref(20)
+const draft = ref('')
+const keyword = ref('')
 const status = ref('')
 const loading = ref(true)
 const error = ref('')
@@ -176,7 +207,12 @@ function splitScopes(val?: string | null): string[] {
 function load() {
   loading.value = true
   error.value = ''
-  ucApi.authApps({ pageNum: pageNum.value, pageSize: 20, status: status.value || undefined })
+  ucApi.authApps({
+    pageNum: pageNum.value,
+    pageSize: pageSize.value,
+    keyword: keyword.value || undefined,
+    status: status.value || undefined,
+  })
     .then((data) => {
       rows.value = data.records
       total.value = data.total
@@ -185,9 +221,31 @@ function load() {
     .finally(() => { loading.value = false })
 }
 
-watch([pageNum, status], load, { immediate: true })
+watch([pageNum, pageSize, keyword, status], load, { immediate: true })
 
 const pendingCount = computed(() => rows.value.filter((row) => row.status === 'pending').length)
+
+function submitSearch() {
+  const next = draft.value.trim()
+  const same = keyword.value === next && pageNum.value === 1
+  keyword.value = next
+  pageNum.value = 1
+  if (same) load()
+}
+
+function resetFilters() {
+  const same = !draft.value && !keyword.value && !status.value && pageNum.value === 1
+  draft.value = ''
+  keyword.value = ''
+  status.value = ''
+  pageNum.value = 1
+  if (same) load()
+}
+
+function handlePageChange(next: number, nextSize: number) {
+  pageSize.value = nextSize
+  pageNum.value = next
+}
 
 function create() {
   formRef.value?.validate()

@@ -65,52 +65,54 @@
       </section>
     </div>
 
-    <section class="surface-card">
-      <SectionHeading
-        kicker="推送任务"
-        :title="`历史记录（${total}）`"
-        :action="polling ? '投递中，自动刷新' : undefined"
-        @action="load()"
-      />
-      <a-table
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :scroll="{ x: 1080 }"
-        :columns="columns"
-        :pagination="{
-          current: pageNum,
-          pageSize: 20,
-          total,
-          showTotal: (count: number) => `共 ${count} 次`,
-          onChange: (next: number) => { pageNum = next },
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <div v-if="column.key === 'title'">
-            <b>{{ text }}</b>
-            <div v-if="record.templateCode" class="small muted">{{ record.templateCode }}</div>
-            <div v-if="record.failReason" class="small" style="color: var(--red-700)">{{ record.failReason }}</div>
-          </div>
-          <template v-else-if="column.key === 'audience'">{{ AUDIENCE_LABEL[text] ?? text }}</template>
-          <span v-else-if="column.key === 'channels'" class="small">{{ channelText(text) }}</span>
-          <div v-else-if="column.key === 'reachCount'">
-            <b>{{ text }}</b>
-            <span class="small muted"> / {{ record.targetCount || '—' }}</span>
-          </div>
-          <StatusTag v-else-if="column.key === 'status'" :status="text" />
-          <template v-else-if="column.key === 'sendTime'">{{ formatTime(text) }}</template>
-          <template v-else-if="column.key === 'operatorName'">{{ text || '—' }}</template>
-        </template>
-      </a-table>
-    </section>
+    <AgriAntdvListTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      total-unit="次"
+      column-settings-storage-key="uc-ops:message-pushes"
+      @page-change="handlePageChange"
+      @refresh="load()"
+    >
+      <template #toolbar-left>
+        <span style="font-weight: 600">历史推送记录（{{ total }}）</span>
+        <a-tag v-if="polling" class="soft-tag tone-green">投递中，自动刷新</a-tag>
+      </template>
+
+      <template #cell-title="{ value, record }">
+        <div>
+          <b>{{ value }}</b>
+          <div v-if="record.templateCode" class="small muted">{{ record.templateCode }}</div>
+          <div v-if="record.failReason" class="small" style="color: var(--red-700)">{{ record.failReason }}</div>
+        </div>
+      </template>
+      <template #cell-audience="{ value }">{{ AUDIENCE_LABEL[String(value ?? '')] ?? value }}</template>
+      <template #cell-channels="{ value }">
+        <span class="small">{{ channelText(String(value ?? '')) }}</span>
+      </template>
+      <template #cell-reachCount="{ value, record }">
+        <div>
+          <b>{{ value }}</b>
+          <span class="small muted"> / {{ record.targetCount || '—' }}</span>
+        </div>
+      </template>
+      <template #cell-status="{ value }">
+        <StatusTag :status="String(value ?? '')" />
+      </template>
+      <template #cell-sendTime="{ value }">{{ formatTime(String(value ?? '')) }}</template>
+      <template #cell-operatorName="{ value }">{{ value || '—' }}</template>
+    </AgriAntdvListTable>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { message, type FormInstance } from 'ant-design-vue'
+import { AgriAntdvListTable, type VueListColumn } from '@agri/shared/vue/antdv'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
 import PageTitle from '../components/PageTitle.vue'
@@ -128,19 +130,20 @@ const CHANNEL_OPTIONS = [
 
 const AUDIENCE_OPTIONS = Object.entries(AUDIENCE_LABEL).map(([value, label]) => ({ value, label }))
 
-const columns = [
-  { title: '标题', dataIndex: 'title', key: 'title' },
-  { title: '人群', dataIndex: 'audience', key: 'audience', width: 130 },
-  { title: '渠道', dataIndex: 'channels', key: 'channels', width: 190 },
-  { title: '触达 / 目标', dataIndex: 'reachCount', key: 'reachCount', width: 130 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 100 },
-  { title: '发送时间', dataIndex: 'sendTime', key: 'sendTime', width: 150 },
-  { title: '操作人', dataIndex: 'operatorName', key: 'operatorName', width: 110 },
+const columns: VueListColumn[] = [
+  { key: 'title', prop: 'title', label: '标题', minWidth: 200 },
+  { key: 'audience', prop: 'audience', label: '人群', width: 130 },
+  { key: 'channels', prop: 'channels', label: '渠道', width: 190 },
+  { key: 'reachCount', prop: 'reachCount', label: '触达 / 目标', width: 130 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'sendTime', prop: 'sendTime', label: '发送时间', width: 160 },
+  { key: 'operatorName', prop: 'operatorName', label: '操作人', width: 110 },
 ]
 
 const rows = ref<PushTask[]>([])
 const total = ref(0)
 const pageNum = ref(1)
+const pageSize = ref(20)
 const templates = ref<MessageTemplate[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -172,7 +175,7 @@ function load(silent = false) {
     loading.value = true
     error.value = ''
   }
-  ucApi.pushes({ pageNum: pageNum.value, pageSize: 20 })
+  ucApi.pushes({ pageNum: pageNum.value, pageSize: pageSize.value })
     .then((data) => {
       rows.value = data.records
       total.value = data.total
@@ -186,7 +189,7 @@ function load(silent = false) {
     })
 }
 
-watch(pageNum, () => load(), { immediate: true })
+watch([pageNum, pageSize], () => load(), { immediate: true })
 
 watch(polling, (isPolling) => {
   if (pollTimer) {
@@ -217,9 +220,14 @@ watch(() => formState.audience, (aud) => {
     .finally(() => { previewLoading.value = false })
 }, { immediate: true })
 
-function handleTemplateChange(code?: string) {
+function handlePageChange(next: number, nextSize: number) {
+  pageSize.value = nextSize
+  pageNum.value = next
+}
+
+function handleTemplateChange(code?: unknown) {
   if (!code) return
-  const hit = templates.value.find((item) => item.code === code)
+  const hit = templates.value.find((item) => item.code === String(code))
   if (!hit) return
   formState.title = hit.title
   formState.content = hit.content ?? ''

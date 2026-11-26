@@ -8,50 +8,58 @@
 
     <ErrorBlock v-if="error" :message="error" @retry="load" />
 
-    <section class="surface-card">
-      <div class="chip-row" style="margin-bottom: 14px">
-        <a-input
-          v-model:value="draft"
-          placeholder="搜动作名 / 对象 / 说明"
-          style="width: 260px"
-          @press-enter="submitSearch"
-        />
-        <a-button type="primary" @click="submitSearch">搜索</a-button>
-        <a-select
-          :value="actionPrefix"
-          style="width: 240px"
-          :options="ACTION_PREFIX_OPTIONS"
-          @change="(val: string) => { actionPrefix = val; pageNum = 1 }"
-        />
-      </div>
-      <a-table
-        row-key="id"
-        size="middle"
-        :loading="loading"
-        :data-source="rows"
-        :scroll="{ x: 1120 }"
-        :columns="columns"
-        :pagination="{
-          current: pageNum,
-          pageSize: 20,
-          total,
-          showTotal: (count: number) => `共 ${count} 条`,
-          onChange: (next: number) => { pageNum = next },
-        }"
-      >
-        <template #bodyCell="{ column, record, text }">
-          <template v-if="column.key === 'createdAt'">{{ formatTime(text) }}</template>
-          <b v-else-if="column.key === 'operator'">{{ text }}</b>
-          <div v-else-if="column.key === 'actionLabel'">
-            {{ text || '—' }}
-            <div class="small muted">{{ record.action }}</div>
+    <AgriAntdvListTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="pageNum"
+      :page-size="pageSize"
+      :total="total"
+      column-settings-storage-key="uc-ops:audit-logs"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="submitSearch" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="搜动作名 / 对象 / 说明"
+              @press-enter="submitSearch"
+            />
           </div>
-          <template v-else-if="column.key === 'target' || column.key === 'ip'">{{ text || '—' }}</template>
-          <span v-else-if="column.key === 'detail'" class="small">{{ text || '—' }}</span>
-          <StatusTag v-else-if="column.key === 'result'" :status="text" />
-        </template>
-      </a-table>
-    </section>
+          <div class="agri-vue-filter-field">
+            <label>动作类型</label>
+            <a-select
+              v-model:value="actionPrefix"
+              :options="ACTION_PREFIX_OPTIONS"
+              @change="pageNum = 1"
+            />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-createdAt="{ value }">{{ formatTime(String(value ?? '')) }}</template>
+      <template #cell-operator="{ value }"><b>{{ value }}</b></template>
+      <template #cell-actionLabel="{ value, record }">
+        <div>
+          {{ value || '—' }}
+          <div class="small muted">{{ record.action }}</div>
+        </div>
+      </template>
+      <template #cell-target="{ value }">{{ value || '—' }}</template>
+      <template #cell-detail="{ value }">
+        <span class="small">{{ value || '—' }}</span>
+      </template>
+      <template #cell-ip="{ value }">{{ value || '—' }}</template>
+      <template #cell-result="{ value }">
+        <StatusTag :status="String(value ?? '')" />
+      </template>
+    </AgriAntdvListTable>
 
     <section class="surface-card">
       <SectionHeading kicker="口径" title="和用户端「操作日志」是同一张表" />
@@ -66,6 +74,11 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import {
+  AgriAntdvListTable,
+  AgriVueFilterBar,
+  type VueListColumn,
+} from '@agri/shared/vue/antdv'
 import { ucApi } from '../api'
 import ErrorBlock from '../components/ErrorBlock.vue'
 import PageTitle from '../components/PageTitle.vue'
@@ -84,19 +97,20 @@ const ACTION_PREFIX_OPTIONS = [
   { label: '用户端操作（account.）', value: 'account.' },
 ]
 
-const columns = [
-  { title: '时间', dataIndex: 'createdAt', key: 'createdAt', width: 160 },
-  { title: '操作人', dataIndex: 'operator', key: 'operator', width: 130 },
-  { title: '动作', dataIndex: 'actionLabel', key: 'actionLabel' },
-  { title: '对象', dataIndex: 'target', key: 'target', width: 200 },
-  { title: '说明', dataIndex: 'detail', key: 'detail' },
-  { title: 'IP', dataIndex: 'ip', key: 'ip', width: 130 },
-  { title: '结果', dataIndex: 'result', key: 'result', width: 90 },
+const columns: VueListColumn[] = [
+  { key: 'createdAt', prop: 'createdAt', label: '时间', width: 160 },
+  { key: 'operator', prop: 'operator', label: '操作人', width: 130 },
+  { key: 'actionLabel', prop: 'actionLabel', label: '动作', minWidth: 180 },
+  { key: 'target', prop: 'target', label: '对象', width: 200 },
+  { key: 'detail', prop: 'detail', label: '说明', minWidth: 200 },
+  { key: 'ip', prop: 'ip', label: 'IP', width: 130 },
+  { key: 'result', prop: 'result', label: '结果', width: 90 },
 ]
 
 const rows = ref<AuditLog[]>([])
 const total = ref(0)
 const pageNum = ref(1)
+const pageSize = ref(20)
 const keyword = ref('')
 const draft = ref('')
 const actionPrefix = ref('')
@@ -108,7 +122,7 @@ function load() {
   error.value = ''
   ucApi.auditLogs({
     pageNum: pageNum.value,
-    pageSize: 20,
+    pageSize: pageSize.value,
     keyword: keyword.value || undefined,
     actionPrefix: actionPrefix.value || undefined,
   })
@@ -120,10 +134,27 @@ function load() {
     .finally(() => { loading.value = false })
 }
 
-watch([pageNum, keyword, actionPrefix], load, { immediate: true })
+watch([pageNum, pageSize, keyword, actionPrefix], load, { immediate: true })
 
 function submitSearch() {
-  keyword.value = draft.value.trim()
+  const next = draft.value.trim()
+  const same = keyword.value === next && pageNum.value === 1
+  keyword.value = next
   pageNum.value = 1
+  if (same) load()
+}
+
+function resetFilters() {
+  const same = !draft.value && !keyword.value && !actionPrefix.value && pageNum.value === 1
+  draft.value = ''
+  keyword.value = ''
+  actionPrefix.value = ''
+  pageNum.value = 1
+  if (same) load()
+}
+
+function handlePageChange(next: number, nextSize: number) {
+  pageSize.value = nextSize
+  pageNum.value = next
 }
 </script>
