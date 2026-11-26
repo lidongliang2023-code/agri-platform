@@ -36,8 +36,8 @@ export default defineComponent({
     scroll: agriAntdvJsxListProps.scroll,
     expandable: agriAntdvJsxListProps.expandable,
     onReload: Function as PropType<() => void>,
-    columnSettingsStorageKey: [String, Boolean] as PropType<string | false>,
-    columnWidthStorageKey: [String, Boolean] as PropType<string | false>
+    columnSettingsStorageKey: { type: [String, Boolean] as PropType<string | false>, default: undefined },
+    columnWidthStorageKey: { type: [String, Boolean] as PropType<string | false>, default: undefined }
   },
   setup(props, {
     attrs,
