@@ -1,0 +1,25 @@
+{
+  "name": "agri-ai-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AI 运营台（Vue 3 + Vite）",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:smoke": "node scripts/smoke.mjs"
+  },
+  "dependencies": {
+    "vue": "3.5.13",
+    "@agri/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.2.4",
+    "vite": "^5.0.11"
+  },
+  "engines": {
+    "node": ">=18",
+    "pnpm": ">=8"
+  }
+}

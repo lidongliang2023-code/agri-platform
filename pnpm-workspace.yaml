@@ -8,6 +8,7 @@
 # 为什么用 pnpm：V2.0 第 4.3 节指定 pnpm 8（本机实测 pnpm 11.25.0，版本偏新但同族可用；
 #   若要严格对齐 8.x，用 corepack 固定版本即可）。
 packages:
+  - 'agri-ai/frontend'
   - 'packages/*'
   - 'agri-production/frontend'
   - 'agri-trade/frontend'

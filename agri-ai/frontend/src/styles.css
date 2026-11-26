@@ -15,3 +15,124 @@
 .statistics-drawer{width:1100px;max-width:96vw}.statistics-filters select{min-width:130px;max-width:260px}.statistics-summary{font-size:12px;line-height:2;color:#6b8273}.statistics-trend{padding:16px 22px;max-height:310px;overflow:auto}.trend-row{display:flex;align-items:center;gap:12px;margin:10px 0;font-size:10px;color:#80998a}.trend-row>span{width:100px;flex-shrink:0}.trend-row small{width:110px;text-align:right;flex-shrink:0}.trend-bar{display:flex;flex:1;height:14px;background:#f0f4f2;border-radius:3px;overflow:hidden}.trend-bar i{height:100%;display:block}.trend-primary{background:#729cb5}.trend-rescued{background:#23835c}.trend-failed{background:#c97c72}@media(max-width:600px){.statistics-drawer .stats{grid-template-columns:repeat(2,minmax(0,1fr))}.statistics-filters select{flex:1;min-width:0;max-width:100%}.statistics-drawer .drawer-body{padding:16px}.trend-row{gap:5px}.trend-row>span{width:85px}.trend-row small{width:90px}}
 
 .alert-notification-button{white-space:nowrap;border:1px solid #dce6df;background:#fff;color:#12694b;border-radius:6px;padding:6px 9px;font-size:11px}.alert-notification-button.has-unread{border-color:#edc385;background:#fff7e9;color:#956116}.circuit-alert-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.circuit-alert-filters select{max-width:240px}.circuit-alert-unread{background:#fffaf0}.circuit-alert-table td{vertical-align:top}.circuit-alert-table .cell-sub{max-width:260px;white-space:normal}.circuit-alert-actions{display:flex;gap:8px;flex-wrap:wrap}@media(max-width:760px){.alert-notification-button{font-size:10px;padding:5px}.circuit-alert-filters select{max-width:100%}}
+
+/* PC UI V1.0，保留 AI 中台品牌与业务交互。 */
+:root{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:#1a1a1a;background:#f5f6fa;--green:#2d8f4e;--ink:#1a1a1a;--muted:#595959;--line:#e8e8e8}
+.sidebar{width:240px;background:#001529;color:#a6a6a6;border:0;transition:width .2s}
+.brand{height:64px;margin:0;padding:0 20px;font-size:18px;font-weight:600;color:#fff;border-bottom:1px solid #ffffff14}.brand small{color:#a6a6a6}.brand-symbol{box-shadow:none;border-radius:8px}
+.workspace{margin:16px;background:#0d2137;border-color:#ffffff14;color:#a6a6a6}.workspace small,.sidebar-note p,.sidebar-bottom{color:#a6a6a6}.sidebar-note{border-color:#ffffff14;color:#fff}
+nav a{height:40px;margin:0;border-radius:0;border-left:3px solid transparent;font-size:14px;color:#a6a6a6}nav a:hover{background:#0d2137;color:#fff}nav a.active{background:rgba(45,143,78,.18);border-left-color:#2d8f4e;color:#fff;font-weight:500}nav a.active:after{display:none}nav svg{width:16px;height:16px;stroke-width:2}
+.body-wrap{margin-left:240px}.topbar{height:64px;padding:0 24px;position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #e8e8e8}.breadcrumb,.top-actions{font-size:13px;color:#595959}main{max-width:1560px;padding:24px}.page-head h1{font-size:30px;font-weight:600;line-height:1.3}.page-head p{font-size:13px;color:#595959}
+.panel,.stat{border:1px solid #e8e8e8;border-radius:8px;box-shadow:none}.stat{padding:16px 20px}.stats{gap:12px;margin-bottom:20px}.stat-value{font-size:22px;font-variant-numeric:tabular-nums}.stat-top,.stat-foot{font-size:13px;color:#595959}.panel-head{padding:16px 24px}.panel-head h2{font-size:20px;font-weight:600}.panel-head small{font-size:13px;color:#595959}.hero{background:#fff;border:1px solid #e8e8e8;border-radius:8px;color:#1a1a1a;padding:24px;min-height:0}.hero p{color:#595959;font-size:14px}.hero h2{font-size:24px;font-weight:600}.hero-orbit,.hero:before,.hero:after{display:none}.hero .eyebrow{color:#595959}.hero .hero-tag{color:#1b6332;border-color:#c8e6c9;background:#e8f5e9}
+.primary,.secondary{height:32px;padding:0 16px;border-radius:4px;font-size:14px;font-weight:500}.primary:hover{background:#247a3f}.link,.text-button{color:#1b6332;font-size:13px}.toolbar{min-height:48px;padding:8px 24px;gap:12px}input,select{min-height:32px;border-radius:4px}.search input,select,.field input,.field select{font-size:14px;padding:5px 12px;min-height:32px;border-radius:4px}.field{margin-bottom:24px}.field label{font-size:14px;color:#1a1a1a;margin-bottom:12px}.form{padding:24px}.form-actions{gap:8px}.field small{font-size:12px;color:#595959}textarea{border-radius:4px;font-size:14px}.pill{font-size:12px;border-radius:4px;font-weight:500}.pill.amber{color:#8f4500;background:#fff3e0}.pill.red{color:#b71c1c;background:#ffebee}.banner.error{color:#b71c1c}.banner{font-size:13px}
+table{font-size:14px;line-height:1.5}th{height:48px;padding:12px 16px;background:#fafafa;font-size:12px;font-weight:600;color:#595959;border-bottom:1px solid #e8e8e8}td{height:48px;padding:12px 16px;font-size:14px;color:#1a1a1a;border-bottom:1px solid #f0f0f0}tbody tr:hover{background:#f0f9f1}.cell-sub,.mono{color:#595959;font-size:13px}.pagination{font-size:14px;gap:8px}.empty{font-size:14px;color:#595959}.drawer{width:640px;border-radius:12px 0 0 12px}.drawer-body{padding:24px}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #2d8f4e;outline-offset:2px}#toast{top:24px;bottom:auto;border-radius:8px}.split{gap:12px}.domain b,.health-row,.setting-row{font-size:14px}.domain small,.health-row small,.governance p,.provider p{font-size:13px;color:#595959}
+@media(min-width:1024px) and (max-width:1279px){.sidebar{width:80px}.body-wrap{margin-left:80px}.brand{padding:0 18px}.brand>span:last-child,.workspace,.nav-label,.sidebar-note,.sidebar-bottom,.sidebar .pc-side-user-meta,.sidebar .pc-side-user-caret{display:none}.sidebar .pc-side-user-trigger{justify-content:center;padding:6px 0}.sidebar .pc-side-user-menu{left:calc(100% + 6px);right:auto;bottom:8px}nav{padding:12px 8px}nav a{padding:0;justify-content:center}nav a span{display:none}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1023px){.sidebar{width:80px}.body-wrap{margin-left:80px}.brand{padding:0 18px}.brand>span:last-child,.workspace,.nav-label,.sidebar-note,.sidebar-bottom,.sidebar .pc-side-user-meta,.sidebar .pc-side-user-caret{display:none}.sidebar .pc-side-user-trigger{justify-content:center;padding:6px 0}.sidebar .pc-side-user-menu{left:calc(100% + 6px);right:auto;bottom:8px}nav{padding:12px 8px}nav a{padding:0;justify-content:center}nav a span{display:none}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.split,.debug-grid,.providers{grid-template-columns:1fr}main{padding:24px}.table-scroll{overflow:auto}}
+.sidebar{display:flex;flex-direction:column}.sidebar .pc-side-user{margin-top:auto}.pc-side-user-menu[hidden]{display:none!important}
+/* PC UI V1.0 字号下限（>=12px）与主色收口补充。 */
+html.pc-ui-v1 .brand small,html.pc-ui-v1 .workspace small,html.pc-ui-v1 .nav-label,html.pc-ui-v1 .sidebar-note p,html.pc-ui-v1 .sidebar-note>span:last-child,html.pc-ui-v1 .sidebar-bottom,html.pc-ui-v1 .alert-notification-button,html.pc-ui-v1 .user-avatar,html.pc-ui-v1 .eyebrow,html.pc-ui-v1 .hero-tag,html.pc-ui-v1 footer,html.pc-ui-v1 footer span,html.pc-ui-v1 .change-fields,html.pc-ui-v1 .change-value,html.pc-ui-v1 .model-catalog-status,html.pc-ui-v1 .current-model small,html.pc-ui-v1 .scene-batch-bar .muted,html.pc-ui-v1 .trend-row,html.pc-ui-v1 .toolbar .muted,html.pc-ui-v1 .result-meta,html.pc-ui-v1 .inline-note,html.pc-ui-v1 .orbit-label,html.pc-ui-v1 .page-head .primary{font-size:12px!important}
+html.pc-ui-v1 .brand small,html.pc-ui-v1 .workspace small,html.pc-ui-v1 .nav-label,html.pc-ui-v1 .sidebar-note>span:last-child{letter-spacing:.06em}
+html.pc-ui-v1 .alert-notification-button{color:#2d8f4e;border-radius:4px}
+html.pc-ui-v1 .brand-symbol{background:linear-gradient(140deg,#2d8f4e,#1b6332)}
+html.pc-ui-v1 .user-avatar{background:#e8f5e9;color:#1b6332}
+html.pc-ui-v1 .panel,html.pc-ui-v1 .stat,html.pc-ui-v1 .hero{border:1px solid #e8e8e8;border-radius:8px;box-shadow:none}
+
+/* 侧栏底部用户区（PC UI V1 第 08 章）：AI 中台为静态页，不加载公共 pc-ui-v1.css，这里单独声明。 */
+.pc-side-user{flex:none;position:relative;padding:8px;border-top:1px solid rgba(255,255,255,.1)}
+.pc-side-user-trigger{width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:#fff;text-align:left;cursor:pointer}
+.pc-side-user-trigger:hover{background:#0d2137}
+.pc-side-user-avatar{width:32px;height:32px;flex:0 0 32px;border-radius:50%;display:grid;place-items:center;background:#2d8f4e;color:#fff;font-size:13px;font-weight:600}
+.pc-side-user-meta{flex:1;min-width:0;display:grid;gap:1px;line-height:1.25}
+.pc-side-user-meta strong{color:#fff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-side-user-meta small{color:#a6a6a6;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-side-user-caret{color:#a6a6a6;font-size:12px}
+.pc-side-user-menu{position:absolute;left:8px;right:8px;bottom:calc(100% + 6px);min-width:184px;padding:6px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:#0b2239;box-shadow:0 8px 24px rgba(0,0,0,.32);z-index:160;display:grid;gap:2px}
+.pc-side-user-menu a,.pc-side-user-menu button{width:100%;display:flex;align-items:center;height:36px;padding:0 10px;border:0;border-radius:6px;background:transparent;color:#e5e7eb;font-size:13px;text-decoration:none;text-align:left;cursor:pointer;box-sizing:border-box}
+.pc-side-user-menu a:hover,.pc-side-user-menu button:hover{background:#0d2137;color:#fff}
+.pc-side-user-menu .is-danger{color:#fca5a5}
+.pc-side-user-divider{height:1px;margin:4px 6px;background:rgba(255,255,255,.1)}
+
+/* 侧栏不再放工作空间卡、分组标签和宣传卡：导航直接接在品牌区下，用户区沉底。 */
+.sidebar>#nav{margin-top:12px;flex:1 1 auto;overflow-y:auto}
+/* 表格列对齐：数字右对齐、状态居中、操作列右对齐且固定右侧。 */
+html.pc-ui-v1 table :is(th,td).pc-cell-number{text-align:right;font-variant-numeric:tabular-nums}
+html.pc-ui-v1 table :is(th,td).pc-cell-status{text-align:center}
+html.pc-ui-v1 table :is(th,td).pc-cell-actions{position:sticky;right:0;z-index:2;text-align:right;background:#fff;box-shadow:-1px 0 0 #e8e8e8;white-space:nowrap}
+html.pc-ui-v1 table th.pc-cell-actions{z-index:4;background:#fafafa}
+html.pc-ui-v1 table tbody tr:hover>td.pc-cell-actions{background:#f0f9f1}
+html.pc-ui-v1 table td.pc-cell-actions :is(button,a){display:inline-flex;align-items:center;gap:4px;height:auto!important;min-height:24px!important;line-height:22px!important;padding:0!important;background:transparent!important;border:0!important;box-shadow:none!important;font-size:13px!important;font-weight:500!important;color:#1b6332!important;text-decoration:none}
+html.pc-ui-v1 table td.pc-cell-actions :is(button,a):hover:not(:disabled){color:#2d8f4e!important;text-decoration:underline}
+html.pc-ui-v1 table td.pc-cell-actions :is(.danger-button,.is-danger){color:#b71c1c!important}
+html.pc-ui-v1 table td.pc-cell-actions :is(button,a)+:is(button,a){margin-left:10px!important}
+html.pc-ui-v1 .pagination{font-size:13px;color:#595959}
+html.pc-ui-v1 .pagination select{height:30px;padding:0 8px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;font-size:13px;color:#1a1a1a;min-width:92px}
+html.pc-ui-v1 .pagination button{height:30px;padding:0 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;font-size:13px;color:#1a1a1a}
+html.pc-ui-v1 .pagination button:hover:not(:disabled){border-color:#2d8f4e;color:#1b6332}
+html.pc-ui-v1 .pagination button:disabled{color:#bfbfbf;cursor:not-allowed}
+
+/* 兼容桌面端手动折叠侧栏与移动端抽屉 */
+.body-wrap{margin-left:240px;transition:margin-left .2s;min-width:0}
+#app.is-collapsed .sidebar{width:80px}
+#app.is-collapsed .body-wrap{margin-left:80px}
+#app.is-collapsed .brand{padding:0 18px;justify-content:center}
+#app.is-collapsed .brand>span:last-child,
+#app.is-collapsed .sidebar .pc-side-user-meta,
+#app.is-collapsed .sidebar .pc-side-user-caret,
+#app.is-collapsed nav a span{display:none}
+#app.is-collapsed .sidebar .pc-side-user-trigger{justify-content:center;padding:6px 0}
+#app.is-collapsed .sidebar .pc-side-user-menu{left:calc(100% + 6px);right:auto;bottom:8px}
+#app.is-collapsed nav{padding:12px 8px}
+#app.is-collapsed nav a{padding:0;justify-content:center}
+
+.sidebar-overlay{position:fixed;inset:0;z-index:35;border:0;background:rgba(0,0,0,.42);padding:0}
+@media(max-width:1023px){
+ #app.is-mobile .sidebar{width:240px;transform:translateX(-100%);transition:transform .2s;z-index:40}
+ #app.is-mobile .sidebar.is-open{transform:translateX(0)}
+ #app.is-mobile .sidebar .brand{padding:0 20px;justify-content:flex-start}
+ #app.is-mobile .sidebar .brand>span:last-child,
+ #app.is-mobile .sidebar .pc-side-user-meta,
+ #app.is-mobile .sidebar .pc-side-user-caret,
+ #app.is-mobile .sidebar nav a span{display:inline}
+ #app.is-mobile .sidebar .pc-side-user-meta{display:grid}
+ #app.is-mobile .sidebar .pc-side-user-trigger{justify-content:flex-start;padding:8px 10px}
+ #app.is-mobile .sidebar nav{padding:0 13px}
+ #app.is-mobile .sidebar nav a{padding:0 16px;justify-content:flex-start}
+ #app.is-mobile .body-wrap{margin-left:0}
+}
+
+/* 统一顶部栏微调，确保与多页签栏无缝贴合 */
+.topbar.agri-workspace-header{height:64px;padding:0 24px;border-bottom:1px solid #e8e8e8}
+.topbar.agri-workspace-header .breadcrumb{font-size:13px;color:#595959}
+.topbar.agri-workspace-header .breadcrumb b,
+.topbar.agri-workspace-header .breadcrumb strong{color:#1a1a1a;font-weight:600}
+
+/* 共享 AgriVueTable / AgriVueFilterBar 区域衔接与样式隔离 */
+.ai-vue-section{margin-top:0;margin-bottom:20px}
+.ai-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+.ai-section-head h2{margin:0;font-size:16px;font-weight:600;color:#1a1a1a}
+.ai-section-head small{font-size:13px;font-weight:400;color:#595959;margin-left:10px}
+.ai-section-gap{margin-top:20px}
+.ai-toolbar-meta{font-size:13px;color:#595959;white-space:nowrap}
+.ai-status-pair{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+.ai-inline-note{margin:14px 0 0}
+
+/* 筛选框控件对齐共享列表高度，避免全局 input/select 样式互相干扰 */
+.agri-vue-filter-field input,
+.agri-vue-filter-field select{box-sizing:border-box;width:100%;height:32px;min-height:32px;padding:4px 10px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;font-size:14px;color:#1a1a1a;outline:none}
+.agri-vue-filter-field input:focus,
+.agri-vue-filter-field select:focus{border-color:#2d8f4e;box-shadow:0 0 0 2px rgba(45,143,78,.12)}
+.agri-vue-table-card .agri-vue-table th,
+.agri-vue-table-card .agri-vue-table td{max-width:none;height:auto}
+.agri-vue-table-card .agri-vue-table thead th{height:44px;padding:10px 12px}
+.agri-vue-table-card .agri-vue-table tbody td{min-height:48px;padding:8px 12px;vertical-align:middle}
+.agri-vue-table-card .agri-vue-table tbody td.is-kind-action{position:sticky;right:0;z-index:2;background:#fff;box-shadow:-1px 0 0 #e8e8e8}
+.agri-vue-table-card .agri-vue-table thead th.is-kind-action{position:sticky;right:0;z-index:4;background:#fafafa;box-shadow:-1px 0 0 #e8e8e8}
+.agri-vue-table-card .agri-vue-table tbody tr:hover td.is-kind-action{background:#f0f9f1}
+.agri-vue-table-card .agri-vue-table tbody tr.is-selected td.is-kind-action{background:#e8f5e9!important}
+.agri-vue-table-card .agri-vue-table tbody tr.is-selected td{background:#e8f5e9!important}
+.agri-vue-table-card .agri-vue-table th.is-selection,
+.agri-vue-table-card .agri-vue-table td.is-selection{padding:8px!important;width:48px}
+.agri-vue-table-card .agri-vue-table th.is-selection input,
+.agri-vue-table-card .agri-vue-table td.is-selection input{min-height:0;width:16px;height:16px}
+.agri-vue-table-card .agri-vue-page-size{min-height:30px;height:30px;padding:0 8px}
+

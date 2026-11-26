@@ -1,30 +1,43 @@
-const $ = (q) => document.querySelector(q)
+import { reactive, nextTick } from 'vue'
+
+export function createAiConsole(ui, root, tableState) {
+const $ = (q) => root.querySelector(q)
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
-const state = { token:'', user:null, permissions:[], scenes:[], overview:null, providers:[], providerChanges:{}, page:1, keyword:'', status:'', domain:'', sceneSearch:'', sceneModelSource:'', sceneModelProvider:'', sceneSelection:new Set(), sceneBatchSaving:false, selected:'farm.crop.schedule', result:null, running:false, providerTests:{}, providerTesting:{}, providerSwitching:false, sceneCreating:false }
+const state = reactive({ token:'', user:null, permissions:[], scenes:[], overview:null, providers:[], providerChanges:{}, page:1, pageSize:20, keyword:'', status:'', domain:'', sceneSearch:'', sceneModelSource:'', sceneModelProvider:'', sceneSelection:new Set(), sceneBatchSaving:false, selected:'farm.crop.schedule', result:null, running:false, providerTests:{}, providerTesting:{}, providerSwitching:false, sceneCreating:false })
 const CLIENT='ai-ops', PREFIX='agri_ai_ops_', landing='/ai-ops/'
 const sso = ['localhost','127.0.0.1'].includes(location.hostname) ? `${location.protocol}//${location.hostname}:8090` : 'https://sso.agri-platform.com'
 const navs = [['overview','运行概览','M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z'],['scenes','场景中心','M12 3l9 5-9 5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5'],['prompts','提示词管理','M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5'],['debug','调试工作台','M8 7l-5 5 5 5 M16 7l5 5-5 5 M14 4l-4 16'],['calls','调用日志','M5 3h14v18H5z M8 8h8 M8 12h8 M8 16h5'],['providers','模型接入','M8 3v4 M16 3v4 M5 7h14v6a7 7 0 01-14 0z M12 20v3'],['governance','权限与审计','M12 2l8 4v6c0 5-8 10-8 10S4 17 4 12V6z M8 12l3 3 5-6']]
 const icons=['♧','⌁','⇄','▦','◇','◷','≋','✧']
 let toastTimer
-function toast(message){$('#toast').textContent=message;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,4200)}
+function toast(message){ui.toast=message;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{ui.toast=''},4200)}
 async function request(path, options={}){
  const {timeoutMs=20000,...fetchOptions}=options
  const res=await fetch(path,{...fetchOptions,credentials:'include',headers:{...(state.token?{Authorization:`Bearer ${state.token}`} : {}),...(options.body?{'Content-Type':'application/json'}:{}),...(path.startsWith('/api/v1/auth/')?{'X-Sso-Client':CLIENT}:{}),...options.headers},signal:AbortSignal.timeout(timeoutMs)})
  const body=await res.json().catch(()=>({message:'服务返回格式不正确'}))
- if(res.status===401 && !path.includes('/auth/')){state.token='';throw new Error('统一登录已过期，请刷新页面重新登录')}
+ if(res.status===401 && !path.includes('/auth/')){state.token='';void login();throw new Error('统一登录已过期，正在跳转统一认证中心…')}
  if(!res.ok || (typeof body.code==='number' && body.code!==0 && body.code!==200))throw new Error(body.message || `请求失败（${res.status}）`)
  return body.data ?? body
 }
 const api=(path,options)=>request(`/api/ai/admin/${path}`,options)
 const granted=(p)=>state.permissions.some(x=>x==='*'||x==='ai:*'||x===p)
 const b64=(bytes)=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
+let loginPending=null
+function cleanReturnTarget(){
+ if(location.pathname==='/sso/callback')return landing
+ const cleaned=(location.pathname+location.search+location.hash).replace(/([?&])logout=1(?=&|$)/,'$1').replace(/[?&](?=#|$)/,'')
+ return cleaned.startsWith(landing)?cleaned:landing
+}
 async function login(){
- const verifier=b64(crypto.getRandomValues(new Uint8Array(32))), nonce=b64(crypto.getRandomValues(new Uint8Array(16)))
- sessionStorage.setItem(PREFIX+'verifier',verifier);sessionStorage.setItem(PREFIX+'state',nonce)
- sessionStorage.setItem(PREFIX+'return',location.pathname==='/sso/callback'?landing:location.pathname+location.hash)
- const challenge=b64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))))
- const params=new URLSearchParams({client_id:CLIENT,redirect_uri:location.origin+'/sso/callback',state:nonce,code_challenge:challenge,code_challenge_method:'S256'})
- location.assign(sso+'/authorize?'+params)
+ if(loginPending)return loginPending
+ loginPending=(async()=>{
+  const verifier=b64(crypto.getRandomValues(new Uint8Array(32))), nonce=b64(crypto.getRandomValues(new Uint8Array(16)))
+  sessionStorage.setItem(PREFIX+'verifier',verifier);sessionStorage.setItem(PREFIX+'state',nonce)
+  sessionStorage.setItem(PREFIX+'return',cleanReturnTarget())
+  const challenge=b64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))))
+  const params=new URLSearchParams({client_id:CLIENT,redirect_uri:location.origin+'/sso/callback',state:nonce,code_challenge:challenge,code_challenge_method:'S256'})
+  location.replace(sso+'/authorize?'+params)
+ })().catch(err=>{loginPending=null;throw err})
+ return loginPending
 }
 async function boot(){
  try{
@@ -37,30 +50,28 @@ async function boot(){
    const target=sessionStorage.getItem(PREFIX+'return');sessionStorage.removeItem(PREFIX+'return')
    history.replaceState({},'',target?.startsWith(landing)?target:landing)
   }else{try{session=await request('/api/v1/auth/refresh',{method:'POST',body:'{}'})}catch{}}
-  if(!session?.accessToken){$('#boot-message').textContent='使用产业互联网平台账号，统一登录 AI 中台管理工作空间。';$('#login').hidden=false;return}
+  if(!session?.accessToken){await login();return}
   state.token=session.accessToken;state.user=session.user
   const permissions=await request('/api/v1/platform/permissions/mine');state.permissions=permissions.permissions ?? []
-  if(!granted('ai:admin'))throw new Error('当前账号没有 AI 中台管理权限，请使用平台管理员账号或联系运营开通 ai:admin。')
+  if(!granted('ai:admin')){state.token='';throw new Error('当前账号没有 AI 中台管理权限，请使用平台管理员账号或联系运营开通 ai:admin。')}
   const [scenes,overview,providers]=await Promise.all([api('scenes'),api('overview'),api('providers')])
   state.scenes=scenes;state.overview=overview;state.providers=providers
-  $('#username').textContent=state.user?.nickname || state.user?.username || '平台管理员'
-  $('#avatar').textContent=($('#username').textContent)[0]
-  $('#nav').innerHTML=navs.map(([id,name,path])=>`<a href="#${id}" data-nav="${id}"><svg viewBox="0 0 24 24"><path d="${path}"/></svg><span>${name}</span></a>`).join('')
-  $('#boot').hidden=true;$('#app').hidden=false;await render();startCircuitNotifications()
- }catch(e){$('#boot-message').textContent=e.message;$('#login').hidden=false}
+  ui.user=state.user
+  ui.ready=true
+  await nextTick()
+  await render();startCircuitNotifications()
+ }catch(e){ui.bootMessage=e.message;ui.loginVisible=true}
 }
 function head(title,desc,action=''){return `<div class="page-head"><div><div class="eyebrow">AI CAPABILITY CONSOLE</div><h1>${title}</h1><p>${desc}</p></div>${action}</div>`}
 function domains(){return [...new Set(state.scenes.map(s=>s.domain))]}
 function nameOf(code){return state.scenes.find(s=>s.code===code)?.name || code}
 function time(value){return value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'—'}
 function pill(text,cls=''){return `<span class="pill ${cls}">${esc(text)}</span>`}
-function rows(records,full=false){return records.length?records.map(e=>`<tr><td><div class="cell-title">${esc(nameOf(e.sceneCode))}</div><div class="mono">${esc(e.sceneCode)}</div></td>${full?`<td><div class="mono">${esc(e.taskId)}</div><div class="cell-sub">${esc(e.source)}${e.failover?' · 已故障切换':''}</div>${e.modelAttempts?.length?`<div class="cell-sub">${e.modelAttempts.map(a=>esc(a.provider_name)+'：'+esc(a.status==='SUCCESS'?'成功':a.reason||'失败')).join(' → ')}</div>`:''}</td>`:''}<td>${pill(e.status==='SUCCESS'?'调用成功':'调用失败',e.status==='SUCCESS'?'':'red')}</td><td>${e.latencyMs} <span class="cell-sub">ms</span></td><td>${esc(time(e.time))}</td>${full?`<td><button class="link" data-trace="${esc(e.traceId)}">复制追踪号</button></td>`:''}</tr>`).join(''):`<tr><td colspan="${full?6:4}" class="empty">暂无调用记录<br><span class="cell-sub">前往调试工作台发起一次场景调用</span></td></tr>`}
-function overview(){const o=state.overview, count=o.callCount, rate=count?`${((o.successCount/count)*100).toFixed(1)}`:'—';return head('运行概览','统一管理农业 AI 能力，洞察业务场景与调用运行状态。','<a class="primary" href="#debug">＋ 发起场景调试</a>')+`
+function overview(){const o=state.overview, count=o.callCount, rate=count?`${((o.successCount/count)*100).toFixed(1)}`:'—';tableState.overviewRecent=o.recent||[];return head('运行概览','统一管理农业 AI 能力，洞察业务场景与调用运行状态。','<a class="primary" href="#debug">＋ 发起场景调试</a>')+`
 <section class="hero"><div><div class="eyebrow"><span class="live-dot"></span> AGRICULTURE · INTELLIGENCE HUB</div><h2>连接产业场景，释放智能价值</h2><p>汇聚农事生产、物联网、交易与服务能力。以统一场景协议连接业务，让每一次调用有据可查。</p><span class="hero-tag">${o.sceneCount} 个已接入场景 · ${o.systemCount} 个业务子系统</span></div><div class="hero-orbit"><div class="orbit-core">AI</div><div class="orbit-label">CONNECTED INTELLIGENCE</div></div></section>
 <div class="stats"><div class="stat"><div class="stat-top">已接入业务场景 <span class="stat-icon">▦</span></div><div class="stat-value">${o.sceneCount}<small>个</small></div><div class="stat-foot">覆盖 <b>${o.systemCount} 个业务子系统</b></div></div><div class="stat"><div class="stat-top">保留调用总量 <span class="stat-icon">↗</span></div><div class="stat-value">${count}<small>次</small></div><div class="stat-foot">最近 1000 条持久化调用记录</div></div><div class="stat"><div class="stat-top">调用成功率 <span class="stat-icon">✓</span></div><div class="stat-value">${rate}<small>${count?'%':''}</small></div><div class="stat-foot">${count?`成功 ${o.successCount} 次 / 共 ${count} 次`:'暂无调用，不计算成功率'}</div></div><div class="stat"><div class="stat-top">平均响应耗时 <span class="stat-icon">◷</span></div><div class="stat-value">${count?Number(o.averageLatencyMs).toFixed(1):'—'}<small>ms</small></div><div class="stat-foot">仅统计当前保留记录的执行耗时</div></div></div>
 <div class="split"><section class="panel"><div class="panel-head"><h2>业务能力矩阵<small>场景驱动 · 统一接入</small></h2><a class="link" href="#scenes">全部场景 ↗</a></div><div class="domain-grid">${domains().map((d,i)=>`<button class="domain" data-domain="${esc(d)}"><span class="domain-icon">${icons[i]}</span><b>${esc(d)}</b><small>${state.scenes.filter(s=>s.domain===d).length} 个业务场景</small></button>`).join('')}</div></section><section class="panel"><div class="panel-head"><h2>服务运行状态</h2>${pill('运行正常')}</div><div class="health-list"><div class="health-row"><span>AI 调度服务</span>${pill(o.status)}</div><div class="health-row"><span>统一认证中心</span>${pill('已连接')}</div><div class="health-row"><span>调用审计持久化</span>${pill(o.auditWritable?'可写入':'写入异常',o.auditWritable?'':'red')}</div><div class="health-row"><span>模型服务通道</span>${pill(o.modelConfigured?'已配置 · 未探测':'待配置','amber')}</div></div></section></div>
-<div class="banner">能力说明：发布提示词并配置模型密钥后，场景调度会进入真实推理并记录服务端返回的 token；模型未配置或调用失败时按策略降级，结果会明确标记。</div>
-<section class="panel"><div class="panel-head"><h2>最近调用<small>真实服务记录</small></h2><a class="link" href="#calls">查看全部 ↗</a></div><div class="table-scroll"><table><thead><tr><th>业务场景</th><th>执行状态</th><th>响应耗时</th><th>调用时间</th></tr></thead><tbody>${rows(o.recent)}</tbody></table></div></section>`}
+<div class="banner">能力说明：发布提示词并配置模型密钥后，场景调度会进入真实推理并记录服务端返回的 token；模型未配置或调用失败时按策略降级，结果会明确标记。</div>`}
 function sceneProviderId(scene){return scene.providerId||state.providers.find(p=>p.selected)?.id||''}
 function filteredScenes(){
  const keyword=state.sceneSearch.trim().toLowerCase()
@@ -76,8 +87,26 @@ function sceneModelOptions(){
  if(state.sceneModelProvider&&!ids.has(state.sceneModelProvider))options.push({id:state.sceneModelProvider,label:'已移除通道 / '+state.sceneModelProvider})
  return options
 }
-function resetSceneFilters(){state.sceneSelection.clear();state.domain='';state.sceneSearch='';state.sceneModelSource='';state.sceneModelProvider=''}
-function scenePage(){const list=filteredScenes();const visible=new Set(list.map(s=>s.code));state.sceneSelection=new Set([...state.sceneSelection].filter(code=>visible.has(code)));return head('场景中心','管理内置与自定义场景、模型路由及提示词发布版本。','<button id="add-scene" class="primary">＋ 新增自定义场景</button>')+`<section class="panel"><div class="toolbar scene-filters"><div class="search"><input id="scene-search" aria-label="搜索场景" placeholder="搜索场景名称、编码或业务域" value="${esc(state.sceneSearch)}"></div><select id="scene-domain" aria-label="筛选业务域"><option value="">全部业务子系统</option>${domains().map(d=>`<option ${state.domain===d?'selected':''}>${esc(d)}</option>`).join('')}</select><select id="scene-model-source" aria-label="筛选模型来源"><option value="">全部模型来源</option><option value="GLOBAL" ${state.sceneModelSource==='GLOBAL'?'selected':''}>跟随全局模型</option><option value="SCENE" ${state.sceneModelSource==='SCENE'?'selected':''}>场景专属模型</option></select><select id="scene-model-filter" aria-label="筛选模型通道"><option value="">全部模型通道</option>${sceneModelOptions().map(p=>`<option value="${esc(p.id)}" ${state.sceneModelProvider===p.id?'selected':''}>${esc(p.label)}</option>`).join('')}</select><button id="reset-scene-filters" class="text-button" ${state.domain||state.sceneSearch||state.sceneModelSource||state.sceneModelProvider?'':'disabled'}>重置</button><span class="muted" role="status">匹配 ${list.length} / ${state.scenes.length} 个场景</span></div><div class="toolbar scene-batch-bar"><span id="scene-selection-count" role="status">已选择 ${state.sceneSelection.size} 个场景</span><button id="batch-bind-model" class="primary" ${state.sceneSelection.size?'':'disabled'}>批量绑定模型</button><button id="clear-scene-selection" class="text-button" ${state.sceneSelection.size?'':'disabled'}>清空选择</button><small class="muted">全选仅作用于当前筛选结果；变更筛选会清空选择</small></div><div class="table-scroll"><table><thead><tr><th class="scene-select-cell"><input type="checkbox" id="select-visible-scenes" aria-label="全选当前筛选结果" ${list.length?'':'disabled'}></th><th>场景名称 / 编码</th><th>业务子系统</th><th>状态 / 提示词版本</th><th>模型路由 / 应用说明</th><th>操作</th></tr></thead><tbody>${list.map(s=>`<tr><td class="scene-select-cell"><input type="checkbox" data-scene-select="${esc(s.code)}" aria-label="选择${esc(s.name)}" ${state.sceneSelection.has(s.code)?'checked':''}></td><td><div class="cell-title">${esc(s.name)} ${s.custom?pill('自定义','gray'):''}</div><div class="mono">${esc(s.code)}</div></td><td>${esc(s.domain)}</td><td>${pill(s.enabled?'已启用':'已停用',s.enabled?'':'gray')} ${pill(s.publishedVersion?'v'+s.publishedVersion:'未发布','amber')}</td><td><div class="cell-title">${esc(sceneModelText(s))}</div><div class="cell-sub">${esc(s.description)}</div></td><td><button class="link" data-manage="${s.code}">配置与提示词</button> <button class="link" data-detail="${s.code}">详情</button> <button class="link" data-debug="${s.code}" style="margin-left:12px">调试 ↗</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">没有匹配的场景，请调整筛选条件</td></tr>'}</tbody></table></div></section><div class="inline-note">模型通道按当前配置路由筛选，跟随全局的场景计入当前全局通道；实际调用以回执为准。可新增自定义场景；保存后场景编码与业务子系统固定，停用后统一调度拒绝执行。自定义场景使用已发布提示词调用模型，无内置规则降级。提示词支持版本发布与回滚，真实模型推理使用已发布版本，规则降级不消费提示词正文。</div>`}
+function resetSceneFilters(){state.sceneSelection.clear();state.domain='';state.sceneSearch='';state.sceneModelSource='';state.sceneModelProvider='';tableState.sceneDomain='';tableState.sceneSearch='';tableState.sceneModelSource='';tableState.sceneModelProvider='';tableState.sceneSelection=[]}
+function syncSceneTable(){
+ const list=filteredScenes()
+ const visible=new Set(list.map(s=>s.code))
+ state.sceneSelection=new Set([...state.sceneSelection].filter(code=>visible.has(code)))
+ tableState.scenes=list
+ tableState.sceneTotal=state.scenes.length
+ tableState.sceneSelection=[...state.sceneSelection]
+ tableState.sceneDomainOptions=domains()
+ tableState.sceneModelOptions=sceneModelOptions()
+ tableState.sceneBatchSaving=state.sceneBatchSaving
+}
+function scenePage(){
+ tableState.sceneDomain=state.domain
+ tableState.sceneSearch=state.sceneSearch
+ tableState.sceneModelSource=state.sceneModelSource
+ tableState.sceneModelProvider=state.sceneModelProvider
+ syncSceneTable()
+ return head('场景中心','管理内置与自定义场景、模型路由及提示词发布版本。','<button id="add-scene" class="primary">＋ 新增自定义场景</button>')
+}
 function createSceneDrawer(){
  if(state.sceneCreating)return
  const systems=[...new Map(state.scenes.map(s=>[s.bizSystem,{id:s.bizSystem,name:s.domain}])).values()]
@@ -112,12 +141,8 @@ function createSceneDrawer(){
 }
 
 function syncSceneSelection(){
- const list=filteredScenes(), count=state.sceneSelection.size, all=$('#select-visible-scenes')
- if(!all)return
- all.checked=list.length>0&&list.every(s=>state.sceneSelection.has(s.code));all.indeterminate=count>0&&!all.checked
- $('#scene-selection-count').textContent=`已选择 ${count} 个场景`
- $('#batch-bind-model').disabled=!count||state.sceneBatchSaving;$('#clear-scene-selection').disabled=!count||state.sceneBatchSaving
- document.querySelectorAll('[data-scene-select]').forEach(input=>{input.checked=state.sceneSelection.has(input.dataset.sceneSelect)})
+ tableState.sceneSelection=[...state.sceneSelection]
+ tableState.sceneBatchSaving=state.sceneBatchSaving
 }
 function batchModelDrawer(){
  if(state.sceneBatchSaving)return
@@ -157,9 +182,29 @@ function sceneModelForm(c){
  const id=c.providerId||''
  return `<section class="panel"><div class="panel-head"><h2>场景专属模型</h2>${pill(id?'独立指定':'跟随全局',id?'':'gray')}</div><form id="scene-model-form" class="form"><div class="field"><label for="scene-model-provider">模型通道</label><select id="scene-model-provider"><option value="" ${!id?'selected':''}>跟随全局模型</option>${state.providers.map(p=>`<option value="${esc(p.id)}" ${p.id===id?'selected':''} ${!p.configured&&p.id!==id?'disabled':''}>${esc(p.name)} / ${esc(p.model)}${p.configured?'':'（待配置）'}</option>`).join('')}${id&&!state.providers.some(p=>p.id===id)?`<option selected value="${esc(id)}">通道已不可用，请重新选择</option>`:''}</select><small>专属模型只影响当前场景，不切换全局通道；跟随全局会随全局模型切换。请先在模型接入中配置并验证通道。需发布提示词并开启真实推理后生效；失败时按绑定主通道的故障切换策略尝试备用模型；自定义场景全部失败后返回失败，内置场景按全局降级策略处理。</small></div><p class="muted">${esc(sceneModelText(c))}</p><div id="scene-model-error" class="banner error" role="alert" hidden></div><button class="primary">保存场景模型</button> <a class="link" href="#providers">管理模型通道 ↗</a></form></section>`
 }
-function debugPage(){const s=state.scenes.find(x=>x.code===state.selected)||state.scenes[0];return head('调试工作台','选择业务场景、编辑结构化参数，查看服务端原始响应。')+sceneModelView(s)+`<div class="banner">启用真实推理、配置模型通道并发布提示词后，调试将调用外部模型，可能产生模型用量；内置场景的其他情况按配置执行规则降级，自定义场景无内置规则且必须发布后调用。调试不写入业务单据，请勿输入敏感业务资料。</div><div class="debug-grid"><section class="panel"><div class="panel-head"><h2>请求配置</h2>${pill('POST · 场景调度','gray')}</div><form id="debug-form" class="form"><div class="field"><label for="debug-scene">业务场景</label><select id="debug-scene">${state.scenes.map(x=>`<option value="${x.code}" ${x.code===s.code?'selected':''}>${esc(x.domain)} / ${esc(x.name)}</option>`).join('')}</select><small id="scene-hint">${esc(s.description)} · ${esc(s.code)}</small></div><div class="field"><a class="link" href="#prompts">管理当前场景提示词版本 ↗</a></div><div class="field"><label for="biz-id">业务参考编号 <span class="muted">（选填）</span></label><input id="biz-id" maxlength="100" placeholder="例如 DEMO-001，不影响业务数据库"></div><div class="field"><label for="json-input" style="display:flex;justify-content:space-between">JSON 结构化参数<button type="button" id="load-example" class="link">重置为示例</button></label><textarea id="json-input" spellcheck="false" aria-describedby="input-hint">${esc(JSON.stringify(JSON.parse(s.exampleJson),null,2))}</textarea><small id="input-hint">仅支持 JSON 对象，最多 50 个字段、16KB 字符。</small></div><div class="form-actions"><span class="muted" style="font-size:10px">输入正文不会写入调用审计</span><button class="primary" id="run" ${state.running?'disabled':''}>${state.running?'执行中…':'▷ 执行调试'}</button></div></form></section><section class="panel"><div class="panel-head"><h2>执行结果</h2><button id="copy-result" class="link" ${state.result?'':'disabled'}>复制 JSON</button></div><div id="result">${state.result?resultView(state.result):'<div class="empty" style="padding:115px 25px"><div style="font-size:30px;color:#b0c8b6;margin-bottom:14px">⌘</div>等待场景执行<br><span class="cell-sub">结果、耗时与追踪编号将在这里展示</span></div>'}</div></section></div>`}
+function debugPage(){const s=state.scenes.find(x=>x.code===state.selected)||state.scenes[0];return head('调试工作台','选择业务场景、编辑结构化参数，查看服务端原始响应。')+sceneModelView(s)+`<div class="banner">启用真实推理、配置模型通道并发布提示词后，调试将调用外部模型，可能产生模型用量；内置场景的其他情况按配置执行规则降级，自定义场景无内置规则且必须发布后调用。调试不写入业务单据，请勿输入敏感业务资料。</div><div class="debug-grid"><section class="panel"><div class="panel-head"><h2>请求配置</h2>${pill('POST · 场景调度','gray')}</div><form id="debug-form" class="form"><div class="field"><label for="debug-scene">业务场景</label><select id="debug-scene">${state.scenes.map(x=>`<option value="${x.code}" ${x.code===s.code?'selected':''}>${esc(x.domain)} / ${esc(x.name)}</option>`).join('')}</select><small id="scene-hint">${esc(s.description)} · ${esc(s.code)}</small></div><div class="field"><a class="link" href="#prompts">管理当前场景提示词版本 ↗</a></div><div class="field"><label for="biz-id">业务参考编号 <span class="muted">（选填）</span></label><input id="biz-id" maxlength="100" placeholder="例如 DEMO-001，不影响业务数据库"></div><div class="field"><label for="json-input" style="display:flex;justify-content:space-between">JSON 结构化参数<button type="button" id="load-example" class="link">重置为示例</button></label><textarea id="json-input" spellcheck="false" aria-describedby="input-hint">${esc(JSON.stringify(JSON.parse(s.exampleJson),null,2))}</textarea><small id="input-hint">仅支持 JSON 对象，最多 50 个字段、16KB 字符。</small></div><div class="form-actions"><span class="muted" style="font-size:12px">输入正文不会写入调用审计</span><button class="primary" id="run" ${state.running?'disabled':''}>${state.running?'执行中…':'▷ 执行调试'}</button></div></form></section><section class="panel"><div class="panel-head"><h2>执行结果</h2><button id="copy-result" class="link" ${state.result?'':'disabled'}>复制 JSON</button></div><div id="result">${state.result?resultView(state.result):'<div class="empty" style="padding:115px 25px"><div style="font-size:30px;color:#b0c8b6;margin-bottom:14px">⌘</div>等待场景执行<br><span class="cell-sub">结果、耗时与追踪编号将在这里展示</span></div>'}</div></section></div>`}
 function resultView(r){return `<div class="result-meta">${pill(r.ok?'执行成功':'执行失败',r.ok?'':'red')}<span>耗时 ${r.usage?.latency_ms ?? '—'} ms</span><span>${esc(r.usage?.execution_mode==='REAL_MODEL'?'真实模型':r.usage?.execution_mode==='FAILED'?'执行失败':'规则降级')}</span></div>${r.usage?.model_attempts?.length?`<div class="banner">${r.usage.failover?'已切换至备用模型 · ':''}${r.usage.model_attempts.map(a=>esc(a.provider_name)+'：'+esc(a.status==='SUCCESS'?'成功':a.reason||'失败')).join(' → ')}</div>`:''}<pre class="code-result">${esc(JSON.stringify(r,null,2))}</pre>`}
-async function callPage(){const p=new URLSearchParams({page:state.page,pageSize:15,keyword:state.keyword,status:state.status});const data=await api('calls?'+p);return head('调用日志','查看真实调用元数据，按场景、任务编号或追踪编号定位请求。')+`<section class="panel"><div class="toolbar"><div class="search"><input id="call-search" placeholder="搜索场景编码、任务或追踪编号" aria-label="搜索调用日志" value="${esc(state.keyword)}"></div><select id="call-status" aria-label="筛选调用状态"><option value="">全部执行状态</option><option value="SUCCESS" ${state.status==='SUCCESS'?'selected':''}>调用成功</option><option value="FAILED" ${state.status==='FAILED'?'selected':''}>调用失败</option></select><button id="query-calls" class="secondary">查询</button><span class="muted">共 ${data.total} 条记录</span></div><div class="table-scroll"><table><thead><tr><th>场景</th><th>任务编号 / 来源</th><th>状态</th><th>耗时</th><th>时间</th><th>追踪</th></tr></thead><tbody>${rows(data.records,true)}</tbody></table></div><div class="pagination"><span>第 ${state.page} / ${Math.max(1,Math.ceil(data.total/15))} 页</span><button id="prev" ${state.page<=1?'disabled':''}>上一页</button><button id="next" ${state.page*15>=data.total?'disabled':''}>下一页</button></div></section><div class="inline-note">最近 1000 条记录持久化保留。为减少业务数据暴露，日志不保存请求或响应正文、令牌、密钥。未经管理鉴权的兼容业务调用会标注为“未核验调用方”。</div>`}
+async function loadCalls(){
+ tableState.callsLoading=true
+ try{
+  const size=state.pageSize||20
+  const p=new URLSearchParams({page:state.page,pageSize:size,keyword:state.keyword,status:state.status})
+  const data=await api('calls?'+p)
+  tableState.calls=data.records||[]
+  tableState.callsTotal=Number(data.total||0)
+  tableState.callsPage=state.page
+  tableState.callsPageSize=size
+  tableState.callKeyword=state.keyword
+  tableState.callStatus=state.status
+  ui.notice=''
+ }finally{
+  tableState.callsLoading=false
+ }
+}
+async function callPage(){
+ await loadCalls()
+ return head('调用日志','查看真实调用元数据，按场景、任务编号或追踪编号定位请求。')
+}
 function changeLabel(key){return ({circuit:'熔断恢复策略',circuitState:'熔断运行状态',failover:'故障切换策略',id:'通道标识',name:'通道名称',authType:'鉴权方式',baseUrl:'服务地址',model:'模型名称',keyConfigured:'API Key 状态',selected:'当前通道',inferenceEnabled:'真实推理',fallbackToRuleTemplate:'失败处理'})[key]||key}
 function changeValue(key,value){
  if(key==='circuitState')return circuitLabel(value)
@@ -242,7 +287,7 @@ function configureProvider(id){
  const p=creating?{name:'',baseUrl:'',model:'',authType:'BEARER',custom:true,revision:current.revision||0,inferenceEnabled:current.inferenceEnabled!==false,fallbackToRuleTemplate:current.fallbackToRuleTemplate!==false}:state.providers.find(x=>x.id===id);if(!p)return
  $('#drawer').innerHTML=`<section class="drawer" role="dialog" aria-modal="true" aria-labelledby="provider-config-title"><div class="panel-head"><h2 id="provider-config-title">${creating?'新增自定义模型':'配置'+esc(p.name)}</h2><button type="button" id="close-provider" class="text-button">关闭 ✕</button></div><form id="provider-config-form" class="form" autocomplete="off"><div class="banner">保存后立即生效。密钥在服务端加密存储，不会回显；留空保留已有密钥。管理端保存的配置优先于部署环境。</div>${p.custom?`<div class="field"><label for="provider-name">通道名称</label><input id="provider-name" required maxlength="80" value="${esc(p.name)}" placeholder="如：企业私有模型、生产推理服务"></div><div class="field"><label for="provider-protocol">接入协议</label><select id="provider-protocol" disabled><option>Chat Completions 兼容协议</option></select><small>适用于提供该协议的云服务、自建服务与本地部署模型。</small></div><div class="field"><label for="provider-auth">鉴权方式</label><select id="provider-auth"><option value="BEARER" ${p.authType!=='NONE'?'selected':''}>API Key（Bearer Token）</option><option value="NONE" ${p.authType==='NONE'?'selected':''}>无需 API Key（本地 / 内网服务）</option></select><small>无需鉴权时不发送 Authorization 请求头。</small></div>`:''}<div class="field"><label for="provider-url">Base URL <span class="muted">（兼容 Chat Completions）</span></label><input id="provider-url" type="url" maxlength="2048" required value="${esc(p.baseUrl)}" placeholder="输入服务商提供的 API 基础地址"><small>填写基础地址，例如服务商提供的 /v1 地址，勿附加 /chat/completions、密钥或查询参数。</small></div><div class="field"><label for="provider-model">模型名称</label><div class="model-fetch-row"><input id="provider-model" maxlength="200" required value="${esc(p.model)}" placeholder="输入或从服务列表选择模型标识"><button id="fetch-provider-models" class="secondary" type="button">获取模型列表</button></div><small>使用当前表单地址和鉴权获取，留空可复用原地址已保存的密钥。获取不会保存配置或发起推理。</small><div id="provider-model-status" role="status" aria-live="polite" class="model-catalog-status" hidden></div><div id="provider-model-picker" class="model-catalog-picker" hidden><label for="provider-model-search">搜索模型</label><input id="provider-model-search" type="search" maxlength="200" placeholder="输入模型标识关键字"><label for="provider-model-list">可用模型</label><select id="provider-model-list" size="6" aria-label="可用模型列表"></select><small id="provider-model-count"></small><small>选择后填入模型名称；仍可手动修改。列表可能包含非对话模型，请保存后验证连接。</small></div></div><div class="field"><label for="provider-key">API Key · ${p.keyConfigured?'已设置':'未设置'}</label><input id="provider-key" type="password" maxlength="4096" autocomplete="new-password" placeholder="${p.keyConfigured?'留空保留已有密钥':'输入 API Key'}"><small>不会读取或展示已有密钥；更新后需重新验证连接。</small></div><label class="provider-check"><input id="provider-clear-key" type="checkbox">清除已有密钥（API Key 鉴权时需重新填写密钥）</label><div class="field"><label for="provider-selected">通道用途</label><select id="provider-selected"><option value="false" ${p.selected?'':'selected'}>备用通道</option><option value="true" ${p.selected?'selected':''}>设为当前通道</option></select><small>${p.selected?'当前通道需通过将另一个通道设为当前来切换。':'保存为备用通道时不会切换当前通道。'}</small></div><div class="field"><label for="provider-inference">全局真实推理</label><select id="provider-inference"><option value="true" ${p.inferenceEnabled?'selected':''}>开启</option><option value="false" ${p.inferenceEnabled?'':'selected'}>关闭（使用规则模板）</option></select></div><div class="field"><label for="provider-fallback">模型调用失败处理</label><select id="provider-fallback"><option value="true" ${p.fallbackToRuleTemplate?'selected':''}>允许规则降级</option><option value="false" ${p.fallbackToRuleTemplate?'':'selected'}>返回调用失败</option></select><small>推理和失败处理开关对所有通道生效。验证连接仍可单独执行。</small></div><div id="provider-save-error" class="banner error" role="alert" hidden></div><div class="form-actions"><button class="secondary" type="submit">保存配置</button><button class="primary" type="submit" data-verify="true">保存并验证</button></div></form></section>`
  $('#drawer').hidden=false
- const returnFocus=()=>{ $('#drawer').hidden=true;$('#drawer').innerHTML='';document.querySelector(`[data-config-provider="${id}"]`)?.focus() }
+ const returnFocus=()=>{ $('#drawer').hidden=true;$('#drawer').innerHTML='';root.querySelector(`[data-config-provider="${id}"]`)?.focus() }
  $('#close-provider').onclick=returnFocus
  if(p.selected)$('#provider-selected').disabled=true
  $('#provider-clear-key').onchange=e=>{const key=$('#provider-key');key.value='';key.disabled=e.target.checked}
@@ -327,41 +372,37 @@ function switchProvider(id){
   finally{state.providerSwitching=false;button.disabled=false;button.textContent='确认切换'}
  }
 }
-const failoverFilters={hours:'24',provider:'',outcome:'ALL',page:1}
+const failoverFilters={hours:'24',provider:'',outcome:'ALL',page:1,pageSize:20}
 let failoverLoadVersion=0
-const percentage=v=>v==null?'—':Number(v).toFixed(1)+'%'
-async function showFailoverStatistics(provider){
- if(typeof provider==='string'){failoverFilters.provider=provider;failoverFilters.page=1}
- const drawer=$('#drawer'), version=++failoverLoadVersion
- drawer.innerHTML=`<section class="drawer statistics-drawer" role="dialog" aria-modal="true" aria-labelledby="statistics-title"><div class="panel-head"><h2 id="statistics-title">故障切换统计</h2><button type="button" id="close-statistics" class="text-button">关闭 ✕</button></div><div class="toolbar statistics-filters"><select id="statistics-hours" aria-label="统计时间范围">${[['1','最近1小时'],['24','最近24小时'],['168','最近7天'],['720','最近30天'],['0','全部保留记录']].map(([id,label])=>`<option value="${id}" ${failoverFilters.hours===id?'selected':''}>${label}</option>`).join('')}</select><select id="statistics-provider" aria-label="筛选统计主通道"></select><select id="statistics-outcome" aria-label="筛选路由结果">${[['ALL','全部路由结果'],['SWITCHED','发生故障切换'],['FAILED','模型最终失败'],['PRIMARY','主模型直接成功']].map(([id,label])=>`<option value="${id}" ${failoverFilters.outcome===id?'selected':''}>${label}</option>`).join('')}</select><button type="button" class="secondary" id="refresh-statistics">刷新统计</button></div><div id="statistics-body" class="drawer-body"><div class="loading">正在汇总模型路由记录…</div></div></section>`
- drawer.hidden=false
- $('#close-statistics').onclick=()=>{++failoverLoadVersion;drawer.hidden=true;drawer.innerHTML=''}
+function syncFailoverProviderOptions(extraProviders=[]){
  const options=new Map(state.providers.map(p=>[p.id,p.name]))
- const setOptions=()=>{if(failoverFilters.provider&&!options.has(failoverFilters.provider))options.set(failoverFilters.provider,failoverFilters.provider+'（历史通道）');$('#statistics-provider').innerHTML='<option value="">全部主通道</option>'+[...options].map(([id,name])=>`<option value="${esc(id)}" ${id===failoverFilters.provider?'selected':''}>${esc(name)}</option>`).join('')}
- setOptions()
- for(const [selector,key] of [['#statistics-hours','hours'],['#statistics-provider','provider'],['#statistics-outcome','outcome']])$(selector).onchange=e=>{failoverFilters[key]=e.target.value;failoverFilters.page=1;showFailoverStatistics()}
- $('#refresh-statistics').onclick=()=>showFailoverStatistics()
- try{
-  const data=await api('failover/statistics?'+new URLSearchParams({...failoverFilters,pageSize:15}))
-  if(version!==failoverLoadVersion||!$('#statistics-body'))return
-  for(const p of data.providers||[])if(!options.has(p.id))options.set(p.id,p.name+'（历史通道）');setOptions()
-  $('#statistics-body').innerHTML=failoverStatisticsView(data)
-  $('#statistics-previous').onclick=()=>{failoverFilters.page--;showFailoverStatistics()}
-  $('#statistics-next').onclick=()=>{failoverFilters.page++;showFailoverStatistics()}
- }catch(err){if(version===failoverLoadVersion&&$('#statistics-body'))$('#statistics-body').innerHTML=`<div class="banner error" role="alert">${esc(err.message)}，可点击刷新统计重试。</div>`}
+ for(const p of extraProviders)if(!options.has(p.id))options.set(p.id,p.name+'（历史通道）')
+ if(failoverFilters.provider&&!options.has(failoverFilters.provider))options.set(failoverFilters.provider,failoverFilters.provider+'（历史通道）')
+ tableState.failoverProviderOptions=[...options].map(([id,name])=>({id,name}))
 }
-function failoverStatisticsView(d){
- const metric=(title,value,note)=>`<div class="stat"><div class="stat-top">${title}</div><div class="stat-value">${esc(value)}</div><div class="stat-foot">${esc(note)}</div></div>`
- const table=(headers,body,cols)=>`<div class="table-scroll"><table><thead><tr>${headers.map(h=>'<th>'+h+'</th>').join('')}</tr></thead><tbody>${body||`<tr><td class="empty" colspan="${cols}">暂无符合条件的记录</td></tr>`}</tbody></table></div>`
- const section=(title,body)=>`<section class="panel"><div class="panel-head"><h2>${title}</h2></div>${body}</section>`
- const trend=d.trend||[],max=Math.max(1,...trend.map(x=>x.total))
- return `<div class="banner ${d.writable?'':'error'}">统计覆盖场景真实推理及普通聊天；连接验证、模型列表获取和纯规则执行不计入。切换指已进入第二或后续通道（含熔断跳过）；切换成功率 = 备用成功接管 / 发生切换。规则降级成功仍计为模型失败。</div><p class="muted">保留最近 ${esc(d.capacity)} 条，当前 ${esc(d.retained)} 条；筛选后 ${esc(d.total)} 条。${d.oldestRetainedAt?'最早保留 '+esc(time(d.oldestRetainedAt))+'。':''}从功能启用后采集，不补算旧日志。更新时间 ${esc(time(d.generatedAt))} · ${esc(d.zone)}。${d.writable?'持久化正常，重启可恢复。':'统计文件不可写，新增记录仅暂存内存。'}</p>
- <div class="stats">${metric('真实模型路由',d.total,'按当前时间、主通道和结果筛选')}${metric('发生故障切换',d.switched,'占路由总量 '+percentage(d.switchRate))}${metric('备用接管成功',d.rescued,'切换成功率 '+percentage(d.switchSuccessRate))}${metric('模型最终失败',d.failed,'真实模型成功率 '+percentage(d.successRate))}</div>
- <p class="statistics-summary">主模型直接成功 <b>${esc(d.primarySuccess)}</b> 次 · 切换后失败 <b>${esc(d.switchFailed)}</b> 次 · 熔断跳过 <b>${esc(d.skipped)}</b> 次 · 平均路由耗时 <b>${d.total?Number(d.averageLatencyMs).toFixed(1):'—'}</b> ms · 切换平均耗时 <b>${d.switched?Number(d.switchAverageLatencyMs).toFixed(1):'—'}</b> ms</p>
- ${section('切换趋势',trend.length?`<div class="statistics-trend" aria-label="蓝色为主模型成功，绿色为备用接管，红色为模型最终失败">${trend.map(t=>`<div class="trend-row"><span>${esc(t.time)}</span><div class="trend-bar" role="img" aria-label="${esc(t.time)}：总计${t.total}，备用接管${t.rescued}，失败${t.failed}"><i class="trend-primary" style="width:${t.primarySuccess/max*100}%"></i><i class="trend-rescued" style="width:${t.rescued/max*100}%"></i><i class="trend-failed" style="width:${t.failed/max*100}%"></i></div><small>${t.total} 次 / 切换 ${t.switched}</small></div>`).join('')}<p class="muted">蓝：主模型成功 · 绿：备用接管 · 红：模型最终失败；按 ${esc(d.zone)} 分桶，首尾可能为部分时段。</p></div>`:'<div class="empty">暂无趋势数据</div>')}
- ${section('通道运行表现',table(['通道','实际尝试','成功 / 失败','熔断跳过','备用接管','成功率','平均耗时'],(d.channels||[]).map(c=>`<tr><td>${esc(c.name)}<div class="mono">${esc(c.id)}</div></td><td>${c.requests}</td><td>${c.success} / ${c.failed}</td><td>${c.skipped}</td><td>${c.takeovers}</td><td>${percentage(c.successRate)}</td><td>${c.requests?Number(c.averageLatencyMs).toFixed(1):'—'} ms</td></tr>`).join(''),7))}
- ${section('失败与跳过原因',table(['原因','通道次数'],(d.reasons||[]).map(r=>`<tr><td>${esc(r.reason)}</td><td>${r.count}</td></tr>`).join(''),2))}
- ${section('最近路由记录',table(['时间 / 场景','主通道','模型结果','尝试顺序','总耗时'],(d.records||[]).map(r=>`<tr><td>${esc(time(r.time))}<div class="cell-sub">${esc(r.sceneCode?nameOf(r.sceneCode):'普通聊天 / 通用调用')}</div></td><td>${esc(r.primaryName)}</td><td>${pill(r.success?(r.switched?'备用接管成功':'主模型成功'):'模型最终失败',r.success?'':'red')}</td><td>${r.attempts.map(a=>`<div class="cell-sub">${esc(a.name)} / ${esc(a.model)}：${esc(a.status==='SUCCESS'?'成功':a.reason)} · ${esc(a.latencyMs)} ms</div>`).join('')||'未进入通道尝试'}</td><td>${esc(r.latencyMs)} ms</td></tr>`).join(''),5)+`<div class="pagination"><span>第 ${d.page} / ${Math.max(1,Math.ceil(d.total/d.pageSize))} 页 · 共 ${d.total} 条</span><button type="button" id="statistics-previous" ${d.page<=1?'disabled':''}>上一页</button><button type="button" id="statistics-next" ${d.page*d.pageSize>=d.total?'disabled':''}>下一页</button></div>`)}`
+async function loadFailoverStatistics(){
+ const version=++failoverLoadVersion
+ tableState.drawerBusy=true;tableState.failoverError=''
+ tableState.failoverFilters={...failoverFilters}
+ syncFailoverProviderOptions()
+ try{
+  const data=await api('failover/statistics?'+new URLSearchParams({hours:failoverFilters.hours,provider:failoverFilters.provider,outcome:failoverFilters.outcome,page:String(failoverFilters.page),pageSize:String(failoverFilters.pageSize)}))
+  if(version!==failoverLoadVersion||tableState.drawerType!=='failover-statistics')return
+  syncFailoverProviderOptions(data.providers||[])
+  tableState.failoverData=data
+ }catch(err){
+  if(version===failoverLoadVersion&&tableState.drawerType==='failover-statistics')tableState.failoverError=err.message
+ }finally{
+  if(version===failoverLoadVersion)tableState.drawerBusy=false
+ }
+}
+async function showFailoverStatistics(provider){
+ closeDrawer()
+ if(typeof provider==='string'){failoverFilters.provider=provider;failoverFilters.page=1}
+ tableState.drawerType='failover-statistics'
+ tableState.drawerTitle='故障切换统计'
+ tableState.failoverData=null
+ await loadFailoverStatistics()
 }
 function providerPage(){return head('模型接入','管理内置与自定义模型，统一配置、验证连接并追踪变更。','<div class="form-actions"><button class="secondary" type="button" id="circuit-alerts">熔断告警通知</button><button class="secondary" type="button" id="failover-statistics">故障切换统计</button><button class="primary" type="button" id="add-provider">＋ 新增自定义模型</button></div>')+`
  ${currentModelView()}<div class="banner">连接验证会向指定通道发送一次固定的最小推理请求，可能产生少量模型用量；不携带业务数据，不切换当前通道，不触发规则降级。业务场景执行效果请在调试工作台验证。</div>
@@ -390,6 +431,10 @@ let promptConfig=null
 async function promptPage(){
  const scene=state.scenes.find(s=>s.code===state.selected)||state.scenes[0];state.selected=scene.code
  promptConfig=await api('scenes/'+encodeURIComponent(scene.code));const c=promptConfig
+ tableState.promptSceneCode=c.code
+ tableState.promptPublishedVersion=c.publishedVersion||null
+ tableState.promptVersions=[...(c.versions||[])].reverse()
+ tableState.promptEvents=[...(c.events||[])].reverse()
  const options=c.versions.map(v=>`<option value="${v.number}" ${v.number===(c.publishedVersion||c.versions.at(-1)?.number)?'selected':''}>v${v.number} · ${v.number===c.publishedVersion?'当前发布':v.publishedAt?'历史发布':'草稿'} · ${esc(v.note)}</option>`).join('')
  return head('提示词管理','维护场景配置与不可变版本，发布、回滚和调试均可追溯。')+`
  <section class="panel"><div class="toolbar"><label for="manage-scene">业务场景</label><select id="manage-scene">${state.scenes.map(s=>`<option value="${s.code}" ${s.code===c.code?'selected':''}>${esc(s.domain)} / ${esc(s.name)}</option>`).join('')}</select><span class="muted">修订 ${c.revision} · ${esc(c.code)}</span></div></section>
@@ -397,9 +442,27 @@ async function promptPage(){
  ${sceneModelForm(c)}
  <div class="debug-grid"><section class="panel"><div class="panel-head"><h2>场景配置</h2>${pill(c.enabled?'已启用':'已停用',c.enabled?'':'gray')}</div><form id="scene-edit" class="form"><div class="field"><label>场景名称</label><input id="manage-name" maxlength="80" required value="${esc(c.name)}"></div><div class="field"><label>应用说明</label><input id="manage-description" maxlength="500" required value="${esc(c.description)}"></div><div class="field"><label>运行状态</label><select id="manage-enabled"><option value="true" ${c.enabled?'selected':''}>启用</option><option value="false" ${c.enabled?'':'selected'}>停用（拒绝场景调用）</option></select></div><div class="field"><label>JSON 参数示例</label><textarea id="manage-example" style="min-height:150px">${esc(JSON.stringify(JSON.parse(c.exampleJson),null,2))}</textarea></div><button class="primary">保存场景配置</button></form></section>
  <section class="panel"><div class="panel-head"><h2>创建提示词草稿</h2>${pill(c.publishedVersion?'发布版本 v'+c.publishedVersion:'尚未发布','amber')}</div><form id="prompt-draft" class="form"><div class="field"><label>系统提示词</label><textarea id="system-prompt" maxlength="8000" required style="min-height:135px">${esc('你是农业产业互联网的'+c.name+'助手。请基于提供的数据给出审慎、可解释的建议，不编造事实。')}</textarea></div><div class="field"><label>用户提示词</label><textarea id="user-prompt" maxlength="12000" required style="min-height:135px">${esc('业务编号：{{bizId}}\n业务输入：{{input}}\n请返回结构化建议与必要的风险说明。'.replaceAll('\\n','\n'))}</textarea><small>变量：{{input}} 为完整 JSON，{{bizId}} 为业务编号；也可使用 {{crop}} 等顶层输入字段。缺少变量时禁止发布。</small></div><div class="field"><label>版本说明</label><input id="prompt-note" maxlength="300" required placeholder="填写本次调整与预期效果"></div><button class="primary">保存为新草稿</button></form></section></div>
- <section class="panel"><div class="panel-head"><h2>版本记录</h2><span class="muted">正文保存后不可覆盖，修改时复制为新草稿</span></div><div class="table-scroll"><table><thead><tr><th>版本</th><th>状态</th><th>版本说明</th><th>创建账号 / 时间</th><th>操作</th></tr></thead><tbody>${[...c.versions].reverse().map(v=>`<tr><td>v${v.number}</td><td>${pill(v.number===c.publishedVersion?'当前发布':v.publishedAt?'历史发布':'草稿',v.publishedAt?'':'amber')}</td><td>${esc(v.note)}</td><td>${esc(v.createdBy)}<div class="cell-sub">${esc(time(v.createdAt))}</div></td><td><button class="link" data-load-version="${v.number}">复制编辑 / 预览</button> ${v.number===c.publishedVersion?'':`<button class="link" style="margin-left:12px" data-activate="${v.number}" data-rollback="${Boolean(v.publishedAt)}">${v.publishedAt?'回滚到此版本':'发布'}</button>`}</td></tr>`).join('')||'<tr><td colspan="5" class="empty">尚无提示词版本，先创建一个草稿</td></tr>'}</tbody></table></div></section>
- <section class="panel"><div class="panel-head"><h2>提示词变量预览</h2>${pill('不调用模型','gray')}</div><div class="debug-grid"><form id="prompt-preview" class="form"><div class="field"><label>选择版本</label><select id="preview-version" ${options?'':'disabled'}>${options||'<option>暂无版本</option>'}</select></div><div class="field"><label>业务编号</label><input id="preview-biz-id" value="DEMO-001" maxlength="100"></div><div class="field"><label>JSON 输入</label><textarea id="preview-input" style="min-height:160px">${esc(JSON.stringify(JSON.parse(c.exampleJson),null,2))}</textarea></div><button class="secondary" ${options?'':'disabled'}>渲染预览</button><a class="link" href="#debug" style="margin-left:14px">进入场景调试 ↗</a></form><div><pre id="prompt-output" class="code-result">选择版本并输入参数，预览渲染后的系统与用户提示词。</pre></div></div></section>
- <section class="panel"><div class="panel-head"><h2>最近配置操作</h2><small>最多保留100条</small></div><div class="table-scroll"><table><thead><tr><th>动作</th><th>版本</th><th>操作账号</th><th>时间</th></tr></thead><tbody>${[...c.events].reverse().slice(0,20).map(e=>`<tr><td>${esc({CREATE_SCENE:'新增自定义场景',EDIT_SCENE:'修改场景',BIND_MODEL:'变更场景模型',BATCH_BIND_MODEL:'批量绑定模型',CREATE_DRAFT:'创建草稿',PUBLISH:'发布版本',ROLLBACK:'回滚版本'}[e.action]||e.action)}</td><td>${['BIND_MODEL','BATCH_BIND_MODEL'].includes(e.action)?esc((e.beforeProviderId||'跟随全局')+' → '+(e.afterProviderId||'跟随全局')):(e.version?'v'+e.version:'—')}</td><td>${esc(e.operator)}</td><td>${esc(time(e.time))}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">暂无配置操作</td></tr>'}</tbody></table></div></section>`
+ <section class="panel"><div class="panel-head"><h2>提示词变量预览</h2>${pill('不调用模型','gray')}</div><div class="debug-grid"><form id="prompt-preview" class="form"><div class="field"><label>选择版本</label><select id="preview-version" ${options?'':'disabled'}>${options||'<option>暂无版本</option>'}</select></div><div class="field"><label>业务编号</label><input id="preview-biz-id" value="DEMO-001" maxlength="100"></div><div class="field"><label>JSON 输入</label><textarea id="preview-input" style="min-height:160px">${esc(JSON.stringify(JSON.parse(c.exampleJson),null,2))}</textarea></div><button class="secondary" ${options?'':'disabled'}>渲染预览</button><a class="link" href="#debug" style="margin-left:14px">进入场景调试 ↗</a></form><div><pre id="prompt-output" class="code-result">选择版本并输入参数，预览渲染后的系统与用户提示词。</pre></div></div></section>`
+}
+function loadPromptVersion(number){
+ if(!promptConfig)return
+ const v=promptConfig.versions.find(x=>x.number===Number(number))
+ if(!v)return
+ const sys=$('#system-prompt'), usr=$('#user-prompt'), note=$('#prompt-note'), prev=$('#preview-version')
+ if(sys)sys.value=v.systemPrompt
+ if(usr)usr.value=v.userPrompt
+ if(note)note.value='基于 v'+v.number+' 调整：'
+ if(prev)prev.value=String(v.number)
+ toast('已加载版本，可预览或编辑后保存为新草稿')
+}
+async function activatePromptVersion(number, isRollback){
+ if(!promptConfig)return
+ try{
+  await api('scenes/'+encodeURIComponent(promptConfig.code)+(isRollback?'/rollback':'/publish'),{method:'POST',body:JSON.stringify({version:Number(number),revision:promptConfig.revision})})
+  state.scenes=await api('scenes')
+  await render()
+  toast('配置已保存')
+ }catch(e){toast(e.message)}
 }
 function jsonObject(value){const data=JSON.parse(value);if(!data||typeof data!=='object'||Array.isArray(data))throw Error('请输入JSON对象');return data}
 function bindPrompts(){
@@ -412,19 +475,11 @@ function bindPrompts(){
  }
  $('#scene-edit').onsubmit=e=>{e.preventDefault();try{jsonObject($('#manage-example').value);mutate('','PUT',{name:$('#manage-name').value,description:$('#manage-description').value,exampleJson:$('#manage-example').value,enabled:$('#manage-enabled').value==='true'},e.submitter)}catch(err){toast(err.message)}}
  $('#prompt-draft').onsubmit=e=>{e.preventDefault();mutate('/versions','POST',{systemPrompt:$('#system-prompt').value,userPrompt:$('#user-prompt').value,note:$('#prompt-note').value},e.submitter)}
- document.querySelectorAll('[data-activate]').forEach(b=>b.onclick=()=>mutate(b.dataset.rollback==='true'?'/rollback':'/publish','POST',{version:Number(b.dataset.activate)},b))
- document.querySelectorAll('[data-load-version]').forEach(b=>b.onclick=()=>{const v=promptConfig.versions.find(v=>v.number===Number(b.dataset.loadVersion));$('#system-prompt').value=v.systemPrompt;$('#user-prompt').value=v.userPrompt;$('#prompt-note').value='基于 v'+v.number+' 调整：';$('#preview-version').value=String(v.number);toast('已加载版本，可预览或编辑后保存为新草稿')})
  $('#prompt-preview').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{const result=await api('scenes/'+encodeURIComponent(promptConfig.code)+'/preview',{method:'POST',body:JSON.stringify({version:Number($('#preview-version').value),input:jsonObject($('#preview-input').value),bizId:$('#preview-biz-id').value})});$('#prompt-output').textContent=JSON.stringify(result,null,2);if(result.missingVariables.length)toast('缺少变量：'+result.missingVariables.join('、'))}catch(err){toast(err.message)}finally{button.disabled=false}}
 }
 
 let circuitNotificationTimer, circuitNotificationBusy=false, circuitLatestId=null, circuitAlertVersion=0
-function updateCircuitNotificationBadge(summary){
- const b=$('#model-notifications');if(!b)return
- b.textContent='熔断通知'+(summary.unreadCount?' · '+summary.unreadCount:'')
- b.classList.toggle('has-unread',summary.unreadCount>0)
- b.title=summary.writable?'查看熔断和恢复通知':'通知记录持久化异常，请检查存储'
- b.setAttribute('aria-label','熔断通知，'+summary.unreadCount+'条未读')
-}
+function updateCircuitNotificationBadge(summary){ui.notifications=summary;ui.notificationError=false}
 async function pollCircuitNotifications(){
  if(!state.token||document.hidden||circuitNotificationBusy)return
  circuitNotificationBusy=true
@@ -432,89 +487,205 @@ async function pollCircuitNotifications(){
   const summary=await api('circuit-alerts/summary');updateCircuitNotificationBadge(summary)
   if(circuitLatestId!==null&&summary.latestId!==circuitLatestId&&summary.unreadCount>0)toast('收到新的模型熔断或恢复通知，请查看顶部熔断通知')
   circuitLatestId=summary.latestId
- }catch{const b=$('#model-notifications');if(b)b.title='通知暂时无法刷新，点击重试'}
+ }catch{ui.notificationError=true}
  finally{circuitNotificationBusy=false}
 }
 function startCircuitNotifications(){
- if(!$('#model-notifications')){
-  const b=document.createElement('button');b.id='model-notifications';b.type='button';b.className='alert-notification-button';b.textContent='熔断通知';b.onclick=()=>showCircuitAlerts();$('.top-actions').prepend(b)
- }
  clearInterval(circuitNotificationTimer);pollCircuitNotifications();circuitNotificationTimer=setInterval(pollCircuitNotifications,30000)
 }
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)pollCircuitNotifications()})
-const circuitEventLabel=type=>({OPEN:'通道熔断',REOPEN:'探测失败',RECOVERED:'恢复成功'})[type]||type
-async function showCircuitAlerts(initialProvider=''){
- const drawer=$('#drawer');const session=++circuitAlertVersion
- let provider=initialProvider,type='ALL',unreadOnly=false,page=1,busy=false,data
- drawer.innerHTML=`<section class="drawer" role="dialog" aria-modal="true" aria-labelledby="circuit-alert-title" style="width:min(1180px,96vw)"><div class="panel-head"><h2 id="circuit-alert-title">熔断告警通知</h2><button type="button" id="close-circuit-alerts" class="text-button">关闭 ✕</button></div><div class="form"><div class="banner">通道首次熔断、恢复探测失败及恢复成功时生成站内通知。同一轮冷却中的跳过请求不重复提醒；已读状态按账号分别保存。标记已读不影响熔断恢复。</div><div class="circuit-alert-filters"><select id="alert-provider" aria-label="告警通道"></select><select id="alert-type" aria-label="告警事件"><option value="ALL">全部事件</option><option value="OPEN">通道熔断</option><option value="REOPEN">探测失败</option><option value="RECOVERED">恢复成功</option></select><label class="provider-check"><input type="checkbox" id="alert-unread">仅看未读</label><button class="secondary" id="alert-refresh" type="button">刷新通知</button><button class="secondary" id="alert-read-all" type="button">全部标为已读</button></div><p class="muted" id="alert-summary">正在加载通知…</p><div class="banner error" id="alert-error" role="alert" hidden></div><div class="table-wrap"><table class="circuit-alert-table"><thead><tr><th>时间 / 阅读状态</th><th>模型通道</th><th>告警事件</th><th>故障与恢复信息</th><th>处理</th></tr></thead><tbody id="alert-records"></tbody></table></div><div class="pagination"><span id="alert-page"></span><button class="secondary" id="alert-prev" type="button">上一页</button><button class="secondary" id="alert-next" type="button">下一页</button></div><p class="muted">保留最近1000条事件，重启后恢复通知历史与已读状态；通道配置重置和服务重启不代表真实恢复，不发送恢复成功通知。控制台打开且页面可见时每30秒检查新通知，列表通过“刷新通知”更新。</p></div></section>`
- drawer.hidden=false
- const active=()=>session===circuitAlertVersion&&!drawer.hidden&&!!$('#alert-records')
- const showError=e=>{if(active()){$('#alert-error').textContent=e.message;$('#alert-error').hidden=false}}
- const setBusy=value=>{busy=value;if(active())drawer.querySelectorAll('button,select,input').forEach(b=>{if(b.id!=='close-circuit-alerts')b.disabled=value})}
- $('#close-circuit-alerts').onclick=()=>{circuitAlertVersion++;drawer.hidden=true;drawer.innerHTML=''}
- async function load(){
-  if(!active())return
-  setBusy(true);$('#alert-error').hidden=true
-  try{
-   const query=new URLSearchParams({provider,type,unreadOnly:String(unreadOnly),page:String(page),pageSize:'15'})
-   const result=await api('circuit-alerts?'+query);if(!active())return
-   data=result;updateCircuitNotificationBadge(data)
-   const options=new Map(state.providers.map(p=>[p.id,p.name]));for(const p of data.providers)options.set(p.id,p.name);if(provider&&!options.has(provider))options.set(provider,provider)
-   $('#alert-provider').innerHTML='<option value="">全部通道</option>'+[...options].map(([id,name])=>`<option value="${esc(id)}" ${id===provider?'selected':''}>${esc(name)}</option>`).join('')
-   $('#alert-summary').textContent=`共保留 ${data.retained} 条通知，当前账号未读 ${data.unreadCount} 条，筛选结果 ${data.total} 条。${data.writable?'持久化正常。':'持久化异常，新增通知可能仅保留在内存中。'}`
-   $('#alert-records').innerHTML=data.records.length?data.records.map(({event:e,read})=>`<tr class="${read?'':'circuit-alert-unread'}"><td>${esc(time(e.time))}<div class="cell-sub">${read?'已读':'未读'}</div></td><td><div class="cell-title">${esc(e.providerName)}</div><div class="cell-sub">${esc(e.model)}</div></td><td>${pill(circuitEventLabel(e.type),e.type==='RECOVERED'?'':'amber')}<div class="cell-sub">${esc(e.title)}</div></td><td>${esc(e.reason)}<div class="cell-sub">连续故障 ${esc(e.failures)} 次 · 阈值 ${esc(e.threshold)} 次 · 冷却 ${esc(e.cooldownSeconds)} 秒</div><div class="cell-sub">事件组 ${esc(e.incidentId)}</div></td><td><div class="circuit-alert-actions">${read?'':`<button class="link" data-alert-read="${esc(e.id)}" type="button">标为已读</button>`}${state.providers.some(p=>p.id===e.providerId)?`<button class="link" data-alert-channel="${esc(e.providerId)}" type="button">查看通道</button>`:'<span class="muted">通道已移除</span>'}</div></td></tr>`).join(''):'<tr><td colspan="5" class="empty">暂无符合条件的熔断通知</td></tr>'
-   $('#alert-page').textContent=`第 ${page} / ${Math.max(1,Math.ceil(data.total/15))} 页 · 共 ${data.total} 条`
-   drawer.querySelectorAll('[data-alert-read]').forEach(b=>b.onclick=()=>markRead({ids:[b.dataset.alertRead]}))
-   drawer.querySelectorAll('[data-alert-channel]').forEach(b=>b.onclick=()=>{circuitAlertVersion++;configureCircuit(b.dataset.alertChannel)})
-  }catch(e){showError(e)}finally{
-   setBusy(false)
-   if(active()){$('#alert-prev').disabled=page<=1;$('#alert-next').disabled=!data||page*15>=data.total;$('#alert-read-all').disabled=!data?.unreadCount}
+
+const alertFilters={provider:'',type:'ALL',unreadOnly:false,page:1,pageSize:20}
+function syncAlertProviderOptions(extraProviders=[]){
+ const options=new Map(state.providers.map(p=>[p.id,p.name]))
+ for(const p of extraProviders)options.set(p.id,p.name)
+ if(alertFilters.provider&&!options.has(alertFilters.provider))options.set(alertFilters.provider,alertFilters.provider)
+ tableState.alertProviderOptions=[...options].map(([id,name])=>({id,name}))
+}
+async function loadCircuitAlerts(){
+ const session=++circuitAlertVersion
+ tableState.drawerBusy=true;tableState.alertError=''
+ tableState.alertFilters={...alertFilters}
+ syncAlertProviderOptions()
+ try{
+  const query=new URLSearchParams({provider:alertFilters.provider,type:alertFilters.type,unreadOnly:String(alertFilters.unreadOnly),page:String(alertFilters.page),pageSize:String(alertFilters.pageSize)})
+  const result=await api('circuit-alerts?'+query)
+  if(session!==circuitAlertVersion||tableState.drawerType!=='circuit-alerts')return
+  updateCircuitNotificationBadge(result)
+  syncAlertProviderOptions(result.providers||[])
+  tableState.alertData=result
+ }catch(e){
+  if(session===circuitAlertVersion&&tableState.drawerType==='circuit-alerts')tableState.alertError=e.message
+ }finally{
+  if(session===circuitAlertVersion)tableState.drawerBusy=false
+ }
+}
+async function markCircuitAlertsRead(payload){
+ if(tableState.drawerBusy)return
+ tableState.drawerBusy=true;tableState.alertError=''
+ try{
+  const summary=await api('circuit-alerts/read',{method:'POST',body:JSON.stringify(payload)})
+  updateCircuitNotificationBadge(summary)
+  if(tableState.drawerType==='circuit-alerts'){
+   if(alertFilters.unreadOnly)alertFilters.page=1
+   tableState.drawerBusy=false
+   await loadCircuitAlerts()
   }
+ }catch(e){
+  tableState.alertError=e.message
+  tableState.drawerBusy=false
  }
- async function markRead(payload){
-  if(busy)return;setBusy(true);$('#alert-error').hidden=true
-  try{const summary=await api('circuit-alerts/read',{method:'POST',body:JSON.stringify(payload)});updateCircuitNotificationBadge(summary);if(active()){if(unreadOnly)page=1;await load()}}
-  catch(e){showError(e);setBusy(false)}
- }
- $('#alert-provider').onchange=e=>{provider=e.target.value;page=1;load()}
- $('#alert-type').onchange=e=>{type=e.target.value;page=1;load()}
- $('#alert-unread').onchange=e=>{unreadOnly=e.target.checked;page=1;load()}
- $('#alert-refresh').onclick=()=>load()
- $('#alert-prev').onclick=()=>{if(!busy&&page>1){page--;load()}}
- $('#alert-next').onclick=()=>{if(!busy&&data&&page*15<data.total){page++;load()}}
- $('#alert-read-all').onclick=()=>{if(data?.latestId)markRead({ids:[],throughId:data.latestId})}
- await load()
+}
+async function showCircuitAlerts(initialProvider=''){
+ closeDrawer()
+ alertFilters.provider=typeof initialProvider==='string'?initialProvider:''
+ alertFilters.type='ALL'
+ alertFilters.unreadOnly=false
+ alertFilters.page=1
+ alertFilters.pageSize=20
+ tableState.drawerType='circuit-alerts'
+ tableState.drawerTitle='熔断告警通知'
+ tableState.alertData=null
+ await loadCircuitAlerts()
 }
 
 let renderVersion=0
-async function render(){const current=++renderVersion;const id=location.hash.slice(1)||'overview', nav=navs.find(x=>x[0]===id)||navs[0];$('#crumb').textContent=nav[1];document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.dataset.nav===nav[0]));$('#notice').hidden=true
- try{let html;if(nav[0]==='overview')html=overview();else if(nav[0]==='scenes')html=scenePage();else if(nav[0]==='prompts')html=await promptPage();else if(nav[0]==='debug')html=debugPage();else if(nav[0]==='calls')html=await callPage();else if(nav[0]==='providers')html=providerPage();else html=governancePage();if(current!==renderVersion)return;$('#content').innerHTML=html;bind(nav[0])}catch(e){if(current!==renderVersion)return;$('#notice').className='banner error';$('#notice').textContent=e.message;$('#notice').hidden=false}}
+async function render(){
+ const current=++renderVersion
+ const id=location.hash.slice(1)||'overview', nav=navs.find(x=>x[0]===id)||navs[0]
+ ui.active=nav[0];ui.notice=''
+ try{
+  let html
+  if(nav[0]==='overview')html=overview()
+  else if(nav[0]==='scenes')html=scenePage()
+  else if(nav[0]==='prompts')html=await promptPage()
+  else if(nav[0]==='debug')html=debugPage()
+  else if(nav[0]==='calls')html=await callPage()
+  else if(nav[0]==='providers')html=providerPage()
+  else html=governancePage()
+  if(current!==renderVersion)return
+  ui.content=html
+  await nextTick()
+  if(current!==renderVersion)return
+  bind(nav[0])
+ }catch(e){if(current===renderVersion)ui.notice=e.message}
+}
 function showScene(code){const s=state.scenes.find(x=>x.code===code);if(!s)return;$('#drawer').innerHTML=`<section class="drawer" role="dialog" aria-modal="true" aria-label="场景详情"><div class="panel-head"><h2>场景详情</h2><button id="close-drawer" class="text-button">关闭 ✕</button></div><div class="drawer-body"><span class="eyebrow">SCENE CAPABILITY</span><h2>${esc(s.name)}</h2>${pill(s.publishedVersion?'提示词已发布':'待发布提示词',s.publishedVersion?'':'amber')}<p>${esc(s.description)}</p><dl class="definition"><dt>场景编码</dt><dd class="mono">${esc(s.code)}</dd><dt>业务子系统</dt><dd>${esc(s.domain)}</dd><dt>业务标识</dt><dd class="mono">${esc(s.bizSystem)}</dd><dt>模型路由</dt><dd>${esc(sceneModelText(s))}</dd><dt>执行类型</dt><dd>按场景模型配置和全局推理策略执行</dd></dl><h3 style="font-size:13px">JSON 入参示例</h3><pre>${esc(JSON.stringify(JSON.parse(s.exampleJson),null,2))}</pre><p>发布提示词后可进入调试工作台验证；金融、监管和生产结果仍需业务人员复核。</p><button class="primary" id="drawer-debug">进入调试工作台 ↗</button></div></section>`;$('#drawer').hidden=false;$('#close-drawer').onclick=()=>$('#drawer').hidden=true;$('#drawer-debug').onclick=()=>{state.selected=code;state.result=null;$('#drawer').hidden=true;location.hash='debug'}}
 async function copy(value){try{await navigator.clipboard.writeText(value);toast('已复制')}catch{toast('当前浏览器未允许复制，请从结果区域手动选择')}}
-function bind(id){if(id==='providers'){$('#circuit-alerts').onclick=()=>showCircuitAlerts();$('#failover-statistics').onclick=()=>showFailoverStatistics('');document.querySelectorAll('[data-statistics-provider]').forEach(b=>b.onclick=()=>showFailoverStatistics(b.dataset.statisticsProvider));document.querySelectorAll('[data-circuit-provider]').forEach(b=>b.onclick=()=>configureCircuit(b.dataset.circuitProvider));document.querySelectorAll('[data-failover-provider]').forEach(b=>b.onclick=()=>configureFailover(b.dataset.failoverProvider));document.querySelectorAll('[data-select-provider]').forEach(b=>b.onclick=()=>switchProvider(b.dataset.selectProvider));$('#add-provider').onclick=()=>configureProvider();document.querySelectorAll('[data-delete-provider]').forEach(b=>b.onclick=()=>deleteProvider(b.dataset.deleteProvider));document.querySelectorAll('[data-test-provider]').forEach(b=>b.onclick=()=>testProvider(b.dataset.testProvider));document.querySelectorAll('[data-config-provider]').forEach(b=>b.onclick=()=>configureProvider(b.dataset.configProvider));document.querySelectorAll('[data-change-provider]').forEach(b=>b.onclick=()=>showProviderChanges(b.dataset.changeProvider));}if(id==='prompts')bindPrompts();document.querySelectorAll('[data-manage]').forEach(b=>b.onclick=()=>{state.selected=b.dataset.manage;location.hash='prompts'});document.querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>{resetSceneFilters();state.domain=b.dataset.domain;location.hash='scenes'});document.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>showScene(b.dataset.detail));document.querySelectorAll('[data-debug]').forEach(b=>b.onclick=()=>{state.selected=b.dataset.debug;state.result=null;location.hash='debug'});document.querySelectorAll('[data-trace]').forEach(b=>b.onclick=()=>copy(b.dataset.trace));
+function bind(id){if(id==='providers'){$('#circuit-alerts').onclick=()=>showCircuitAlerts();$('#failover-statistics').onclick=()=>showFailoverStatistics('');root.querySelectorAll('[data-statistics-provider]').forEach(b=>b.onclick=()=>showFailoverStatistics(b.dataset.statisticsProvider));root.querySelectorAll('[data-circuit-provider]').forEach(b=>b.onclick=()=>configureCircuit(b.dataset.circuitProvider));root.querySelectorAll('[data-failover-provider]').forEach(b=>b.onclick=()=>configureFailover(b.dataset.failoverProvider));root.querySelectorAll('[data-select-provider]').forEach(b=>b.onclick=()=>switchProvider(b.dataset.selectProvider));$('#add-provider').onclick=()=>configureProvider();root.querySelectorAll('[data-delete-provider]').forEach(b=>b.onclick=()=>deleteProvider(b.dataset.deleteProvider));root.querySelectorAll('[data-test-provider]').forEach(b=>b.onclick=()=>testProvider(b.dataset.testProvider));root.querySelectorAll('[data-config-provider]').forEach(b=>b.onclick=()=>configureProvider(b.dataset.configProvider));root.querySelectorAll('[data-change-provider]').forEach(b=>b.onclick=()=>showProviderChanges(b.dataset.changeProvider));}if(id==='prompts')bindPrompts();root.querySelectorAll('[data-manage]').forEach(b=>b.onclick=()=>{state.selected=b.dataset.manage;location.hash='prompts'});root.querySelectorAll('[data-domain]').forEach(b=>b.onclick=()=>{resetSceneFilters();state.domain=b.dataset.domain;location.hash='scenes'});root.querySelectorAll('[data-detail]').forEach(b=>b.onclick=()=>showScene(b.dataset.detail));root.querySelectorAll('[data-debug]').forEach(b=>b.onclick=()=>{state.selected=b.dataset.debug;state.result=null;location.hash='debug'});root.querySelectorAll('[data-trace]').forEach(b=>b.onclick=()=>copy(b.dataset.trace));
  if(id==='scenes'){
- $('#add-scene').onclick=createSceneDrawer
- syncSceneSelection()
- document.querySelectorAll('[data-scene-select]').forEach(input=>input.onchange=()=>{if(input.checked)state.sceneSelection.add(input.dataset.sceneSelect);else state.sceneSelection.delete(input.dataset.sceneSelect);syncSceneSelection()})
- $('#select-visible-scenes').onchange=e=>{for(const s of filteredScenes()){if(e.target.checked)state.sceneSelection.add(s.code);else state.sceneSelection.delete(s.code)}syncSceneSelection()}
- $('#clear-scene-selection').onclick=()=>{state.sceneSelection.clear();syncSceneSelection()}
- $('#batch-bind-model').onclick=batchModelDrawer
- let timer;$('#scene-search').oninput=e=>{state.sceneSelection.clear();state.sceneSearch=e.target.value;syncSceneSelection();clearTimeout(timer);timer=setTimeout(async()=>{const pos=$('#scene-search')?.selectionStart;await render();$('#scene-search')?.focus();$('#scene-search')?.setSelectionRange(pos,pos)},220)};$('#scene-domain').onchange=e=>{state.sceneSelection.clear();state.domain=e.target.value;render()};$('#scene-model-source').onchange=e=>{state.sceneSelection.clear();state.sceneModelSource=e.target.value;render()};$('#scene-model-filter').onchange=e=>{state.sceneSelection.clear();state.sceneModelProvider=e.target.value;render()};$('#reset-scene-filters').onclick=()=>{resetSceneFilters();render()}}
- if(id==='debug'){$('#debug-scene').onchange=e=>{state.selected=e.target.value;state.result=null;render()};$('#load-example').onclick=()=>$('#json-input').value=JSON.stringify(JSON.parse(state.scenes.find(s=>s.code===state.selected).exampleJson),null,2);$('#copy-result').onclick=()=>copy(JSON.stringify(state.result,null,2));$('#debug-form').onsubmit=async e=>{e.preventDefault();if(state.running)return;let input;try{input=JSON.parse($('#json-input').value);if(!input||Array.isArray(input)||typeof input!=='object')throw Error('参数必须是 JSON 对象');if(Object.keys(input).length>50||$('#json-input').value.length>16000)throw Error('参数超过 50 个字段或 16KB 限制')}catch(err){toast('参数错误：'+err.message);return}state.running=true;const button=$('#run');button.disabled=true;button.textContent='执行中…';try{state.result=await api('debug',{method:'POST',timeoutMs:105000,body:JSON.stringify({sceneCode:state.selected,bizId:$('#biz-id').value,input})});$('#result').innerHTML=resultView(state.result);$('#copy-result').disabled=false;state.overview=await api('overview');toast(state.result.ok?'场景执行成功，调用已记录':'场景执行失败，请查看响应')}catch(err){toast(err.message)}finally{state.running=false;button.disabled=false;button.textContent='▷ 执行调试'}}}
- if(id==='calls'){const query=()=>{state.keyword=$('#call-search').value;state.status=$('#call-status').value;state.page=1;render()};$('#query-calls').onclick=query;$('#call-search').onkeydown=e=>{if(e.key==='Enter')query()};$('#call-status').onchange=query;$('#prev').onclick=()=>{state.page--;render()};$('#next').onclick=()=>{state.page++;render()}}
+  $('#add-scene').onclick=createSceneDrawer
+ }
+ if(id==='debug'){$('#debug-scene').onchange=e=>{state.selected=e.target.value;state.result=null;render()};$('#load-example').onclick=()=>$('#json-input').value=JSON.stringify(JSON.parse(state.scenes.find(s=>s.code===state.selected).exampleJson),null,2);$('#copy-result').onclick=()=>copy(JSON.stringify(state.result,null,2));$('#debug-form').onsubmit=async e=>{e.preventDefault();if(state.running)return;let input;try{input=JSON.parse($('#json-input').value);if(!input||Array.isArray(input)||typeof input!=='object')throw Error('参数必须是 JSON 对象');if(Object.keys(input).length>50||$('#json-input').value.length>16000)throw Error('参数超过 50 个字段或 16KB 限制')}catch(err){toast('参数错误：'+err.message);return}state.running=true;const button=$('#run');button.disabled=true;button.textContent='执行中…';try{state.result=await api('debug',{method:'POST',timeoutMs:105000,body:JSON.stringify({sceneCode:state.selected,bizId:$('#biz-id').value,input})});$('#result').innerHTML=resultView(state.result);$('#copy-result').disabled=false;state.overview=await api('overview');tableState.overviewRecent=state.overview?.recent||[];toast(state.result.ok?'场景执行成功，调用已记录':'场景执行失败，请查看响应')}catch(err){toast(err.message)}finally{state.running=false;button.disabled=false;button.textContent='▷ 执行调试'}}}
 }
-$('#login').onclick=()=>login().catch(e=>toast(e.message));
 let logoutPending=false
-$('#logout').onclick=async()=>{
+async function logout(){
  if(logoutPending)return
- logoutPending=true;$('#logout').disabled=true
+ logoutPending=true;ui.loggingOut=true
  try{
   await request('/api/v1/auth/logout',{method:'POST',body:'{}',timeoutMs:10000})
   state.token='';['verifier','state','return'].forEach(key=>sessionStorage.removeItem(PREFIX+key))
   location.assign(sso+'/api/v1/sso/logout/complete?client_id='+CLIENT)
- }catch{toast('未完成全局退出，登录状态已保留，请重试');logoutPending=false;$('#logout').disabled=false}
+ }catch{toast('未完成全局退出，登录状态已保留，请重试');logoutPending=false;ui.loggingOut=false}
 }
-$('#refresh').onclick=async()=>{try{[state.overview,state.providers,state.scenes]=await Promise.all([api('overview'),api('providers'),api('scenes')]);state.providerTests={};state.sceneSelection.clear();await render();toast('数据已刷新')}catch(e){toast(e.message)}}
-$('#drawer').onclick=e=>{if(!state.sceneCreating&&e.target===$('#drawer'))$('#drawer').hidden=true};document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!state.sceneCreating)$('#drawer').hidden=true})
-window.addEventListener('hashchange',()=>{if(state.token){render();window.scrollTo(0,0)}})
-boot()
+async function refresh(){
+ try{[state.overview,state.providers,state.scenes]=await Promise.all([api('overview'),api('providers'),api('scenes')]);state.providerTests={};state.sceneSelection.clear();await render();toast('数据已刷新')}catch(e){toast(e.message)}
+}
+let sceneSearchTimer
+function onSceneSearchInput(){
+ state.sceneSelection.clear()
+ state.sceneSearch=tableState.sceneSearch
+ clearTimeout(sceneSearchTimer)
+ sceneSearchTimer=setTimeout(()=>syncSceneTable(),120)
+}
+function applySceneFilters(){
+ clearTimeout(sceneSearchTimer)
+ state.sceneSelection.clear()
+ state.sceneSearch=tableState.sceneSearch
+ state.domain=tableState.sceneDomain
+ state.sceneModelSource=tableState.sceneModelSource
+ state.sceneModelProvider=tableState.sceneModelProvider
+ syncSceneTable()
+}
+function resetSceneFiltersAndSync(){
+ clearTimeout(sceneSearchTimer)
+ resetSceneFilters()
+ syncSceneTable()
+}
+function setSceneSelection(keys){
+ state.sceneSelection=new Set(keys)
+ syncSceneSelection()
+}
+function clearSceneSelection(){
+ state.sceneSelection.clear()
+ syncSceneSelection()
+}
+function openScenePrompts(code){state.selected=code;location.hash='prompts'}
+function openSceneDebug(code){state.selected=code;state.result=null;location.hash='debug'}
+async function queryCalls(){
+ state.keyword=tableState.callKeyword
+ state.status=tableState.callStatus
+ state.page=1
+ try{await loadCalls()}catch(e){ui.notice=e.message}
+}
+async function resetCallFilters(){
+ state.keyword='';state.status='';state.page=1
+ tableState.callKeyword='';tableState.callStatus=''
+ try{await loadCalls()}catch(e){ui.notice=e.message}
+}
+async function setCallsPagination(page, pageSize){
+ state.page=page;state.pageSize=pageSize||20
+ try{await loadCalls()}catch(e){ui.notice=e.message}
+}
+async function applyFailoverFilters(){
+ failoverFilters.hours=tableState.failoverFilters.hours
+ failoverFilters.provider=tableState.failoverFilters.provider
+ failoverFilters.outcome=tableState.failoverFilters.outcome
+ failoverFilters.page=1
+ await loadFailoverStatistics()
+}
+async function resetFailoverFilters(){
+ failoverFilters.hours='24';failoverFilters.provider='';failoverFilters.outcome='ALL';failoverFilters.page=1
+ await loadFailoverStatistics()
+}
+async function setFailoverPagination(page, pageSize){
+ failoverFilters.page=page;failoverFilters.pageSize=pageSize||20
+ await loadFailoverStatistics()
+}
+async function applyAlertFilters(){
+ alertFilters.provider=tableState.alertFilters.provider
+ alertFilters.type=tableState.alertFilters.type
+ alertFilters.page=1
+ await loadCircuitAlerts()
+}
+async function resetAlertFilters(){
+ alertFilters.provider='';alertFilters.type='ALL';alertFilters.unreadOnly=false;alertFilters.page=1
+ await loadCircuitAlerts()
+}
+async function setAlertUnreadOnly(flag){
+ alertFilters.unreadOnly=Boolean(flag)
+ alertFilters.page=1
+ await loadCircuitAlerts()
+}
+async function setAlertPagination(page, pageSize){
+ alertFilters.page=page;alertFilters.pageSize=pageSize||20
+ await loadCircuitAlerts()
+}
+function markAllCircuitAlertsRead(){
+ if(tableState.alertData?.latestId)markCircuitAlertsRead({ids:[],throughId:tableState.alertData.latestId})
+}
+function openCircuitFromAlert(providerId){
+ closeVueDrawer()
+ configureCircuit(providerId)
+}
+function closeVueDrawer(){
+ failoverLoadVersion++
+ circuitAlertVersion++
+ tableState.drawerType=''
+ tableState.drawerBusy=false
+}
+function closeDrawer(){if(!state.sceneCreating){$('#drawer').hidden=true;$('#drawer').innerHTML=''}}
+function hashchange(){if(state.token){render();window.scrollTo(0,0)}}
+function visibilitychange(){if(!document.hidden)pollCircuitNotifications()}
+function dispose(){state.token='';renderVersion++;failoverLoadVersion++;circuitAlertVersion++;clearTimeout(toastTimer);clearTimeout(sceneSearchTimer);clearInterval(circuitNotificationTimer)}
+return {navs,boot,login:()=>login().catch(e=>toast(e.message)),logout,refresh,closeDrawer,closeVueDrawer,hashchange,visibilitychange,showCircuitAlerts,loadCircuitAlerts,applyAlertFilters,resetAlertFilters,setAlertUnreadOnly,setAlertPagination,markCircuitAlertsRead,markAllCircuitAlertsRead,openCircuitFromAlert,hasProvider:(id)=>state.providers.some(p=>p.id===id),loadFailoverStatistics,applyFailoverFilters,resetFailoverFilters,setFailoverPagination,nameOf,sceneModelText,showScene,openScenePrompts,openSceneDebug,onSceneSearchInput,applySceneFilters,resetSceneFiltersAndSync,setSceneSelection,clearSceneSelection,openBatchModelDrawer:batchModelDrawer,loadCalls,queryCalls,resetCallFilters,setCallsPagination,copyText:copy,loadPromptVersion,activatePromptVersion,dispose}
+}
