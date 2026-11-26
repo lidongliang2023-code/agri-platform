@@ -2,7 +2,7 @@
   <div class="agri-vue-list-page agri-antdv-list-page">
     <slot name="filter" />
 
-    <div class="agri-vue-table-card">
+    <div class="agri-vue-table-card" @dblclick.capture="handleHeaderHandleDblClick">
       <AgriVueToolbar
         v-if="showToolbar"
         :columns="normalizedColumns"
@@ -193,6 +193,7 @@ const {
 const {
   widths: customColumnWidths,
   setColumnWidth,
+  resetColumnWidth,
   resetAllWidths,
 } = useVueColumnWidths({
   storageKey: () => props.columnWidthStorageKey,
@@ -276,8 +277,12 @@ const resolvedScroll = computed(() => {
   const totalWidth =
     (props.selectable ? props.selectionWidth : 0) +
     antdvColumns.value.reduce((acc, col) => acc + (typeof col.width === 'number' ? col.width : 140), 0)
+  const resolvedX =
+    typeof props.scrollX === 'number'
+      ? Math.max(totalWidth, props.scrollX)
+      : (props.scrollX ?? Math.max(totalWidth, 720))
   return {
-    x: props.scrollX ?? Math.max(totalWidth, 720),
+    x: resolvedX,
     ...(props.scrollY !== undefined ? { y: props.scrollY } : {}),
   }
 })
@@ -320,11 +325,42 @@ function resolveRowClassName(record: RowRecord, index: number): string {
   return classes.join(' ')
 }
 
+let lastDblClickReset: { key: string; at: number } | null = null
+
 function handleResizeColumn(width: number, col: ColumnType<RowRecord>) {
   const key = String(col.key || col.dataIndex || '')
   if (!key) return
+  // 双击手柄复位时，Ant Design Vue DragHandle 在 mouseup 阶段调度的 raf 会在下一帧把旧宽度回写，这里忽略 120ms 内的残余回调
+  if (lastDblClickReset && lastDblClickReset.key === key && Date.now() - lastDblClickReset.at < 120) {
+    return
+  }
   setColumnWidth(key, width, MIN_RESIZABLE_COLUMN_WIDTH)
   emit('column-resize', key, customColumnWidths.value[key] ?? width)
+}
+
+function handleHeaderHandleDblClick(event: MouseEvent) {
+  const target = event.target as HTMLElement | null
+  const handle = target?.closest?.('.ant-table-resize-handle')
+  if (!handle) return
+  const th = handle.closest('th')
+  if (!th) return
+  const headerRow = th.parentElement
+  const thIndex = headerRow ? Array.from(headerRow.children).indexOf(th) : -1
+  const colStartAttr = th.getAttribute('colstart')
+  const colStart = colStartAttr !== null ? Number(colStartAttr) : thIndex
+  const offset = (props.selectable ? 1 : 0) + (props.expandedRowRender ? 1 : 0)
+  const colIndex = Number.isFinite(colStart) ? colStart - offset : -1
+  let col = colIndex >= 0 ? antdvColumns.value[colIndex] : undefined
+  if (!col) {
+    const titleText = (th.getAttribute('title') || th.textContent || '').trim()
+    col = antdvColumns.value.find((item) => String(item.title || '').trim() === titleText)
+  }
+  const key = col ? String(col.key || col.dataIndex || '') : ''
+  if (!key) return
+  event.stopPropagation()
+  lastDblClickReset = { key, at: Date.now() }
+  resetColumnWidth(key)
+  emit('column-resize', key, Number(col?.width ?? 140))
 }
 
 function handleTableChange(pagination: unknown, filters: unknown, sorter: unknown) {

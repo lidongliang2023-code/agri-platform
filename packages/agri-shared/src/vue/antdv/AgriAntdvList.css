@@ -26,3 +26,28 @@
 .agri-antdv-list-page .ant-table-thead > tr > th {
   position: relative;
 }
+
+/* 将 Ant Design Vue 列宽拖拽手柄收进表头内右沿，防止 ellipsis 的 overflow:hidden 裁切或被右侧相邻表头遮挡 */
+.agri-antdv-list-page .ant-table-thead > tr > th .ant-table-resize-handle {
+  left: auto !important;
+  right: 0 !important;
+  width: 10px !important;
+  z-index: 2 !important;
+}
+
+.agri-antdv-list-page .ant-table-thead > tr > th .ant-table-resize-handle-line {
+  margin-left: auto !important;
+  margin-right: 1px;
+  width: 2px !important;
+  background-color: #2d8f4e !important;
+}
+
+.agri-antdv-list-page .ant-table-thead > tr > th:hover .ant-table-resize-handle-line {
+  opacity: 0.45;
+}
+
+.agri-antdv-list-page .ant-table-thead > tr > th .ant-table-resize-handle:hover .ant-table-resize-handle-line,
+.agri-antdv-list-page .ant-table-thead > tr > th .ant-table-resize-handle.dragging .ant-table-resize-handle-line {
+  opacity: 1 !important;
+}
+
