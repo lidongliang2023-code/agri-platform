@@ -18,6 +18,8 @@
     "baseUrl": ".",
     "paths": {
       "vue": ["./node_modules/vue"],
+      "ant-design-vue": ["./node_modules/ant-design-vue"],
+      "@ant-design/icons-vue": ["./node_modules/@ant-design/icons-vue"],
       "@agri/shared": ["../../packages/agri-shared/src/index.ts"],
       "@agri/shared/vue/workspace": ["../../packages/agri-shared/src/vue/workspace/index.ts"],
       "@agri/shared/vue/list": ["../../packages/agri-shared/src/vue/list/index.ts"],

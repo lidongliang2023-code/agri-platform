@@ -55,7 +55,7 @@ small { font-size: max(var(--o-fs-micro), 0.833em); }
   .o-card footer{flex-wrap:wrap}
   .o-card footer>span:first-child{width:100%;margin-right:0}
 }
-
-.o-row-actions{display:flex;gap:5px;flex-wrap:wrap}.o-filter-label{color:var(--ink5);font-size:var(--o-fs-micro)}
-
-.o-row-actions{display:flex;gap:5px;flex-wrap:wrap}.o-filter-label{color:var(--ink5);font-size:var(--o-fs-micro)}
+.o-table-caption-wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.o-table-caption{display:flex;align-items:baseline;gap:8px}
+.o-table-caption b{font-size:14px;color:var(--ink)}
+.o-table-caption small{color:var(--ink4);font-size:var(--o-fs-micro)}

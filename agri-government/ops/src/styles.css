@@ -24,3 +24,7 @@
 
 /* <small> 走浏览器默认 0.833em，父级 ≤14px 时会掉到 12px 以下（info-ops 行情页实测 11.6667px）；同一个下限兜住它。 */
 small { font-size: max(var(--o-fs-micro), 0.833em); }
+
+.o-table-caption { display: flex; align-items: baseline; gap: 8px; }
+.o-table-caption b { font-size: 14px; color: var(--ink); }
+.o-table-caption small { color: var(--ink4); font-size: var(--o-fs-micro); }

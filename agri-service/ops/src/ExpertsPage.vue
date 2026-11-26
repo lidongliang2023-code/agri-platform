@@ -5,7 +5,6 @@
         <h1>专家账号绑定</h1>
         <p>将已核实的专家档案绑定到本人统一账号，专家登录移动端后在“我的 → 专家工作台”回复问诊。</p>
       </div>
-      <a-button @click="load">刷新</a-button>
     </div>
 
     <a-alert
@@ -16,28 +15,52 @@
     />
     <a-alert v-if="error" type="error" show-icon :message="error" />
 
-    <section class="ops-card ops-table-card">
-      <a-table row-key="id" :loading="loading" :data-source="items" :columns="columns" :pagination="tablePagination">
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'expert'">
-            <b>{{ record.name }}</b>
-            <div>{{ record.title }} · {{ record.organization }}</div>
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag :color="record.status === 'available' ? 'green' : 'orange'">
-              {{ record.status === 'available' ? '可接诊' : '暂停接诊' }}
-            </a-tag>
-          </template>
-          <template v-else-if="column.key === 'userId'">
-            {{ record.userId ? `${record.accountName || ''}（${record.userId}）` : '未绑定' }}
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <a-button type="link" @click="openBind(record)">{{ record.userId ? '更换绑定' : '绑定账号' }}</a-button>
-            <a-button v-if="record.userId" type="link" danger @click="unbind(record)">解除绑定</a-button>
-          </template>
-        </template>
-      </a-table>
-    </section>
+    <AgriAntdvListTable
+      :columns="columns"
+      :data="filteredItems"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="service-ops:experts"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <a-input
+              v-model:value="draft"
+              allow-clear
+              placeholder="姓名 / 单位 / 领域 / 统一账号"
+              @press-enter="applyFilter"
+            />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>接诊状态</label>
+            <a-select
+              v-model:value="statusFilter"
+              :options="statusOptions"
+              @change="applyFilter"
+            />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #cell-expert="{ record }">
+        <b>{{ record.name }}</b>
+        <div>{{ record.title }} · {{ record.organization }}</div>
+      </template>
+      <template #cell-status="{ record }">
+        <a-tag :color="record.status === 'available' ? 'green' : 'orange'">
+          {{ record.status === 'available' ? '可接诊' : '暂停接诊' }}
+        </a-tag>
+      </template>
+      <template #cell-userId="{ record }">
+        {{ record.userId ? `${record.accountName || ''}（${record.userId}）` : '未绑定' }}
+      </template>
+      <template #cell-action="{ record }">
+        <AgriVueRowActions :actions="rowActions(record as unknown as OpsExpert)" />
+      </template>
+    </AgriAntdvListTable>
 
     <a-modal
       :open="Boolean(active)"
@@ -55,8 +78,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Modal, message } from 'ant-design-vue'
+import { AgriAntdvListTable } from '@agri/shared/vue/antdv'
+import { AgriVueFilterBar, AgriVueRowActions, type VueListColumn, type VueRowActionItem } from '@agri/shared/vue/list'
 import { opsApi, type OpsExpert } from './api'
 
 const items = ref<OpsExpert[]>([])
@@ -65,22 +90,55 @@ const error = ref('')
 const active = ref<OpsExpert | null>(null)
 const userId = ref('')
 const saving = ref(false)
+const draft = ref('')
+const keyword = ref('')
+const statusFilter = ref('all')
 
-const tablePagination = {
-  defaultPageSize: 20,
-  showSizeChanger: true,
-  showQuickJumper: true,
-  pageSizeOptions: ['10', '20', '50', '100'],
-  showTotal: (total: number) => `共 ${total} 条`,
+const statusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'available', label: '可接诊' },
+  { value: 'paused', label: '暂停接诊' },
+]
+
+const filteredItems = computed(() => {
+  const q = keyword.value.trim().toLowerCase()
+  return items.value.filter((item) => {
+    if (statusFilter.value === 'available' && item.status !== 'available') return false
+    if (statusFilter.value === 'paused' && item.status === 'available') return false
+    if (!q) return true
+    return `${item.name} ${item.title} ${item.organization} ${item.category} ${item.userId || ''} ${item.accountName || ''}`
+      .toLowerCase()
+      .includes(q)
+  })
+})
+
+const columns: VueListColumn[] = [
+  { label: '专家', key: 'expert', width: 260, locked: true },
+  { label: '领域', key: 'category', prop: 'category', width: 150 },
+  { label: '状态', key: 'status', prop: 'status', width: 110 },
+  { label: '统一账号', key: 'userId', prop: 'userId', width: 200 },
+  { label: '操作', key: 'action', width: 160, fixed: 'right' },
+]
+
+function applyFilter() {
+  keyword.value = draft.value.trim()
 }
 
-const columns = [
-  { title: '专家', key: 'expert' },
-  { title: '领域', key: 'category', dataIndex: 'category' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '统一账号', key: 'userId', dataIndex: 'userId' },
-  { title: '操作', key: 'action' },
-]
+function resetFilter() {
+  draft.value = ''
+  keyword.value = ''
+  statusFilter.value = 'all'
+}
+
+function rowActions(row: OpsExpert): VueRowActionItem[] {
+  const actions: VueRowActionItem[] = [
+    { key: 'bind', label: row.userId ? '更换绑定' : '绑定账号', onClick: () => openBind(row) },
+  ]
+  if (row.userId) {
+    actions.push({ key: 'unbind', label: '解除绑定', danger: true, onClick: () => unbind(row) })
+  }
+  return actions
+}
 
 async function load() {
   loading.value = true

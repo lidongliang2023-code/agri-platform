@@ -142,26 +142,50 @@
             <!-- 租户与配额 -->
             <div v-else-if="page === 'tenants'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>租户与配额</h1><p>物联网租户、设备容量、套餐到期和服务状态。</p></div></div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :columns="tenantColumns" :data-source="tenants" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'tenantName'">
-                      <div class="o-entity"><b>{{ record.tenantName }}</b><small>{{ record.tenantCode }} · {{ record.region }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'usage'">
-                      <div class="usage">
-                        <a-progress :percent="Math.min(100, Math.round((record.deviceCount / record.deviceLimit) * 100))" size="small" stroke-color="#159a5e" :format="() => `${record.deviceCount}/${record.deviceLimit}`" />
-                      </div>
-                    </template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button type="link" @click="openQuotaModal(record)">调整配额</a-button>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="tenantColumns"
+                :data="filteredTenants"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="iot-ops:tenants"
+                @refresh="loadTenants"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyTenantFilter" @reset="resetTenantFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="tenantDraft"
+                        allow-clear
+                        placeholder="租户名称 / 编码 / 区域 / 套餐"
+                        @press-enter="applyTenantFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>状态</label>
+                      <a-select
+                        v-model:value="tenantStatusFilter"
+                        :options="tenantStatusOptions"
+                        @change="applyTenantFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-tenantName="{ record }">
+                  <div class="o-entity"><b>{{ record.tenantName }}</b><small>{{ record.tenantCode }} · {{ record.region }}</small></div>
+                </template>
+                <template #cell-usage="{ record }">
+                  <div class="usage">
+                    <a-progress :percent="Math.min(100, Math.round((Number(record.deviceCount) / Math.max(Number(record.deviceLimit), 1)) * 100))" size="small" stroke-color="#159a5e" :format="() => `${record.deviceCount}/${record.deviceLimit}`" />
+                  </div>
+                </template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="tenantRowActions(record as unknown as Tenant)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(quotaTarget)" title="调整租户配额" ok-text="保存" @cancel="quotaTarget = null" @ok="saveQuota">
                 <div class="o-summary"><b>{{ quotaTarget?.tenantName }}</b><span>当前设备数 {{ quotaTarget?.deviceCount }}</span></div>
                 <a-form layout="vertical">
@@ -175,40 +199,50 @@
             <!-- 平台设备监控 -->
             <div v-else-if="page === 'devices'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>平台设备监控</h1><p>全平台设备在线状态、关键指标、租户归属与固件版本。</p></div></div>
-              <section class="o-card o-filter">
-                <div class="o-tabs">
-                  <button v-for="s in deviceStatusTabs" :key="s" type="button" :class="{ on: deviceStatus === s }" @click="changeDeviceStatus(s)">
-                    {{ s === 'all' ? '全部' : statusMeta(s).label }}
-                  </button>
-                </div>
-                <a-input v-model:value="deviceKeyword" placeholder="设备名称 / 编码" @pressEnter="loadDevices">
-                  <template #prefix><SearchOutlined /></template>
-                </a-input>
-                <a-button type="primary" @click="loadDevices">查询</a-button>
-              </section>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="devices" :columns="deviceColumns" :scroll="{ x: 1050 }" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'deviceName'">
-                      <div class="o-entity"><b>{{ record.deviceName }}</b><small>{{ record.deviceCode }} · {{ record.typeName }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'tenant'">
-                      <div class="o-entity"><b>{{ record.tenantName }}</b><small>{{ record.farmName }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'onlineStatus'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.onlineStatus).tone}`">{{ statusMeta(record.onlineStatus).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'rssi'">{{ record.rssi ? `${record.rssi} dBm` : '—' }}</template>
-                    <template v-else-if="column.key === 'battery'">{{ record.battery }}%</template>
-                    <template v-else-if="column.key === 'commands'">
-                      <a-space>
-                        <a-button size="small" @click="samplingDevice = record">采样配置</a-button>
-                        <a-button size="small" @click="commandDevice = record">指令回执</a-button>
-                      </a-space>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="deviceColumns"
+                :data="devices"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="iot-ops:devices"
+                @refresh="loadDevices"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="loadDevices" @reset="resetDevices">
+                    <div class="agri-vue-filter-field">
+                      <label>在线状态</label>
+                      <a-select
+                        v-model:value="deviceStatus"
+                        :options="deviceStatusOptions"
+                        @change="loadDevices"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="deviceKeyword"
+                        allow-clear
+                        placeholder="设备名称 / 编码"
+                        @press-enter="loadDevices"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-deviceName="{ record }">
+                  <div class="o-entity"><b>{{ record.deviceName }}</b><small>{{ record.deviceCode }} · {{ record.typeName }}</small></div>
+                </template>
+                <template #cell-tenant="{ record }">
+                  <div class="o-entity"><b>{{ record.tenantName }}</b><small>{{ record.farmName }}</small></div>
+                </template>
+                <template #cell-onlineStatus="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.onlineStatus ?? '')).tone}`">{{ statusMeta(String(record.onlineStatus ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-rssi="{ record }">{{ record.rssi ? `${record.rssi} dBm` : '—' }}</template>
+                <template #cell-battery="{ record }">{{ record.battery }}%</template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="deviceRowActions(record as unknown as Device)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(samplingDevice)" :title="`${samplingDevice?.deviceName ?? ''} · 采样配置`" :footer="null" @cancel="samplingDevice = null">
                 <DeviceSampling v-if="samplingDevice" :key="samplingDevice.id" :device-id="samplingDevice.id" :load="opsApi.sampling" :save="opsApi.saveSampling" />
               </a-modal>
@@ -255,34 +289,57 @@
             <!-- 告警运营中心 -->
             <div v-else-if="page === 'alerts'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>告警运营中心</h1><p>全平台设备告警统一台账；待处理→处理中→已处理，双端共用处置记录。</p></div></div>
-              <section class="o-card o-filter">
-                <div class="o-tabs"><span class="o-filter-label">共 {{ alerts.length }} 条告警</span></div>
-                <a-button @click="loadAlerts"><template #icon><ReloadOutlined /></template>刷新</a-button>
-              </section>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="alerts" :columns="alertColumns" :pagination="tablePagination" :scroll="{ x: 980 }">
-                  <template #emptyText>
-                    <div class="o-empty-list"><b>暂无告警记录</b><span>设备产生告警后会自动进入统一台账。</span></div>
-                  </template>
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'title'">
-                      <div class="o-entity"><b>{{ record.title }}</b><small>{{ record.alertNo }} · {{ record.tenantName }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'level'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.level).tone}`">{{ statusMeta(record.level).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <div class="o-row-actions">
-                        <a-button size="small" @click="go('workorders')">创建工单</a-button>
-                        <a-button v-if="record.status !== 'resolved'" size="small" type="primary" @click="openHandleAlert(record)">登记处置</a-button>
-                      </div>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="alertColumns"
+                :data="filteredAlerts"
+                row-key="id"
+                client-pagination
+                empty-text="暂无告警记录，设备产生告警后会自动进入统一台账"
+                column-settings-storage-key="iot-ops:alerts"
+                @refresh="loadAlerts"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="3" @search="applyAlertFilter" @reset="resetAlertFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="alertDraft"
+                        allow-clear
+                        placeholder="告警标题 / 编号 / 设备 / 租户"
+                        @press-enter="applyAlertFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>告警级别</label>
+                      <a-select
+                        v-model:value="alertLevelFilter"
+                        :options="alertLevelOptions"
+                        @change="applyAlertFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>处置状态</label>
+                      <a-select
+                        v-model:value="alertStatusFilter"
+                        :options="alertStatusOptions"
+                        @change="applyAlertFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-title="{ record }">
+                  <div class="o-entity"><b>{{ record.title }}</b><small>{{ record.alertNo }} · {{ record.tenantName }}</small></div>
+                </template>
+                <template #cell-level="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.level ?? '')).tone}`">{{ statusMeta(String(record.level ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="alertRowActions(record as unknown as Alert)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(alertTarget)" title="告警处置" ok-text="确认处置" @cancel="alertTarget = null" @ok="submitHandleAlert">
                 <div class="o-summary"><b>{{ alertTarget?.title }}</b><span>{{ alertTarget?.content }}</span></div>
                 <a-textarea v-model:value="alertNote" :rows="4" placeholder="填写处置动作与结论（会写入审计日志）" />
@@ -293,40 +350,48 @@
             <div v-else-if="page === 'rules'" class="o-page">
               <div class="o-title">
                 <div><span>IOT PLATFORM · OPERATIONS</span><h1>阈值规则治理</h1><p>按指标维护平台兜底规则；经营主体可在用户端按同一指标覆盖阈值。</p></div>
-                <div class="o-actions"><a-button type="primary" @click="openRuleForm(null)">新增指标规则</a-button></div>
               </div>
-              <section class="o-card o-table">
-                <div class="o-card-head"><div><b>平台指标阈值</b><small>每条规则对应一个指标、比较方式、阈值和持续时长；启停影响平台兜底判定</small></div></div>
-                <a-table row-key="id" :data-source="platformRules" :columns="platformRuleColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'metric'">{{ record.metricName }}{{ record.deviceType ? ` · ${record.deviceType}` : '' }}</template>
-                    <template v-else-if="column.key === 'cond'">{{ record.operator }} {{ Number(record.threshold) }}</template>
-                    <template v-else-if="column.key === 'duration'">{{ record.durationSeconds > 0 ? `${record.durationSeconds} 秒` : '瞬时' }}</template>
-                    <template v-else-if="column.key === 'level'"><a-tag :class="`o-status tone-${statusMeta(record.level).tone}`">{{ statusMeta(record.level).label }}</a-tag></template>
-                    <template v-else-if="column.key === 'enabled'"><a-tag :class="`o-status tone-${statusMeta(record.enabled ? 'running' : 'disabled').tone}`">{{ record.enabled ? '运行中' : '已停用' }}</a-tag></template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-space>
-                        <a-button size="small" @click="openRuleForm(record)">编辑</a-button>
-                        <a-button size="small" @click="toggleRule(record)">{{ record.enabled ? '停用' : '启用' }}</a-button>
-                        <a-button size="small" danger @click="removeRule(record)">删除</a-button>
-                      </a-space>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
-              <section class="o-card o-table" style="margin-top: 14px">
-                <div class="o-card-head"><div><b>各经营主体自定义阈值</b><small>只读：主体在用户端维护，同指标规则覆盖平台预置</small></div></div>
-                <a-table :row-key="(row: AlertRule) => `${row.tenantId}-${row.id}`" :data-source="tenantRules" :columns="tenantRuleColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'tenantName'">{{ record.tenantName || '未归属' }}</template>
-                    <template v-else-if="column.key === 'metric'">{{ record.metricName }}{{ record.deviceType ? ` · ${record.deviceType}` : '' }}</template>
-                    <template v-else-if="column.key === 'cond'">{{ record.operator }} {{ Number(record.threshold) }}</template>
-                    <template v-else-if="column.key === 'duration'">{{ record.durationSeconds > 0 ? `${record.durationSeconds} 秒` : '瞬时' }}</template>
-                    <template v-else-if="column.key === 'level'"><a-tag :class="`o-status tone-${statusMeta(record.level).tone}`">{{ statusMeta(record.level).label }}</a-tag></template>
-                    <template v-else-if="column.key === 'enabled'"><a-tag :class="`o-status tone-${statusMeta(record.enabled ? 'running' : 'disabled').tone}`">{{ record.enabled ? '运行中' : '已停用' }}</a-tag></template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="platformRuleColumns"
+                :data="platformRules"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="iot-ops:platform-rules"
+                @refresh="loadRules"
+              >
+                <template #toolbar-left>
+                  <div class="o-table-caption-wrap">
+                    <a-button type="primary" @click="openRuleForm(null)">+ 新增指标规则</a-button>
+                    <div class="o-table-caption"><b>平台指标阈值</b><small>每条规则对应一个指标、比较方式、阈值和持续时长</small></div>
+                  </div>
+                </template>
+                <template #cell-metric="{ record }">{{ record.metricName }}{{ record.deviceType ? ` · ${record.deviceType}` : '' }}</template>
+                <template #cell-cond="{ record }">{{ record.operator }} {{ Number(record.threshold) }}</template>
+                <template #cell-duration="{ record }">{{ Number(record.durationSeconds) > 0 ? `${record.durationSeconds} 秒` : '瞬时' }}</template>
+                <template #cell-level="{ record }"><a-tag :class="`o-status tone-${statusMeta(String(record.level ?? '')).tone}`">{{ statusMeta(String(record.level ?? '')).label }}</a-tag></template>
+                <template #cell-enabled="{ record }"><a-tag :class="`o-status tone-${statusMeta(record.enabled ? 'running' : 'disabled').tone}`">{{ record.enabled ? '运行中' : '已停用' }}</a-tag></template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="platformRuleRowActions(record as unknown as AlertRule)" />
+                </template>
+              </AgriAntdvListTable>
+              <AgriAntdvListTable
+                :columns="tenantRuleColumns"
+                :data="tenantRules"
+                :row-key="(row) => `${row.tenantId}-${row.id}`"
+                client-pagination
+                column-settings-storage-key="iot-ops:tenant-rules"
+                @refresh="loadRules"
+              >
+                <template #toolbar-left>
+                  <div class="o-table-caption"><b>各经营主体自定义阈值</b><small>只读：主体在用户端维护，同指标规则覆盖平台预置</small></div>
+                </template>
+                <template #cell-tenantName="{ record }">{{ record.tenantName || '未归属' }}</template>
+                <template #cell-metric="{ record }">{{ record.metricName }}{{ record.deviceType ? ` · ${record.deviceType}` : '' }}</template>
+                <template #cell-cond="{ record }">{{ record.operator }} {{ Number(record.threshold) }}</template>
+                <template #cell-duration="{ record }">{{ Number(record.durationSeconds) > 0 ? `${record.durationSeconds} 秒` : '瞬时' }}</template>
+                <template #cell-level="{ record }"><a-tag :class="`o-status tone-${statusMeta(String(record.level ?? '')).tone}`">{{ statusMeta(String(record.level ?? '')).label }}</a-tag></template>
+                <template #cell-enabled="{ record }"><a-tag :class="`o-status tone-${statusMeta(record.enabled ? 'running' : 'disabled').tone}`">{{ record.enabled ? '运行中' : '已停用' }}</a-tag></template>
+              </AgriAntdvListTable>
               <a-modal v-model:open="ruleModalOpen" :title="editingRule ? '编辑平台指标规则' : '新增平台指标规则'" ok-text="保存" @ok="saveRule">
                 <a-form layout="vertical">
                   <a-form-item label="规则名称" required><a-input v-model:value="ruleForm.ruleName" :maxlength="160" placeholder="例如：温度过高告警" /></a-form-item>
@@ -351,17 +416,22 @@
             <div v-else-if="page === 'products'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>产品与协议管理</h1><p>物联网产品、物模型、接入协议和连接状态。</p></div></div>
               <div class="o-dashboard-grid">
-                <section class="o-card o-table">
-                  <div class="o-card-head"><div><b>产品与物模型</b><small>认证产品清单</small></div></div>
-                  <a-table row-key="id" :pagination="false" :data-source="products" :columns="productColumns">
-                    <template #bodyCell="{ column, record }">
-                      <template v-if="column.key === 'productName'">
-                        <div class="o-entity"><b>{{ record.productName }}</b><small>{{ record.productKey }} · {{ record.model }}</small></div>
-                      </template>
-                      <template v-else-if="column.key === 'status'"><a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag></template>
-                    </template>
-                  </a-table>
-                </section>
+                <AgriAntdvListTable
+                  :columns="productColumns"
+                  :data="products"
+                  row-key="id"
+                  client-pagination
+                  column-settings-storage-key="iot-ops:products"
+                  @refresh="loadProducts"
+                >
+                  <template #toolbar-left>
+                    <div class="o-table-caption"><b>产品与物模型</b><small>认证产品清单</small></div>
+                  </template>
+                  <template #cell-productName="{ record }">
+                    <div class="o-entity"><b>{{ record.productName }}</b><small>{{ record.productKey }} · {{ record.model }}</small></div>
+                  </template>
+                  <template #cell-status="{ record }"><a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag></template>
+                </AgriAntdvListTable>
                 <section class="o-card">
                   <div class="o-card-head"><div><b>协议适配器</b><small>连接与端点</small></div></div>
                   <div v-for="p in protocols" :key="p.id" class="o-protocol">
@@ -377,32 +447,47 @@
             <!-- 设备接入审核 -->
             <div v-else-if="page === 'access'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>设备接入审核</h1><p>自动注册与人工接入审核、物模型校验和风险拦截。</p></div></div>
-              <section class="o-card o-filter">
-                <div class="o-tabs"><span class="o-filter-label">共 {{ accessAudits.length }} 条接入申请</span></div>
-                <a-button @click="loadAccessAudits"><template #icon><ReloadOutlined /></template>刷新</a-button>
-              </section>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="accessAudits" :columns="accessColumns" :scroll="{ x: 900 }" :pagination="tablePagination">
-                  <template #emptyText>
-                    <div class="o-empty-list"><b>暂无接入申请</b><span>设备提交接入后会出现在这里。</span></div>
-                  </template>
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'deviceName'">
-                      <div class="o-entity"><b>{{ record.deviceName }}</b><small>{{ record.deviceCode }} · {{ record.requestType }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'auditor'">{{ record.auditor || '待分配' }}</template>
-                    <template v-else-if="column.key === 'status'"><a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag></template>
-                    <template v-else-if="column.key === 'note'">{{ record.note || '等待物模型与产品认证校验' }}</template>
-                    <template v-else-if="column.key === 'action'">
-                      <div v-if="record.status === 'pending'" class="o-row-actions">
-                        <a-button size="small" danger @click="openAccessReview(record, 'rejected')">驳回</a-button>
-                        <a-button size="small" type="primary" @click="openAccessReview(record, 'approved')">通过接入</a-button>
-                      </div>
-                      <span v-else>—</span>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="accessColumns"
+                :data="filteredAccessAudits"
+                row-key="id"
+                client-pagination
+                empty-text="暂无接入申请，设备提交接入后会出现在这里"
+                column-settings-storage-key="iot-ops:access-audits"
+                @refresh="loadAccessAudits"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyAccessFilter" @reset="resetAccessFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="accessDraft"
+                        allow-clear
+                        placeholder="设备名称 / 编码 / 所属主体"
+                        @press-enter="applyAccessFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>审核状态</label>
+                      <a-select
+                        v-model:value="accessStatusFilter"
+                        :options="accessStatusOptions"
+                        @change="applyAccessFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-deviceName="{ record }">
+                  <div class="o-entity"><b>{{ record.deviceName }}</b><small>{{ record.deviceCode }} · {{ record.requestType }}</small></div>
+                </template>
+                <template #cell-auditor="{ record }">{{ record.auditor || '待分配' }}</template>
+                <template #cell-status="{ record }"><a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag></template>
+                <template #cell-note="{ record }">{{ record.note || '等待物模型与产品认证校验' }}</template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions v-if="record.status === 'pending'" :actions="accessRowActions(record as unknown as AccessAudit)" />
+                  <span v-else class="muted">—</span>
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(accessTarget)" :title="accessTarget?.status === 'approved' ? '通过接入' : '驳回接入'" :confirm-loading="accessSaving" ok-text="提交审核" @cancel="accessTarget = null" @ok="submitAccessReview">
                 <div class="o-summary"><b>{{ accessTarget?.row.deviceName }}</b><span>{{ accessTarget?.row.tenantName }} · {{ accessTarget?.row.requestType }}</span></div>
                 <a-textarea v-model:value="accessNote" :rows="3" placeholder="填写物模型/认证白名单的核验结论（会写入审计）" />
@@ -412,39 +497,68 @@
             <!-- 固件包管理 -->
             <div v-else-if="page === 'firmwares'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>固件包版本台账</h1><p>设备与边缘网关的固件包、适用型号、完整SHA-256防篡改摘要及发布状态。</p></div></div>
-              <div style="display: flex; justify-content: space-between; margin-bottom: 16px">
-                <div style="display: flex; gap: 12px">
-                  <a-select v-model:value="fwType" placeholder="固件类型" style="width: 130px" allow-clear :options="fwTypeOptions" @change="loadFirmwares" />
-                  <a-select v-model:value="fwStatus" placeholder="状态" style="width: 130px" allow-clear :options="fwStatusOptions" @change="loadFirmwares" />
-                  <a-input v-model:value="fwModel" placeholder="适用型号搜索" style="width: 160px" @change="loadFirmwares" />
-                  <a-button @click="loadFirmwares"><template #icon><ReloadOutlined /></template>刷新</a-button>
-                </div>
-                <a-button type="primary" @click="openRegisterFirmware">登记新固件包</a-button>
-              </div>
-              <a-table row-key="id" :columns="fwColumns" :data-source="firmwares" :loading="fwLoading" :scroll="{ x: 1300 }" :pagination="tablePagination">
-                <template #bodyCell="{ column, record }">
-                  <template v-if="column.key === 'name'">
-                    <div>
-                      <b>{{ record.firmwareName }}</b>
-                      <div style="font-size: 12px; color: #666">{{ record.versionName }} · {{ record.firmwareType }} · 型号: {{ record.targetModel }}</div>
+              <AgriAntdvListTable
+                :columns="fwColumns"
+                :data="firmwares"
+                row-key="id"
+                :loading="fwLoading"
+                client-pagination
+                column-settings-storage-key="iot-ops:firmwares"
+                @refresh="loadFirmwares"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="3" :loading="fwLoading" @search="loadFirmwares" @reset="resetFirmwares">
+                    <div class="agri-vue-filter-field">
+                      <label>固件类型</label>
+                      <a-select
+                        v-model:value="fwType"
+                        placeholder="全部类型"
+                        allow-clear
+                        :options="fwTypeOptions"
+                        @change="loadFirmwares"
+                      />
                     </div>
-                  </template>
-                  <template v-else-if="column.key === 'fileSizeBytes'">{{ record.fileSizeBytes ? `${(record.fileSizeBytes / 1024 / 1024).toFixed(2)} MB` : '-' }}</template>
-                  <template v-else-if="column.key === 'sha256Text'"><span style="font-family: monospace; font-size: 12px">{{ record.sha256Text }}</span></template>
-                  <template v-else-if="column.key === 'status'">
-                    <a-tag :color="record.status === 'stable' ? 'success' : record.status === 'draft' ? 'warning' : 'default'">
-                      {{ record.status === 'stable' ? '已发布稳定版' : record.status === 'draft' ? '草稿' : '已废弃' }}
-                    </a-tag>
-                  </template>
-                  <template v-else-if="column.key === 'action'">
-                    <div style="display: flex; gap: 8px">
-                      <a-button size="small" @click="fwDetailTarget = record">详情</a-button>
-                      <a-button v-if="record.status === 'draft'" size="small" type="primary" @click="confirmPublishFirmware(record)">发布稳定版</a-button>
-                      <a-button v-if="record.status === 'stable'" size="small" danger @click="openDeprecateFirmware(record.id)">下线废弃</a-button>
+                    <div class="agri-vue-filter-field">
+                      <label>状态</label>
+                      <a-select
+                        v-model:value="fwStatus"
+                        placeholder="全部状态"
+                        allow-clear
+                        :options="fwStatusOptions"
+                        @change="loadFirmwares"
+                      />
                     </div>
-                  </template>
+                    <div class="agri-vue-filter-field">
+                      <label>适用型号</label>
+                      <a-input
+                        v-model:value="fwModel"
+                        allow-clear
+                        placeholder="适用型号搜索"
+                        @press-enter="loadFirmwares"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
                 </template>
-              </a-table>
+                <template #toolbar-left>
+                  <a-button type="primary" @click="openRegisterFirmware">+ 登记新固件包</a-button>
+                </template>
+                <template #cell-name="{ record }">
+                  <div>
+                    <b>{{ record.firmwareName }}</b>
+                    <div style="font-size: 12px; color: #666">{{ record.versionName }} · {{ record.firmwareType }} · 型号: {{ record.targetModel }}</div>
+                  </div>
+                </template>
+                <template #cell-fileSizeBytes="{ record }">{{ record.fileSizeBytes ? `${(Number(record.fileSizeBytes) / 1024 / 1024).toFixed(2)} MB` : '-' }}</template>
+                <template #cell-sha256Text="{ record }"><span style="font-family: monospace; font-size: 12px">{{ record.sha256Text }}</span></template>
+                <template #cell-status="{ record }">
+                  <a-tag :color="record.status === 'stable' ? 'success' : record.status === 'draft' ? 'warning' : 'default'">
+                    {{ record.status === 'stable' ? '已发布稳定版' : record.status === 'draft' ? '草稿' : '已废弃' }}
+                  </a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="fwRowActions(record as unknown as FirmwarePackage)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(fwDetailTarget)" title="固件包详情" :width="700" :footer="null" @cancel="fwDetailTarget = null">
                 <div v-if="fwDetailTarget" style="word-break: break-all">
                   <p>{{ fwDetailTarget.firmwareName }} · {{ fwDetailTarget.versionName }}</p>
@@ -531,21 +645,43 @@
             <!-- 运维工单 -->
             <div v-else-if="page === 'workorders'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>运维工单</h1><p>用户报修与运营处理共用台账：待受理→处理中→已完成，保留实际处理结果。</p></div></div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="workOrders" :columns="workOrderColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'tenantName'">{{ record.tenantName || '未归属' }}</template>
-                    <template v-else-if="column.key === 'description'">{{ record.description || '—' }}</template>
-                    <template v-else-if="column.key === 'priority'"><a-tag :class="`o-status tone-${statusMeta(record.priority).tone}`">{{ statusMeta(record.priority).label }}</a-tag></template>
-                    <template v-else-if="column.key === 'status'"><a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag></template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button :disabled="!['pending', 'processing'].includes(record.status)" @click="openHandleWorkOrder(record)">
-                        {{ record.status === 'pending' ? '受理工单' : '登记完成' }}
-                      </a-button>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="workOrderColumns"
+                :data="filteredWorkOrders"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="iot-ops:workorders"
+                @refresh="loadWorkOrders"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyWorkOrderFilter" @reset="resetWorkOrderFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="workOrderDraft"
+                        allow-clear
+                        placeholder="工单号 / 所属主体 / 设备 / 报修描述"
+                        @press-enter="applyWorkOrderFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>工单状态</label>
+                      <a-select
+                        v-model:value="workOrderStatusFilter"
+                        :options="workOrderStatusOptions"
+                        @change="applyWorkOrderFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-tenantName="{ record }">{{ record.tenantName || '未归属' }}</template>
+                <template #cell-description="{ record }">{{ record.description || '—' }}</template>
+                <template #cell-priority="{ record }"><a-tag :class="`o-status tone-${statusMeta(String(record.priority ?? '')).tone}`">{{ statusMeta(String(record.priority ?? '')).label }}</a-tag></template>
+                <template #cell-status="{ record }"><a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag></template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="workOrderRowActions(record as unknown as WorkOrder)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal
                 :open="Boolean(workOrderTarget)"
                 :title="workOrderTarget?.status === 'pending' ? '受理运维工单' : '登记实际维修完成结果'"
@@ -600,14 +736,30 @@
             <!-- 操作审计日志 -->
             <div v-else-if="page === 'logs'" class="o-page">
               <div class="o-title"><div><span>IOT PLATFORM · OPERATIONS</span><h1>操作审计日志</h1><p>设备接入、告警处置、租户配额和 OTA 等敏感操作留痕；操作人取自登录令牌，来源 IP 由网关透传。</p></div></div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="logs" :columns="logColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'action'"><a-tag>{{ record.action }}</a-tag></template>
-                    <template v-else-if="column.key === 'ip'">{{ record.ip || '—' }}</template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="logColumns"
+                :data="filteredLogs"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="iot-ops:logs"
+                @refresh="loadLogs"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="1" @search="applyLogFilter" @reset="resetLogFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="logDraft"
+                        allow-clear
+                        placeholder="操作人 / 动作 / 对象 / 详情"
+                        @press-enter="applyLogFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-actionType="{ record }"><a-tag>{{ record.action }}</a-tag></template>
+                <template #cell-ip="{ record }">{{ record.ip || '—' }}</template>
+              </AgriAntdvListTable>
             </div>
           </main>
         </div>
@@ -637,6 +789,8 @@ import {
   ToolOutlined,
 } from '@ant-design/icons-vue'
 import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
+import { AgriAntdvListTable } from '@agri/shared/vue/antdv'
+import { AgriVueFilterBar, AgriVueRowActions, type VueListColumn, type VueRowActionItem } from '@agri/shared/vue/list'
 import {
   opsApi,
   STATUS,
@@ -770,14 +924,6 @@ const theme = {
   },
 }
 
-const tablePagination = {
-  defaultPageSize: 20,
-  showSizeChanger: true,
-  showQuickJumper: true,
-  pageSizeOptions: ['10', '20', '50', '100'],
-  showTotal: (total: number) => `共 ${total} 条`,
-}
-
 function parse(): Page {
   const relative =
     ROUTER_BASE && window.location.pathname.startsWith(ROUTER_BASE)
@@ -821,16 +967,51 @@ async function loadOverview() {
 
 // 租户
 const tenants = ref<Tenant[]>([])
+const tenantDraft = ref('')
+const tenantKeyword = ref('')
+const tenantStatusFilter = ref('all')
+const tenantStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'active', label: '正常' },
+  { value: 'trial', label: '试用' },
+  { value: 'suspended', label: '已停用' },
+]
+const filteredTenants = computed(() => {
+  const q = tenantKeyword.value.trim().toLowerCase()
+  return tenants.value.filter((t) => {
+    if (tenantStatusFilter.value !== 'all' && t.status !== tenantStatusFilter.value) return false
+    if (!q) return true
+    return `${t.tenantName} ${t.tenantCode} ${t.region} ${t.planName}`.toLowerCase().includes(q)
+  })
+})
 const quotaTarget = ref<Tenant | null>(null)
 const quotaLimit = ref(500)
-const tenantColumns = [
-  { title: '租户', key: 'tenantName', dataIndex: 'tenantName' },
-  { title: '套餐', key: 'planName', dataIndex: 'planName' },
-  { title: '设备数', key: 'usage' },
-  { title: '到期', key: 'expireDate', dataIndex: 'expireDate' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '操作', key: 'action' },
+const tenantColumns: VueListColumn[] = [
+  { label: '租户', key: 'tenantName', prop: 'tenantName', width: 220, locked: true },
+  { label: '套餐', key: 'planName', prop: 'planName', width: 130 },
+  { label: '设备数', key: 'usage', width: 180 },
+  { label: '到期', key: 'expireDate', prop: 'expireDate', width: 140 },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '操作', key: 'action', width: 120, fixed: 'right' },
 ]
+async function loadTenants() {
+  try {
+    tenants.value = await opsApi.tenants()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载租户失败')
+  }
+}
+function applyTenantFilter() {
+  tenantKeyword.value = tenantDraft.value.trim()
+}
+function resetTenantFilter() {
+  tenantDraft.value = ''
+  tenantKeyword.value = ''
+  tenantStatusFilter.value = 'all'
+}
+function tenantRowActions(row: Tenant): VueRowActionItem[] {
+  return [{ key: 'quota', label: '调整配额', onClick: () => openQuotaModal(row) }]
+}
 function openQuotaModal(r: Tenant) {
   quotaTarget.value = r
   quotaLimit.value = r.deviceLimit
@@ -848,23 +1029,34 @@ async function saveQuota() {
 }
 
 // 设备
-const deviceStatusTabs = ['all', 'online', 'offline', 'alert']
+const deviceStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'online', label: '在线' },
+  { value: 'offline', label: '离线' },
+  { value: 'alert', label: '告警' },
+]
 const devices = ref<Device[]>([])
 const deviceStatus = ref('all')
 const deviceKeyword = ref('')
 const commandDevice = ref<Device | null>(null)
 const samplingDevice = ref<Device | null>(null)
-const deviceColumns = [
-  { title: '设备', key: 'deviceName', dataIndex: 'deviceName' },
-  { title: '租户 / 农场', key: 'tenant' },
-  { title: '协议', key: 'protocol', dataIndex: 'protocol' },
-  { title: '在线状态', key: 'onlineStatus', dataIndex: 'onlineStatus' },
-  { title: '信号', key: 'rssi', dataIndex: 'rssi' },
-  { title: '电量', key: 'battery', dataIndex: 'battery' },
-  { title: '最近上报', key: 'lastReport', dataIndex: 'lastReport' },
-  { title: '固件', key: 'firmwareVersion', dataIndex: 'firmwareVersion' },
-  { title: '操作', key: 'commands', fixed: 'right', width: 200 },
+const deviceColumns: VueListColumn[] = [
+  { label: '设备', key: 'deviceName', prop: 'deviceName', width: 210, locked: true },
+  { label: '租户 / 农场', key: 'tenant', width: 190 },
+  { label: '协议', key: 'protocol', prop: 'protocol', width: 110 },
+  { label: '在线状态', key: 'onlineStatus', prop: 'onlineStatus', width: 100 },
+  { label: '信号', key: 'rssi', prop: 'rssi', width: 100 },
+  { label: '电量', key: 'battery', prop: 'battery', width: 90 },
+  { label: '最近上报', key: 'lastReport', prop: 'lastReport', width: 160 },
+  { label: '固件', key: 'firmwareVersion', prop: 'firmwareVersion', width: 120 },
+  { label: '操作', key: 'action', fixed: 'right', width: 160 },
 ]
+function deviceRowActions(row: Device): VueRowActionItem[] {
+  return [
+    { key: 'sampling', label: '采样配置', onClick: () => { samplingDevice.value = row } },
+    { key: 'commands', label: '指令回执', onClick: () => { commandDevice.value = row } },
+  ]
+}
 async function loadDevices() {
   try {
     devices.value = await opsApi.devices({
@@ -875,8 +1067,9 @@ async function loadDevices() {
     message.error(e instanceof Error ? e.message : '加载设备失败')
   }
 }
-function changeDeviceStatus(s: string) {
-  deviceStatus.value = s
+function resetDevices() {
+  deviceStatus.value = 'all'
+  deviceKeyword.value = ''
   void loadDevices()
 }
 
@@ -901,17 +1094,60 @@ function confirmRestartGateway(g: Gateway) {
 
 // 告警
 const alerts = ref<Alert[]>([])
+const alertDraft = ref('')
+const alertKeyword = ref('')
+const alertLevelFilter = ref('all')
+const alertStatusFilter = ref('all')
+const alertLevelOptions = [
+  { value: 'all', label: '全部级别' },
+  { value: 'critical', label: '紧急' },
+  { value: 'major', label: '重要' },
+  { value: 'minor', label: '一般' },
+]
+const alertStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'pending', label: '待处理' },
+  { value: 'handling', label: '处理中' },
+  { value: 'resolved', label: '已处理' },
+]
+const filteredAlerts = computed(() => {
+  const q = alertKeyword.value.trim().toLowerCase()
+  return alerts.value.filter((a) => {
+    if (alertLevelFilter.value !== 'all' && a.level !== alertLevelFilter.value) return false
+    if (alertStatusFilter.value !== 'all' && a.status !== alertStatusFilter.value) return false
+    if (!q) return true
+    return `${a.title} ${a.alertNo} ${a.deviceName} ${a.tenantName} ${a.content}`.toLowerCase().includes(q)
+  })
+})
 const alertTarget = ref<Alert | null>(null)
 const alertNote = ref('')
-const alertColumns = [
-  { title: '告警', key: 'title', dataIndex: 'title' },
-  { title: '设备', key: 'deviceName', dataIndex: 'deviceName' },
-  { title: '级别', key: 'level', dataIndex: 'level' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '告警信息', key: 'content', dataIndex: 'content', ellipsis: true },
-  { title: '发生时间', key: 'createdAt', dataIndex: 'createdAt' },
-  { title: '操作', key: 'action', fixed: 'right', width: 150 },
+const alertColumns: VueListColumn[] = [
+  { label: '告警', key: 'title', prop: 'title', width: 220, locked: true },
+  { label: '设备', key: 'deviceName', prop: 'deviceName', width: 160 },
+  { label: '级别', key: 'level', prop: 'level', width: 90 },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '告警信息', key: 'content', prop: 'content', width: 240, ellipsis: true },
+  { label: '发生时间', key: 'createdAt', prop: 'createdAt', width: 160 },
+  { label: '操作', key: 'action', fixed: 'right', width: 160 },
 ]
+function applyAlertFilter() {
+  alertKeyword.value = alertDraft.value.trim()
+}
+function resetAlertFilter() {
+  alertDraft.value = ''
+  alertKeyword.value = ''
+  alertLevelFilter.value = 'all'
+  alertStatusFilter.value = 'all'
+}
+function alertRowActions(row: Alert): VueRowActionItem[] {
+  const actions: VueRowActionItem[] = [
+    { key: 'workorder', label: '创建工单', onClick: () => go('workorders') },
+  ]
+  if (row.status !== 'resolved') {
+    actions.push({ key: 'handle', label: '登记处置', onClick: () => openHandleAlert(row) })
+  }
+  return actions
+}
 async function loadAlerts() {
   try {
     alerts.value = await opsApi.alerts()
@@ -981,24 +1217,31 @@ const ruleLevelOptions = computed(
       label: v === 'critical' ? '紧急' : v === 'major' ? '重要' : '一般',
     })) ?? [],
 )
-const platformRuleColumns = [
-  { title: '规则', key: 'ruleName', dataIndex: 'ruleName' },
-  { title: '指标范围', key: 'metric' },
-  { title: '条件', key: 'cond' },
-  { title: '持续', key: 'duration' },
-  { title: '等级', key: 'level' },
-  { title: '状态', key: 'enabled' },
-  { title: '操作', key: 'action' },
+const platformRuleColumns: VueListColumn[] = [
+  { label: '规则', key: 'ruleName', prop: 'ruleName', width: 200, locked: true },
+  { label: '指标范围', key: 'metric', width: 180 },
+  { label: '条件', key: 'cond', width: 110 },
+  { label: '持续', key: 'duration', width: 100 },
+  { label: '等级', key: 'level', width: 90 },
+  { label: '状态', key: 'enabled', width: 100 },
+  { label: '操作', key: 'action', width: 150, fixed: 'right' },
 ]
-const tenantRuleColumns = [
-  { title: '经营主体', key: 'tenantName', dataIndex: 'tenantName' },
-  { title: '规则', key: 'ruleName', dataIndex: 'ruleName' },
-  { title: '指标范围', key: 'metric' },
-  { title: '条件', key: 'cond' },
-  { title: '持续', key: 'duration' },
-  { title: '等级', key: 'level' },
-  { title: '状态', key: 'enabled' },
+const tenantRuleColumns: VueListColumn[] = [
+  { label: '经营主体', key: 'tenantName', prop: 'tenantName', width: 180, locked: true },
+  { label: '规则', key: 'ruleName', prop: 'ruleName', width: 190 },
+  { label: '指标范围', key: 'metric', width: 180 },
+  { label: '条件', key: 'cond', width: 110 },
+  { label: '持续', key: 'duration', width: 100 },
+  { label: '等级', key: 'level', width: 90 },
+  { label: '状态', key: 'enabled', width: 100 },
 ]
+function platformRuleRowActions(row: AlertRule): VueRowActionItem[] {
+  return [
+    { key: 'edit', label: '编辑', onClick: () => openRuleForm(row) },
+    { key: 'toggle', label: row.enabled ? '停用' : '启用', onClick: () => void toggleRule(row) },
+    { key: 'delete', label: '删除', danger: true, onClick: () => removeRule(row) },
+  ]
+}
 async function loadRules() {
   const [preset, own, opts] = await Promise.all([opsApi.alertRules(), opsApi.tenantAlertRules(), opsApi.alertRuleOptions()])
   platformRules.value = preset
@@ -1069,29 +1312,69 @@ function removeRule(rule: AlertRule) {
 // 产品与协议
 const products = ref<Product[]>([])
 const protocols = ref<Protocol[]>([])
-const productColumns = [
-  { title: '产品', key: 'productName', dataIndex: 'productName' },
-  { title: '品类', key: 'category', dataIndex: 'category' },
-  { title: '协议', key: 'protocol', dataIndex: 'protocol' },
-  { title: '属性', key: 'propertyCount', dataIndex: 'propertyCount' },
-  { title: '设备', key: 'deviceCount', dataIndex: 'deviceCount' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
+const productColumns: VueListColumn[] = [
+  { label: '产品', key: 'productName', prop: 'productName', width: 220, locked: true },
+  { label: '品类', key: 'category', prop: 'category', width: 110 },
+  { label: '协议', key: 'protocol', prop: 'protocol', width: 100 },
+  { label: '属性', key: 'propertyCount', prop: 'propertyCount', width: 85, kind: 'number' },
+  { label: '设备', key: 'deviceCount', prop: 'deviceCount', width: 85, kind: 'number' },
+  { label: '状态', key: 'status', prop: 'status', width: 95 },
 ]
+async function loadProducts() {
+  try {
+    const [p, x] = await Promise.all([opsApi.products(), opsApi.protocols()])
+    products.value = p
+    protocols.value = x
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载产品与协议失败')
+  }
+}
 
 // 接入审核
 const accessAudits = ref<AccessAudit[]>([])
+const accessDraft = ref('')
+const accessKeyword = ref('')
+const accessStatusFilter = ref('all')
+const accessStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'pending', label: '待审核' },
+  { value: 'approved', label: '已通过' },
+  { value: 'rejected', label: '已驳回' },
+]
+const filteredAccessAudits = computed(() => {
+  const q = accessKeyword.value.trim().toLowerCase()
+  return accessAudits.value.filter((a) => {
+    if (accessStatusFilter.value !== 'all' && a.status !== accessStatusFilter.value) return false
+    if (!q) return true
+    return `${a.deviceName} ${a.deviceCode} ${a.tenantName} ${a.requestType}`.toLowerCase().includes(q)
+  })
+})
 const accessTarget = ref<{ row: AccessAudit; status: string } | null>(null)
 const accessNote = ref('')
 const accessSaving = ref(false)
-const accessColumns = [
-  { title: '设备', key: 'deviceName', dataIndex: 'deviceName' },
-  { title: '所属主体', key: 'tenantName', dataIndex: 'tenantName' },
-  { title: '提交时间', key: 'submittedAt', dataIndex: 'submittedAt' },
-  { title: '审核人', key: 'auditor', dataIndex: 'auditor' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '审核意见', key: 'note', dataIndex: 'note', ellipsis: true },
-  { title: '操作', key: 'action', fixed: 'right', width: 140 },
+const accessColumns: VueListColumn[] = [
+  { label: '设备', key: 'deviceName', prop: 'deviceName', width: 210, locked: true },
+  { label: '所属主体', key: 'tenantName', prop: 'tenantName', width: 160 },
+  { label: '提交时间', key: 'submittedAt', prop: 'submittedAt', width: 160 },
+  { label: '审核人', key: 'auditor', prop: 'auditor', width: 110 },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '审核意见', key: 'note', prop: 'note', width: 220, ellipsis: true },
+  { label: '操作', key: 'action', fixed: 'right', width: 150 },
 ]
+function applyAccessFilter() {
+  accessKeyword.value = accessDraft.value.trim()
+}
+function resetAccessFilter() {
+  accessDraft.value = ''
+  accessKeyword.value = ''
+  accessStatusFilter.value = 'all'
+}
+function accessRowActions(row: AccessAudit): VueRowActionItem[] {
+  return [
+    { key: 'approve', label: '通过接入', onClick: () => openAccessReview(row, 'approved') },
+    { key: 'reject', label: '驳回', danger: true, onClick: () => openAccessReview(row, 'rejected') },
+  ]
+}
 async function loadAccessAudits() {
   try {
     accessAudits.value = await opsApi.accessAudits()
@@ -1159,16 +1442,34 @@ const fwStatusOptions = [
   { value: 'stable', label: '已发布稳定版' },
   { value: 'deprecated', label: '已废弃' },
 ]
-const fwColumns = [
-  { title: 'ID', key: 'id', dataIndex: 'id', width: 70 },
-  { title: '固件名称与版本', key: 'name' },
-  { title: '包大小', key: 'fileSizeBytes', dataIndex: 'fileSizeBytes', width: 110 },
-  { title: 'SHA-256 完整摘要', key: 'sha256Text', dataIndex: 'sha256Text', width: 220 },
-  { title: '状态', key: 'status', dataIndex: 'status', width: 100 },
-  { title: '更新说明', key: 'releaseNotes', dataIndex: 'releaseNotes', ellipsis: true },
-  { title: '登记时间', key: 'createdAt', dataIndex: 'createdAt', width: 160 },
-  { title: '操作', key: 'action', width: 160, fixed: 'right' },
+const fwColumns: VueListColumn[] = [
+  { label: 'ID', key: 'id', prop: 'id', width: 80, kind: 'number' },
+  { label: '固件名称与版本', key: 'name', width: 240, locked: true },
+  { label: '包大小', key: 'fileSizeBytes', prop: 'fileSizeBytes', width: 110 },
+  { label: 'SHA-256 完整摘要', key: 'sha256Text', prop: 'sha256Text', width: 220 },
+  { label: '状态', key: 'status', prop: 'status', width: 120 },
+  { label: '更新说明', key: 'releaseNotes', prop: 'releaseNotes', width: 220, ellipsis: true },
+  { label: '登记时间', key: 'createdAt', prop: 'createdAt', width: 160 },
+  { label: '操作', key: 'action', width: 160, fixed: 'right' },
 ]
+function resetFirmwares() {
+  fwType.value = undefined
+  fwStatus.value = undefined
+  fwModel.value = ''
+  void loadFirmwares()
+}
+function fwRowActions(row: FirmwarePackage): VueRowActionItem[] {
+  const actions: VueRowActionItem[] = [
+    { key: 'detail', label: '详情', onClick: () => { fwDetailTarget.value = row } },
+  ]
+  if (row.status === 'draft') {
+    actions.push({ key: 'publish', label: '发布稳定版', onClick: () => confirmPublishFirmware(row) })
+  }
+  if (row.status === 'stable') {
+    actions.push({ key: 'deprecate', label: '下线废弃', danger: true, onClick: () => openDeprecateFirmware(row.id) })
+  }
+  return actions
+}
 async function loadFirmwares() {
   fwLoading.value = true
   try {
@@ -1330,22 +1631,64 @@ async function submitExecuteOta() {
 
 // 工单
 const workOrders = ref<WorkOrder[]>([])
+const workOrderDraft = ref('')
+const workOrderKeyword = ref('')
+const workOrderStatusFilter = ref('all')
+const workOrderStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'pending', label: '待受理' },
+  { value: 'processing', label: '处理中' },
+  { value: 'completed', label: '已完成' },
+]
+const filteredWorkOrders = computed(() => {
+  const q = workOrderKeyword.value.trim().toLowerCase()
+  return workOrders.value.filter((w) => {
+    if (workOrderStatusFilter.value !== 'all' && w.status !== workOrderStatusFilter.value) return false
+    if (!q) return true
+    return `${w.orderNo} ${w.tenantName || ''} ${w.deviceName} ${w.description || ''} ${w.technician || ''}`.toLowerCase().includes(q)
+  })
+})
 const workOrderTarget = ref<WorkOrder | null>(null)
 const workOrderNote = ref('')
 const workOrderSaving = ref(false)
-const workOrderColumns = [
-  { title: '工单', key: 'orderNo', dataIndex: 'orderNo' },
-  { title: '所属主体', key: 'tenantName', dataIndex: 'tenantName' },
-  { title: '设备', key: 'deviceName', dataIndex: 'deviceName' },
-  { title: '来源', key: 'source', dataIndex: 'source' },
-  { title: '类型', key: 'type', dataIndex: 'type' },
-  { title: '报修描述', key: 'description', dataIndex: 'description', ellipsis: true },
-  { title: '优先级', key: 'priority', dataIndex: 'priority' },
-  { title: '处理人', key: 'technician', dataIndex: 'technician' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '创建', key: 'createdAt', dataIndex: 'createdAt' },
-  { title: '操作', key: 'action', fixed: 'right', width: 140 },
+const workOrderColumns: VueListColumn[] = [
+  { label: '工单', key: 'orderNo', prop: 'orderNo', width: 150, locked: true },
+  { label: '所属主体', key: 'tenantName', prop: 'tenantName', width: 150 },
+  { label: '设备', key: 'deviceName', prop: 'deviceName', width: 150 },
+  { label: '来源', key: 'source', prop: 'source', width: 100 },
+  { label: '类型', key: 'type', prop: 'type', width: 100 },
+  { label: '报修描述', key: 'description', prop: 'description', width: 210, ellipsis: true },
+  { label: '优先级', key: 'priority', prop: 'priority', width: 90 },
+  { label: '处理人', key: 'technician', prop: 'technician', width: 100 },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '创建', key: 'createdAt', prop: 'createdAt', width: 160 },
+  { label: '操作', key: 'action', fixed: 'right', width: 130 },
 ]
+async function loadWorkOrders() {
+  try {
+    workOrders.value = await opsApi.workOrders()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载工单失败')
+  }
+}
+function applyWorkOrderFilter() {
+  workOrderKeyword.value = workOrderDraft.value.trim()
+}
+function resetWorkOrderFilter() {
+  workOrderDraft.value = ''
+  workOrderKeyword.value = ''
+  workOrderStatusFilter.value = 'all'
+}
+function workOrderRowActions(row: WorkOrder): VueRowActionItem[] {
+  return [
+    {
+      key: 'handle',
+      label: row.status === 'pending' ? '受理工单' : '登记完成',
+      disabled: !['pending', 'processing'].includes(row.status),
+      onClick: () => openHandleWorkOrder(row),
+    },
+  ]
+}
 function openHandleWorkOrder(row: WorkOrder) {
   workOrderTarget.value = row
   workOrderNote.value = ''
@@ -1399,14 +1742,39 @@ function exportOpsReport() {
 }
 
 const logs = ref<Awaited<ReturnType<typeof opsApi.logs>>>([])
-const logColumns = [
-  { title: '时间', key: 'createdAt', dataIndex: 'createdAt' },
-  { title: '操作人', key: 'operator', dataIndex: 'operator' },
-  { title: '动作', key: 'action', dataIndex: 'action' },
-  { title: '对象', key: 'target', dataIndex: 'target' },
-  { title: '详情', key: 'detail', dataIndex: 'detail', ellipsis: true },
-  { title: '来源 IP', key: 'ip', dataIndex: 'ip' },
+const logDraft = ref('')
+const logKeyword = ref('')
+const filteredLogs = computed(() => {
+  const q = logKeyword.value.trim().toLowerCase()
+  if (!q) return logs.value
+  return logs.value.filter((item) =>
+    `${item.operator || ''} ${item.action || ''} ${item.target || ''} ${item.detail || ''} ${item.ip || ''}`
+      .toLowerCase()
+      .includes(q),
+  )
+})
+const logColumns: VueListColumn[] = [
+  { label: '时间', key: 'createdAt', prop: 'createdAt', width: 170, locked: true },
+  { label: '操作人', key: 'operator', prop: 'operator', width: 130 },
+  { label: '动作', key: 'actionType', prop: 'action', width: 140 },
+  { label: '对象', key: 'target', prop: 'target', width: 180 },
+  { label: '详情', key: 'detail', prop: 'detail', width: 260, ellipsis: true },
+  { label: '来源 IP', key: 'ip', prop: 'ip', width: 140 },
 ]
+async function loadLogs() {
+  try {
+    logs.value = await opsApi.logs()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载审计日志失败')
+  }
+}
+function applyLogFilter() {
+  logKeyword.value = logDraft.value.trim()
+}
+function resetLogFilter() {
+  logDraft.value = ''
+  logKeyword.value = ''
+}
 
 let pollTimer: number | null = null
 function stopPoll() {
@@ -1468,6 +1836,15 @@ const syncLayout = () => {
   if (w >= 1024) mobileOpen.value = false
 }
 const onPopState = () => { page.value = parse() }
+
+watch(
+  () => iotSession.user,
+  (user) => {
+    if (!user) return
+    const latest = parse()
+    if (page.value !== latest) page.value = latest
+  },
+)
 
 watch(
   () => [iotSession.user, page.value] as const,

@@ -107,7 +107,7 @@
             <a-select
               v-model:value="reg.code"
               :options="availableRegionOptions"
-              @change="(code) => handleRegionSelect(idx, String(code))"
+              @change="(code: unknown) => handleRegionSelect(idx, String(code))"
             />
           </a-form-item>
           <a-form-item label="包含下级区域">

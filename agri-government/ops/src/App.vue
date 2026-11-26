@@ -165,52 +165,60 @@
                   <h1>市场主体监管</h1>
                   <p>辖区农业生产经营主体全量档案、风险等级与分级分类监管。</p>
                 </div>
-                <div class="o-actions"><a-button @click="exportSubjects">导出台账</a-button></div>
               </div>
-              <section class="o-card o-filter">
-                <div class="o-tabs">
-                  <button
-                    v-for="k in riskTabs"
-                    :key="k.key"
-                    type="button"
-                    :class="{ on: subjectRisk === k.key }"
-                    @click="changeSubjectRisk(k.key)"
-                  >
-                    {{ k.label }}
-                  </button>
-                </div>
-                <a-input v-model:value="subjectKeyword" placeholder="主体名称 / 信用代码" @pressEnter="loadSubjects">
-                  <template #prefix><SearchOutlined /></template>
-                </a-input>
-                <a-button type="primary" @click="loadSubjects">查询</a-button>
-              </section>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="subjects" :columns="subjectColumns" :scroll="{ x: 1120 }" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'subjectName'">
-                      <div class="o-entity"><b>{{ record.subjectName }}</b><small>{{ record.creditCode }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'region'">{{ record.industry }} · {{ record.region }}</template>
-                    <template v-else-if="column.key === 'creditScore'">
-                      <b :class="Number(record.creditScore) < 75 ? 'red' : 'green'">{{ record.creditScore }}</b>
-                    </template>
-                    <template v-else-if="column.key === 'riskLevel'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.riskLevel).tone}`">{{ statusMeta(record.riskLevel).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'annualReportStatus'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.annualReportStatus).tone}`">{{ statusMeta(record.annualReportStatus).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'merchantId'">
-                      <a-tag v-if="record.merchantId" color="green">已绑定 {{ record.merchantId }}</a-tag>
-                      <a-tag v-else>未绑定</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button type="link" @click="openBindMerchant(record)">{{ record.merchantId ? '变更绑定' : '绑定经营主体' }}</a-button>
-                      <a-button v-if="record.merchantId" type="link" danger @click="applyMerchantBinding(record, '')">解除</a-button>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="subjectColumns"
+                :data="subjects"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:subjects"
+                @refresh="loadSubjects"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="loadSubjects" @reset="resetSubjects">
+                    <div class="agri-vue-filter-field">
+                      <label>风险等级</label>
+                      <a-select
+                        v-model:value="subjectRisk"
+                        :options="riskFilterOptions"
+                        @change="loadSubjects"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="subjectKeyword"
+                        allow-clear
+                        placeholder="主体名称 / 信用代码"
+                        @press-enter="loadSubjects"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button @click="exportSubjects">导出台账</a-button>
+                </template>
+                <template #cell-subjectName="{ record }">
+                  <div class="o-entity"><b>{{ record.subjectName }}</b><small>{{ record.creditCode }}</small></div>
+                </template>
+                <template #cell-region="{ record }">{{ record.industry }} · {{ record.region }}</template>
+                <template #cell-creditScore="{ record }">
+                  <b :class="Number(record.creditScore) < 75 ? 'red' : 'green'">{{ record.creditScore }}</b>
+                </template>
+                <template #cell-riskLevel="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.riskLevel ?? '')).tone}`">{{ statusMeta(String(record.riskLevel ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-annualReportStatus="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.annualReportStatus ?? '')).tone}`">{{ statusMeta(String(record.annualReportStatus ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-merchantId="{ record }">
+                  <a-tag v-if="record.merchantId" color="green">已绑定 {{ record.merchantId }}</a-tag>
+                  <a-tag v-else>未绑定</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="subjectRowActions(record as unknown as Subject)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal
                 :open="Boolean(merchantTarget)"
                 :title="`绑定平台经营主体 · ${merchantTarget?.subjectName ?? ''}`"
@@ -281,20 +289,24 @@
                 </section>
               </div>
               <p v-if="!tasks.length" class="muted">当前没有执法任务</p>
-              <section class="o-card o-table" style="margin-top: 14px">
-                <div class="o-card-head"><div><b>整改复核队列</b><small>主体已反馈，待监管结案或退回</small></div></div>
-                <a-table row-key="id" :data-source="rectifications" :pagination="false" :scroll="{ x: 900 }" :columns="rectColumns">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'status'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button type="link" @click="openRectReview(record, 'closed')">结案</a-button>
-                      <a-button type="link" danger @click="openRectReview(record, 'pending')">退回</a-button>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="rectColumns"
+                :data="rectifications"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:rectifications"
+                @refresh="loadRectifications"
+              >
+                <template #toolbar-left>
+                  <div class="o-table-caption"><b>整改复核队列</b><small>主体已反馈，待监管结案或退回</small></div>
+                </template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="rectRowActions(record as unknown as Rectification)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal
                 :open="Boolean(rectReview)"
                 :title="rectReview ? `整改复核 · ${rectReview.row.rectificationNo}` : ''"
@@ -324,26 +336,52 @@
             <div v-else-if="page === 'items'" class="o-page">
               <div class="o-title">
                 <div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>执法事项清单</h1><p>现场检查看勾选项来自这张模板表；停用只影响新建任务，不改写历史结论。</p></div>
-                <div class="o-actions"><a-button type="primary" @click="openCheckItemModal(null)">+ 新增检查项</a-button></div>
               </div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="checkItems" :columns="checkItemColumns" :scroll="{ x: 760 }" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'itemName'">
-                      <div class="o-entity"><b>{{ record.itemName }}</b><small>{{ record.note || '无说明' }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :color="record.status === 'active' ? 'green' : 'default'">{{ record.status === 'active' ? '启用' : '停用' }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'toggle'">
-                      <a-switch :checked="record.status === 'active'" @change="(checked) => toggleCheckItem(record, Boolean(checked))" />
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button type="link" @click="openCheckItemModal(record)">编辑</a-button>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="checkItemColumns"
+                :data="filteredCheckItems"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:check-items"
+                @refresh="loadCheckItems"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyCheckItemFilter" @reset="resetCheckItemFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="checkItemDraft"
+                        allow-clear
+                        placeholder="检查项名称 / 说明"
+                        @press-enter="applyCheckItemFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>状态</label>
+                      <a-select
+                        v-model:value="checkItemStatus"
+                        :options="checkItemStatusOptions"
+                        @change="applyCheckItemFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button type="primary" @click="openCheckItemModal(null)">+ 新增检查项</a-button>
+                </template>
+                <template #cell-itemName="{ record }">
+                  <div class="o-entity"><b>{{ record.itemName }}</b><small>{{ record.note || '无说明' }}</small></div>
+                </template>
+                <template #cell-status="{ record }">
+                  <a-tag :color="record.status === 'active' ? 'green' : 'default'">{{ record.status === 'active' ? '启用' : '停用' }}</a-tag>
+                </template>
+                <template #cell-toggle="{ record }">
+                  <a-switch :checked="record.status === 'active'" @change="(checked: unknown) => toggleCheckItem(record as unknown as CheckItem, Boolean(checked))" />
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="checkItemRowActions(record as unknown as CheckItem)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal v-model:open="checkItemModalOpen" :title="checkItemTarget ? '编辑检查项' : '新增检查项'" ok-text="保存" @ok="saveCheckItem">
                 <a-form layout="vertical">
                   <a-form-item label="检查项名称" required><a-input v-model:value="checkItemForm.itemName" placeholder="例如：投入品仓储与使用台账" /></a-form-item>
@@ -355,27 +393,49 @@
             <!-- 案件管理 -->
             <div v-else-if="page === 'cases'" class="o-page">
               <div class="o-title"><div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>案件管理</h1><p>立案、调查取证、裁量、处罚、送达与结案归档。</p></div></div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="cases" :columns="caseColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'caseNo'">
-                      <div class="o-entity"><b>{{ record.caseNo }}</b><small>{{ record.subjectName }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'progress'">
-                      <a-progress :percent="record.progress" size="small" stroke-color="#159a5e" />
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button v-if="record.status !== 'closed'" type="link" @click="advanceCase(record)">
-                        推进到{{ statusMeta(nextCaseStage(record)).label }}
-                      </a-button>
-                      <span v-else class="muted">已归档</span>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="caseColumns"
+                :data="filteredCases"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:cases"
+                @refresh="loadCases"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyCaseFilter" @reset="resetCaseFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="caseDraft"
+                        allow-clear
+                        placeholder="案件编号 / 主体 / 案情摘要"
+                        @press-enter="applyCaseFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>案件阶段</label>
+                      <a-select
+                        v-model:value="caseStatusFilter"
+                        :options="caseStatusOptions"
+                        @change="applyCaseFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-caseNo="{ record }">
+                  <div class="o-entity"><b>{{ record.caseNo }}</b><small>{{ record.subjectName }}</small></div>
+                </template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-progress="{ record }">
+                  <a-progress :percent="Number(record.progress ?? 0)" size="small" stroke-color="#159a5e" />
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions v-if="record.status !== 'closed'" :actions="caseRowActions(record as unknown as Case)" />
+                  <span v-else class="muted">已归档</span>
+                </template>
+              </AgriAntdvListTable>
             </div>
 
             <!-- 信用修复复核 -->
@@ -406,29 +466,50 @@
             <!-- 补贴项目监管 -->
             <div v-else-if="page === 'subsidies'" class="o-page">
               <div class="o-title"><div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>补贴项目监管</h1><p>补贴项目申报、遥感核查、审核节点与资金兑付跟踪。</p></div></div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="subsidies" :columns="subsidyColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'projectName'">
-                      <div class="o-entity"><b>{{ record.projectName }}</b><small>{{ record.applicationNo }} · {{ record.subjectName }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'amount'">¥{{ Number(record.amount).toLocaleString() }}</template>
-                    <template v-else-if="column.key === 'progress'">
-                      <a-progress :percent="record.progress" size="small" stroke-color="#159a5e" />
-                    </template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <template v-if="record.status !== 'paid'">
-                        <a-button type="link" @click="reviewSubsidy(record, 'county_review')">通过复核</a-button>
-                        <a-button type="link" @click="reviewSubsidy(record, 'paid')">标记兑付</a-button>
-                      </template>
-                      <span v-else class="muted">已兑付</span>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="subsidyColumns"
+                :data="filteredSubsidies"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:subsidies"
+                @refresh="loadSubsidies"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applySubsidyFilter" @reset="resetSubsidyFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="subsidyDraft"
+                        allow-clear
+                        placeholder="项目名称 / 申报编号 / 主体"
+                        @press-enter="applySubsidyFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>审核状态</label>
+                      <a-select
+                        v-model:value="subsidyStatusFilter"
+                        :options="subsidyStatusOptions"
+                        @change="applySubsidyFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-projectName="{ record }">
+                  <div class="o-entity"><b>{{ record.projectName }}</b><small>{{ record.applicationNo }} · {{ record.subjectName }}</small></div>
+                </template>
+                <template #cell-amount="{ record }">¥{{ Number(record.amount).toLocaleString() }}</template>
+                <template #cell-progress="{ record }">
+                  <a-progress :percent="Number(record.progress ?? 0)" size="small" stroke-color="#159a5e" />
+                </template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions v-if="record.status !== 'paid'" :actions="subsidyRowActions(record as unknown as Subsidy)" />
+                  <span v-else class="muted">已兑付</span>
+                </template>
+              </AgriAntdvListTable>
             </div>
 
             <!-- 举报处理 -->
@@ -462,20 +543,46 @@
             <div v-else-if="page === 'samplings'" class="o-page">
               <div class="o-title">
                 <div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>监督抽检</h1><p>抽检计划、结果公示、不合格产品处置与风险区域分析。</p></div>
-                <div class="o-actions"><a-button type="primary" @click="samplingModalOpen = true">+ 新建抽样</a-button></div>
               </div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="samplings" :columns="samplingColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'productName'">
-                      <div class="o-entity"><b>{{ record.productName }}</b><small>{{ record.subjectName }} · {{ record.region }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'result'">
-                      <a-tag :color="record.result === '合格' ? 'green' : record.result === '不合格' ? 'red' : 'default'">{{ record.result }}</a-tag>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="samplingColumns"
+                :data="filteredSamplings"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:samplings"
+                @refresh="loadSamplings"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applySamplingFilter" @reset="resetSamplingFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="samplingDraft"
+                        allow-clear
+                        placeholder="抽样编号 / 产品 / 主体"
+                        @press-enter="applySamplingFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>抽检结果</label>
+                      <a-select
+                        v-model:value="samplingResultFilter"
+                        :options="samplingResultFilterOptions"
+                        @change="applySamplingFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button type="primary" @click="samplingModalOpen = true">+ 新建抽样</a-button>
+                </template>
+                <template #cell-productName="{ record }">
+                  <div class="o-entity"><b>{{ record.productName }}</b><small>{{ record.subjectName }} · {{ record.region }}</small></div>
+                </template>
+                <template #cell-result="{ record }">
+                  <a-tag :color="record.result === '合格' ? 'green' : record.result === '不合格' ? 'red' : 'default'">{{ record.result }}</a-tag>
+                </template>
+              </AgriAntdvListTable>
               <a-modal v-model:open="samplingModalOpen" title="新建抽样任务" ok-text="创建" @ok="submitCreateSampling">
                 <a-form layout="vertical">
                   <a-form-item label="监管主体" required>
@@ -491,27 +598,48 @@
             <!-- 跨部门数据共享 -->
             <div v-else-if="page === 'sharing'" class="o-page">
               <div class="o-title"><div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>跨部门数据共享</h1><p>数据目录、授权审批、敏感分级与共享交换记录。</p></div></div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="dataShares" :columns="shareColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'parties'">{{ record.owner }} → {{ record.receiver }}</template>
-                    <template v-else-if="column.key === 'sensitiveLevel'">
-                      <a-tag :color="record.sensitiveLevel === '二级' ? 'orange' : 'blue'">{{ record.sensitiveLevel }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'recordCount'">{{ Number(record.recordCount).toLocaleString() }}</template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <template v-if="record.status === 'pending'">
-                        <a-button type="link" @click="reviewDataShare(record, 'approved')">授权</a-button>
-                        <a-button type="link" danger @click="reviewDataShare(record, 'rejected')">驳回</a-button>
-                      </template>
-                      <span v-else class="muted">已配置</span>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="shareColumns"
+                :data="filteredDataShares"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:sharing"
+                @refresh="loadDataShares"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyShareFilter" @reset="resetShareFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="shareDraft"
+                        allow-clear
+                        placeholder="数据资源 / 提供方 / 接收方"
+                        @press-enter="applyShareFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>授权状态</label>
+                      <a-select
+                        v-model:value="shareStatusFilter"
+                        :options="shareStatusOptions"
+                        @change="applyShareFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-parties="{ record }">{{ record.owner }} → {{ record.receiver }}</template>
+                <template #cell-sensitiveLevel="{ record }">
+                  <a-tag :color="record.sensitiveLevel === '二级' ? 'orange' : 'blue'">{{ record.sensitiveLevel }}</a-tag>
+                </template>
+                <template #cell-recordCount="{ record }">{{ Number(record.recordCount).toLocaleString() }}</template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions v-if="record.status === 'pending'" :actions="shareRowActions(record as unknown as DataShare)" />
+                  <span v-else class="muted">已配置</span>
+                </template>
+              </AgriAntdvListTable>
             </div>
 
             <!-- 统计报表中心 -->
@@ -520,7 +648,6 @@
               <template v-else>
                 <div class="o-title">
                   <div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>统计报表中心</h1><p>主体、预警、抽检、案件与产业运行周期报表。</p></div>
-                  <div class="o-actions"><a-button type="primary" @click="exportStatsCases">导出案件台账</a-button></div>
                 </div>
                 <div class="o-stats-grid">
                   <section class="o-card">
@@ -540,54 +667,88 @@
                     </div>
                   </section>
                 </div>
-                <section class="o-card o-table">
-                  <a-table row-key="id" :data-source="statsData.cases" :columns="statsCaseColumns" :pagination="tablePagination">
-                    <template #bodyCell="{ column, record }">
-                      <template v-if="column.key === 'status'">
-                        <a-tag :class="`o-status tone-${statusMeta(record.status).tone}`">{{ statusMeta(record.status).label }}</a-tag>
-                      </template>
-                    </template>
-                  </a-table>
-                </section>
-                <section class="o-card o-table" style="margin-top: 14px">
-                  <div class="o-card-head"><div><b>抽检结果</b><small>已出结果的抽样</small></div></div>
-                  <a-table row-key="id" :data-source="statsData.samplings.filter((s) => s.result !== '待检')" :pagination="false" :columns="statsSamplingColumns">
-                    <template #bodyCell="{ column, record }">
-                      <template v-if="column.key === 'result'">
-                        <a-tag :color="record.result === '合格' ? 'green' : 'red'">{{ record.result }}</a-tag>
-                      </template>
-                    </template>
-                  </a-table>
-                </section>
+                <AgriAntdvListTable
+                  :columns="statsCaseColumns"
+                  :data="statsData.cases"
+                  row-key="id"
+                  client-pagination
+                  column-settings-storage-key="gov-ops:stats-cases"
+                  @refresh="loadStatistics"
+                >
+                  <template #toolbar-left>
+                    <a-button type="primary" @click="exportStatsCases">导出案件台账</a-button>
+                  </template>
+                  <template #cell-status="{ record }">
+                    <a-tag :class="`o-status tone-${statusMeta(String(record.status ?? '')).tone}`">{{ statusMeta(String(record.status ?? '')).label }}</a-tag>
+                  </template>
+                </AgriAntdvListTable>
+                <AgriAntdvListTable
+                  :columns="statsSamplingColumns"
+                  :data="statsFinishedSamplings"
+                  row-key="id"
+                  client-pagination
+                  column-settings-storage-key="gov-ops:stats-samplings"
+                  @refresh="loadStatistics"
+                >
+                  <template #toolbar-left>
+                    <div class="o-table-caption"><b>抽检结果</b><small>已出结果的抽样</small></div>
+                  </template>
+                  <template #cell-result="{ record }">
+                    <a-tag :color="record.result === '合格' ? 'green' : 'red'">{{ record.result }}</a-tag>
+                  </template>
+                </AgriAntdvListTable>
               </template>
             </div>
 
             <!-- 组织与权限 -->
             <div v-else-if="page === 'users'" class="o-page">
               <div class="o-title"><div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>组织与权限</h1><p>跨部门组织、监管角色、辖区网格与统一账号绑定关系。</p></div></div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="staffList" :columns="userColumns" :scroll="{ x: 1020 }" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'role'"><a-tag>{{ record.role }}</a-tag></template>
-                    <template v-else-if="column.key === 'grid'">{{ record.grid || '未分配' }}</template>
-                    <template v-else-if="column.key === 'certificateNo'">
-                      <span v-if="record.certificateNo">{{ record.certificateNo }}</span>
-                      <span v-else class="muted">未登记</span>
-                    </template>
-                    <template v-else-if="column.key === 'platformUserId'">
-                      <a-tag v-if="record.platformUserId" color="green">已绑定 {{ record.platformUserId }}</a-tag>
-                      <a-tag v-else>未绑定</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :color="record.status === 'active' ? 'green' : 'default'">{{ record.status === 'active' ? '在岗' : '停用' }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button type="link" @click="openBindPlatformUser(record)">{{ record.platformUserId ? '变更绑定' : '绑定平台账号' }}</a-button>
-                      <a-button v-if="record.platformUserId" type="link" danger @click="bindPlatformUser(record, '')">解除</a-button>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="userColumns"
+                :data="filteredStaffList"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:users"
+                @refresh="loadStaffList"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyStaffFilter" @reset="resetStaffFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="staffDraft"
+                        allow-clear
+                        placeholder="姓名 / 单位 / 网格 / 执法证号"
+                        @press-enter="applyStaffFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>在岗状态</label>
+                      <a-select
+                        v-model:value="staffStatusFilter"
+                        :options="staffStatusOptions"
+                        @change="applyStaffFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-role="{ record }"><a-tag>{{ record.role }}</a-tag></template>
+                <template #cell-grid="{ record }">{{ record.grid || '未分配' }}</template>
+                <template #cell-certificateNo="{ record }">
+                  <span v-if="record.certificateNo">{{ record.certificateNo }}</span>
+                  <span v-else class="muted">未登记</span>
+                </template>
+                <template #cell-platformUserId="{ record }">
+                  <a-tag v-if="record.platformUserId" color="green">已绑定 {{ record.platformUserId }}</a-tag>
+                  <a-tag v-else>未绑定</a-tag>
+                </template>
+                <template #cell-status="{ record }">
+                  <a-tag :color="record.status === 'active' ? 'green' : 'default'">{{ record.status === 'active' ? '在岗' : '停用' }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="staffRowActions(record as unknown as StaffRow)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal
                 :open="Boolean(staffTarget)"
                 :title="`绑定平台账号 · ${staffTarget?.name ?? ''}`"
@@ -604,18 +765,36 @@
             <div v-else-if="page === 'logs'" class="o-page">
               <div class="o-title">
                 <div><span>GOVERNMENT REGULATION · OPERATIONS</span><h1>操作审计日志</h1><p>审核、分派、处罚、补贴与数据共享的敏感操作留痕。</p></div>
-                <div class="o-actions"><a-button @click="exportLogs">导出日志</a-button></div>
               </div>
-              <section class="o-card o-table">
-                <a-table row-key="id" :data-source="logs" :columns="logColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'operator'">
-                      <div class="o-entity"><b>{{ record.operator || '系统' }}</b><small>{{ record.role }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'action'"><a-tag>{{ record.action }}</a-tag></template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="logColumns"
+                :data="filteredLogs"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="gov-ops:logs"
+                @refresh="loadLogs"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="1" @search="applyLogFilter" @reset="resetLogFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="logDraft"
+                        allow-clear
+                        placeholder="操作人 / 动作 / 对象 / 说明"
+                        @press-enter="applyLogFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button @click="exportLogs">导出日志</a-button>
+                </template>
+                <template #cell-operator="{ record }">
+                  <div class="o-entity"><b>{{ record.operator || '系统' }}</b><small>{{ record.role }}</small></div>
+                </template>
+                <template #cell-actionType="{ record }"><a-tag>{{ record.action }}</a-tag></template>
+              </AgriAntdvListTable>
             </div>
 
             <RegionRegistry v-else-if="page === 'region-registry'" />
@@ -650,6 +829,8 @@ import {
   WarningOutlined,
 } from '@ant-design/icons-vue'
 import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
+import { AgriAntdvListTable } from '@agri/shared/vue/antdv'
+import { AgriVueFilterBar, AgriVueRowActions, type VueListColumn, type VueRowActionItem } from '@agri/shared/vue/list'
 import {
   opsApi,
   STATUS,
@@ -804,14 +985,6 @@ const theme = {
   },
 }
 
-const tablePagination = {
-  defaultPageSize: 20,
-  showSizeChanger: true,
-  showQuickJumper: true,
-  pageSizeOptions: ['10', '20', '50', '100'],
-  showTotal: (total: number) => `共 ${total} 条`,
-}
-
 const landingPath = window.location.port === '5183' ? '/#/dashboard' : '/gov-ops/#/dashboard'
 const baseUrl = import.meta.env.BASE_URL
 const userPortalUrl = `${window.location.protocol}//${window.location.hostname}:8108/`
@@ -824,7 +997,14 @@ function parse(): Page {
 }
 
 function go(p: Page) {
-  window.location.hash = `/${p}`
+  const nextHash = `#/${p}`
+  if (window.location.hash !== nextHash) {
+    window.location.hash = `/${p}`
+  }
+  if (page.value !== p) {
+    page.value = p
+    window.scrollTo({ top: 0 })
+  }
 }
 
 function statusMeta(value: string) {
@@ -854,28 +1034,37 @@ const pendingCount = computed(() => overview.value?.metrics.pendingWarnings ?? 0
 const maxTrendWarnings = computed(() => Math.max(...(overview.value?.trend.map((t) => t.warnings) ?? [1]), 1))
 
 // 市场主体
-const riskTabs = [
-  { key: 'all', label: '全部' },
-  { key: 'low', label: '低风险' },
-  { key: 'medium', label: '中风险' },
-  { key: 'high', label: '高风险' },
+const riskFilterOptions = [
+  { value: 'all', label: '全部风险等级' },
+  { value: 'low', label: '低风险' },
+  { value: 'medium', label: '中风险' },
+  { value: 'high', label: '高风险' },
 ]
 const subjects = ref<Subject[]>([])
 const subjectRisk = ref('all')
 const subjectKeyword = ref('')
 const merchantTarget = ref<Subject | null>(null)
 const merchantIdInput = ref('')
-const subjectColumns = [
-  { title: '主体', key: 'subjectName', dataIndex: 'subjectName' },
-  { title: '类型', key: 'subjectType', dataIndex: 'subjectType' },
-  { title: '行业 / 区域', key: 'region' },
-  { title: '信用分', key: 'creditScore', dataIndex: 'creditScore', sorter: (a: Subject, b: Subject) => a.creditScore - b.creditScore },
-  { title: '等级', key: 'creditLevel', dataIndex: 'creditLevel' },
-  { title: '风险', key: 'riskLevel', dataIndex: 'riskLevel' },
-  { title: '年报', key: 'annualReportStatus', dataIndex: 'annualReportStatus' },
-  { title: '平台经营主体', key: 'merchantId', dataIndex: 'merchantId' },
-  { title: '操作', key: 'action' },
+const subjectColumns: VueListColumn[] = [
+  { label: '主体', key: 'subjectName', prop: 'subjectName', width: 220, locked: true },
+  { label: '类型', key: 'subjectType', prop: 'subjectType', width: 120 },
+  { label: '行业 / 区域', key: 'region', width: 180 },
+  { label: '信用分', key: 'creditScore', prop: 'creditScore', width: 100, sorter: (a: Subject, b: Subject) => a.creditScore - b.creditScore },
+  { label: '等级', key: 'creditLevel', prop: 'creditLevel', width: 90 },
+  { label: '风险', key: 'riskLevel', prop: 'riskLevel', width: 100 },
+  { label: '年报', key: 'annualReportStatus', prop: 'annualReportStatus', width: 100 },
+  { label: '平台经营主体', key: 'merchantId', prop: 'merchantId', width: 150 },
+  { label: '操作', key: 'action', width: 160, fixed: 'right' },
 ]
+function subjectRowActions(row: Subject): VueRowActionItem[] {
+  const actions: VueRowActionItem[] = [
+    { key: 'bind', label: row.merchantId ? '变更绑定' : '绑定经营主体', onClick: () => openBindMerchant(row) },
+  ]
+  if (row.merchantId) {
+    actions.push({ key: 'unbind', label: '解除', danger: true, onClick: () => void applyMerchantBinding(row, '') })
+  }
+  return actions
+}
 
 // 预警与人员
 const warnings = ref<Warning[]>([])
@@ -883,6 +1072,22 @@ const warningTarget = ref<Warning | null>(null)
 const warningNote = ref('')
 const warningAssignee = ref<number | undefined>(undefined)
 const staffList = ref<StaffRow[]>([])
+const staffDraft = ref('')
+const staffKeyword = ref('')
+const staffStatusFilter = ref('all')
+const staffStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'active', label: '在岗' },
+  { value: 'inactive', label: '停用' },
+]
+const filteredStaffList = computed(() => {
+  const q = staffKeyword.value.trim().toLowerCase()
+  return staffList.value.filter((u) => {
+    if (staffStatusFilter.value !== 'all' && u.status !== staffStatusFilter.value) return false
+    if (!q) return true
+    return `${u.name} ${u.organization} ${u.grid || ''} ${u.certificateNo || ''} ${u.role}`.toLowerCase().includes(q)
+  })
+})
 const activeStaff = computed(() => staffList.value.filter((r) => r.status === 'active'))
 const staffOptions = computed(() =>
   activeStaff.value.map((v) => ({ value: v.id, label: `${v.name} · ${v.role} · ${v.grid || '未分配网格'}` })),
@@ -905,57 +1110,144 @@ const taskForm = reactive<{ taskType: string; subjectId?: number; address: strin
   assigneeId: undefined,
 })
 const taskTypeOptions = ['双随机一公开', '日常巡查', '专项检查', '抽样任务'].map((v) => ({ value: v, label: v }))
-const rectColumns = [
-  { title: '整改单', key: 'rectificationNo', dataIndex: 'rectificationNo' },
-  { title: '问题', key: 'issueText', dataIndex: 'issueText' },
-  { title: '整改要求', key: 'requirement', dataIndex: 'requirement' },
-  { title: '主体反馈', key: 'feedbackText', dataIndex: 'feedbackText', ellipsis: true },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '操作', key: 'action' },
+const rectColumns: VueListColumn[] = [
+  { label: '整改单', key: 'rectificationNo', prop: 'rectificationNo', width: 150, locked: true },
+  { label: '问题', key: 'issueText', prop: 'issueText', width: 200 },
+  { label: '整改要求', key: 'requirement', prop: 'requirement', width: 200 },
+  { label: '主体反馈', key: 'feedbackText', prop: 'feedbackText', width: 220, ellipsis: true },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '操作', key: 'action', width: 130, fixed: 'right' },
 ]
+function rectRowActions(row: Rectification): VueRowActionItem[] {
+  return [
+    { key: 'close', label: '结案', onClick: () => openRectReview(row, 'closed') },
+    { key: 'reject', label: '退回', danger: true, onClick: () => openRectReview(row, 'pending') },
+  ]
+}
 
 // 执法事项清单
 const checkItems = ref<CheckItem[]>([])
+const checkItemDraft = ref('')
+const checkItemKeyword = ref('')
+const checkItemStatus = ref('all')
+const checkItemStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'active', label: '启用' },
+  { value: 'disabled', label: '停用' },
+]
+const filteredCheckItems = computed(() => {
+  const q = checkItemKeyword.value.trim().toLowerCase()
+  return checkItems.value.filter((item) => {
+    if (checkItemStatus.value !== 'all' && (checkItemStatus.value === 'active' ? item.status !== 'active' : item.status === 'active')) return false
+    if (!q) return true
+    return `${item.itemName} ${item.note || ''}`.toLowerCase().includes(q)
+  })
+})
 const checkItemTarget = ref<CheckItem | null>(null)
 const checkItemModalOpen = ref(false)
 const checkItemForm = reactive({ itemName: '', note: '' })
-const checkItemColumns = [
-  { title: '顺序', key: 'sortOrder', dataIndex: 'sortOrder', width: 70 },
-  { title: '检查项', key: 'itemName', dataIndex: 'itemName' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '启停', key: 'toggle', width: 90 },
-  { title: '操作', key: 'action' },
+const checkItemColumns: VueListColumn[] = [
+  { label: '顺序', key: 'sortOrder', prop: 'sortOrder', width: 80 },
+  { label: '检查项', key: 'itemName', prop: 'itemName', width: 320, locked: true },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '启停', key: 'toggle', width: 100 },
+  { label: '操作', key: 'action', width: 100, fixed: 'right' },
 ]
+function checkItemRowActions(row: CheckItem): VueRowActionItem[] {
+  return [{ key: 'edit', label: '编辑', onClick: () => openCheckItemModal(row) }]
+}
 
 // 案件、修复、补贴、举报、抽检、共享、统计、人员绑定、日志
 const cases = ref<Case[]>([])
-const caseColumns = [
-  { title: '案件', key: 'caseNo', dataIndex: 'caseNo' },
-  { title: '类型', key: 'caseType', dataIndex: 'caseType' },
-  { title: '案情摘要', key: 'summary', dataIndex: 'summary', ellipsis: true },
-  { title: '法律依据', key: 'legalBasis', dataIndex: 'legalBasis', ellipsis: true },
-  { title: '阶段', key: 'status', dataIndex: 'status' },
-  { title: '进度', key: 'progress' },
-  { title: '承办', key: 'handler', dataIndex: 'handler' },
-  { title: '操作', key: 'action' },
+const caseDraft = ref('')
+const caseKeyword = ref('')
+const caseStatusFilter = ref('all')
+const caseStatusOptions = [
+  { value: 'all', label: '全部阶段' },
+  { value: 'filing', label: '立案' },
+  { value: 'investigating', label: '调查取证' },
+  { value: 'evidence', label: '证据复核' },
+  { value: 'decision', label: '处罚决定' },
+  { value: 'closed', label: '已归档' },
 ]
+const filteredCases = computed(() => {
+  const q = caseKeyword.value.trim().toLowerCase()
+  return cases.value.filter((c) => {
+    if (caseStatusFilter.value !== 'all' && c.status !== caseStatusFilter.value) return false
+    if (!q) return true
+    return `${c.caseNo} ${c.subjectName} ${c.summary} ${c.handler}`.toLowerCase().includes(q)
+  })
+})
+const caseColumns: VueListColumn[] = [
+  { label: '案件', key: 'caseNo', prop: 'caseNo', width: 200, locked: true },
+  { label: '类型', key: 'caseType', prop: 'caseType', width: 120 },
+  { label: '案情摘要', key: 'summary', prop: 'summary', width: 220, ellipsis: true },
+  { label: '法律依据', key: 'legalBasis', prop: 'legalBasis', width: 180, ellipsis: true },
+  { label: '阶段', key: 'status', prop: 'status', width: 110 },
+  { label: '进度', key: 'progress', width: 130 },
+  { label: '承办', key: 'handler', prop: 'handler', width: 110 },
+  { label: '操作', key: 'action', width: 150, fixed: 'right' },
+]
+function caseRowActions(row: Case): VueRowActionItem[] {
+  return [{ key: 'advance', label: `推进到${statusMeta(nextCaseStage(row)).label}`, onClick: () => void advanceCase(row) }]
+}
 
 const repairs = ref<Repair[]>([])
 const subsidies = ref<Subsidy[]>([])
-const subsidyColumns = [
-  { title: '项目', key: 'projectName', dataIndex: 'projectName' },
-  { title: '金额', key: 'amount', dataIndex: 'amount' },
-  { title: '遥感核查', key: 'remoteCheckStatus', dataIndex: 'remoteCheckStatus' },
-  { title: '进度', key: 'progress' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '操作', key: 'action' },
+const subsidyDraft = ref('')
+const subsidyKeyword = ref('')
+const subsidyStatusFilter = ref('all')
+const subsidyStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'pending', label: '待审核' },
+  { value: 'county_review', label: '县级复核' },
+  { value: 'paid', label: '已兑付' },
 ]
+const filteredSubsidies = computed(() => {
+  const q = subsidyKeyword.value.trim().toLowerCase()
+  return subsidies.value.filter((s) => {
+    if (subsidyStatusFilter.value !== 'all' && s.status !== subsidyStatusFilter.value) return false
+    if (!q) return true
+    return `${s.projectName} ${s.applicationNo} ${s.subjectName}`.toLowerCase().includes(q)
+  })
+})
+const subsidyColumns: VueListColumn[] = [
+  { label: '项目', key: 'projectName', prop: 'projectName', width: 240, locked: true },
+  { label: '金额', key: 'amount', prop: 'amount', width: 130 },
+  { label: '遥感核查', key: 'remoteCheckStatus', prop: 'remoteCheckStatus', width: 130 },
+  { label: '进度', key: 'progress', width: 140 },
+  { label: '状态', key: 'status', prop: 'status', width: 110 },
+  { label: '操作', key: 'action', width: 160, fixed: 'right' },
+]
+function subsidyRowActions(row: Subsidy): VueRowActionItem[] {
+  return [
+    { key: 'review', label: '通过复核', onClick: () => void reviewSubsidy(row, 'county_review') },
+    { key: 'paid', label: '标记兑付', onClick: () => void reviewSubsidy(row, 'paid') },
+  ]
+}
 
 const complaints = ref<Complaint[]>([])
 const complaintTarget = ref<Complaint | null>(null)
 const complaintNote = ref('')
 
 const samplings = ref<Sampling[]>([])
+const samplingDraft = ref('')
+const samplingKeyword = ref('')
+const samplingResultFilter = ref('all')
+const samplingResultFilterOptions = [
+  { value: 'all', label: '全部结果' },
+  { value: '待检', label: '待检' },
+  { value: '合格', label: '合格' },
+  { value: '不合格', label: '不合格' },
+]
+const filteredSamplings = computed(() => {
+  const q = samplingKeyword.value.trim().toLowerCase()
+  return samplings.value.filter((s) => {
+    if (samplingResultFilter.value !== 'all' && s.result !== samplingResultFilter.value) return false
+    if (!q) return true
+    return `${s.samplingNo} ${s.productName} ${s.subjectName} ${s.testItems}`.toLowerCase().includes(q)
+  })
+})
 const samplingModalOpen = ref(false)
 const samplingForm = reactive<{ subjectId?: number; productName: string; testItems: string; result?: string }>({
   subjectId: undefined,
@@ -964,71 +1256,115 @@ const samplingForm = reactive<{ subjectId?: number; productName: string; testIte
   result: undefined,
 })
 const samplingResultOptions = ['待检', '合格', '不合格'].map((v) => ({ value: v, label: v }))
-const samplingColumns = [
-  { title: '抽样编号', key: 'samplingNo', dataIndex: 'samplingNo' },
-  { title: '产品 / 主体', key: 'productName', dataIndex: 'productName' },
-  { title: '检测项目', key: 'testItems', dataIndex: 'testItems' },
-  { title: '结果', key: 'result', dataIndex: 'result' },
-  { title: '处置', key: 'disposition', dataIndex: 'disposition' },
-  { title: '抽样日期', key: 'sampleDate', dataIndex: 'sampleDate' },
+const samplingColumns: VueListColumn[] = [
+  { label: '抽样编号', key: 'samplingNo', prop: 'samplingNo', width: 150, locked: true },
+  { label: '产品 / 主体', key: 'productName', prop: 'productName', width: 220 },
+  { label: '检测项目', key: 'testItems', prop: 'testItems', width: 180 },
+  { label: '结果', key: 'result', prop: 'result', width: 100 },
+  { label: '处置', key: 'disposition', prop: 'disposition', width: 150 },
+  { label: '抽样日期', key: 'sampleDate', prop: 'sampleDate', width: 140 },
 ]
 
 const dataShares = ref<DataShare[]>([])
-const shareColumns = [
-  { title: '数据资源', key: 'resourceName', dataIndex: 'resourceName' },
-  { title: '提供 / 接收方', key: 'parties' },
-  { title: '共享方式', key: 'shareType', dataIndex: 'shareType' },
-  { title: '敏感等级', key: 'sensitiveLevel', dataIndex: 'sensitiveLevel' },
-  { title: '记录数', key: 'recordCount', dataIndex: 'recordCount' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '更新时间', key: 'updatedAt', dataIndex: 'updatedAt' },
-  { title: '操作', key: 'action' },
+const shareDraft = ref('')
+const shareKeyword = ref('')
+const shareStatusFilter = ref('all')
+const shareStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'pending', label: '待审批' },
+  { value: 'approved', label: '已授权' },
+  { value: 'rejected', label: '已驳回' },
 ]
+const filteredDataShares = computed(() => {
+  const q = shareKeyword.value.trim().toLowerCase()
+  return dataShares.value.filter((d) => {
+    if (shareStatusFilter.value !== 'all' && d.status !== shareStatusFilter.value) return false
+    if (!q) return true
+    return `${d.resourceName} ${d.owner} ${d.receiver} ${d.shareType}`.toLowerCase().includes(q)
+  })
+})
+const shareColumns: VueListColumn[] = [
+  { label: '数据资源', key: 'resourceName', prop: 'resourceName', width: 200, locked: true },
+  { label: '提供 / 接收方', key: 'parties', width: 210 },
+  { label: '共享方式', key: 'shareType', prop: 'shareType', width: 120 },
+  { label: '敏感等级', key: 'sensitiveLevel', prop: 'sensitiveLevel', width: 100 },
+  { label: '记录数', key: 'recordCount', prop: 'recordCount', width: 110 },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '更新时间', key: 'updatedAt', prop: 'updatedAt', width: 160 },
+  { label: '操作', key: 'action', width: 130, fixed: 'right' },
+]
+function shareRowActions(row: DataShare): VueRowActionItem[] {
+  return [
+    { key: 'approve', label: '授权', onClick: () => void reviewDataShare(row, 'approved') },
+    { key: 'reject', label: '驳回', danger: true, onClick: () => void reviewDataShare(row, 'rejected') },
+  ]
+}
 
 const statsData = ref<Awaited<ReturnType<typeof opsApi.statistics>> | null>(null)
+const statsFinishedSamplings = computed(() => statsData.value?.samplings.filter((s) => s.result !== '待检') ?? [])
 const maxWarningTypeVal = computed(() => Math.max(...(statsData.value?.warningTypes.map((w) => w.value) ?? [1]), 1))
 const creditLevels = computed(() => {
   if (!statsData.value) return []
   const uniq = [...new Set(statsData.value.subjects.map((s) => s.creditLevel))]
   return uniq.map((level) => ({ level, count: statsData.value!.subjects.filter((s) => s.creditLevel === level).length }))
 })
-const statsCaseColumns = [
-  { title: '案件编号', key: 'caseNo', dataIndex: 'caseNo' },
-  { title: '主体', key: 'subjectName', dataIndex: 'subjectName' },
-  { title: '类型', key: 'caseType', dataIndex: 'caseType' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '承办人', key: 'handler', dataIndex: 'handler' },
-  { title: '立案时间', key: 'filedAt', dataIndex: 'filedAt' },
+const statsCaseColumns: VueListColumn[] = [
+  { label: '案件编号', key: 'caseNo', prop: 'caseNo', width: 160, locked: true },
+  { label: '主体', key: 'subjectName', prop: 'subjectName', width: 200 },
+  { label: '类型', key: 'caseType', prop: 'caseType', width: 130 },
+  { label: '状态', key: 'status', prop: 'status', width: 110 },
+  { label: '承办人', key: 'handler', prop: 'handler', width: 120 },
+  { label: '立案时间', key: 'filedAt', prop: 'filedAt', width: 160 },
 ]
-const statsSamplingColumns = [
-  { title: '抽样编号', key: 'samplingNo', dataIndex: 'samplingNo' },
-  { title: '产品', key: 'productName', dataIndex: 'productName' },
-  { title: '主体', key: 'subjectName', dataIndex: 'subjectName' },
-  { title: '结果', key: 'result', dataIndex: 'result' },
-  { title: '处置', key: 'disposition', dataIndex: 'disposition' },
+const statsSamplingColumns: VueListColumn[] = [
+  { label: '抽样编号', key: 'samplingNo', prop: 'samplingNo', width: 160, locked: true },
+  { label: '产品', key: 'productName', prop: 'productName', width: 180 },
+  { label: '主体', key: 'subjectName', prop: 'subjectName', width: 200 },
+  { label: '结果', key: 'result', prop: 'result', width: 100 },
+  { label: '处置', key: 'disposition', prop: 'disposition', width: 180 },
 ]
 
 const staffTarget = ref<StaffRow | null>(null)
 const staffPlatformId = ref('')
-const userColumns = [
-  { title: '姓名', key: 'name', dataIndex: 'name' },
-  { title: '角色', key: 'role', dataIndex: 'role' },
-  { title: '单位', key: 'organization', dataIndex: 'organization' },
-  { title: '网格', key: 'grid', dataIndex: 'grid' },
-  { title: '执法证号', key: 'certificateNo', dataIndex: 'certificateNo' },
-  { title: '平台账号', key: 'platformUserId', dataIndex: 'platformUserId' },
-  { title: '在岗', key: 'status', dataIndex: 'status' },
-  { title: '操作', key: 'action' },
+const userColumns: VueListColumn[] = [
+  { label: '姓名', key: 'name', prop: 'name', width: 120, locked: true },
+  { label: '角色', key: 'role', prop: 'role', width: 120 },
+  { label: '单位', key: 'organization', prop: 'organization', width: 180 },
+  { label: '网格', key: 'grid', prop: 'grid', width: 140 },
+  { label: '执法证号', key: 'certificateNo', prop: 'certificateNo', width: 150 },
+  { label: '平台账号', key: 'platformUserId', prop: 'platformUserId', width: 140 },
+  { label: '在岗', key: 'status', prop: 'status', width: 90 },
+  { label: '操作', key: 'action', width: 160, fixed: 'right' },
 ]
+function staffRowActions(row: StaffRow): VueRowActionItem[] {
+  const actions: VueRowActionItem[] = [
+    { key: 'bind', label: row.platformUserId ? '变更绑定' : '绑定平台账号', onClick: () => openBindPlatformUser(row) },
+  ]
+  if (row.platformUserId) {
+    actions.push({ key: 'unbind', label: '解除', danger: true, onClick: () => void bindPlatformUser(row, '') })
+  }
+  return actions
+}
 
 const logs = ref<Awaited<ReturnType<typeof opsApi.logs>>>([])
-const logColumns = [
-  { title: '时间', key: 'createdAt', dataIndex: 'createdAt' },
-  { title: '操作人', key: 'operator' },
-  { title: '动作', key: 'action', dataIndex: 'action' },
-  { title: '对象', key: 'target', dataIndex: 'target' },
-  { title: '说明', key: 'detail', dataIndex: 'detail', ellipsis: true },
-  { title: 'IP', key: 'ip', dataIndex: 'ip' },
+const logDraft = ref('')
+const logKeyword = ref('')
+const filteredLogs = computed(() => {
+  const q = logKeyword.value.trim().toLowerCase()
+  if (!q) return logs.value
+  return logs.value.filter((item) =>
+    `${item.operator || ''} ${item.role || ''} ${item.action || ''} ${item.target || ''} ${item.detail || ''} ${item.ip || ''}`
+      .toLowerCase()
+      .includes(q),
+  )
+})
+const logColumns: VueListColumn[] = [
+  { label: '时间', key: 'createdAt', prop: 'createdAt', width: 170, locked: true },
+  { label: '操作人', key: 'operator', width: 150 },
+  { label: '动作', key: 'actionType', prop: 'action', width: 140 },
+  { label: '对象', key: 'target', prop: 'target', width: 180 },
+  { label: '说明', key: 'detail', prop: 'detail', width: 260, ellipsis: true },
+  { label: 'IP', key: 'ip', prop: 'ip', width: 140 },
 ]
 
 function handleLogout() {
@@ -1075,9 +1411,137 @@ async function loadSubjects() {
   }
 }
 
-function changeSubjectRisk(k: string) {
-  subjectRisk.value = k
+function resetSubjects() {
+  subjectRisk.value = 'all'
+  subjectKeyword.value = ''
   void loadSubjects()
+}
+
+async function loadRectifications() {
+  try {
+    rectifications.value = await opsApi.rectifications('feedback')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载整改队列失败')
+  }
+}
+
+async function loadCheckItems() {
+  try {
+    checkItems.value = await opsApi.checkItems()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载执法事项失败')
+  }
+}
+function applyCheckItemFilter() {
+  checkItemKeyword.value = checkItemDraft.value.trim()
+}
+function resetCheckItemFilter() {
+  checkItemDraft.value = ''
+  checkItemKeyword.value = ''
+  checkItemStatus.value = 'all'
+}
+
+async function loadCases() {
+  try {
+    cases.value = await opsApi.cases()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载案件失败')
+  }
+}
+function applyCaseFilter() {
+  caseKeyword.value = caseDraft.value.trim()
+}
+function resetCaseFilter() {
+  caseDraft.value = ''
+  caseKeyword.value = ''
+  caseStatusFilter.value = 'all'
+}
+
+async function loadSubsidies() {
+  try {
+    subsidies.value = await opsApi.subsidies()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载补贴项目失败')
+  }
+}
+function applySubsidyFilter() {
+  subsidyKeyword.value = subsidyDraft.value.trim()
+}
+function resetSubsidyFilter() {
+  subsidyDraft.value = ''
+  subsidyKeyword.value = ''
+  subsidyStatusFilter.value = 'all'
+}
+
+async function loadSamplings() {
+  try {
+    samplings.value = await opsApi.samplings()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载抽检台账失败')
+  }
+}
+function applySamplingFilter() {
+  samplingKeyword.value = samplingDraft.value.trim()
+}
+function resetSamplingFilter() {
+  samplingDraft.value = ''
+  samplingKeyword.value = ''
+  samplingResultFilter.value = 'all'
+}
+
+async function loadDataShares() {
+  try {
+    dataShares.value = await opsApi.dataShares()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载共享台账失败')
+  }
+}
+function applyShareFilter() {
+  shareKeyword.value = shareDraft.value.trim()
+}
+function resetShareFilter() {
+  shareDraft.value = ''
+  shareKeyword.value = ''
+  shareStatusFilter.value = 'all'
+}
+
+async function loadStatistics() {
+  try {
+    statsData.value = await opsApi.statistics()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载统计数据失败')
+  }
+}
+
+async function loadStaffList() {
+  try {
+    staffList.value = await opsApi.users()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载组织人员失败')
+  }
+}
+function applyStaffFilter() {
+  staffKeyword.value = staffDraft.value.trim()
+}
+function resetStaffFilter() {
+  staffDraft.value = ''
+  staffKeyword.value = ''
+  staffStatusFilter.value = 'all'
+}
+
+async function loadLogs() {
+  try {
+    logs.value = await opsApi.logs()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载审计日志失败')
+  }
+}
+function applyLogFilter() {
+  logKeyword.value = logDraft.value.trim()
+}
+function resetLogFilter() {
+  logDraft.value = ''
+  logKeyword.value = ''
 }
 
 function openBindMerchant(s: Subject) {
@@ -1409,6 +1873,15 @@ const onHashChange = () => {
   page.value = parse()
   window.scrollTo({ top: 0 })
 }
+
+watch(
+  () => unifiedSession.user,
+  (user) => {
+    if (!user) return
+    const latest = parse()
+    if (page.value !== latest) page.value = latest
+  },
+)
 
 watch(
   () => [unifiedSession.user, page.value] as const,

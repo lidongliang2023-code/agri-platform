@@ -15,26 +15,50 @@
             <p>匹配结果、主体资格、材料核验与补贴兑付进度。</p>
           </div>
         </div>
-        <section class="ops-card ops-table-card">
-          <a-table row-key="id" :data-source="policies" :columns="policyColumns" :pagination="tablePagination">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'applicationNo'">
-                <div class="ops-table-entity"><b>{{ record.applicationNo }}</b><small>{{ record.policyTitle }}</small></div>
-              </template>
-              <template v-else-if="column.key === 'amountText'"><b>{{ record.amountText }}</b></template>
-              <template v-else-if="column.key === 'progress'">
-                <a-progress :percent="record.progress" size="small" stroke-color="#159a5e" />
-              </template>
-              <template v-else-if="column.key === 'status'">
-                <a-tag :class="`ops-status tone-${labelMeta(POLICY_STATUS, record.status).tone}`">{{ labelMeta(POLICY_STATUS, record.status).label }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <a-button v-if="record.allowedStatuses?.length" type="link" @click="openPolicyReview(record)">审核</a-button>
-                <span v-else>无可用操作</span>
-              </template>
-            </template>
-          </a-table>
-        </section>
+        <AgriAntdvListTable
+          :columns="policyColumns"
+          :data="filteredPolicies"
+          row-key="id"
+          client-pagination
+          column-settings-storage-key="service-ops:policy-desk"
+          @refresh="loadPolicies"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="2" @search="applyPolicyFilter" @reset="resetPolicyFilter">
+              <div class="agri-vue-filter-field">
+                <label>关键字</label>
+                <a-input
+                  v-model:value="policyDraft"
+                  allow-clear
+                  placeholder="申报单号 / 政策名称 / 申报主体"
+                  @press-enter="applyPolicyFilter"
+                />
+              </div>
+              <div class="agri-vue-filter-field">
+                <label>审核状态</label>
+                <a-select
+                  v-model:value="policyStatusFilter"
+                  :options="policyStatusFilterOptions"
+                  @change="applyPolicyFilter"
+                />
+              </div>
+            </AgriVueFilterBar>
+          </template>
+          <template #cell-applicationNo="{ record }">
+            <div class="ops-table-entity"><b>{{ record.applicationNo }}</b><small>{{ record.policyTitle }}</small></div>
+          </template>
+          <template #cell-amountText="{ record }"><b>{{ record.amountText }}</b></template>
+          <template #cell-progress="{ record }">
+            <a-progress :percent="Number(record.progress ?? 0)" size="small" stroke-color="#159a5e" />
+          </template>
+          <template #cell-status="{ record }">
+            <a-tag :class="`ops-status tone-${labelMeta(POLICY_STATUS, String(record.status ?? '')).tone}`">{{ labelMeta(POLICY_STATUS, String(record.status ?? '')).label }}</a-tag>
+          </template>
+          <template #cell-action="{ record }">
+            <AgriVueRowActions v-if="(record.allowedStatuses as string[] | undefined)?.length" :actions="policyRowActions(record as unknown as PolicyApplication)" />
+            <span v-else class="muted">无可用操作</span>
+          </template>
+        </AgriAntdvListTable>
       </main>
 
       <!-- 完整运营工作台 -->
@@ -239,51 +263,65 @@
                   <h1>服务商管理</h1>
                   <span class="ops-dense-head-meta">主体资质、经营状态、信用等级与平台账号绑定统一管理</span>
                 </div>
-                <div class="ops-page-actions"><a-button @click="exportProvidersCsv">导出当前名录</a-button></div>
               </div>
-              <section class="ops-card ops-filter">
-                <div class="ops-tabs">
-                  <button v-for="key in providerStatusKeys" :key="key" type="button" :class="{ on: providerStatus === key }" @click="changeProviderStatus(key)">
-                    {{ key === 'all' ? '全部' : PROVIDER_STATUS[key]?.label }}
+              <AgriAntdvListTable
+                :columns="providerColumns"
+                :data="providers"
+                row-key="id"
+                :loading="providersLoading"
+                client-pagination
+                column-settings-storage-key="service-ops:providers"
+                @refresh="loadProviders"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" :loading="providersLoading" @search="loadProviders" @reset="resetProviders">
+                    <div class="agri-vue-filter-field">
+                      <label>经营状态</label>
+                      <a-select
+                        v-model:value="providerStatus"
+                        :options="providerStatusFilterOptions"
+                        @change="loadProviders"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="providerKeyword"
+                        allow-clear
+                        placeholder="搜索名称、服务类型或区域"
+                        @press-enter="loadProviders"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button @click="exportProvidersCsv">导出当前名录</a-button>
+                </template>
+                <template #cell-name="{ record }">
+                  <button type="button" class="ops-entity ops-entity-inline" :title="`${record.name}（${record.creditCode ?? `SV${record.id}`}）`" @click="go('provider-detail', Number(record.id))">
+                    <span>{{ record.categoryIcon }}</span>
+                    <b>{{ record.name }}</b>
+                    <small>{{ record.creditCode ?? `SV${record.id}` }}</small>
                   </button>
-                </div>
-                <a-input v-model:value="providerKeyword" placeholder="搜索名称、服务类型或区域" @pressEnter="loadProviders">
-                  <template #prefix><SearchOutlined /></template>
-                </a-input>
-                <a-button type="primary" @click="loadProviders">查询</a-button>
-              </section>
-              <section class="ops-card ops-table-card">
-                <a-table row-key="id" :loading="providersLoading" :columns="providerColumns" :data-source="providers" :scroll="{ x: 1240 }" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'name'">
-                      <button type="button" class="ops-entity ops-entity-inline" :title="`${record.name}（${record.creditCode ?? `SV${record.id}`}）`" @click="go('provider-detail', record.id)">
-                        <span>{{ record.categoryIcon }}</span>
-                        <b>{{ record.name }}</b>
-                        <small>{{ record.creditCode ?? `SV${record.id}` }}</small>
-                      </button>
-                    </template>
-                    <template v-else-if="column.key === 'category'"><a-tag>{{ record.category }}</a-tag></template>
-                    <template v-else-if="column.key === 'region'"><span class="ops-cell-ellipsis" :title="record.region">{{ record.region || '—' }}</span></template>
-                    <template v-else-if="column.key === 'merchantId'">
-                      <a-tag v-if="record.merchantId" color="green">已绑定</a-tag>
-                      <a-tag v-else color="red">未绑定</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'creditScore'">
-                      <b :class="record.creditScore < 70 ? 'text-red' : record.creditScore > 90 ? 'text-green' : ''">{{ record.creditScore }}</b>
-                    </template>
-                    <template v-else-if="column.key === 'rating'"><span class="ops-rating">★ {{ record.rating }}</span></template>
-                    <template v-else-if="column.key === 'cancelRate'"><span :class="Number(record.cancelRate) > 10 ? 'text-red' : ''">{{ record.cancelRate }}%</span></template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :class="`ops-status tone-${labelMeta(PROVIDER_STATUS, record.status).tone}`">{{ labelMeta(PROVIDER_STATUS, record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'actions'">
-                      <a-button type="link" size="small" @click="go('provider-detail', record.id)">档案</a-button>
-                      <a-button type="link" size="small" @click="openProviderReview(record)">{{ record.status === 'pending' ? '审核' : '处置' }}</a-button>
-                      <a-button type="link" size="small" @click="openProviderBinding(record)">主体绑定</a-button>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+                </template>
+                <template #cell-category="{ record }"><a-tag>{{ record.category }}</a-tag></template>
+                <template #cell-region="{ record }"><span class="ops-cell-ellipsis" :title="String(record.region ?? '')">{{ record.region || '—' }}</span></template>
+                <template #cell-merchantId="{ record }">
+                  <a-tag v-if="record.merchantId" color="green">已绑定</a-tag>
+                  <a-tag v-else color="red">未绑定</a-tag>
+                </template>
+                <template #cell-creditScore="{ record }">
+                  <b :class="Number(record.creditScore) < 70 ? 'text-red' : Number(record.creditScore) > 90 ? 'text-green' : ''">{{ record.creditScore }}</b>
+                </template>
+                <template #cell-rating="{ record }"><span class="ops-rating">★ {{ record.rating }}</span></template>
+                <template #cell-cancelRate="{ record }"><span :class="Number(record.cancelRate) > 10 ? 'text-red' : ''">{{ record.cancelRate }}%</span></template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`ops-status tone-${labelMeta(PROVIDER_STATUS, String(record.status ?? '')).tone}`">{{ labelMeta(PROVIDER_STATUS, String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="providerRowActions(record as unknown as OpsProvider)" />
+                </template>
+              </AgriAntdvListTable>
 
               <a-modal :open="Boolean(providerReviewTarget)" :title="`服务商处置 · ${providerReviewTarget?.name ?? ''}`" :confirm-loading="submitting" ok-text="确认提交" @cancel="providerReviewTarget = null" @ok="submitProviderReview">
                 <a-form layout="vertical">
@@ -352,19 +390,24 @@
                     </div>
                   </section>
                 </div>
-                <section class="ops-card ops-table-card">
-                  <div class="ops-card-head"><div><b>服务商品与目录</b><small>审核状态与近期选择量</small></div></div>
-                  <a-table row-key="id" :pagination="false" :data-source="providerDetail.items ?? []" :columns="providerDetailItemColumns">
-                    <template #bodyCell="{ column, record }">
-                      <template v-if="column.key === 'price'">¥{{ record.price }} / {{ record.unit }}</template>
-                      <template v-else-if="column.key === 'auditStatus'">
-                        <a-tag :color="record.auditStatus === 'approved' ? 'green' : 'orange'">{{ record.auditStatus === 'approved' ? '已通过' : record.auditStatus === 'rejected' ? '已驳回' : '待审核' }}</a-tag>
-                      </template>
-                      <template v-else-if="column.key === 'aiScore'">{{ record.aiScore }} 分</template>
-                      <template v-else-if="column.key === 'selectedCount'">{{ record.selectedCount }} 人</template>
-                    </template>
-                  </a-table>
-                </section>
+                <AgriAntdvListTable
+                  :columns="providerDetailItemColumns"
+                  :data="providerDetail.items ?? []"
+                  row-key="id"
+                  client-pagination
+                  column-settings-storage-key="service-ops:provider-detail-items"
+                  @refresh="reloadProviderDetail"
+                >
+                  <template #toolbar-left>
+                    <div class="ops-table-caption"><b>服务商品与目录</b><small>审核状态与近期选择量</small></div>
+                  </template>
+                  <template #cell-price="{ record }">¥{{ record.price }} / {{ record.unit }}</template>
+                  <template #cell-auditStatus="{ record }">
+                    <a-tag :color="record.auditStatus === 'approved' ? 'green' : 'orange'">{{ record.auditStatus === 'approved' ? '已通过' : record.auditStatus === 'rejected' ? '已驳回' : '待审核' }}</a-tag>
+                  </template>
+                  <template #cell-aiScore="{ record }">{{ record.aiScore }} 分</template>
+                  <template #cell-selectedCount="{ record }">{{ record.selectedCount }} 人</template>
+                </AgriAntdvListTable>
                 <a-modal v-model:open="detailStatusOpen" title="调整服务商经营状态" ok-text="确认处置" @ok="submitDetailStatus">
                   <a-form layout="vertical">
                     <a-form-item label="处置状态"><a-select v-model:value="detailNextStatus" :options="providerStatusOptions" /></a-form-item>
@@ -378,29 +421,51 @@
             <div v-else-if="route.page === 'catalog'" class="ops-page">
               <div class="ops-page-title">
                 <div><span>COMPREHENSIVE SERVICE · OPERATIONS</span><h1>服务商品审核</h1><p>服务内容、价格区间、资质与版权材料统一审核。</p></div>
-                <div class="ops-page-actions"><a-button @click="exportCatalogCsv">导出当前清单</a-button></div>
               </div>
-              <section class="ops-card ops-filter">
-                <div class="ops-tabs">
-                  <button v-for="t in catalogTabs" :key="t.key" type="button" :class="{ on: catalogTab === t.key }" @click="changeCatalogTab(t.key)">{{ t.label }}</button>
-                </div>
-                <a-button @click="loadCatalog">刷新</a-button>
-              </section>
-              <section class="ops-card ops-table-card">
-                <a-table row-key="id" :columns="catalogColumns" :data-source="catalogItems" :scroll="{ x: 960 }" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'name'"><div class="ops-table-entity"><b>{{ record.name }}</b><small>{{ record.providerName }}</small></div></template>
-                    <template v-else-if="column.key === 'price'">¥{{ record.price }} / {{ record.unit }}</template>
-                    <template v-else-if="column.key === 'aiScore'"><b :class="record.aiScore < 70 ? 'text-red' : 'text-green'">{{ record.aiScore }} 分</b></template>
-                    <template v-else-if="column.key === 'auditStatus'">
-                      <a-tag :color="record.auditStatus === 'approved' ? 'green' : record.auditStatus === 'rejected' ? 'red' : 'orange'">
-                        {{ record.auditStatus === 'approved' ? '已上架' : record.auditStatus === 'rejected' ? '已驳回' : '待审核' }}
-                      </a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'"><a-button type="link" @click="openCatalogReview(record)">审核</a-button></template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="catalogColumns"
+                :data="filteredCatalogItems"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="service-ops:catalog"
+                @refresh="loadCatalog"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyCatalogFilter" @reset="resetCatalogFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>审核状态</label>
+                      <a-select
+                        v-model:value="catalogTab"
+                        :options="catalogFilterOptions"
+                        @change="loadCatalog"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="catalogDraft"
+                        allow-clear
+                        placeholder="商品名称 / 服务商 / 品类"
+                        @press-enter="applyCatalogFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button @click="exportCatalogCsv">导出当前清单</a-button>
+                </template>
+                <template #cell-name="{ record }"><div class="ops-table-entity"><b>{{ record.name }}</b><small>{{ record.providerName }}</small></div></template>
+                <template #cell-price="{ record }">¥{{ record.price }} / {{ record.unit }}</template>
+                <template #cell-aiScore="{ record }"><b :class="Number(record.aiScore) < 70 ? 'text-red' : 'text-green'">{{ record.aiScore }} 分</b></template>
+                <template #cell-auditStatus="{ record }">
+                  <a-tag :color="record.auditStatus === 'approved' ? 'green' : record.auditStatus === 'rejected' ? 'red' : 'orange'">
+                    {{ record.auditStatus === 'approved' ? '已上架' : record.auditStatus === 'rejected' ? '已驳回' : '待审核' }}
+                  </a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="catalogRowActions(record as unknown as ServiceItem)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(catalogTarget)" :title="`商品审核 · ${catalogTarget?.name ?? ''}`" ok-text="提交审核" @cancel="catalogTarget = null" @ok="submitCatalogReview">
                 <div class="ops-review-summary"><span>AI 预检 {{ catalogTarget?.aiScore }} 分</span><p>{{ catalogTarget?.description }}</p></div>
                 <a-form layout="vertical">
@@ -415,33 +480,50 @@
             <div v-else-if="route.page === 'orders'" class="ops-page">
               <div class="ops-page-title">
                 <div><span>COMPREHENSIVE SERVICE · OPERATIONS</span><h1>全量服务订单</h1><p>查看全量订单、风险订单与派单状态，并支持人工改派。</p></div>
-                <div class="ops-page-actions"><a-button @click="go('dispatch')">进入调度看板</a-button></div>
               </div>
-              <section class="ops-card ops-filter">
-                <div class="ops-tabs">
-                  <button v-for="k in orderStatusKeys" :key="k" type="button" :class="{ on: orderStatus === k }" @click="changeOrderStatus(k)">
-                    {{ k === 'all' ? '全部' : ORDER_STATUS[k]?.label }}
-                  </button>
-                </div>
-                <a-input v-model:value="orderKeyword" placeholder="订单号 / 服务商 / 服务项目" @pressEnter="loadOrders">
-                  <template #prefix><SearchOutlined /></template>
-                </a-input>
-                <a-button @click="loadOrders">查询</a-button>
-              </section>
-              <section class="ops-card ops-table-card">
-                <a-table row-key="id" :columns="orderColumns" :data-source="orders" :scroll="{ x: 1160 }" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'orderNo'"><div class="ops-table-entity"><b>{{ record.orderNo }}</b><small>{{ record.serviceName }} · {{ record.category }}</small></div></template>
-                    <template v-else-if="column.key === 'totalAmount'"><b>¥{{ Number(record.totalAmount).toLocaleString() }}</b></template>
-                    <template v-else-if="column.key === 'status'"><a-tag :class="`ops-status tone-${labelMeta(ORDER_STATUS, record.status).tone}`">{{ labelMeta(ORDER_STATUS, record.status).label }}</a-tag></template>
-                    <template v-else-if="column.key === 'riskFlag'">
-                      <a-tag v-if="record.riskFlag" color="red">{{ record.riskFlag }}</a-tag>
-                      <span v-else class="muted">正常</span>
-                    </template>
-                    <template v-else-if="column.key === 'action'"><a-button type="link" @click="openOrderDispatch(record)">派单 / 改派</a-button></template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="orderColumns"
+                :data="orders"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="service-ops:orders"
+                @refresh="loadOrders"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="loadOrders" @reset="resetOrders">
+                    <div class="agri-vue-filter-field">
+                      <label>履约状态</label>
+                      <a-select
+                        v-model:value="orderStatus"
+                        :options="orderStatusFilterOptions"
+                        @change="loadOrders"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="orderKeyword"
+                        allow-clear
+                        placeholder="订单号 / 服务商 / 服务项目"
+                        @press-enter="loadOrders"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button @click="go('dispatch')">进入调度看板</a-button>
+                </template>
+                <template #cell-orderNo="{ record }"><div class="ops-table-entity"><b>{{ record.orderNo }}</b><small>{{ record.serviceName }} · {{ record.category }}</small></div></template>
+                <template #cell-totalAmount="{ record }"><b>¥{{ Number(record.totalAmount).toLocaleString() }}</b></template>
+                <template #cell-status="{ record }"><a-tag :class="`ops-status tone-${labelMeta(ORDER_STATUS, String(record.status ?? '')).tone}`">{{ labelMeta(ORDER_STATUS, String(record.status ?? '')).label }}</a-tag></template>
+                <template #cell-riskFlag="{ record }">
+                  <a-tag v-if="record.riskFlag" color="red">{{ record.riskFlag }}</a-tag>
+                  <span v-else class="muted">正常</span>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions :actions="orderRowActions(record as unknown as OpsOrder)" />
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(orderDispatchTarget)" :title="`派单 · ${orderDispatchTarget?.orderNo ?? ''}`" ok-text="确认派单" @cancel="orderDispatchTarget = null" @ok="submitOrderDispatch">
                 <a-form layout="vertical">
                   <a-form-item label="指派服务商（必选）">
@@ -579,24 +661,48 @@
             <!-- 政策项目运营 -->
             <div v-else-if="route.page === 'policies'" class="ops-page">
               <div class="ops-page-title"><div><span>COMPREHENSIVE SERVICE · OPERATIONS</span><h1>政策项目运营</h1><p>匹配结果、主体资格、材料核验与补贴兑付进度。</p></div></div>
-              <section class="ops-card ops-table-card">
-                <a-table row-key="id" :data-source="policies" :columns="policyColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'applicationNo'">
-                      <div class="ops-table-entity"><b>{{ record.applicationNo }}</b><small>{{ record.policyTitle }}</small></div>
-                    </template>
-                    <template v-else-if="column.key === 'amountText'"><b>{{ record.amountText }}</b></template>
-                    <template v-else-if="column.key === 'progress'"><a-progress :percent="record.progress" size="small" stroke-color="#159a5e" /></template>
-                    <template v-else-if="column.key === 'status'">
-                      <a-tag :class="`ops-status tone-${labelMeta(POLICY_STATUS, record.status).tone}`">{{ labelMeta(POLICY_STATUS, record.status).label }}</a-tag>
-                    </template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button v-if="record.allowedStatuses?.length" type="link" @click="openPolicyReview(record)">审核</a-button>
-                      <span v-else>无可用操作</span>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="policyColumns"
+                :data="filteredPolicies"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="service-ops:policies"
+                @refresh="loadPolicies"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applyPolicyFilter" @reset="resetPolicyFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="policyDraft"
+                        allow-clear
+                        placeholder="申报单号 / 政策名称 / 申报主体"
+                        @press-enter="applyPolicyFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>审核状态</label>
+                      <a-select
+                        v-model:value="policyStatusFilter"
+                        :options="policyStatusFilterOptions"
+                        @change="applyPolicyFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-applicationNo="{ record }">
+                  <div class="ops-table-entity"><b>{{ record.applicationNo }}</b><small>{{ record.policyTitle }}</small></div>
+                </template>
+                <template #cell-amountText="{ record }"><b>{{ record.amountText }}</b></template>
+                <template #cell-progress="{ record }"><a-progress :percent="Number(record.progress ?? 0)" size="small" stroke-color="#159a5e" /></template>
+                <template #cell-status="{ record }">
+                  <a-tag :class="`ops-status tone-${labelMeta(POLICY_STATUS, String(record.status ?? '')).tone}`">{{ labelMeta(POLICY_STATUS, String(record.status ?? '')).label }}</a-tag>
+                </template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions v-if="(record.allowedStatuses as string[] | undefined)?.length" :actions="policyRowActions(record as unknown as PolicyApplication)" />
+                  <span v-else class="muted">无可用操作</span>
+                </template>
+              </AgriAntdvListTable>
             </div>
 
             <!-- 农险理赔运营 -->
@@ -632,24 +738,47 @@
             <div v-else-if="route.page === 'settlement'" class="ops-page">
               <div class="ops-page-title">
                 <div><span>COMPREHENSIVE SERVICE · OPERATIONS</span><h1>结算与分账</h1><p>按批次复核交易额与佣金；本版本只落复核结论，不执行真实资金动作。</p></div>
-                <div class="ops-page-actions"><a-button @click="loadSettlements">重新拉取批次</a-button></div>
               </div>
-              <section class="ops-card ops-table-card">
-                <a-table row-key="id" :data-source="settlements" :columns="settlementColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'batchNo'"><div class="ops-table-entity"><b>{{ record.batchNo }}</b><small>{{ record.period }}</small></div></template>
-                    <template v-else-if="column.key === 'orderCount'">{{ Number(record.orderCount).toLocaleString() }}</template>
-                    <template v-else-if="column.key === 'amount'"><b>¥{{ Number(record.amount).toLocaleString() }}</b></template>
-                    <template v-else-if="column.key === 'commission'">¥{{ Number(record.commission).toLocaleString() }}</template>
-                    <template v-else-if="column.key === 'status'"><a-tag :color="record.status === 'approved' ? 'green' : 'orange'">{{ record.status === 'approved' ? '已复核' : '待复核' }}</a-tag></template>
-                    <template v-else-if="column.key === 'reviewedBy'">{{ record.reviewedBy ?? '—' }}</template>
-                    <template v-else-if="column.key === 'action'">
-                      <a-button v-if="record.status === 'pending'" type="link" @click="openSettlementReview(record)">复核</a-button>
-                      <span v-else class="muted">{{ record.reviewedAt }}</span>
-                    </template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="settlementColumns"
+                :data="filteredSettlements"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="service-ops:settlements"
+                @refresh="loadSettlements"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="2" @search="applySettlementFilter" @reset="resetSettlementFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="settlementDraft"
+                        allow-clear
+                        placeholder="批次号 / 账期 / 复核人"
+                        @press-enter="applySettlementFilter"
+                      />
+                    </div>
+                    <div class="agri-vue-filter-field">
+                      <label>复核状态</label>
+                      <a-select
+                        v-model:value="settlementStatusFilter"
+                        :options="settlementStatusOptions"
+                        @change="applySettlementFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #cell-batchNo="{ record }"><div class="ops-table-entity"><b>{{ record.batchNo }}</b><small>{{ record.period }}</small></div></template>
+                <template #cell-orderCount="{ record }">{{ Number(record.orderCount).toLocaleString() }}</template>
+                <template #cell-amount="{ record }"><b>¥{{ Number(record.amount).toLocaleString() }}</b></template>
+                <template #cell-commission="{ record }">¥{{ Number(record.commission).toLocaleString() }}</template>
+                <template #cell-status="{ record }"><a-tag :color="record.status === 'approved' ? 'green' : 'orange'">{{ record.status === 'approved' ? '已复核' : '待复核' }}</a-tag></template>
+                <template #cell-reviewedBy="{ record }">{{ record.reviewedBy ?? '—' }}</template>
+                <template #cell-action="{ record }">
+                  <AgriVueRowActions v-if="record.status === 'pending'" :actions="settlementRowActions(record as unknown as Settlement)" />
+                  <span v-else class="muted">{{ record.reviewedAt }}</span>
+                </template>
+              </AgriAntdvListTable>
               <a-modal :open="Boolean(settlementTarget)" title="结算批次复核" :confirm-loading="submitting" ok-text="复核通过" @cancel="settlementTarget = null" @ok="submitSettlementReview">
                 <div class="ops-settlement-summary">
                   <div><small>批次</small><b>{{ settlementTarget?.batchNo }}</b></div>
@@ -729,7 +858,6 @@
               <template v-else>
                 <div class="ops-page-title">
                   <div><span>COMPREHENSIVE SERVICE · OPERATIONS</span><h1>数据报表中心</h1><p>交易规模、品类结构、服务商经营与区域供给运营报表。</p></div>
-                  <div class="ops-page-actions"><a-button type="primary" @click="exportReportCsv">导出经营报表</a-button></div>
                 </div>
                 <div class="ops-report-grid">
                   <section class="ops-card">
@@ -753,15 +881,23 @@
                     </div>
                   </section>
                 </div>
-                <section class="ops-card ops-table-card">
-                  <div class="ops-card-head"><div><b>服务商经营排行</b><small>评分与订单贡献</small></div></div>
-                  <a-table row-key="id" :pagination="false" :data-source="reportData.providers" :columns="reportProviderColumns">
-                    <template #bodyCell="{ column, record }">
-                      <template v-if="column.key === 'rating'">★ {{ record.rating }}</template>
-                      <template v-else-if="column.key === 'cancelRate'">{{ record.cancelRate }}%</template>
-                    </template>
-                  </a-table>
-                </section>
+                <AgriAntdvListTable
+                  :columns="reportProviderColumns"
+                  :data="reportData.providers"
+                  row-key="id"
+                  client-pagination
+                  column-settings-storage-key="service-ops:report-providers"
+                  @refresh="loadReport"
+                >
+                  <template #toolbar-left>
+                    <div class="ops-table-caption-wrap">
+                      <a-button type="primary" @click="exportReportCsv">导出经营报表</a-button>
+                      <div class="ops-table-caption"><b>服务商经营排行</b><small>评分与订单贡献</small></div>
+                    </div>
+                  </template>
+                  <template #cell-rating="{ record }">★ {{ record.rating }}</template>
+                  <template #cell-cancelRate="{ record }">{{ record.cancelRate }}%</template>
+                </AgriAntdvListTable>
               </template>
             </div>
 
@@ -801,16 +937,34 @@
             <div v-else-if="route.page === 'logs'" class="ops-page">
               <div class="ops-page-title">
                 <div><span>COMPREHENSIVE SERVICE · OPERATIONS</span><h1>操作审计日志</h1><p>审核、派单、仲裁、政策与结算等敏感操作留痕；操作人与来源 IP 均由服务端从访问令牌和请求头解析。</p></div>
-                <div class="ops-page-actions"><a-button @click="exportLogsCsv">导出当前日志</a-button></div>
               </div>
-              <section class="ops-card ops-table-card">
-                <a-table row-key="id" :data-source="logs" :columns="logColumns" :pagination="tablePagination">
-                  <template #bodyCell="{ column, record }">
-                    <template v-if="column.key === 'operator'"><div class="ops-table-entity"><b>{{ record.operator }}</b><small>{{ record.role }}</small></div></template>
-                    <template v-else-if="column.key === 'action'"><a-tag>{{ record.action }}</a-tag></template>
-                  </template>
-                </a-table>
-              </section>
+              <AgriAntdvListTable
+                :columns="logColumns"
+                :data="filteredLogs"
+                row-key="id"
+                client-pagination
+                column-settings-storage-key="service-ops:logs"
+                @refresh="loadLogs"
+              >
+                <template #filter>
+                  <AgriVueFilterBar :field-count="1" @search="applyLogFilter" @reset="resetLogFilter">
+                    <div class="agri-vue-filter-field">
+                      <label>关键字</label>
+                      <a-input
+                        v-model:value="logDraft"
+                        allow-clear
+                        placeholder="操作人 / 动作 / 对象 / 说明"
+                        @press-enter="applyLogFilter"
+                      />
+                    </div>
+                  </AgriVueFilterBar>
+                </template>
+                <template #toolbar-left>
+                  <a-button @click="exportLogsCsv">导出当前日志</a-button>
+                </template>
+                <template #cell-operator="{ record }"><div class="ops-table-entity"><b>{{ record.operator }}</b><small>{{ record.role }}</small></div></template>
+                <template #cell-actionType="{ record }"><a-tag>{{ record.action }}</a-tag></template>
+              </AgriAntdvListTable>
             </div>
           </main>
         </div>
@@ -873,6 +1027,8 @@ import {
   WarningOutlined,
 } from '@ant-design/icons-vue'
 import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
+import { AgriAntdvListTable } from '@agri/shared/vue/antdv'
+import { AgriVueFilterBar, AgriVueRowActions, type VueListColumn, type VueRowActionItem } from '@agri/shared/vue/list'
 import {
   opsApi,
   ORDER_STATUS,
@@ -1024,11 +1180,26 @@ function parseRoute(): RouteState {
 }
 
 function go(page: Page, id?: number): void {
-  window.location.hash = `/${page}${id === undefined ? '' : `/${id}`}`
+  const nextHash = `#/${page}${id === undefined ? '' : `/${id}`}`
+  if (window.location.hash !== nextHash) {
+    window.location.hash = `/${page}${id === undefined ? '' : `/${id}`}`
+  }
+  if (route.value.page !== page || route.value.id !== id) {
+    route.value = { page, id }
+    window.scrollTo({ top: 0 })
+  }
 }
 
 function navigatePath(path: string): void {
-  window.location.hash = `/${path}`
+  const nextHash = `#/${path}`
+  if (window.location.hash !== nextHash) {
+    window.location.hash = `/${path}`
+  }
+  const nextRoute = parseRoute()
+  if (route.value.page !== nextRoute.page || route.value.id !== nextRoute.id) {
+    route.value = nextRoute
+    window.scrollTo({ top: 0 })
+  }
 }
 
 function labelMeta(dict: Record<string, { label: string; tone: string }>, key: string) {
@@ -1069,14 +1240,6 @@ const theme = {
   },
 }
 
-const tablePagination = {
-  defaultPageSize: 20,
-  showSizeChanger: true,
-  showQuickJumper: true,
-  pageSizeOptions: ['10', '20', '50', '100'],
-  showTotal: (total: number) => `共 ${total} 条`,
-}
-
 const landingPath = window.location.port === '5196' ? '/#/dashboard' : '/service-ops/#/dashboard'
 const baseUrl = import.meta.env.BASE_URL
 const userPortalUrl = `${window.location.protocol}//${window.location.hostname}:8105/`
@@ -1110,8 +1273,8 @@ const overviewTodosTotal = computed(() => overview.value?.todos.reduce((sum, ite
 const maxOverviewGmv = computed(() => Math.max(...(overview.value?.trend.map((item) => Number(item.gmv)) ?? [1]), 1))
 
 // 服务商
-const providerStatusKeys = ['all', 'pending', 'available', 'restricted', 'frozen', 'removed']
 const providerStatusOptions = Object.entries(PROVIDER_STATUS).map(([value, item]) => ({ value, label: item.label }))
+const providerStatusFilterOptions = [{ value: 'all', label: '全部状态' }, ...providerStatusOptions]
 const providers = ref<OpsProvider[]>([])
 const providerStatus = ref('all')
 const providerKeyword = ref('')
@@ -1121,37 +1284,52 @@ const providerReviewStatus = ref('available')
 const providerReviewReason = ref('')
 const providerBindTarget = ref<OpsProvider | null>(null)
 const providerBindMerchantId = ref('')
-const providerColumns = [
-  { title: '服务商', key: 'name', dataIndex: 'name', width: 280, ellipsis: true },
-  { title: '服务类型', key: 'category', dataIndex: 'category', width: 112 },
-  { title: '覆盖区域', key: 'region', dataIndex: 'region', width: 170, ellipsis: true },
-  { title: '平台主体', key: 'merchantId', dataIndex: 'merchantId', width: 104 },
-  { title: '信用分', key: 'creditScore', dataIndex: 'creditScore', width: 92, sorter: (a: OpsProvider, b: OpsProvider) => a.creditScore - b.creditScore },
-  { title: '评分', key: 'rating', dataIndex: 'rating', width: 88 },
-  { title: '取消率', key: 'cancelRate', dataIndex: 'cancelRate', width: 92 },
-  { title: '状态', key: 'status', dataIndex: 'status', width: 100 },
-  { title: '操作', key: 'actions', fixed: 'right', width: 180 },
+const providerColumns: VueListColumn[] = [
+  { label: '服务商', key: 'name', prop: 'name', width: 260, ellipsis: true, locked: true },
+  { label: '服务类型', key: 'category', prop: 'category', width: 112 },
+  { label: '覆盖区域', key: 'region', prop: 'region', width: 170, ellipsis: true },
+  { label: '平台主体', key: 'merchantId', prop: 'merchantId', width: 104 },
+  { label: '信用分', key: 'creditScore', prop: 'creditScore', width: 92, sorter: (a: OpsProvider, b: OpsProvider) => a.creditScore - b.creditScore },
+  { label: '评分', key: 'rating', prop: 'rating', width: 88 },
+  { label: '取消率', key: 'cancelRate', prop: 'cancelRate', width: 92 },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '操作', key: 'action', fixed: 'right', width: 160 },
 ]
+function providerRowActions(row: OpsProvider): VueRowActionItem[] {
+  return [
+    { key: 'detail', label: '档案', onClick: () => go('provider-detail', row.id) },
+    { key: 'review', label: row.status === 'pending' ? '审核' : '处置', onClick: () => openProviderReview(row) },
+    { key: 'bind', label: '主体绑定', onClick: () => openProviderBinding(row) },
+  ]
+}
 
 // 服务商详情
 const providerDetail = ref<OpsProvider | null>(null)
 const detailStatusOpen = ref(false)
 const detailNextStatus = ref('available')
 const detailReason = ref('')
-const providerDetailItemColumns = [
-  { title: '服务项目', key: 'name', dataIndex: 'name' },
-  { title: '价格', key: 'price' },
-  { title: '审核', key: 'auditStatus', dataIndex: 'auditStatus' },
-  { title: 'AI 预检', key: 'aiScore', dataIndex: 'aiScore' },
-  { title: '近 30 天', key: 'selectedCount', dataIndex: 'selectedCount' },
+const providerDetailItemColumns: VueListColumn[] = [
+  { label: '服务项目', key: 'name', prop: 'name', width: 220, locked: true },
+  { label: '价格', key: 'price', width: 140 },
+  { label: '审核', key: 'auditStatus', prop: 'auditStatus', width: 100 },
+  { label: 'AI 预检', key: 'aiScore', prop: 'aiScore', width: 100 },
+  { label: '近 30 天', key: 'selectedCount', prop: 'selectedCount', width: 110 },
 ]
+async function reloadProviderDetail() {
+  if (!route.value.id) return
+  try {
+    providerDetail.value = await opsApi.provider(route.value.id)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载服务商档案失败')
+  }
+}
 
 // 商品审核
-const catalogTabs = [
-  { key: 'pending', label: '待审核' },
-  { key: 'approved', label: '已上架' },
-  { key: 'rejected', label: '已驳回' },
-  { key: 'all', label: '全部' },
+const catalogFilterOptions = [
+  { value: 'pending', label: '待审核' },
+  { value: 'approved', label: '已上架' },
+  { value: 'rejected', label: '已驳回' },
+  { value: 'all', label: '全部状态' },
 ]
 const catalogResultOptions = [
   { value: 'approved', label: '通过上架' },
@@ -1159,21 +1337,48 @@ const catalogResultOptions = [
 ]
 const catalogItems = ref<ServiceItem[]>([])
 const catalogTab = ref('pending')
+const catalogDraft = ref('')
+const catalogKeyword = ref('')
+const filteredCatalogItems = computed(() => {
+  const q = catalogKeyword.value.trim().toLowerCase()
+  if (!q) return catalogItems.value
+  return catalogItems.value.filter((item) =>
+    `${item.name} ${item.providerName} ${item.category} ${item.auditReason || ''}`.toLowerCase().includes(q),
+  )
+})
 const catalogTarget = ref<ServiceItem | null>(null)
 const catalogResult = ref('approved')
 const catalogReason = ref('')
-const catalogColumns = [
-  { title: '服务商品', key: 'name', dataIndex: 'name' },
-  { title: '品类', key: 'category', dataIndex: 'category' },
-  { title: '指导价格', key: 'price' },
-  { title: 'AI 预检', key: 'aiScore', dataIndex: 'aiScore' },
-  { title: '审核状态', key: 'auditStatus', dataIndex: 'auditStatus' },
-  { title: '说明', key: 'auditReason', dataIndex: 'auditReason', ellipsis: true },
-  { title: '操作', key: 'action' },
+const catalogColumns: VueListColumn[] = [
+  { label: '服务商品', key: 'name', prop: 'name', width: 220, locked: true },
+  { label: '品类', key: 'category', prop: 'category', width: 110 },
+  { label: '指导价格', key: 'price', width: 130 },
+  { label: 'AI 预检', key: 'aiScore', prop: 'aiScore', width: 100 },
+  { label: '审核状态', key: 'auditStatus', prop: 'auditStatus', width: 100 },
+  { label: '说明', key: 'auditReason', prop: 'auditReason', width: 220, ellipsis: true },
+  { label: '操作', key: 'action', width: 100, fixed: 'right' },
 ]
+function applyCatalogFilter() {
+  catalogKeyword.value = catalogDraft.value.trim()
+}
+function resetCatalogFilter() {
+  catalogDraft.value = ''
+  catalogKeyword.value = ''
+  catalogTab.value = 'pending'
+  void loadCatalog()
+}
+function catalogRowActions(row: ServiceItem): VueRowActionItem[] {
+  return [{ key: 'review', label: '审核', onClick: () => openCatalogReview(row) }]
+}
 
 // 订单 & 调度
-const orderStatusKeys = ['all', 'confirmed', 'in_progress', 'completed', 'cancelled']
+const orderStatusFilterOptions = [
+  { value: 'all', label: '全部状态' },
+  ...['confirmed', 'in_progress', 'completed', 'cancelled'].map((value) => ({
+    value,
+    label: ORDER_STATUS[value]?.label ?? value,
+  })),
+]
 const orders = ref<OpsOrder[]>([])
 const availableProviders = ref<OpsProvider[]>([])
 const orderStatus = ref('all')
@@ -1187,16 +1392,19 @@ const availableProviderOptions = computed(() =>
 const dispatchProviderOptions = computed(() =>
   availableProviders.value.map((p) => ({ value: p.id, label: `${p.name} · 信用 ${p.creditScore} · ★${p.rating}` })),
 )
-const orderColumns = [
-  { title: '订单', key: 'orderNo', dataIndex: 'orderNo' },
-  { title: '服务商', key: 'providerName', dataIndex: 'providerName' },
-  { title: '服务地点', key: 'location', dataIndex: 'location', ellipsis: true },
-  { title: '预约时间', key: 'appointmentDate', dataIndex: 'appointmentDate' },
-  { title: '金额', key: 'totalAmount', dataIndex: 'totalAmount' },
-  { title: '履约', key: 'status', dataIndex: 'status' },
-  { title: '风险', key: 'riskFlag', dataIndex: 'riskFlag' },
-  { title: '操作', key: 'action', fixed: 'right' },
+const orderColumns: VueListColumn[] = [
+  { label: '订单', key: 'orderNo', prop: 'orderNo', width: 220, locked: true },
+  { label: '服务商', key: 'providerName', prop: 'providerName', width: 160 },
+  { label: '服务地点', key: 'location', prop: 'location', width: 180, ellipsis: true },
+  { label: '预约时间', key: 'appointmentDate', prop: 'appointmentDate', width: 140 },
+  { label: '金额', key: 'totalAmount', prop: 'totalAmount', width: 110 },
+  { label: '履约', key: 'status', prop: 'status', width: 100 },
+  { label: '风险', key: 'riskFlag', prop: 'riskFlag', width: 110 },
+  { label: '操作', key: 'action', fixed: 'right', width: 130 },
 ]
+function orderRowActions(row: OpsOrder): VueRowActionItem[] {
+  return [{ key: 'dispatch', label: '派单 / 改派', onClick: () => openOrderDispatch(row) }]
+}
 const dispatchDemands = ref<DispatchDemand[]>([])
 const dispatchOrders = ref<OpsOrder[]>([])
 const demandTarget = ref<DispatchDemand | null>(null)
@@ -1212,6 +1420,21 @@ const qualityNote = ref('')
 
 // 政策项目
 const policies = ref<PolicyApplication[]>([])
+const policyDraft = ref('')
+const policyKeyword = ref('')
+const policyStatusFilter = ref('all')
+const policyStatusFilterOptions = [
+  { value: 'all', label: '全部状态' },
+  ...Object.entries(POLICY_STATUS).map(([value, item]) => ({ value, label: item.label })),
+]
+const filteredPolicies = computed(() => {
+  const q = policyKeyword.value.trim().toLowerCase()
+  return policies.value.filter((p) => {
+    if (policyStatusFilter.value !== 'all' && p.status !== policyStatusFilter.value) return false
+    if (!q) return true
+    return `${p.applicationNo} ${p.policyTitle} ${p.applicant}`.toLowerCase().includes(q)
+  })
+})
 const policyTarget = ref<PolicyApplication | null>(null)
 const policyStatus = ref<string | undefined>(undefined)
 const policyNote = ref('')
@@ -1222,15 +1445,33 @@ const policyReady = computed(
 const policyAllowedOptions = computed(() =>
   (policyTarget.value?.allowedStatuses ?? []).map((value) => ({ value, label: POLICY_STATUS[value]?.label ?? value })),
 )
-const policyColumns = [
-  { title: '申报单', key: 'applicationNo', dataIndex: 'applicationNo' },
-  { title: '申报主体', key: 'applicant', dataIndex: 'applicant' },
-  { title: '预计金额', key: 'amountText', dataIndex: 'amountText' },
-  { title: '进度', key: 'progress' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '提交时间', key: 'submittedAt', dataIndex: 'submittedAt' },
-  { title: '操作', key: 'action' },
+const policyColumns: VueListColumn[] = [
+  { label: '申报单', key: 'applicationNo', prop: 'applicationNo', width: 220, locked: true },
+  { label: '申报主体', key: 'applicant', prop: 'applicant', width: 160 },
+  { label: '预计金额', key: 'amountText', prop: 'amountText', width: 120 },
+  { label: '进度', key: 'progress', width: 140 },
+  { label: '状态', key: 'status', prop: 'status', width: 110 },
+  { label: '提交时间', key: 'submittedAt', prop: 'submittedAt', width: 160 },
+  { label: '操作', key: 'action', width: 110, fixed: 'right' },
 ]
+async function loadPolicies() {
+  try {
+    policies.value = await opsApi.policies()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载政策项目失败')
+  }
+}
+function applyPolicyFilter() {
+  policyKeyword.value = policyDraft.value.trim()
+}
+function resetPolicyFilter() {
+  policyDraft.value = ''
+  policyKeyword.value = ''
+  policyStatusFilter.value = 'all'
+}
+function policyRowActions(row: PolicyApplication): VueRowActionItem[] {
+  return [{ key: 'review', label: '审核', onClick: () => openPolicyReview(row) }]
+}
 
 // 农险理赔
 const claims = ref<InsuranceClaim[]>([])
@@ -1248,17 +1489,44 @@ const claimStatusOptions = [
 
 // 结算
 const settlements = ref<Settlement[]>([])
+const settlementDraft = ref('')
+const settlementKeyword = ref('')
+const settlementStatusFilter = ref('all')
+const settlementStatusOptions = [
+  { value: 'all', label: '全部状态' },
+  { value: 'pending', label: '待复核' },
+  { value: 'approved', label: '已复核' },
+]
+const filteredSettlements = computed(() => {
+  const q = settlementKeyword.value.trim().toLowerCase()
+  return settlements.value.filter((s) => {
+    if (settlementStatusFilter.value !== 'all' && s.status !== settlementStatusFilter.value) return false
+    if (!q) return true
+    return `${s.batchNo} ${s.period} ${s.reviewedBy || ''}`.toLowerCase().includes(q)
+  })
+})
 const settlementTarget = ref<Settlement | null>(null)
 const settlementNote = ref('')
-const settlementColumns = [
-  { title: '批次', key: 'batchNo', dataIndex: 'batchNo' },
-  { title: '订单数', key: 'orderCount', dataIndex: 'orderCount' },
-  { title: '交易金额', key: 'amount', dataIndex: 'amount' },
-  { title: '平台佣金', key: 'commission', dataIndex: 'commission' },
-  { title: '状态', key: 'status', dataIndex: 'status' },
-  { title: '复核人', key: 'reviewedBy' },
-  { title: '操作', key: 'action' },
+const settlementColumns: VueListColumn[] = [
+  { label: '批次', key: 'batchNo', prop: 'batchNo', width: 200, locked: true },
+  { label: '订单数', key: 'orderCount', prop: 'orderCount', width: 100 },
+  { label: '交易金额', key: 'amount', prop: 'amount', width: 130 },
+  { label: '平台佣金', key: 'commission', prop: 'commission', width: 120 },
+  { label: '状态', key: 'status', prop: 'status', width: 100 },
+  { label: '复核人', key: 'reviewedBy', width: 120 },
+  { label: '操作', key: 'action', width: 130, fixed: 'right' },
 ]
+function applySettlementFilter() {
+  settlementKeyword.value = settlementDraft.value.trim()
+}
+function resetSettlementFilter() {
+  settlementDraft.value = ''
+  settlementKeyword.value = ''
+  settlementStatusFilter.value = 'all'
+}
+function settlementRowActions(row: Settlement): VueRowActionItem[] {
+  return [{ key: 'review', label: '复核', onClick: () => openSettlementReview(row) }]
+}
 
 // AI 策略、营销、报表、团队、日志
 const strategies = ref<Strategy[]>([])
@@ -1267,25 +1535,57 @@ const strategyValue = ref('')
 const campaigns = ref<Campaign[]>([])
 const reportData = ref<Awaited<ReturnType<typeof opsApi.report>> | null>(null)
 const maxCategoryGmv = computed(() => Math.max(...(reportData.value?.categories.map((i) => Number(i.gmv)) ?? [1]), 1))
-const reportProviderColumns = [
-  { title: '服务商', key: 'name', dataIndex: 'name' },
-  { title: '品类', key: 'category', dataIndex: 'category' },
-  { title: '订单数', key: 'orderCount', dataIndex: 'orderCount' },
-  { title: '评分', key: 'rating', dataIndex: 'rating' },
-  { title: '信用分', key: 'creditScore', dataIndex: 'creditScore' },
-  { title: '取消率', key: 'cancelRate', dataIndex: 'cancelRate' },
+const reportProviderColumns: VueListColumn[] = [
+  { label: '服务商', key: 'name', prop: 'name', width: 220, locked: true },
+  { label: '品类', key: 'category', prop: 'category', width: 120 },
+  { label: '订单数', key: 'orderCount', prop: 'orderCount', width: 100 },
+  { label: '评分', key: 'rating', prop: 'rating', width: 100 },
+  { label: '信用分', key: 'creditScore', prop: 'creditScore', width: 100 },
+  { label: '取消率', key: 'cancelRate', prop: 'cancelRate', width: 100 },
 ]
+async function loadReport() {
+  try {
+    reportData.value = await opsApi.report()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载报表失败')
+  }
+}
 const teamMembers = ref<TeamMember[]>([])
 const teamIdentity = ref<{ operatorName?: string; operatorRole?: string } | null>(null)
 const logs = ref<OpLog[]>([])
-const logColumns = [
-  { title: '时间', key: 'createdAt', dataIndex: 'createdAt' },
-  { title: '操作人', key: 'operator' },
-  { title: '动作', key: 'action', dataIndex: 'action' },
-  { title: '对象', key: 'target', dataIndex: 'target' },
-  { title: '说明', key: 'detail', dataIndex: 'detail', ellipsis: true },
-  { title: '来源 IP', key: 'ip', dataIndex: 'ip' },
+const logDraft = ref('')
+const logKeyword = ref('')
+const filteredLogs = computed(() => {
+  const q = logKeyword.value.trim().toLowerCase()
+  if (!q) return logs.value
+  return logs.value.filter((item) =>
+    `${item.operator || ''} ${item.role || ''} ${item.action || ''} ${item.target || ''} ${item.detail || ''} ${item.ip || ''}`
+      .toLowerCase()
+      .includes(q),
+  )
+})
+const logColumns: VueListColumn[] = [
+  { label: '时间', key: 'createdAt', prop: 'createdAt', width: 170, locked: true },
+  { label: '操作人', key: 'operator', width: 150 },
+  { label: '动作', key: 'actionType', prop: 'action', width: 140 },
+  { label: '对象', key: 'target', prop: 'target', width: 180 },
+  { label: '说明', key: 'detail', prop: 'detail', width: 260, ellipsis: true },
+  { label: '来源 IP', key: 'ip', prop: 'ip', width: 140 },
 ]
+async function loadLogs() {
+  try {
+    logs.value = await opsApi.logs()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载审计日志失败')
+  }
+}
+function applyLogFilter() {
+  logKeyword.value = logDraft.value.trim()
+}
+function resetLogFilter() {
+  logDraft.value = ''
+  logKeyword.value = ''
+}
 
 function handleLogout() {
   void logoutUnified('service-ops')
@@ -1314,8 +1614,9 @@ async function loadProviders() {
     providersLoading.value = false
   }
 }
-function changeProviderStatus(key: string) {
-  providerStatus.value = key
+function resetProviders() {
+  providerStatus.value = 'all'
+  providerKeyword.value = ''
   void loadProviders()
 }
 function openProviderReview(p: OpsProvider) {
@@ -1417,10 +1718,6 @@ async function loadCatalog() {
     message.error(e instanceof Error ? e.message : '加载失败')
   }
 }
-function changeCatalogTab(key: string) {
-  catalogTab.value = key
-  void loadCatalog()
-}
 function openCatalogReview(row: ServiceItem) {
   catalogTarget.value = row
   catalogResult.value = row.aiScore >= 75 ? 'approved' : 'rejected'
@@ -1476,8 +1773,9 @@ async function loadOrders() {
     message.error(e instanceof Error ? e.message : '加载订单失败')
   }
 }
-function changeOrderStatus(k: string) {
-  orderStatus.value = k
+function resetOrders() {
+  orderStatus.value = 'all'
+  orderKeyword.value = ''
   void loadOrders()
 }
 function openOrderDispatch(row: OpsOrder) {
@@ -1784,6 +2082,17 @@ const onHashChange = () => {
   route.value = parseRoute()
   window.scrollTo({ top: 0 })
 }
+
+watch(
+  () => serviceSession.user,
+  (user) => {
+    if (!user) return
+    const latest = parseRoute()
+    if (route.value.page !== latest.page || route.value.id !== latest.id) {
+      route.value = latest
+    }
+  },
+)
 
 watch(
   () => [serviceSession.user, route.value.page, route.value.id] as const,
