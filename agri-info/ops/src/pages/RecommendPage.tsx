@@ -326,7 +326,7 @@ export const RecommendPage = defineComponent({
                   <InputNumber style={{ width: '100%' }} min={1} max={20} />
                 </Form.Item>
                 <Form.Item name="status" label="状态" rules={[{ required: true }]}>
-                  <Select options={[{ value: 'online', label: '上线' }, { value: 'offline', label: '下线' }]} />
+                  <Select options={[{ value: 'online', label: '上线' }, { value: 'paused', label: '已暂停' }, { value: 'offline', label: '下线' }]} />
                 </Form.Item>
               </div>
             </Form>

@@ -257,6 +257,10 @@ const STATUS_META: Record<string, {
     label: '在线',
     tone: 'green'
   },
+  paused: {
+    label: '已暂停',
+    tone: 'amber'
+  },
   enabled: {
     label: '启用',
     tone: 'green'
@@ -289,7 +293,8 @@ const STATUS_META: Record<string, {
 
 /** 状态中文文案（未知状态原样显示，不猜一个看起来合理的词） */
 export function statusLabel(status: string): string {
-  return STATUS_META[status]?.label ?? status ?? '';
+  const key = String(status ?? '').trim().toLowerCase();
+  return STATUS_META[key]?.label ?? status ?? '';
 }
 export const StatusTag = defineComponent({
   name: "StatusTag",
@@ -304,9 +309,12 @@ export const StatusTag = defineComponent({
     slots: __slots
   }) {
     const status = computed(() => __props.status);
-    const hit = computed(() => STATUS_META[status.value] ?? {
-      label: status.value || '—',
-      tone: 'default'
+    const hit = computed(() => {
+      const key = String(status.value ?? '').trim().toLowerCase();
+      return STATUS_META[key] ?? {
+        label: status.value || '—',
+        tone: 'default'
+      };
     });
     return () => {
       const view_hit = hit.value;
