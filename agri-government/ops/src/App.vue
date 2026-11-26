@@ -206,10 +206,10 @@
                   <b :class="Number(record.creditScore) < 75 ? 'red' : 'green'">{{ record.creditScore }}</b>
                 </template>
                 <template #cell-riskLevel="{ record }">
-                  <a-tag :class="`o-status tone-${statusMeta(String(record.riskLevel ?? '')).tone}`">{{ statusMeta(String(record.riskLevel ?? '')).label }}</a-tag>
+                  <a-tag :class="`o-status tone-${riskLevelMeta(String(record.riskLevel ?? '')).tone}`">{{ riskLevelMeta(String(record.riskLevel ?? '')).label }}</a-tag>
                 </template>
                 <template #cell-annualReportStatus="{ record }">
-                  <a-tag :class="`o-status tone-${statusMeta(String(record.annualReportStatus ?? '')).tone}`">{{ statusMeta(String(record.annualReportStatus ?? '')).label }}</a-tag>
+                  <a-tag :class="`o-status tone-${annualReportMeta(String(record.annualReportStatus ?? '')).tone}`">{{ annualReportMeta(String(record.annualReportStatus ?? '')).label }}</a-tag>
                 </template>
                 <template #cell-merchantId="{ record }">
                   <a-tag v-if="record.merchantId" color="green">已绑定 {{ record.merchantId }}</a-tag>
@@ -832,7 +832,9 @@ import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspa
 import { AgriAntdvListTable } from '@agri/shared/vue/antdv'
 import { AgriVueFilterBar, AgriVueRowActions, type VueListColumn, type VueRowActionItem } from '@agri/shared/vue/list'
 import {
+  ANNUAL_REPORT_META,
   opsApi,
+  RISK_LEVEL_META,
   STATUS,
   type Case,
   type CheckItem,
@@ -1008,7 +1010,20 @@ function go(p: Page) {
 }
 
 function statusMeta(value: string) {
-  return STATUS[value] ?? { label: value, tone: 'gray' }
+  const key = value.trim()
+  return STATUS[key] ?? STATUS[key.toLowerCase()] ?? { label: key || '—', tone: 'gray' }
+}
+
+function riskLevelMeta(value: string) {
+  const key = value.trim()
+  if (!key) return { label: '未评级', tone: 'gray' }
+  return RISK_LEVEL_META[key] ?? RISK_LEVEL_META[key.toLowerCase()] ?? { label: key, tone: 'gray' }
+}
+
+function annualReportMeta(value: string) {
+  const key = value.trim()
+  if (!key) return { label: '未报送', tone: 'gray' }
+  return ANNUAL_REPORT_META[key] ?? ANNUAL_REPORT_META[key.toLowerCase()] ?? { label: key, tone: 'gray' }
 }
 
 function downloadCsv(filename: string, rows: Array<Record<string, unknown>>) {

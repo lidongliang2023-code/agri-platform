@@ -233,7 +233,7 @@
                   <div><small>信用等级</small><b>{{ homeData.subject.creditLevel }}</b><em>{{ homeData.subject.creditScore }} 分</em></div>
                   <div>
                     <small>年报状态</small>
-                    <b>{{ homeData.subject.annualReportStatus === 'completed' ? '已完成' : '待补报' }}</b>
+                    <b>{{ annualReportMeta(homeData.subject.annualReportStatus).label }}</b>
                     <em>更新时间 {{ homeData.subject.updatedAt }}</em>
                   </div>
                 </section>
@@ -296,8 +296,8 @@
                     <div class="g-score-ring"><b>{{ subjectInfo.creditScore }}</b><span>信用分</span></div>
                     <div class="g-score-meta">
                       <span><small>信用等级</small><b>{{ subjectInfo.creditLevel }}</b></span>
-                      <span><small>风险等级</small><b>{{ subjectInfo.riskLevel }}</b></span>
-                      <span><small>年报状态</small><b>{{ subjectInfo.annualReportStatus }}</b></span>
+                      <span><small>风险等级</small><b>{{ riskLevelMeta(subjectInfo.riskLevel).label }}</b></span>
+                      <span><small>年报状态</small><b>{{ annualReportMeta(subjectInfo.annualReportStatus).label }}</b></span>
                     </div>
                   </section>
                 </div>
@@ -422,7 +422,7 @@
                   <div>
                     <a-tag :class="`g-status tone-${statusMeta('approved').tone}`">{{ statusMeta('approved').label }}</a-tag>
                     <h2>{{ creditData.level }} 级守信主体</h2>
-                    <p>风险等级：{{ creditData.riskLevel }} · 档案更新：{{ creditData.updatedAt }}</p>
+                    <p>风险等级：{{ riskLevelMeta(creditData.riskLevel).label }} · 档案更新：{{ creditData.updatedAt }}</p>
                   </div>
                   <div class="g-credit-dimensions">
                     <span v-for="item in creditData.dimensions" :key="item.name"><small>{{ item.name }}</small><b>{{ item.score }}</b></span>
@@ -619,7 +619,7 @@
                   </div>
                   <div class="g-list-box black">
                     <h3>黑名单 · 失信惩戒</h3>
-                    <div v-for="item in publicLists.black" :key="item.id"><b>{{ item.subjectName }}</b><span>{{ item.creditScore }} 分 · {{ item.riskLevel }}</span></div>
+                    <div v-for="item in publicLists.black" :key="item.id"><b>{{ item.subjectName }}</b><span>{{ item.creditScore }} 分 · {{ riskLevelMeta(item.riskLevel).label }}</span></div>
                   </div>
                 </div>
 
@@ -755,7 +755,9 @@ import {
 } from '@ant-design/icons-vue'
 import { AgriVueTopHeader, AgriVueWorkspaceTabs } from '@agri/shared/vue/workspace'
 import {
+  ANNUAL_REPORT_META,
   govApi,
+  RISK_LEVEL_META,
   SUBJECT_STATUS,
   type Complaint,
   type CreditProfile,
@@ -887,7 +889,20 @@ function go(target: Page) {
 }
 
 function statusMeta(value: string) {
-  return SUBJECT_STATUS[value] ?? { label: value, tone: 'gray' }
+  const key = value.trim()
+  return SUBJECT_STATUS[key] ?? SUBJECT_STATUS[key.toLowerCase()] ?? { label: key || '—', tone: 'gray' }
+}
+
+function riskLevelMeta(value: string) {
+  const key = value.trim()
+  if (!key) return { label: '未评级', tone: 'gray' }
+  return RISK_LEVEL_META[key] ?? RISK_LEVEL_META[key.toLowerCase()] ?? { label: key, tone: 'gray' }
+}
+
+function annualReportMeta(value: string) {
+  const key = value.trim()
+  if (!key) return { label: '未报送', tone: 'gray' }
+  return ANNUAL_REPORT_META[key] ?? ANNUAL_REPORT_META[key.toLowerCase()] ?? { label: key, tone: 'gray' }
 }
 
 function traceEventMeta(event: { location?: string; eventTime?: string; chainHash?: string }): string {

@@ -73,10 +73,29 @@ export const opsApi={
   statistics:()=>req<{trend:Overview['trend'];warningTypes:Array<{name:string;value:number}>;samplings:Sampling[];cases:Case[];subjects:Subject[]}>(client.get('/ops/statistics')),
 }
 
+export const RISK_LEVEL_META:Record<string,{label:string;tone:string}>={
+  low:{label:'低风险',tone:'green'},
+  medium:{label:'中风险',tone:'orange'},
+  high:{label:'高风险',tone:'red'},
+}
+
+export const ANNUAL_REPORT_META:Record<string,{label:string;tone:string}>={
+  completed:{label:'已完成',tone:'green'},
+  submitted:{label:'已提交',tone:'blue'},
+  pending:{label:'待报送',tone:'orange'},
+  unsubmitted:{label:'未报送',tone:'orange'},
+  not_submitted:{label:'未报送',tone:'orange'},
+  overdue:{label:'已逾期',tone:'red'},
+  exempt:{label:'免报',tone:'gray'},
+}
+
 export const STATUS:Record<string,{label:string;tone:string}>={
   pending:{label:'待处理',tone:'orange'},assigned:{label:'已分派',tone:'blue'},processing:{label:'处理中',tone:'orange'},closed:{label:'已办结',tone:'gray'},
-  in_progress:{label:'进行中',tone:'green'},completed:{label:'已完成',tone:'gray'},filing:{label:'立案',tone:'blue'},investigating:{label:'调查中',tone:'orange'},
+  in_progress:{label:'进行中',tone:'green'},completed:{label:'已完成',tone:'green'},filing:{label:'立案',tone:'blue'},investigating:{label:'调查中',tone:'orange'},
   evidence:{label:'取证阶段',tone:'purple'},decision:{label:'拟处罚',tone:'orange'},submitted:{label:'已提交',tone:'blue'},reviewing:{label:'审核中',tone:'orange'},
   approved:{label:'已通过',tone:'green'},rejected:{label:'已驳回',tone:'red'},county_review:{label:'区县复核',tone:'orange'},paid:{label:'已兑付',tone:'green'},
-  accepted:{label:'已受理',tone:'blue'},resolved:{label:'已解决',tone:'green'},high:{label:'高',tone:'red'},normal:{label:'普通',tone:'blue'},low:{label:'低',tone:'gray'},
+  accepted:{label:'已受理',tone:'blue'},resolved:{label:'已解决',tone:'green'},feedback:{label:'待复核',tone:'blue'},overdue:{label:'已逾期',tone:'red'},
+  effective:{label:'生效中',tone:'orange'},not_submitted:{label:'未提交',tone:'gray'},restricted:{label:'重点监管',tone:'orange'},revoked:{label:'已注销',tone:'gray'},
+  certified:{label:'已认证',tone:'green'},active:{label:'启用',tone:'green'},inactive:{label:'停用',tone:'gray'},enabled:{label:'启用',tone:'green'},disabled:{label:'停用',tone:'gray'},
+  high:{label:'高风险',tone:'red'},medium:{label:'中风险',tone:'orange'},normal:{label:'普通',tone:'blue'},low:{label:'低风险',tone:'green'},
 }

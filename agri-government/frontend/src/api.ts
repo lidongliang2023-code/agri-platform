@@ -125,6 +125,22 @@ export const govApi = {
   logs: () => req<Array<{ id: number; operator: string; role: string; action: string; target: string; detail: string; ip: string; createdAt: string }>>(client.get('/op-logs')),
 }
 
+export const RISK_LEVEL_META: Record<string, { label: string; tone: string }> = {
+  low: { label: '低风险', tone: 'green' },
+  medium: { label: '中风险', tone: 'orange' },
+  high: { label: '高风险', tone: 'red' },
+}
+
+export const ANNUAL_REPORT_META: Record<string, { label: string; tone: string }> = {
+  completed: { label: '已完成', tone: 'green' },
+  submitted: { label: '已提交', tone: 'blue' },
+  pending: { label: '待报送', tone: 'orange' },
+  unsubmitted: { label: '未报送', tone: 'orange' },
+  not_submitted: { label: '未报送', tone: 'orange' },
+  overdue: { label: '已逾期', tone: 'red' },
+  exempt: { label: '免报', tone: 'gray' },
+}
+
 export const SUBJECT_STATUS: Record<string, { label: string; tone: string }> = {
   normal: { label: '正常', tone: 'green' },
   restricted: { label: '重点监管', tone: 'orange' },
@@ -136,6 +152,11 @@ export const SUBJECT_STATUS: Record<string, { label: string; tone: string }> = {
   needs_fix: { label: '待修正', tone: 'orange' },
   pending: { label: '待处理', tone: 'orange' },
   feedback: { label: '待复核', tone: 'blue' },
+  completed: { label: '已完成', tone: 'green' },
+  overdue: { label: '已逾期', tone: 'red' },
+  effective: { label: '生效中', tone: 'orange' },
+  not_submitted: { label: '未提交', tone: 'gray' },
+  certified: { label: '已认证', tone: 'green' },
   closed: { label: '已办结', tone: 'gray' },
   submitted: { label: '已提交', tone: 'blue' },
   reviewing: { label: '审核中', tone: 'orange' },
@@ -146,4 +167,7 @@ export const SUBJECT_STATUS: Record<string, { label: string; tone: string }> = {
   accepted: { label: '已受理', tone: 'blue' },
   processing: { label: '处理中', tone: 'orange' },
   resolved: { label: '已解决', tone: 'green' },
+  low: { label: '低风险', tone: 'green' },
+  medium: { label: '中风险', tone: 'orange' },
+  high: { label: '高风险', tone: 'red' },
 }

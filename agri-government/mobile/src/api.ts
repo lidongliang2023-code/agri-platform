@@ -37,9 +37,16 @@ export const api={
   messages:()=>request<Message[]>('/mobile/messages'),
   readMessages:()=>request<{updated:number}>('/mobile/messages/read-all','POST'),
 }
+export const RISK_LEVEL_META:Record<string,{label:string;tone:string}>={
+  low:{label:'低风险',tone:'green'},
+  medium:{label:'中风险',tone:'orange'},
+  high:{label:'高风险',tone:'red'},
+}
+export function riskLevelLabel(v?:string){if(!v)return '未评级';return RISK_LEVEL_META[v.toLowerCase()]?.label??v}
 export const STATUS:Record<string,{label:string;tone:string}>={
   pending:{label:'待检查',tone:'orange'},in_progress:{label:'检查中',tone:'green'},completed:{label:'已完成',tone:'gray'},
   filing:{label:'立案',tone:'blue'},investigating:{label:'调查中',tone:'orange'},evidence:{label:'取证阶段',tone:'purple'},decision:{label:'拟处罚',tone:'orange'},closed:{label:'已办结',tone:'gray'},
-  red:{label:'高风险',tone:'red'},orange:{label:'中风险',tone:'orange'},yellow:{label:'提示',tone:'blue'}
+  red:{label:'高风险',tone:'red'},orange:{label:'中风险',tone:'orange'},yellow:{label:'提示',tone:'blue'},
+  high:{label:'高风险',tone:'red'},medium:{label:'中风险',tone:'orange'},low:{label:'低风险',tone:'green'},overdue:{label:'已逾期',tone:'red'},feedback:{label:'待复核',tone:'blue'}
 }
 export function statusMeta(v:string){return STATUS[v]??{label:v,tone:'gray'}}
