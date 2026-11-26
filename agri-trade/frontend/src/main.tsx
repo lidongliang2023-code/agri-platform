@@ -1,11 +1,14 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import axios from 'axios'
-import App from './App'
-import { getAccessToken } from './utils/session'
-import { redirectToSso, refreshAccessToken, LOGIN_PATH, SSO_CALLBACK_PATH } from './utils/sso'
-import './index.css'
+import { createApp } from 'vue';
+import { createPinia } from 'pinia';
+import { VueQueryPlugin, QueryClient } from '@tanstack/vue-query';
+import router from './router';
+import 'ant-design-vue/dist/reset.css';
+import axios from 'axios';
+import App from './App';
+import { getAccessToken } from './utils/session';
+import { redirectToSso, refreshAccessToken, SSO_CALLBACK_PATH } from './utils/sso';
+import './index.css';
+import '../../../shared/pc-ui-v1.mjs';
 
 /**
  * 统一的请求层接在 axios 全局默认上，而不是新包一层。
@@ -13,35 +16,34 @@ import './index.css'
  * <p>原因很实际：10 个 `api/*.ts` 里是 40 多处裸 `axios.get/post`，逐个改成自定义实例
  * 既容易漏、又会把接口文件搅得面目全非。挂在 defaults + 拦截器上，一处生效、全部生效。</p>
  */
-axios.defaults.withCredentials = true
-
-axios.interceptors.request.use((config) => {
-  const token = getAccessToken()
+axios.defaults.withCredentials = true;
+axios.interceptors.request.use(config => {
+  const token = getAccessToken();
   if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+    config.headers.Authorization = `Bearer ${token}`;
   }
-  return config
-})
-
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // 401 = 没登录或令牌过期：清掉会话并送回登录页（登录页与回跳页自身除外，否则会死循环）
-    if (error?.response?.status === 401) {
-      const { pathname, search, hash } = window.location
-      const headers = (error.config as {
-        headers?: Record<string, unknown> & { get?: (name: string) => unknown }
-      } | undefined)?.headers
-      const silent = headers?.get?.('X-Skip-Auth-Redirect') === '1'
-        || headers?.['X-Skip-Auth-Redirect'] === '1'
-        || headers?.['x-skip-auth-redirect'] === '1'
-      if (!silent && pathname !== LOGIN_PATH && pathname !== SSO_CALLBACK_PATH) {
-        void redirectToSso(`${pathname}${search}${hash}`)
-      }
+  return config;
+});
+axios.interceptors.response.use(response => response, error => {
+  // 401 = 没登录或令牌过期：清掉会话并送回登录页（登录页与回跳页自身除外，否则会死循环）
+  if (error?.response?.status === 401) {
+    const {
+      pathname,
+      search,
+      hash
+    } = window.location;
+    const headers = (error.config as {
+      headers?: Record<string, unknown> & {
+        get?: (name: string) => unknown;
+      };
+    } | undefined)?.headers;
+    const silent = headers?.get?.('X-Skip-Auth-Redirect') === '1' || headers?.['X-Skip-Auth-Redirect'] === '1' || headers?.['x-skip-auth-redirect'] === '1';
+    if (!silent && pathname !== SSO_CALLBACK_PATH) {
+      void redirectToSso(`${pathname}${search}${hash}`);
     }
-    return Promise.reject(error)
-  },
-)
+  }
+  return Promise.reject(error);
+});
 
 /**
  * 启动时先静默续签再渲染。
@@ -51,14 +53,19 @@ axios.interceptors.response.use(
  * 换不到就当未登录，正常进登录页。</p>
  */
 async function bootstrap(): Promise<void> {
-  await refreshAccessToken()
-  ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
-    </React.StrictMode>,
-  )
+  await refreshAccessToken();
+  const app = createApp(App);
+  app.use(createPinia()).use(VueQueryPlugin, {
+    queryClient: new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: 1,
+          refetchOnWindowFocus: false
+        }
+      }
+    })
+  }).use(router);
+  await router.isReady();
+  app.mount('#root');
 }
-
-void bootstrap()
+void bootstrap();

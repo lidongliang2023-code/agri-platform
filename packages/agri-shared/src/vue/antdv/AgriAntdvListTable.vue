@@ -31,13 +31,21 @@
         :pagination="false"
         :row-selection="rowSelectionConfig"
         :row-class-name="resolveRowClassName"
+        :custom-row="customRow"
         :scroll="resolvedScroll"
         :locale="{ emptyText }"
-        size="middle"
+        :size="size"
+        :expanded-row-render="expandedRowRender ? ({ record, index }) => expandedRowRender!(record, index) : undefined"
+        :row-expandable="rowExpandable"
         table-layout="fixed"
         @resize-column="handleResizeColumn"
         @change="handleTableChange"
       >
+        <template #headerCell="{ title, column }">
+          <slot :name="`header-${String(column.key || column.dataIndex || '')}`" :title="title" :column="column">
+            {{ title }}
+          </slot>
+        </template>
         <template #bodyCell="slotProps">
           <slot
             :name="`cell-${String(slotProps.column.key || slotProps.column.dataIndex || '')}`"
@@ -72,6 +80,8 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { Table as ATable } from 'ant-design-vue'
+import type { ColumnType } from 'ant-design-vue/es/table/interface'
 import AgriVueToolbar from '../list/AgriVueToolbar.vue'
 import AgriVuePagination from '../list/AgriVuePagination.vue'
 import { useVueListColumns } from '../list/useVueListColumns'
@@ -96,6 +106,9 @@ const props = withDefaults(
     data: readonly RowRecord[]
     rowKey?: string | ((row: RowRecord) => string)
     loading?: boolean
+    size?: 'small' | 'middle' | 'large'
+    expandedRowRender?: (row: RowRecord, index: number) => import('vue').VNodeChild
+    rowExpandable?: (row: RowRecord) => boolean
     emptyText?: string
     selectable?: boolean
     selectionWidth?: number
@@ -116,10 +129,14 @@ const props = withDefaults(
     scrollX?: number | 'max-content'
     scrollY?: number | string
     rowClassName?: (record: RowRecord, index: number) => string
+    customRow?: (record: RowRecord, index?: number) => Record<string, unknown>
+    selectedRowKeys?: readonly (string | number)[]
+    getCheckboxProps?: (record: RowRecord) => Record<string, unknown>
   }>(),
   {
     rowKey: 'id',
     loading: false,
+    size: 'middle',
     emptyText: '暂无符合条件的记录，请调整筛选条件或稍后再试',
     selectable: true,
     selectionWidth: DEFAULT_SELECTION_COLUMN_WIDTH,
@@ -184,6 +201,16 @@ const {
 
 const selectedKeys = ref<string[]>([])
 const selectedRowMap = ref<Record<string, RowRecord>>({})
+watch(() => props.selectedRowKeys, (keys) => {
+  if (keys !== undefined) selectedKeys.value = keys.map(String)
+}, { immediate: true, deep: true })
+watch(() => props.data, (rows) => {
+  const selected = new Set(selectedKeys.value)
+  for (const row of rows) {
+    const key = extractRowKey(row)
+    if (selected.has(key)) selectedRowMap.value[key] = row
+  }
+}, { immediate: true })
 
 function extractRowKey(row: RowRecord): string {
   if (typeof props.rowKey === 'function') return props.rowKey(row)
@@ -232,6 +259,7 @@ const antdvColumns = computed(() =>
       key: col.resolvedKey,
       dataIndex: col.prop,
       title: col.label,
+      sorter: col.sorter,
       width,
       minWidth: col.resolvedMinWidth ?? MIN_RESIZABLE_COLUMN_WIDTH,
       maxWidth: 1200,
@@ -260,6 +288,7 @@ const rowSelectionConfig = computed(() => {
     selectedRowKeys: selectedKeys.value,
     preserveSelectedRowKeys: true,
     columnWidth: props.selectionWidth,
+    getCheckboxProps: props.getCheckboxProps,
     onChange: (keys: (string | number)[], rows: RowRecord[]) => {
       const nextKeys = keys.map(String)
       const nextMap: Record<string, RowRecord> = {}
@@ -291,7 +320,7 @@ function resolveRowClassName(record: RowRecord, index: number): string {
   return classes.join(' ')
 }
 
-function handleResizeColumn(width: number, col: { key?: string; dataIndex?: string }) {
+function handleResizeColumn(width: number, col: ColumnType<RowRecord>) {
   const key = String(col.key || col.dataIndex || '')
   if (!key) return
   setColumnWidth(key, width, MIN_RESIZABLE_COLUMN_WIDTH)
@@ -323,7 +352,7 @@ function handlePageChange(p: number, size: number) {
   emit('page-change', p, size)
 }
 
-function formatCellText(row: RowRecord, col: { key?: string; dataIndex?: string }, index: number): string {
+function formatCellText(row: RowRecord, col: ColumnType<RowRecord>, index: number): string {
   const key = String(col.key || col.dataIndex || '')
   const meta = columnByKey.value.get(key)
   const value = readCellValue(row, meta?.prop || (typeof col.dataIndex === 'string' ? col.dataIndex : undefined))

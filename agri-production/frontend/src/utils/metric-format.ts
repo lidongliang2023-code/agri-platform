@@ -5,7 +5,7 @@
  * `render: (v: number) => v.toLocaleString()` 里，靠 TS 的 `number` 标注「担保」运行时一定有值。
  * 但这个担保是假的：后端 VO 少一个字段、字段名对不上、或把数字序列化成字符串，
  * 运行时拿到的就是 `undefined`，`undefined.toLocaleString()` 直接抛 TypeError，
- * React error boundary 接管后整页白屏。
+ * 渲染异常导致业务页面无法显示。
  *
  * 本项目已经踩到的实例：
  * - `/admin/alerts/review` 返回的是 `AlertVO`（告警复核），根本没有

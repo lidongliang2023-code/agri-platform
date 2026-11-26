@@ -8,7 +8,7 @@
  *    `src/utils/production-adapter` 归一化后再交给页面；
  * 3. 看板类接口允许「无数据回落」，需要 `silent` 静默请求，避免后端未启动时刷屏报错。
  *
- * 所有导出函数均返回 Promise，供 `@tanstack/react-query` 的 useQuery 使用。
+ * 所有导出函数均返回 Promise，供 `@tanstack/vue-query` 的 useQuery 使用。
  */
 import dayjs from 'dayjs'
 import { http, httpPlatform, httpStatusOf } from '@/utils/request'

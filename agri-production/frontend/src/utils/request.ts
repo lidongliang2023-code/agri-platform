@@ -1,3 +1,5 @@
+import { mobileWorkspace, workspaceEndedPath } from './mobile-workspace'
+import { SSO_CLIENT_ID, redirectToSso } from '@/api/sso'
 /**
  * axios 统一封装
  *
@@ -7,7 +9,7 @@
  * - 401 未授权：清空登录态并跳转登录页
  */
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
-import { message } from 'antd'
+import { message } from 'ant-design-vue'
 import useAuthStore from '@/store/auth'
 
 /** 后端统一响应包装体（shared-kernel ApiResponse） */
@@ -41,6 +43,8 @@ interface RawPageResult<T> {
   page: number
   /** 每页条数（运行时可能是字符串） */
   size: number
+  pageNum?: number
+  pageSize?: number
 }
 
 /** 前端统一分页结构 */
@@ -88,8 +92,8 @@ function normalizePageData<T>(data: unknown): T | PageData<T> {
     const raw = data as RawPageResult<T>
     const list = raw.records
     const total = toNumber(raw.total, list.length)
-    const pageSize = toNumber(raw.size, list.length || 1)
-    const pageNum = toNumber(raw.page, 1)
+    const pageSize = toNumber(raw.pageSize ?? raw.size, list.length || 1)
+    const pageNum = toNumber(raw.pageNum ?? raw.page, 1)
     return {
       list,
       total,
@@ -183,19 +187,6 @@ export function toPageResult<T>(raw: unknown, params: PageQueryLike = {}): PageD
 
 /** 业务成功码 */
 export const SUCCESS_CODE = 0
-
-/**
- * 登录页地址（按端取）。
-
- *
- * <p>改前这里写死 `/login`，而 `/login` 的按端分流规则是"**没有 `?end=user` 就落运营端登录页**" ——
- * 于是在**用户端**页面收到 401 时，人会被弹到**运营端**登录页（2026-10-16 实测）。
- * 现在按当前路径判断端：`/admin/**` 走运营端登录页，其余走用户端登录页。
- * （`/login` 仍保留，兼容旧链接与外部跳转。）</p>
- */
-function currentEndLoginPath(): string {
-  return window.location.pathname.startsWith('/admin') ? '/admin/login' : '/production/login'
-}
 
 /**
  * 业务域请求前缀（core-platform mod-produce）。
@@ -387,10 +378,11 @@ function installResponseInterceptor(instance: AxiosInstance): void {
     if (status === 401) {
       // 只清本地与平台会话：401 不代表 SSO 全局会话失效，跳 SSO 登出会把用户弹去再弹回
       useAuthStore.getState().logout({ sso: false })
-      const loginPath = currentEndLoginPath()
-      // 已经在登录页就别再跳（否则会打断 SSO 交接页上的"立即跳转 / 改用本地账号"操作）
-      if (!window.location.pathname.endsWith('/login')) {
-        window.location.href = loginPath
+      if (mobileWorkspace()) {
+        window.location.replace(workspaceEndedPath('expired'))
+      } else if (window.location.pathname.replace(/\/+$/, '') !== '/sso/callback') {
+        const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+        void redirectToSso(SSO_CLIENT_ID, current)
       }
       return Promise.reject(new Error('登录已失效，请重新登录'))
     }

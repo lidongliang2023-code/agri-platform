@@ -1,3 +1,5 @@
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event;
 /** 原型同款 Feather 风格图标（路径取自 prototype/assets/js/app.js）。 */
 const PATHS: Record<string, string> = {
   leaf: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>',
@@ -38,22 +40,30 @@ const PATHS: Record<string, string> = {
   factory: '<path d="M2 20h20"/><path d="M4 20V8l5 4V8l5 4V4h6v16"/><line x1="7" y1="17" x2="7" y2="17"/><line x1="12" y1="17" x2="12" y2="17"/>',
   seed: '<path d="M12 22V12"/><path d="M12 12C8 12 5 9 5 5c4 0 7 3 7 7z"/><path d="M12 15c3.5 0 6-2.5 6-6-3.5 0-6 2.5-6 6z"/>',
   award: '<circle cx="12" cy="8" r="6"/><path d="M8.21 13.89L7 23l5-3 5 3-1.21-9.12"/>',
-  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
-}
-
-export function Icon({ name, size = 18 }: { name: string; size?: number }): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: PATHS[name] ?? PATHS.box }}
-    />
-  )
-}
+  zap: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'
+};
+export const Icon = defineComponent({
+  name: "Icon",
+  props: {
+    name: null as unknown as PropType<{
+      name: string;
+      size?: number;
+    }["name"]>,
+    size: null as unknown as PropType<{
+      name: string;
+      size?: number;
+    }["size"]>
+  },
+  setup(__props: {
+    name: string;
+    size?: number;
+  }, {
+    slots: __slots
+  }) {
+    return () => {
+      const view_prop_size = __props.size;
+      const view_prop_name = __props.name;
+      return <svg viewBox="0 0 24 24" width={view_prop_size ?? 18} height={view_prop_size ?? 18} fill="none" stroke="currentColor" stroke-width={2} stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" innerHTML={PATHS[view_prop_name] ?? PATHS.box} />;
+    };
+  }
+});

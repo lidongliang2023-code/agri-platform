@@ -1,4 +1,4 @@
-/* 跨子系统通用 React 四段式列表页样式（筛选区 → 工具栏 → 表格 → 分页）。
+/* 跨子系统通用四段式列表页样式（筛选区 → 工具栏 → 表格 → 分页）。
  * 标准类名为 .agri-list-page / .agri-filter-grid / .agri-list-toolbar，
  * 同时兼容历史 .production-member-list 与 .device-member-list 作用域。 */
 

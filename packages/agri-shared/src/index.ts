@@ -1,18 +1,13 @@
 /**
- * `@agri/shared` —— 跨子系统共享资产的唯一出口。
- *
- * <p><b>当前为空壳。</b>路线 2 的第一步只搭"家"、不搬东西：一次性搬走 33 个文件、
- * 约 6,000 行，并重写 96 个页面的引用，属必败操作；改为按批次搬、每批一次验证。</p>
- *
- * <p>搬迁批次、每批的验证协议、以及"什么不该进这个包"，见同目录 README.md。</p>
+ * `@agri/shared` —— 跨子系统共享资产的统一出口（纯 Vue 3 + 框架无关工具 / 主题 / 令牌）。
  */
 
 export * from './styles/theme'
-export * from './components/TiandituMap'
-export { default as TiandituMap } from './components/TiandituMap'
-export * from './components/TiandituBoundaryEditor'
-export { default as TiandituBoundaryEditor } from './components/TiandituBoundaryEditor'
 export * from './components/tianditu'
 export * from './components/chinaRegionCenters'
 export * from './components/list'
 export * from './components/workspace'
+export * from './vue/list'
+export * from './vue/workspace'
+export * from './vue/map'
+

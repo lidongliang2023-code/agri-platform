@@ -1,0 +1,1235 @@
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event & {
+  target: T;
+  currentTarget: T;
+  nativeEvent: Event;
+  key: string;
+};
+import DetailInfoGrid from '@/vue/business/components/DetailInfoGrid';
+import ProductionTable from '@/vue/ProductionRequestTable';
+import ListRowActions from '@/vue/business/components/ListRowActions';
+import { QualityPage } from '../quality/QualityShared';
+/**
+ * 页面名称：合规校验管理
+ * 路由路径：/admin/production/food-safety/compliance
+ * 所属模块：食品安全
+ * 原型 pageId：food-safety-compliance（PRD 外，原型补充页面 P17）
+ *
+ * 原型结构：Tab（投入品合规 / 标签合规 / 标准校验）。
+ * - Tab1「投入品合规」按原型还原：记录编号 | 农场 | 投入品 | 类型 | 用量 | 校验结果 | 违规项 | 操作
+ * - Tab2「标签合规」与 Tab3「标准校验」原型仅有一行占位文案
+ *   （"标签合规模块 - 产品标签信息校验"、"标准核验记录与汇总"），
+ *   **原型未展开，此处为补充设计**，字段与交互见各 Tab 内部注释。
+ */
+
+import { Alert, App, Breadcrumb, Button, Card, Col, Empty, Form, Input, Modal, Progress, Row, Select, Space, Statistic, Tabs, Tag, Typography } from '@/vue/ui';
+import type { ProductionColumn } from '@/vue/ProductionRequestTable';
+type ColumnsType<T = any> = ProductionColumn<T>[];
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, HomeOutlined, ReloadOutlined, SearchOutlined, ThunderboltOutlined, WarningOutlined } from '@ant-design/icons-vue';
+import { useMutation, useQuery, useQueryClient } from '@/vue/query';
+import { MetricStatistic, MetricText } from '@/vue/business/components/index';
+import ReactECharts from '@/vue/VueECharts';
+import type { EChartsOption } from 'echarts';
+import { STANDARD_LIBRARY, getStandardCheckSummary, listInputCompliance, listLabelCompliance, listStandardCheckItems, listStandardLibrary, notifyLabelRectify, notifyWriteResult, punishInputCompliance, runStandardCheck } from '@/api/admin/foodSafety';
+import type { ComplianceResult, InputComplianceRecord, LabelCheckResult, LabelComplianceRecord, MarkingResult, RectifyStatus, StandardCheckItem, StandardCheckSummary, StandardLibraryItem } from '@/api/admin/foodSafety';
+const {
+  Text,
+  Title
+} = Typography;
+
+/** 校验结果文案 */
+const RESULT_TEXT: Record<ComplianceResult, string> = {
+  pass: '合规',
+  over: '超标'
+};
+
+/** 标识合规性文案 */
+const MARKING_TEXT: Record<MarkingResult, string> = {
+  compliant: '合规',
+  violation: '违规'
+};
+
+/** 标识合规性 Tag 颜色 */
+const MARKING_COLOR: Record<MarkingResult, string> = {
+  compliant: 'green',
+  violation: 'red'
+};
+
+/** 校验结果 Tag 颜色 */
+const CHECK_COLOR: Record<LabelCheckResult, string> = {
+  pass: 'green',
+  fail: 'red'
+};
+
+/** 整改状态文案 */
+const RECTIFY_TEXT: Record<RectifyStatus, string> = {
+  none: '无需整改',
+  notified: '已下发整改',
+  done: '已整改'
+};
+
+/** 整改状态 Tag 颜色 */
+const RECTIFY_COLOR: Record<RectifyStatus, string> = {
+  none: 'default',
+  notified: 'gold',
+  done: 'green'
+};
+
+/** 处罚方式下拉选项 */
+const PUNISH_OPTIONS: string[] = ['警告并限期整改', '登记处罚及停供建议', '列入重点监管名单', '移交执法部门'];
+
+/** 校验批次范围下拉选项（补充设计） */
+const BATCH_SCOPE_OPTIONS: Array<{
+  value: string;
+  label: string;
+}> = [{
+  value: 'last7d',
+  label: '近 7 天批次'
+}, {
+  value: 'last30d',
+  label: '近 30 天批次'
+}, {
+  value: 'quarter',
+  label: '本季度全部批次'
+}];
+
+/* ==================== Tab1 投入品合规 ==================== */
+
+/**
+ * 投入品合规 Tab
+ *
+ * 业务职责：维护投入品（肥料 / 农药 / 除草剂等）使用台账的合规校验结果，
+ * 对超标记录发起处罚。数据优先取后端 /admin/food-safety/compliance/inputs，
+ * 接口未就绪时降级到原型示例数据。
+ *
+ * @returns Tab 内容
+ */
+const InputComplianceTab = defineComponent({
+  name: "InputComplianceTab",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const {
+      message
+    } = App.useApp();
+    const queryClient = useQueryClient();
+
+    /** 校验结果筛选 */
+    const result = shallowRef<ComplianceResult | 'all'>('all');
+    /** 农场关键字 */
+    const setResult = (next: typeof result.value | ((previous: typeof result.value) => typeof result.value)) => {
+      result.value = typeof next === 'function' ? (next as (previous: typeof result.value) => typeof result.value)(result.value) : next;
+    };
+    const farmName = shallowRef<string>('');
+    /** 页码 */
+    const setFarmName = (next: typeof farmName.value | ((previous: typeof farmName.value) => typeof farmName.value)) => {
+      farmName.value = typeof next === 'function' ? (next as (previous: typeof farmName.value) => typeof farmName.value)(farmName.value) : next;
+    };
+    const pageNum = shallowRef<number>(1);
+    /** 每页条数 */
+    const setPageNum = (next: typeof pageNum.value | ((previous: typeof pageNum.value) => typeof pageNum.value)) => {
+      pageNum.value = typeof next === 'function' ? (next as (previous: typeof pageNum.value) => typeof pageNum.value)(pageNum.value) : next;
+    };
+    const pageSize = shallowRef<number>(20);
+    /** 详情弹窗记录 */
+    const setPageSize = (next: typeof pageSize.value | ((previous: typeof pageSize.value) => typeof pageSize.value)) => {
+      pageSize.value = typeof next === 'function' ? (next as (previous: typeof pageSize.value) => typeof pageSize.value)(pageSize.value) : next;
+    };
+    const detail = shallowRef<InputComplianceRecord | null>(null);
+    /** 处罚弹窗记录 */
+    const setDetail = (next: typeof detail.value | ((previous: typeof detail.value) => typeof detail.value)) => {
+      detail.value = typeof next === 'function' ? (next as (previous: typeof detail.value) => typeof detail.value)(detail.value) : next;
+    };
+    const punishTarget = shallowRef<InputComplianceRecord | null>(null);
+    /** 处罚表单 */
+    const setPunishTarget = (next: typeof punishTarget.value | ((previous: typeof punishTarget.value) => typeof punishTarget.value)) => {
+      punishTarget.value = typeof next === 'function' ? (next as (previous: typeof punishTarget.value) => typeof punishTarget.value)(punishTarget.value) : next;
+    };
+    const punishForm = Form.useForm<{
+      action: string;
+      amount: number;
+      remark: string;
+    }>();
+
+    /** 投入品合规台账 */
+    const listQuery = useQuery(() => ({
+      queryKey: ['admin', 'food-safety', 'compliance', 'inputs', result.value, farmName.value, pageNum.value, pageSize.value],
+      queryFn: () => listInputCompliance({
+        pageNum: pageNum.value,
+        pageSize: pageSize.value,
+        result: result.value,
+        farmName: farmName.value
+      }),
+      retry: false
+    }));
+
+    /** 台账统计（一次性取全量后本地汇总） */
+    const statsQuery = useQuery(() => ({
+      queryKey: ['admin', 'food-safety', 'compliance', 'inputs', 'stats'],
+      queryFn: () => listInputCompliance({
+        pageNum: 1,
+        pageSize: 1000,
+        result: 'all'
+      }),
+      retry: false
+    }));
+
+    /** 处罚提交（只有 result.ok 才提示成功并关闭弹窗） */
+    const punishMutation = useMutation(() => ({
+      mutationFn: (payload: {
+        id: string;
+        action: string;
+        amount: number;
+        remark: string;
+      }) => punishInputCompliance(payload.id, payload),
+      onSuccess: result => {
+        notifyWriteResult(message, result, '处罚已登记并写入服务端');
+        if (!result.ok) {
+          return;
+        }
+        void queryClient.invalidateQueries({
+          queryKey: ['admin', 'food-safety', 'compliance', 'inputs']
+        });
+        setPunishTarget(null);
+        punishForm.resetFields();
+      },
+      onError: (error: Error) => {
+        message.error(error.message || '处罚登记失败，请稍后重试');
+      }
+    }));
+
+    /** 台账「未接入」原因（非空表示本次没拿到任何真实记录，示例数据已不再回落） */
+    const complianceUnavailableReason = computed<string | undefined>(() => listQuery.isError || statsQuery.isError ? '台账加载失败，请刷新重试' : listQuery.data?.unavailableReason);
+
+    /** 全量数据 */
+    const allRecords = computed(() => statsQuery.data?.list ?? []);
+    /** 合规条数 */
+    const passCount = computed(() => allRecords.value.filter(item => item.result === 'pass').length);
+    /** 超标条数 */
+    const overCount = computed(() => allRecords.value.filter(item => item.result === 'over').length);
+    /** 合规率 */
+    const passRate = computed(() => allRecords.value.length > 0 ? Math.round(passCount.value / allRecords.value.length * 1000) / 10 : 0);
+
+    /** 表格列（原型 P17 Tab1 列顺序） */
+    const columns = computed<ColumnsType<InputComplianceRecord>>(() => [{
+      title: '记录编号',
+      dataIndex: 'id',
+      width: 120
+    }, {
+      title: '农场',
+      dataIndex: 'farmName',
+      width: 130
+    }, {
+      title: '投入品',
+      dataIndex: 'inputName',
+      width: 130
+    }, {
+      title: '类型',
+      dataIndex: 'inputType',
+      width: 110
+    }, {
+      title: '用量',
+      dataIndex: 'dosage',
+      width: 120
+    }, {
+      title: '校验结果',
+      dataIndex: 'result',
+      width: 110,
+      render: (value: ComplianceResult) => value === 'pass' ? <Tag color="green" icon={<CheckCircleOutlined />}>
+            ✅ {RESULT_TEXT[value]}
+          </Tag> : <Tag color="red" icon={<CloseCircleOutlined />}>
+            ❌ {RESULT_TEXT[value]}
+          </Tag>
+    }, {
+      title: '违规项',
+      dataIndex: 'violation',
+      render: (value: string) => value === '—' ? <Text type="secondary">—</Text> : <Text type="danger">{value}</Text>
+    }, {
+      title: '校验日期',
+      dataIndex: 'checkDate',
+      width: 120
+    }, {
+      title: '操作',
+      key: 'action',
+      width: 150,
+      render: (_value: unknown, record: InputComplianceRecord) => <ListRowActions items={[<Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
+              查看
+            </Button>, record.result === 'over' && <Button key="punish" type="link" size="small" danger icon={<WarningOutlined />} onClick={() => {
+        setPunishTarget(record);
+        punishForm.setFieldsValue({
+          action: PUNISH_OPTIONS[0],
+          amount: 2000,
+          remark: ''
+        });
+      }}>
+                处罚
+              </Button>]} />
+    }]);
+    return () => {
+      return <div>
+      {/* 台账未接入：后端 /admin/food-safety/** 暂无端点，此处**不再**回落原型示例数据 */}
+      {complianceUnavailableReason.value && <Alert type="warning" showIcon banner style={{
+          marginBottom: 12
+        }} message="投入品合规台账未接入：后端暂无 /admin/food-safety/compliance/inputs 端点，本 Tab 不展示任何示例数据" description={<span>
+              原因：{complianceUnavailableReason.value}。投入品用量、超标判定与处罚金额属于合规强相关
+              数据，<strong>不会</strong>用原型示例口径（原型 P17 Tab1）占位——看起来有数据而实际
+              是编的，在监管举证场景下后果比空表严重得多。接口上线后本提示自动消失，表格、
+              统计卡与筛选即恢复可用。
+            </span>} />}
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+
+
+      <Row gutter={[12, 12]} style={{
+          marginBottom: 12
+        }}>
+        <Col xs={24} sm={8}>
+          <Card>
+            {/* 台账未接入时显示「—」而不是 0：0 会被读成"查过了，没有记录" */}
+            <Statistic title="校验记录总数" value={complianceUnavailableReason.value ? '—' : allRecords.value.length} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card>
+            <Statistic title="合规记录" value={complianceUnavailableReason.value ? '—' : passCount.value} valueStyle={{
+                color: '#52c41a'
+              }} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card>
+            <Statistic title="超标记录" value={complianceUnavailableReason.value ? '—' : overCount.value} valueStyle={{
+                color: '#ff4d4f'
+              }} />
+            <Text type="secondary">
+              合规率 {complianceUnavailableReason.value ? '—' : `${allRecords.value.length ? passRate.value : '—'}%`}
+            </Text>
+          </Card>
+        </Col>
+      </Row>
+
+      <Card size="small" class="production-dense-filter-card">
+        <div class="production-filter-grid">
+          <div class="production-filter-field">
+            <label>校验结果</label>
+            <Select value={result.value} options={[{
+                value: 'all',
+                label: '全部'
+              }, {
+                value: 'pass',
+                label: '合规'
+              }, {
+                value: 'over',
+                label: '超标'
+              }]} onChange={(value: ComplianceResult | 'all') => {
+                setResult(value);
+                setPageNum(1);
+              }} />
+          </div>
+          <div class="production-filter-field">
+            <label>农场</label>
+            <Input allowClear placeholder="请输入农场名称" value={farmName.value} onChange={event => setFarmName(event.target.value)} />
+          </div>
+          <div class="production-filter-actions">
+            <Button onClick={() => {
+                setResult('all');
+                setFarmName('');
+                setPageNum(1);
+              }}>
+              重置
+            </Button>
+            <Button type="primary" icon={<SearchOutlined />} onClick={() => {
+                setPageNum(1);
+                void queryClient.invalidateQueries({
+                  queryKey: ['admin', 'food-safety', 'compliance', 'inputs']
+                });
+              }}>
+              查询
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <ProductionTable rowKey="id" memberListToolbar rowSelection={{}} cardProps={false} headerTitle="投入品合规台账" columnWidthStorageKey="compliance-inputs" size="small" search={false} loading={listQuery.isLoading} columns={columns.value as import('@/vue/pro').ProColumns<any>[]} dataSource={listQuery.data?.list ?? []} options={{
+            reload: () => void queryClient.invalidateQueries({
+              queryKey: ['admin', 'food-safety', 'compliance', 'inputs']
+            })
+          }} locale={{
+            emptyText: <Empty description="暂无投入品合规校验记录" />
+          }} pagination={{
+            current: pageNum.value,
+            pageSize: pageSize.value,
+            total: listQuery.data?.total ?? 0,
+            showSizeChanger: true,
+            showTotal: (total: number) => `共 ${total} 条`,
+            onChange: (page: number, size: number) => {
+              setPageNum(page);
+              setPageSize(size);
+            }
+          }} />
+      </Card>
+
+      <Modal class="quality-dialog quality-detail" width={800} open={detail.value !== null} title="投入品合规记录详情" onCancel={() => setDetail(null)} footer={[<Button key="close" onClick={() => setDetail(null)}>
+            关闭
+          </Button>]}>
+        {detail.value && <DetailInfoGrid items={[{
+            key: 'id',
+            fullWidth: true,
+            label: '记录编号',
+            value: detail.value.id
+          }, {
+            key: 'farmName',
+            label: '农场',
+            value: detail.value.farmName
+          }, {
+            key: 'inputName',
+            label: '投入品',
+            value: detail.value.inputName
+          }, {
+            key: 'inputType',
+            label: '投入品类型',
+            value: detail.value.inputType
+          }, {
+            key: 'dosage',
+            label: '用量',
+            value: detail.value.dosage
+          }, {
+            key: 'result',
+            label: '校验结果',
+            value: <Tag color={detail.value.result === 'pass' ? 'green' : 'red'}>{RESULT_TEXT[detail.value.result]}</Tag>
+          }, {
+            key: 'violation',
+            fullWidth: true,
+            label: '违规项',
+            value: detail.value.violation
+          }, {
+            key: 'checkDate',
+            label: '校验日期',
+            value: detail.value.checkDate
+          }]} />}
+      </Modal>
+
+      <Modal open={punishTarget.value !== null} title="违规处罚登记" okText="提交处罚" cancelText="取消" confirmLoading={punishMutation.isPending} onCancel={() => setPunishTarget(null)} onOk={() => {
+          void punishForm.validateFields().then(values => {
+            if (!punishTarget.value) {
+              return;
+            }
+            punishMutation.mutate({
+              id: punishTarget.value.id,
+              action: values.action,
+              amount: values.amount,
+              remark: values.remark
+            });
+          });
+        }}>
+        {punishTarget.value && <div>
+            <Alert type="error" showIcon style={{
+              marginBottom: 12
+            }} message={`${punishTarget.value.farmName} · ${punishTarget.value.inputName}（${punishTarget.value.dosage}）`} description={`违规项：${punishTarget.value.violation}`} />
+            <Form form={punishForm} layout="vertical">
+              <Form.Item name="action" label="处罚方式" rules={[{
+                required: true,
+                message: '请选择处罚方式'
+              }]}>
+                <Select placeholder="请选择处罚方式" options={PUNISH_OPTIONS.map(item => ({
+                  value: item,
+                  label: item
+                }))} />
+              </Form.Item>
+              <Form.Item name="amount" label="处罚金额（元）" rules={[{
+                required: true,
+                message: '请输入处罚金额'
+              }, {
+                validator: (_rule: unknown, value: number) => Number(value) > 0 ? Promise.resolve() : Promise.reject(new Error('处罚金额须大于 0'))
+              }]}>
+                <Input type="number" placeholder="请输入处罚金额" />
+              </Form.Item>
+              <Form.Item name="remark" label="整改要求" rules={[{
+                required: true,
+                message: '请填写整改要求'
+              }]}>
+                <Input.TextArea rows={3} placeholder="请填写整改要求与整改期限" maxLength={200} showCount />
+              </Form.Item>
+            </Form>
+          </div>}
+      </Modal>
+    </div>;
+    };
+  }
+});
+/* ==================== Tab2 标签合规（补充设计） ==================== */
+/**
+ * 标签合规 Tab
+ *
+ * 【原型未展开，此处为补充设计】原型 P17 该 Tab 仅有一行占位文案
+ * "标签合规模块 - 产品标签信息校验"，按业务合理性补全为三个区块：
+ * 1. 概览卡：已校验标签数 / 字段完整率 / 标识合规率 / 待整改数
+ * 2. 筛选器：产品名称关键字 + 校验结果
+ * 3. 校验结果列表：标签编号 | 产品名称 | 生产者 | 标签版本 | 必填字段完整度 |
+ *    标识合规性 | 缺失字段 | 校验结果 | 校验时间 | 整改状态 | 操作（查看 / 整改通知）
+ *
+ * 必填字段口径按 GB 7718 预包装食品标签通则取 10 项：产品名称、配料表、净含量、
+ * 生产者名称、生产者地址、生产日期、保质期、贮存条件、执行标准号、追溯码；
+ * SC 许可证编号与产地按品类附加校验。
+ *
+ * @returns Tab 内容
+ */
+const LabelComplianceTab = defineComponent({
+  name: "LabelComplianceTab",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const {
+      message
+    } = App.useApp();
+    const queryClient = useQueryClient();
+
+    /** 校验结果筛选 */
+    const result = shallowRef<LabelCheckResult | 'all'>('all');
+    /** 产品关键字 */
+    const setResult = (next: typeof result.value | ((previous: typeof result.value) => typeof result.value)) => {
+      result.value = typeof next === 'function' ? (next as (previous: typeof result.value) => typeof result.value)(result.value) : next;
+    };
+    const productName = shallowRef<string>('');
+    /** 页码 */
+    const setProductName = (next: typeof productName.value | ((previous: typeof productName.value) => typeof productName.value)) => {
+      productName.value = typeof next === 'function' ? (next as (previous: typeof productName.value) => typeof productName.value)(productName.value) : next;
+    };
+    const pageNum = shallowRef<number>(1);
+    /** 每页条数 */
+    const setPageNum = (next: typeof pageNum.value | ((previous: typeof pageNum.value) => typeof pageNum.value)) => {
+      pageNum.value = typeof next === 'function' ? (next as (previous: typeof pageNum.value) => typeof pageNum.value)(pageNum.value) : next;
+    };
+    const pageSize = shallowRef<number>(20);
+    /** 详情弹窗记录 */
+    const setPageSize = (next: typeof pageSize.value | ((previous: typeof pageSize.value) => typeof pageSize.value)) => {
+      pageSize.value = typeof next === 'function' ? (next as (previous: typeof pageSize.value) => typeof pageSize.value)(pageSize.value) : next;
+    };
+    const detail = shallowRef<LabelComplianceRecord | null>(null);
+    /** 整改通知弹窗记录 */
+    const setDetail = (next: typeof detail.value | ((previous: typeof detail.value) => typeof detail.value)) => {
+      detail.value = typeof next === 'function' ? (next as (previous: typeof detail.value) => typeof detail.value)(detail.value) : next;
+    };
+    const rectifyTarget = shallowRef<LabelComplianceRecord | null>(null);
+    /** 整改表单 */
+    const setRectifyTarget = (next: typeof rectifyTarget.value | ((previous: typeof rectifyTarget.value) => typeof rectifyTarget.value)) => {
+      rectifyTarget.value = typeof next === 'function' ? (next as (previous: typeof rectifyTarget.value) => typeof rectifyTarget.value)(rectifyTarget.value) : next;
+    };
+    const rectifyForm = Form.useForm<{
+      deadline: string;
+      remark: string;
+    }>();
+
+    /** 标签合规列表 */
+    const listQuery = useQuery(() => ({
+      queryKey: ['admin', 'food-safety', 'compliance', 'labels', result.value, productName.value, pageNum.value, pageSize.value],
+      queryFn: () => listLabelCompliance({
+        pageNum: pageNum.value,
+        pageSize: pageSize.value,
+        result: result.value,
+        productName: productName.value
+      }),
+      retry: false
+    }));
+
+    /** 全量统计 */
+    const statsQuery = useQuery(() => ({
+      queryKey: ['admin', 'food-safety', 'compliance', 'labels', 'stats'],
+      queryFn: () => listLabelCompliance({
+        pageNum: 1,
+        pageSize: 1000,
+        result: 'all'
+      }),
+      retry: false
+    }));
+
+    /** 下发整改通知（只有 result.ok 才提示成功并关闭弹窗） */
+    const rectifyMutation = useMutation(() => ({
+      mutationFn: (payload: {
+        id: string;
+        deadline: string;
+        remark: string;
+      }) => notifyLabelRectify(payload.id, {
+        deadline: payload.deadline,
+        remark: payload.remark
+      }),
+      onSuccess: result => {
+        notifyWriteResult(message, result, '整改通知已下发并写入服务端');
+        if (!result.ok) {
+          return;
+        }
+        void queryClient.invalidateQueries({
+          queryKey: ['admin', 'food-safety', 'compliance', 'labels']
+        });
+        setRectifyTarget(null);
+        rectifyForm.resetFields();
+      },
+      onError: (error: Error) => {
+        message.error(error.message || '整改通知下发失败，请稍后重试');
+      }
+    }));
+
+    /** 全量数据 */
+    const allRecords = computed(() => statsQuery.data?.list ?? []);
+    /** 通过条数 */
+    const passCount = computed(() => allRecords.value.filter(item => item.result === 'pass').length);
+    /** 待整改条数（不通过且未整改完成） */
+    const pendingRectify = computed(() => allRecords.value.filter(item => item.result === 'fail' && item.rectifyStatus !== 'done').length);
+    /** 字段完整率 */
+    const fieldRate = computed(() => allRecords.value.length > 0 ? Math.round(allRecords.value.reduce((sum, item) => sum + item.filledFields / item.requiredFields, 0) / allRecords.value.length * 1000) / 10 : 0);
+    /** 标识合规率 */
+    const markingRate = computed(() => allRecords.value.length > 0 ? Math.round(allRecords.value.filter(item => item.marking === 'compliant').length / allRecords.value.length * 1000) / 10 : 0);
+
+    /** 表格列（补充设计字段） */
+    const columns = computed<ColumnsType<LabelComplianceRecord>>(() => [{
+      title: '标签编号',
+      dataIndex: 'id',
+      width: 130
+    }, {
+      title: '产品名称',
+      dataIndex: 'productName',
+      width: 150
+    }, {
+      title: '生产者',
+      dataIndex: 'producer',
+      width: 130
+    }, {
+      title: '标签版本',
+      dataIndex: 'labelVersion',
+      width: 100
+    }, {
+      title: '必填字段完整度',
+      key: 'fields',
+      width: 170,
+      render: (_value: unknown, record: LabelComplianceRecord) => <Space direction="vertical" size={0} style={{
+        width: '100%'
+      }}>
+          <Text>
+            {record.filledFields}/{record.requiredFields}
+          </Text>
+          <Progress percent={Math.round(record.filledFields / record.requiredFields * 100)} size="small" strokeColor={record.filledFields === record.requiredFields ? '#52c41a' : '#faad14'} />
+        </Space>
+    }, {
+      title: '标识合规性',
+      dataIndex: 'marking',
+      width: 120,
+      render: (value: MarkingResult) => <Tag color={MARKING_COLOR[value]}>{MARKING_TEXT[value]}</Tag>
+    }, {
+      title: '缺失字段',
+      dataIndex: 'missingFields',
+      width: 180,
+      render: (value: string) => value === '—' ? <Text type="secondary">—</Text> : <Text type="warning">{value}</Text>
+    }, {
+      title: '校验结果',
+      dataIndex: 'result',
+      width: 110,
+      render: (value: LabelCheckResult) => <Tag color={CHECK_COLOR[value]}>{value === 'pass' ? '✅ 通过' : '❌ 不通过'}</Tag>
+    }, {
+      title: '校验时间',
+      dataIndex: 'checkedAt',
+      width: 150
+    }, {
+      title: '整改状态',
+      dataIndex: 'rectifyStatus',
+      width: 110,
+      render: (value: RectifyStatus) => <Tag color={RECTIFY_COLOR[value]}>{RECTIFY_TEXT[value]}</Tag>
+    }, {
+      title: '操作',
+      key: 'action',
+      width: 160,
+      render: (_value: unknown, record: LabelComplianceRecord) => <ListRowActions items={[<Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => setDetail(record)}>
+              查看
+            </Button>, record.result === 'fail' && record.rectifyStatus !== 'done' && <Button key="rectify" type="link" size="small" icon={<WarningOutlined />} onClick={() => {
+        setRectifyTarget(record);
+        rectifyForm.setFieldsValue({
+          deadline: '',
+          remark: ''
+        });
+      }}>
+                整改通知
+              </Button>]} />
+    }]);
+    return () => {
+      return <div>
+      <Alert type="info" showIcon style={{
+          marginBottom: 12
+        }} message="标签合规模块 - 产品标签信息校验" description="查看服务端标签核验记录并登记整改通知；不自动改动交易商品或替代机构认证。" />
+
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+
+
+      <Row gutter={[12, 12]} style={{
+          marginBottom: 12
+        }}>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            <Statistic title="已校验标签数" value={statsQuery.isError ? '—' : allRecords.value.length} suffix="件" />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            <Statistic title="必填字段完整率" value={fieldRate.value} precision={1} suffix="%" valueStyle={{
+                color: '#1677ff'
+              }} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            <Statistic title="标识合规率" value={markingRate.value} precision={1} suffix="%" valueStyle={{
+                color: '#52c41a'
+              }} />
+            <Text type="secondary">通过 {passCount.value} 件</Text>
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            <Statistic title="待整改" value={pendingRectify.value} suffix="件" valueStyle={{
+                color: '#ff4d4f'
+              }} />
+          </Card>
+        </Col>
+      </Row>
+
+      <Card size="small" class="production-dense-filter-card">
+        <div class="production-filter-grid">
+          <div class="production-filter-field">
+            <label>产品名称</label>
+            <Input allowClear placeholder="请输入产品名称" value={productName.value} onChange={event => setProductName(event.target.value)} />
+          </div>
+          <div class="production-filter-field">
+            <label>校验结果</label>
+            <Select value={result.value} options={[{
+                value: 'all',
+                label: '全部'
+              }, {
+                value: 'pass',
+                label: '通过'
+              }, {
+                value: 'fail',
+                label: '不通过'
+              }]} onChange={(value: LabelCheckResult | 'all') => {
+                setResult(value);
+                setPageNum(1);
+              }} />
+          </div>
+          <div class="production-filter-actions">
+            <Button onClick={() => {
+                setResult('all');
+                setProductName('');
+                setPageNum(1);
+              }}>
+              重置
+            </Button>
+            <Button type="primary" icon={<SearchOutlined />} onClick={() => {
+                setPageNum(1);
+                void queryClient.invalidateQueries({
+                  queryKey: ['admin', 'food-safety', 'compliance', 'labels']
+                });
+              }}>
+              查询
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <ProductionTable rowKey="id" memberListToolbar rowSelection={{}} cardProps={false} headerTitle="产品标签校验结果" columnWidthStorageKey="compliance-labels" size="small" search={false} loading={listQuery.isLoading} columns={columns.value as import('@/vue/pro').ProColumns<any>[]} dataSource={listQuery.data?.list ?? []} scroll={{
+            x: 1400
+          }} options={{
+            reload: () => void queryClient.invalidateQueries({
+              queryKey: ['admin', 'food-safety', 'compliance', 'labels']
+            })
+          }} locale={{
+            emptyText: <Empty description="暂无标签校验记录" />
+          }} pagination={{
+            current: pageNum.value,
+            pageSize: pageSize.value,
+            total: listQuery.data?.total ?? 0,
+            showSizeChanger: true,
+            showTotal: (total: number) => `共 ${total} 条`,
+            onChange: (page: number, size: number) => {
+              setPageNum(page);
+              setPageSize(size);
+            }
+          }} />
+      </Card>
+
+      <Modal class="quality-dialog quality-detail" open={detail.value !== null} title="标签校验详情" width={800} onCancel={() => setDetail(null)} footer={[<Button key="close" onClick={() => setDetail(null)}>
+            关闭
+          </Button>]}>
+        {detail.value && <DetailInfoGrid items={[{
+            key: 'id',
+            fullWidth: true,
+            label: '标签编号',
+            value: detail.value.id
+          }, {
+            key: 'productName',
+            label: '产品名称',
+            value: detail.value.productName
+          }, {
+            key: 'producer',
+            fullWidth: true,
+            label: '生产者',
+            value: detail.value.producer
+          }, {
+            key: 'labelVersion',
+            label: '标签版本',
+            value: detail.value.labelVersion
+          }, {
+            key: 'fields',
+            label: '必填字段完整度',
+            value: `${detail.value.filledFields}/${detail.value.requiredFields}`
+          }, {
+            key: 'missing',
+            fullWidth: true,
+            label: '缺失字段',
+            value: detail.value.missingFields
+          }, {
+            key: 'marking',
+            label: '标识合规性',
+            value: <Tag color={MARKING_COLOR[detail.value.marking]}>{MARKING_TEXT[detail.value.marking]}</Tag>
+          }, {
+            key: 'markingNote',
+            fullWidth: true,
+            label: '标识校验说明',
+            value: detail.value.markingNote
+          }, {
+            key: 'result',
+            label: '校验结果',
+            value: <Tag color={CHECK_COLOR[detail.value.result]}>{detail.value.result === 'pass' ? '通过' : '不通过'}</Tag>
+          }, {
+            key: 'checkedAt',
+            label: '校验时间',
+            value: detail.value.checkedAt
+          }, {
+            key: 'rectify',
+            label: '整改状态',
+            value: <Tag color={RECTIFY_COLOR[detail.value.rectifyStatus]}>{RECTIFY_TEXT[detail.value.rectifyStatus]}</Tag>
+          }]} />}
+      </Modal>
+
+      <Modal open={rectifyTarget.value !== null} title="下发标签整改通知" okText="下发通知" cancelText="取消" confirmLoading={rectifyMutation.isPending} onCancel={() => setRectifyTarget(null)} onOk={() => {
+          void rectifyForm.validateFields().then(values => {
+            if (!rectifyTarget.value) {
+              return;
+            }
+            rectifyMutation.mutate({
+              id: rectifyTarget.value.id,
+              deadline: values.deadline,
+              remark: values.remark
+            });
+          });
+        }}>
+        {rectifyTarget.value && <div>
+            <Alert type="warning" showIcon style={{
+              marginBottom: 12
+            }} message={`${rectifyTarget.value.productName}（${rectifyTarget.value.producer}）`} description={`缺失字段：${rectifyTarget.value.missingFields}；标识校验：${rectifyTarget.value.markingNote}`} />
+            <Form form={rectifyForm} layout="vertical">
+              <Form.Item name="deadline" label="整改期限" rules={[{
+                required: true,
+                message: '请输入整改期限'
+              }]}>
+                <Input placeholder="例如：2025-07-20 前完成标签改版并提交复审" />
+              </Form.Item>
+              <Form.Item name="remark" label="整改要求" rules={[{
+                required: true,
+                message: '请填写整改要求'
+              }]}>
+                <Input.TextArea rows={3} placeholder="请填写整改要求" maxLength={200} showCount />
+              </Form.Item>
+            </Form>
+          </div>}
+      </Modal>
+    </div>;
+    };
+  }
+});
+/* ==================== Tab3 标准校验（补充设计） ==================== */
+/**
+ * 标准校验 Tab
+ *
+ * 【原型未展开，此处为补充设计】原型 P17 该 Tab 仅有一行占位文案
+ * "标准核验记录与汇总"，按业务合理性补全为三个区块：
+ * 1. 校验配置：标准库下拉（GB 2762 / GB 2763 / GB 7718 / NY/T 391 / GB/T 19630）
+ *    + 校验批次范围 +「汇总核验结果」按钮
+ * 2. 汇总卡 + 通过率仪表盘：校验批次总数 / 通过 / 不通过 / 通过率
+ * 3. 校验项明细表：校验项 | 标准限值 | 实测值 | 判定 | 抽检批次
+ *
+ * @returns Tab 内容
+ */
+const StandardCheckTab = defineComponent({
+  name: "StandardCheckTab",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const {
+      message
+    } = App.useApp();
+    const queryClient = useQueryClient();
+
+    /** 当前标准编号 */
+    const standardNo = shallowRef<string>(STANDARD_LIBRARY[0].value);
+    /** 校验批次范围 */
+    const setStandardNo = (next: typeof standardNo.value | ((previous: typeof standardNo.value) => typeof standardNo.value)) => {
+      standardNo.value = typeof next === 'function' ? (next as (previous: typeof standardNo.value) => typeof standardNo.value)(standardNo.value) : next;
+    };
+    const batchScope = shallowRef<string>(BATCH_SCOPE_OPTIONS[0].value);
+
+    /** 标准库 */
+    const setBatchScope = (next: typeof batchScope.value | ((previous: typeof batchScope.value) => typeof batchScope.value)) => {
+      batchScope.value = typeof next === 'function' ? (next as (previous: typeof batchScope.value) => typeof batchScope.value)(batchScope.value) : next;
+    };
+    const libraryQuery = useQuery(() => ({
+      queryKey: ['admin', 'food-safety', 'compliance', 'standards'],
+      queryFn: () => listStandardLibrary(),
+      retry: false
+    }));
+
+    /** 校验汇总 */
+    const summaryQuery = useQuery(() => ({
+      queryKey: ['admin', 'food-safety', 'compliance', 'standards', standardNo.value, 'summary'],
+      queryFn: () => getStandardCheckSummary(standardNo.value),
+      retry: false
+    }));
+
+    /** 校验项明细 */
+    const itemsQuery = useQuery(() => ({
+      queryKey: ['admin', 'food-safety', 'compliance', 'standards', standardNo.value, 'items'],
+      queryFn: () => listStandardCheckItems(standardNo.value),
+      retry: false
+    }));
+
+    /** 执行标准自动校验（只有 result.ok 才提示成功并刷新结果） */
+    const runMutation = useMutation(() => ({
+      mutationFn: (payload: {
+        standardNo: string;
+        batchScope: string;
+      }) => runStandardCheck(payload),
+      onSuccess: result => {
+        notifyWriteResult(message, result, '标准校验已执行并写入服务端');
+        if (!result.ok) {
+          return;
+        }
+        void queryClient.invalidateQueries({
+          queryKey: ['admin', 'food-safety', 'compliance', 'standards']
+        });
+      },
+      onError: (error: Error) => {
+        message.error(error.message || '标准校验执行失败，请稍后重试');
+      }
+    }));
+
+    /** 标准库下拉数据 */
+    const library = computed<StandardLibraryItem[]>(() => libraryQuery.data ?? []);
+    /** 当前标准 */
+    const currentStandard = computed(() => library.value.find(item => item.value === standardNo.value));
+    /**
+     * 汇总数据。
+     *
+     * 缺省值一律为 `null`（未接入），**不是 0**：查询失败或该标准无汇总数据时，
+     * 显示「0 批 / 通过率 0%」会被读成"校验执行过、结果为零"，实际是根本没有数据。
+     */
+    const summary = computed<StandardCheckSummary>(() => summaryQuery.data ?? {
+      batchCount: null,
+      passCount: null,
+      failCount: null,
+      passRate: null
+    });
+    /** 汇总缺失时的提示语（带具体标准号，比通用文案可诊断） */
+    const summaryMissingTip = `未接入：后端未提供标准 ${standardNo.value} 的校验汇总，显示为「—」而非 0，接口补齐后自动填充`;
+    /** 校验项 */
+    const items = computed<StandardCheckItem[]>(() => itemsQuery.data ?? []);
+
+    /**
+     * 通过率仪表盘配置。
+     *
+     * 通过率为 `null`（未接入）时**不构造图表**，改由页面展示「—」+ 说明，
+     * 避免把 null 兜成 0 画出一个指向 0% 的仪表盘（那等于宣称"校验跑过、通过率为零"）。
+     */
+    const gaugeOption = computed<EChartsOption | null>(() => summary.value.passRate === null ? null : {
+      tooltip: {
+        formatter: '{a}：{c}%'
+      },
+      series: [{
+        name: '通过率',
+        type: 'gauge',
+        min: 0,
+        max: 100,
+        startAngle: 210,
+        endAngle: -30,
+        radius: '92%',
+        center: ['50%', '58%'],
+        progress: {
+          show: true,
+          width: 12
+        },
+        axisLine: {
+          lineStyle: {
+            width: 12,
+            color: [[0.6, '#ff4d4f'], [0.85, '#faad14'], [1, '#52c41a']]
+          }
+        },
+        axisTick: {
+          show: false
+        },
+        splitLine: {
+          length: 10,
+          lineStyle: {
+            width: 1,
+            color: '#bfbfbf'
+          }
+        },
+        axisLabel: {
+          distance: 14,
+          fontSize: 12
+        },
+        pointer: {
+          width: 4,
+          length: '60%'
+        },
+        detail: {
+          valueAnimation: true,
+          formatter: '{value}%',
+          fontSize: 22,
+          offsetCenter: [0, '68%']
+        },
+        data: [{
+          value: summary.value.passRate,
+          name: '通过率'
+        }]
+      }]
+    });
+
+    /** 校验项表格列 */
+    const itemColumns = computed<ColumnsType<StandardCheckItem>>(() => [{
+      title: '校验项',
+      dataIndex: 'itemName',
+      width: 200
+    }, {
+      title: '标准限值',
+      dataIndex: 'limitValue',
+      width: 160
+    }, {
+      title: '实测值',
+      dataIndex: 'measuredValue',
+      width: 160
+    }, {
+      title: '判定',
+      dataIndex: 'result',
+      width: 120,
+      render: (value: LabelCheckResult) => <Tag color={CHECK_COLOR[value]}>{value === 'pass' ? '✅ 通过' : '❌ 不通过'}</Tag>
+    }, {
+      title: '抽检批次',
+      dataIndex: 'batchNo',
+      width: 140
+    }]);
+    return () => {
+      return <div>
+      <Alert type="info" showIcon style={{
+          marginBottom: 12
+        }} message="标准核验记录与汇总" description="按所选时间窗口汇总已登记的核验项，生成批次统计；不发起新的采样检测，不推定缺失数据为合格。" />
+
+
+      {/* 写操作未接入后端明示（禁止「未写入服务端却提示成功」） */}
+
+
+      {/* 校验配置 */}
+      <Card size="small" style={{
+          marginBottom: 12
+        }}>
+        <Space wrap size={12}>
+          <Space size={4}>
+            <Text>标准库：</Text>
+            <Select style={{
+                width: 320
+              }} value={standardNo.value} options={library.value.map(item => ({
+                value: item.value,
+                label: item.label
+              }))} onChange={(value: string) => setStandardNo(value)} />
+          </Space>
+          <Space size={4}>
+            <Text>校验批次范围：</Text>
+            <Select style={{
+                width: 160
+              }} value={batchScope.value} options={BATCH_SCOPE_OPTIONS} onChange={(value: string) => setBatchScope(value)} />
+          </Space>
+          <Button type="primary" icon={<ThunderboltOutlined />} loading={runMutation.isPending} onClick={() => runMutation.mutate({
+              standardNo: standardNo.value,
+              batchScope: batchScope.value
+            })}>
+            汇总核验结果
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => {
+              void queryClient.invalidateQueries({
+                queryKey: ['admin', 'food-safety', 'compliance', 'standards']
+              });
+            }}>
+            刷新结果
+          </Button>
+        </Space>
+        {currentStandard.value && <div style={{
+            marginTop: 8
+          }}>
+            <Text type="secondary" style={{
+              fontSize: 12
+            }}>
+              当前标准：{currentStandard.value.label}
+              <br />
+              发布机构：{currentStandard.value.issuer}（标准编号与发布机构为公开常识性信息；
+              <Text type="warning">标准目录与核验结果来自平台登记，请以原始标准和有效版本核查，登记不代表认证机构认可</Text>
+              ）
+            </Text>
+          </div>}
+      </Card>
+
+      {/* 汇总卡 + 通过率仪表盘 */}
+      <Row gutter={[12, 12]} style={{
+          marginBottom: 12
+        }}>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            <MetricStatistic title="校验批次总数" value={summary.value.batchCount} suffix="批" missingTip={summaryMissingTip} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            <MetricStatistic title="通过批次" value={summary.value.passCount} suffix="批" valueStyle={{
+                color: '#52c41a'
+              }} missingTip={summaryMissingTip} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            <MetricStatistic title="不通过批次" value={summary.value.failCount} suffix="批" valueStyle={{
+                color: '#ff4d4f'
+              }} missingTip={summaryMissingTip} />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} xl={6}>
+          <Card>
+            {summaryQuery.isLoading ? <div style={{
+                height: 130,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Text type="secondary">加载中…</Text>
+              </div> : gaugeOption.value === null ? <div style={{
+                height: 180,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <MetricText value={null} missingTip={summaryMissingTip} />
+              </div> : <ReactECharts option={gaugeOption.value} style={{
+                height: 180
+              }} notMerge />}
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 校验项明细 */}
+      <Card title="校验项明细" extra={<Text type="secondary">最后校验时间：未接入（无真实校验执行记录）</Text>}>
+        <ProductionTable rowKey="id" memberListToolbar rowSelection={{}} cardProps={false} columnWidthStorageKey="compliance-standard-items" size="small" search={false} loading={itemsQuery.isLoading} columns={itemColumns.value as import('@/vue/pro').ProColumns<any>[]} dataSource={items.value} options={{
+            reload: () => void itemsQuery.refetch()
+          }} pagination={{
+            defaultPageSize: 20,
+            showSizeChanger: true
+          }} locale={{
+            emptyText: <Empty description="该标准下暂无校验项" />
+          }} />
+        <div style={{
+            marginTop: 8
+          }}>
+          <Text type="secondary" style={{
+              fontSize: 12
+            }}>
+            注：本页展示服务端登记的标准核验记录，标准限值与检测报告仍需核对原始凭据，
+            不构成任何合规判定结论。
+          </Text>
+        </div>
+      </Card>
+    </div>;
+    };
+  }
+});
+/**
+ * 合规校验管理
+ *
+ * 业务职责：承载投入品合规台账（原型还原）、产品标签信息校验与标准核验结果汇总
+ * （后两者为原型占位处的补充设计）。数据优先取后端 /admin/food-safety/compliance/*，
+ * 接口未就绪时降级到示例数据。
+ *
+ * @returns 页面内容
+ */
+const Compliance = defineComponent({
+  name: "Compliance",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    /** 当前激活 Tab */
+    const activeTab = shallowRef<string>('input');
+    const setActiveTab = (next: typeof activeTab.value | ((previous: typeof activeTab.value) => typeof activeTab.value)) => {
+      activeTab.value = typeof next === 'function' ? (next as (previous: typeof activeTab.value) => typeof activeTab.value)(activeTab.value) : next;
+    };
+    return () => {
+      return <div>
+      {/* 面包屑 + 标题（原型 P17 顶部栏） */}
+      <div style={{
+          marginBottom: 12
+        }}>
+        <Breadcrumb style={{
+            marginBottom: 4
+          }} items={[{
+            href: '/admin/production/dashboard',
+            title: <HomeOutlined />
+          }, {
+            title: '食品安全'
+          }, {
+            title: '合规校验管理'
+          }]} />
+        <Title level={4} style={{
+            margin: 0
+          }}>
+          合规校验管理
+        </Title>
+        <Text type="secondary">投入品合规台账、产品标签校验与标准核验结果汇总</Text>
+      </div>
+
+      <Card>
+        <Tabs activeKey={activeTab.value} onChange={(key: string | number) => setActiveTab(String(key))} items={[{
+            key: 'input',
+            label: '投入品合规',
+            children: <InputComplianceTab />
+          }, {
+            key: 'label',
+            label: '标签合规',
+            children: <LabelComplianceTab />
+          }, {
+            key: 'standard',
+            label: '标准校验',
+            children: <StandardCheckTab />
+          }]} />
+      </Card>
+    </div>;
+    };
+  }
+});
+const CompactCompliance = defineComponent({
+  name: "CompactCompliance",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    return () => {
+      return <QualityPage title="合规核验台账" subTitle="投入品、标签与标准核验，保留原始记录和统计口径"><div class="legacy-quality"><Compliance /></div></QualityPage>;
+    };
+  }
+});
+export default CompactCompliance;

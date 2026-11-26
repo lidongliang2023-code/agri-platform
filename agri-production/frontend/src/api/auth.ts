@@ -22,20 +22,12 @@ import { logoutBrowser } from '../../../../packages/agri-shared/src/auth/logout'
  */
 import axios, { type AxiosRequestConfig, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import request from '@/utils/request'
+import { mobileWorkspace, workspaceEndedPath } from '@/utils/mobile-workspace'
 import useAuthStore, { registerServerLogout, resetLogoutRedirect, isRedirectingToSsoLogout } from '@/store/auth'
 import { SSO_CLIENT_ID, ssoLogoutUrl } from '@/api/sso'
 
 /** 认证端点前缀 */
 const AUTH_BASE = '/api/v1/auth'
-
-/** 登录页地址（与 `@/utils/request` 中保持一致） */
-export const LOGIN_PATH = '/login'
-
-/** 兼容旧运营登录地址，页面只跳转统一认证中心。 */
-export const ADMIN_LOGIN_PATH = '/admin/login'
-
-/** 用户端统一认证跳转入口。 */
-export const USER_LOGIN_PATH = '/production/login'
 
 /** 用户端首页 */
 export const USER_HOME_PATH = '/production/dashboard'
@@ -63,16 +55,6 @@ interface AuthApiResult<T> {
   message: string
   /** 链路追踪 ID */
   traceId?: string
-}
-
-/** 登录请求体（对齐后端 `LoginRequest`） */
-export interface LoginPayload {
-  /** 用户名 */
-  username: string
-  /** 密码（明文，HTTPS 传输） */
-  password: string
-  /** 进入的市场 ID，缺省 1 */
-  marketId?: number
 }
 
 /** 登录返回的用户信息（对齐后端 `UserVO`） */
@@ -138,21 +120,6 @@ export function toExpireAt(expiresIn: number | string | undefined): number {
     return 0
   }
   return Date.now() + seconds * 1000
-}
-
-/**
- * 登录。
- *
- * @param payload 用户名 / 密码 / 市场 ID
- * @returns 令牌与用户信息
- */
-export async function login(payload: LoginPayload): Promise<LoginResult> {
-  const response = await authRequest.post<AuthApiResult<LoginResult>>('/login', {
-    username: payload.username,
-    password: payload.password,
-    marketId: payload.marketId ?? 1,
-  })
-  return unwrapAuthResult(response)
 }
 
 /**
@@ -253,6 +220,12 @@ let refreshing: Promise<string> | null = null
  * @returns 新的访问令牌
  */
 async function doRefresh(): Promise<string> {
+  if (sessionStorage.getItem('agri_native_workspace') === '1') {
+    const state = useAuthStore.getState()
+    if (state.token && state.tokenExpireAt > Date.now()) return state.token
+    state.logout({ sso: false })
+    throw new Error('原生端登录已失效，请返回客户端重新打开业务')
+  }
   if (isRedirectingToSsoLogout()) throw new axios.CanceledError('正在退出统一登录')
   if (refreshing) {
     return refreshing
@@ -321,7 +294,7 @@ export async function accountRequest<T>(config: AxiosRequestConfig): Promise<T> 
  */
 export async function bootstrapAuthRefresh(): Promise<void> {
   // 只有"本机上次确实登录过"的痕迹（本地留有用户资料）才值得跑续签，未登录访客直接跳过
-  const maybeLoggedIn = Boolean(useAuthStore.getState().userInfo)
+  const maybeLoggedIn = window.location.pathname !== "/mobile/session" && Boolean(useAuthStore.getState().userInfo)
   try {
     if (maybeLoggedIn) {
       await doRefresh()
@@ -369,6 +342,13 @@ export function installAuthRefreshInterceptor(): void {
  * 服务端刷新令牌并清除 HttpOnly Cookie，不必逐个调用点去补网络请求。
  */
 registerServerLogout(() => {
+  if (mobileWorkspace()) {
+    const token = useAuthStore.getState().token
+    void authRequest.post("/logout", {}, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(() => { useAuthStore.getState().logout({ sso: false }); window.location.replace(workspaceEndedPath('logout')) })
+      .catch(() => { resetLogoutRedirect(); window.alert("退出失败，请重试") })
+    return
+  }
   const token = useAuthStore.getState().token
   void logoutBrowser({
     token, clientId: SSO_CLIENT_ID, ssoOrigin: new URL(ssoLogoutUrl(SSO_CLIENT_ID)).origin,

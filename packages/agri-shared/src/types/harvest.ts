@@ -1,3 +1,5 @@
+import { inventoryExpiryState } from '../production/inventory-expiry'
+export { inventoryExpiryState } from '../production/inventory-expiry'
 /**
  * 采收批次 / 库存 实体类型
  *
@@ -27,7 +29,7 @@ export type AppearanceGrade = '优' | '良' | '中' | '差'
 export type MaturityLevel = '未成熟' | '初熟' | '适采' | '过熟'
 
 /** 库存健康状态（原型 P16）：正常 / 预警 / 不足 / 临期 */
-export type InventoryHealthStatus = 'normal' | 'warning' | 'shortage' | 'expiring'
+export type InventoryHealthStatus = 'normal' | 'warning' | 'shortage' | 'expiring' | 'expired'
 
 /** 采收批次 */
 export interface HarvestBatch {
@@ -326,6 +328,7 @@ export const INVENTORY_HEALTH_META: Record<
   warning: { label: '预警', color: 'orange' },
   shortage: { label: '不足', color: 'red' },
   expiring: { label: '临期', color: 'gold' },
+  expired: { label: '已过期', color: 'red' },
 }
 
 /** 库存健康状态下拉选项 */
@@ -334,6 +337,7 @@ export const INVENTORY_HEALTH_OPTIONS: OptionItem<InventoryHealthStatus>[] = [
   { value: 'warning', label: '预警' },
   { value: 'shortage', label: '不足' },
   { value: 'expiring', label: '临期' },
+  { value: 'expired', label: '已过期' },
 ]
 
 /** 外观评价选项（原型 P14） */
@@ -399,18 +403,15 @@ export function resolveMaturityLevel(score: number): MaturityLevel {
  * @param expireDate 保质期截止日期（yyyy-MM-dd）
  * @returns 库存健康状态
  */
+
 export function resolveInventoryHealth(
   currentQty: number,
   safeQty: number,
   expireDate?: string,
 ): InventoryHealthStatus {
-  if (safeQty > 0 && currentQty <= safeQty * 0.5) return 'shortage'
-  if (expireDate) {
-    const days = Math.ceil(
-      (new Date(expireDate).getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000,
-    )
-    if (days <= 3) return 'expiring'
-  }
-  if (safeQty > 0 && currentQty <= safeQty) return 'warning'
+  const expiry = inventoryExpiryState(expireDate)
+  if (expiry === 'expired') return 'expired'
+  if (Number.isFinite(safeQty) && Number.isFinite(currentQty) && currentQty <= safeQty) return 'shortage'
+  if (expiry === 'expiring') return 'expiring'
   return 'normal'
 }

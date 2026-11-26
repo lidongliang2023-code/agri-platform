@@ -1,0 +1,113 @@
+/* 布局、折叠和按钮来自共享 AgriVueFilterBar；这里只适配生产端 Ant Design Vue 字段。 */
+.production-list-filter-form,
+.production-list-filters,
+.production-query-field-content {
+  min-width: 0;
+  width: 100%;
+}
+
+.production-list-filters.is-embedded {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+/* 高于 pc-ui-v1 的全局表单项规则，避免其 24px 下边距把按钮推低。 */
+.production-list-filters .agri-vue-filter-field .ant-form-item {
+  margin: 0;
+  min-width: 0;
+}
+
+.production-list-filters .agri-vue-filter-grid {
+  row-gap: 12px;
+}
+
+/* 与农事计划共用同一布局：宽内容区四列，常规桌面内容区三列，窄屏再降列。 */
+@container agri-vue-filters (min-width: 800px) and (max-width: 1039px) {
+  .production-list-filters .agri-vue-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .production-list-filters .agri-vue-filter-grid.is-collapsed:not(:has(.agri-vue-filter-span-2)) > .agri-vue-filter-field:nth-child(3) {
+    display: flex !important;
+  }
+}
+
+.production-list-filters .ant-form-item-row {
+  flex-direction: column;
+}
+
+.production-list-filters .ant-form-item-label {
+  padding: 0 0 4px;
+  text-align: start;
+}
+
+.production-list-filters .ant-form-item-label > label,
+.production-query-field > label {
+  height: auto;
+  color: var(--pc-secondary, #595959);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.production-query-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.production-list-filters :is(.ant-form-item-control, .ant-form-item-control-input-content) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.production-list-filters :is(.ant-input, .ant-input-affix-wrapper, .ant-input-group-wrapper, .ant-select, .ant-picker, .ant-input-number) {
+  width: 100% !important;
+  min-width: 0;
+}
+
+.production-list-filters .production-filter-full-row {
+  grid-column: 1 / -1;
+}
+
+.production-list-filters .ant-segmented {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.production-list-filters .ant-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+/* 只约束生产用户端，工具栏和分页仍由共享列表组件负责。 */
+.production-member-shell .production-unified-list {
+  min-width: 0;
+  gap: 10px;
+}
+
+.production-member-shell .production-unified-list :is(.ant-table-wrapper, .agri-vue-toolbar-left, .agri-vue-toolbar-right) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.production-member-shell .production-unified-list .ant-table-thead > tr > th {
+  white-space: nowrap;
+}
+
+.production-member-shell .production-unified-list :is(.pc-cell-number, .pc-cell-code, .pc-cell-actions) {
+  white-space: nowrap;
+}
+
+.production-member-shell .production-unified-list .pc-cell-number {
+  font-variant-numeric: tabular-nums;
+}
+
+.production-member-shell .ant-card-body > .production-unified-list > .agri-vue-table-card,
+.production-member-shell .ant-card-body > .production-business-list > .production-unified-list > .agri-vue-table-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}

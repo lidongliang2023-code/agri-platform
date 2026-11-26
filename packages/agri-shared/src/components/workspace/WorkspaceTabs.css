@@ -8,6 +8,25 @@
   overflow: hidden;
 }
 
+/* 页签所在的工作区占满顶栏下方，业务留白由面板统一提供。 */
+html.pc-ui-v1 .agri-workspace-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.agri-workspace-header + .agri-route-workspace,
+.agri-workspace-header + .agri-workspace,
+.agri-workspace-header + .agri-workspace-host {
+  margin-top: 0;
+}
+
 .agri-workspace-tabbar {
   display: flex;
   align-items: center;

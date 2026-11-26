@@ -1,18 +1,22 @@
 <template>
   <div class="agri-vue-filter-card">
-    <form
+    <component
+      :is="as"
       class="agri-vue-filter-grid"
-      :class="{ 'is-collapsed': collapsible && collapsed }"
-      @submit.prevent="emit('search')"
+      :class="{ 'is-collapsed': collapsible && collapsed, 'has-uniform-columns': uniformColumns }"
+      role="search"
+      aria-label="列表查询条件"
+      :aria-busy="loading"
+      @submit.prevent="search"
     >
       <slot :collapsed="collapsed" :collapsible="collapsible" :toggle="toggle" />
       <div class="agri-vue-filter-actions">
-        <slot name="actions" :collapsed="collapsed" :collapsible="collapsible" :toggle="toggle">
+        <slot name="actions" :collapsed="collapsed" :collapsible="collapsible" :toggle="toggle" :loading="loading">
           <button
             type="button"
             class="agri-vue-btn"
             :disabled="loading"
-            @click="emit('reset')"
+            @click="reset"
           >
             {{ resetText }}
           </button>
@@ -21,7 +25,7 @@
             class="agri-vue-btn agri-vue-btn--primary"
             :disabled="loading"
           >
-            {{ searchText }}
+            {{ loading ? '查询中…' : searchText }}
           </button>
         </slot>
         <button
@@ -35,7 +39,7 @@
           <span class="agri-vue-filter-chevron" :class="{ 'is-expanded': !collapsed }" aria-hidden="true">▾</span>
         </button>
       </div>
-    </form>
+    </component>
   </div>
 </template>
 
@@ -46,20 +50,26 @@ import './AgriVueList.css'
 
 const props = withDefaults(
   defineProps<{
+    /** 嵌入已有业务表单时使用 div，避免嵌套原生 form。 */
+    as?: 'form' | 'div'
+    /** 始终使用等宽网格，展开前后字段宽度不随按钮或字段数量改变。 */
+    uniformColumns?: boolean
     /** 筛选字段总数；>= 5 时自动默认收起为单行并在按钮区显示「展开 / 收起」。 */
     fieldCount?: number
     /** 自动折叠阈值，默认 5。 */
     collapseThreshold?: number
     /** 初始折叠状态（缺省按 fieldCount >= collapseThreshold 自动判定）。 */
-    defaultCollapsed?: boolean
+    defaultCollapsed?: boolean | null
     loading?: boolean
     resetText?: string
     searchText?: string
   }>(),
   {
+    as: 'form',
+    uniformColumns: false,
     fieldCount: 0,
     collapseThreshold: DEFAULT_COLLAPSE_THRESHOLD,
-    defaultCollapsed: undefined,
+    defaultCollapsed: null,
     loading: false,
     resetText: '重置',
     searchText: '查询',
@@ -74,13 +84,13 @@ const emit = defineEmits<{
 
 const collapsible = computed(() => shouldCollapseFilters(props.fieldCount, props.collapseThreshold))
 const collapsed = ref<boolean>(
-  props.defaultCollapsed !== undefined ? props.defaultCollapsed : collapsible.value,
+  typeof props.defaultCollapsed === 'boolean' ? props.defaultCollapsed : collapsible.value,
 )
 
 watch(collapsible, (nextCollapsible) => {
   if (!nextCollapsible) {
     collapsed.value = false
-  } else if (props.defaultCollapsed === undefined) {
+  } else if (typeof props.defaultCollapsed !== 'boolean') {
     collapsed.value = true
   }
 })
@@ -88,5 +98,13 @@ watch(collapsible, (nextCollapsible) => {
 function toggle() {
   collapsed.value = !collapsed.value
   emit('update:collapsed', collapsed.value)
+}
+
+function search() {
+  if (!props.loading) emit('search')
+}
+
+function reset() {
+  if (!props.loading) emit('reset')
 }
 </script>

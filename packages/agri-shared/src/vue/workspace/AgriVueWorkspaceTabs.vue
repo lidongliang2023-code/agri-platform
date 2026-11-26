@@ -4,7 +4,7 @@
     ref="wrapperRef"
     class="agri-route-workspace"
     :class="wrapperClass"
-    :style="sticky ? { top: `${stickyTop}px` } : undefined"
+    :style="sticky ? { top: `${stickyTop}px` } : { position: 'relative', top: 'auto' }"
   >
     <div class="agri-workspace-tabbar" :class="tabBarClass">
       <div class="agri-vue-tabs-scroll" role="tablist" aria-label="已打开页面页签">
@@ -353,13 +353,25 @@ let resizeObserver: ResizeObserver | null = null
 let mediaQuery: MediaQueryList | null = null
 
 function syncStickyTop() {
-  const header = wrapperRef.value?.previousElementSibling
+  const header = findHeader()
   if (!(header instanceof HTMLElement)) {
     stickyTop.value = 0
     return
   }
   const pos = window.getComputedStyle(header).position
   stickyTop.value = pos === 'sticky' || pos === 'fixed' ? header.offsetHeight : 0
+}
+
+function findHeader(): HTMLElement | null {
+  let container: HTMLElement | null = wrapperRef.value
+  while (container) {
+    const previous = container.previousElementSibling
+    if (previous instanceof HTMLElement && previous.matches('.agri-workspace-header, header')) {
+      return previous
+    }
+    container = container.parentElement
+  }
+  return null
 }
 
 function handleGlobalClick(event: MouseEvent) {
@@ -380,7 +392,7 @@ onMounted(() => {
   mediaQuery.addEventListener?.('change', handleMediaChange)
   window.addEventListener('click', handleGlobalClick)
   syncStickyTop()
-  const header = wrapperRef.value?.previousElementSibling
+  const header = findHeader()
   if (header instanceof HTMLElement && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(syncStickyTop)
     resizeObserver.observe(header)

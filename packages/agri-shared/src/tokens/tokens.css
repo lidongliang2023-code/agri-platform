@@ -2,7 +2,7 @@
  * 设计令牌的 CSS 变量投影（框架无关）。
  *
  * 权威定义在 ./index.ts 的 CSS_VARIABLES；本文件与它的一致性由 tests/tokens.test.ts 逐项比对。
- * 任何栈（React / Vue / 原生）都可以 `import '@agri/shared/tokens/tokens.css'` 拿到同一套品牌令牌 ——
+ * 各子系统（Vue 3 / 原生页面）都可以 `import '@agri/shared/tokens/tokens.css'` 拿到同一套品牌令牌 ——
  * 这是目前唯一一条不依赖框架、也不需要 TypeScript 的共享通道。
  */
 :root {

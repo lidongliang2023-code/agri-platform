@@ -18,9 +18,6 @@ export const SSO_CLIENT_ID = 'trade'
 /** 授权码回跳路径，必须落在注册表里的 redirect_uri 前缀之下 */
 export const SSO_CALLBACK_PATH = '/sso/callback'
 
-/** 登录页路径 */
-export const LOGIN_PATH = '/login'
-
 /**
  * 认证中心地址。本地按"一端一口"的既有约定映射（sso 在 :8090），生产走 sso 子域。
  * 不读环境变量：它必须与网关实际布局一致，布局变了就该改这里。
@@ -56,6 +53,21 @@ async function codeChallengeOf(verifier: string): Promise<string> {
   return base64Url(new Uint8Array(digest))
 }
 
+/** 规范化回跳目标：去掉 logout=1，避免跳回外部地址、/login 或 /sso/callback */
+export function normalizeReturnTarget(target?: string | null, fallback = '/member/buyer'): string {
+  if (!target || !target.startsWith('/') || target.startsWith('//')) {
+    return fallback
+  }
+  const cleaned = target
+    .replace(/([?&])logout=1(?=&|$)/, '$1')
+    .replace(/[?&]$/, '')
+  const pathname = cleaned.split(/[?#]/)[0].replace(/\/+$/, '') || '/'
+  if (pathname === '/login' || pathname === SSO_CALLBACK_PATH) {
+    return fallback
+  }
+  return cleaned || fallback
+}
+
 /** 跳转到认证中心授权端点。verifier 与 state 是本次跳转的短期状态，放 sessionStorage。 */
 export async function redirectToSso(returnTo?: string): Promise<void> {
   if (redirectingToSso) return
@@ -65,8 +77,11 @@ export async function redirectToSso(returnTo?: string): Promise<void> {
     const state = randomBase64Url(16)
     sessionStorage.setItem(VERIFIER_KEY, verifier)
     sessionStorage.setItem(STATE_KEY, state)
-    if (returnTo) {
-      sessionStorage.setItem(RETURN_KEY, returnTo)
+    const normalized = returnTo ? normalizeReturnTarget(returnTo) : undefined
+    if (normalized) {
+      sessionStorage.setItem(RETURN_KEY, normalized)
+    } else {
+      sessionStorage.removeItem(RETURN_KEY)
     }
     const params = new URLSearchParams({
       client_id: SSO_CLIENT_ID,
@@ -75,7 +90,7 @@ export async function redirectToSso(returnTo?: string): Promise<void> {
       code_challenge: await codeChallengeOf(verifier),
       code_challenge_method: 'S256',
     })
-    window.location.href = `${resolveSsoOrigin()}/authorize?${params.toString()}`
+    window.location.replace(`${resolveSsoOrigin()}/authorize?${params.toString()}`)
   } catch (error) {
     redirectingToSso = false
     throw error
@@ -86,7 +101,7 @@ export async function redirectToSso(returnTo?: string): Promise<void> {
 export function takeReturnTo(): string | undefined {
   const value = sessionStorage.getItem(RETURN_KEY)
   sessionStorage.removeItem(RETURN_KEY)
-  return value ?? undefined
+  return value ? normalizeReturnTarget(value) : undefined
 }
 
 /** 平台令牌响应体（core-platform LoginVO） */
@@ -142,7 +157,11 @@ export async function refreshAccessToken(): Promise<SsoLoginResult | null> {
       {
         timeout: 20000,
         withCredentials: true,
-        headers: { 'X-Skip-Auth-Redirect': '1' },
+        headers: {
+          'X-Skip-Auth-Redirect': '1',
+          // 公开页（如交易大厅与门户嵌入页）的启动静默续签：匿名访客无刷新凭证时返回 code=0, data=null
+          'X-Auth-Optional': '1',
+        },
       },
     )
     const body = response.data

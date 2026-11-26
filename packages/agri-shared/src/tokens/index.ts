@@ -1,16 +1,8 @@
 /**
  * 设计令牌（**框架无关**）—— 品牌色 / 语义色 / 布局尺寸 / 圆角 / 字号。
  *
- * <p>为什么单独抽出这一层：平台的前端不是同一套栈 —— 生产管理与主数据是 React + TS + antd，
- * 供应链金融与 S2B2C 是 Vue 3 + element-plus / vant 且没有 TS。此前品牌色与布局尺寸只以
- * `antd ThemeConfig` 的形式存在，Vue 侧**无处可取**，结果就是各子系统各写一个色值，
- * 「同一平台看起来像好几个产品」。</p>
- *
- * <p>所以令牌的权威定义放在这里（纯 TS 常量，无框架依赖），再由两侧各自投影：</p>
- * <ul>
- *   <li>React 侧：`styles/theme.ts` 把它转成 antd 主题；</li>
- *   <li>Vue / 任意栈：`tokens/tokens.css` 把它们投影成 CSS 变量，`import '@agri/shared/tokens/tokens.css'` 即可。</li>
- * </ul>
+ * <p>各子系统统一使用 Vue 3，组件库包括 Ant Design Vue、Element Plus 和 Vant。
+ * 令牌在纯 TS 常量中统一定义，再投影为主题配置和 CSS 变量。</p>
  *
  * <p>两份投影的一致性由 `tests/tokens.test.ts` 把关：改了一处忘另一处，门禁会红，
  * 而不是等某个子系统颜色不对了才被人发现。</p>

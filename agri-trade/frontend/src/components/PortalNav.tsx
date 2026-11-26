@@ -1,3 +1,5 @@
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event;
 /**
  * 门户主导航在交易端的**唯一一份**实现。
  *
@@ -9,32 +11,58 @@
  * <p>链接目标一律指向门户页面上的同一入口；本站内部的差异（比如卖家中心资金页）
  * 由各页面自己的按钮承担，不再靠导航项区分。</p>
  */
-const PORTAL = `${window.location.protocol}//${window.location.hostname}:8098/portal/`
+const PORTAL = `${window.location.protocol}//${window.location.hostname}:8098/portal/`;
 
 /** 政府监管用户端与门户用的是同一个本机端口约定（见门户 utils.governmentUrl）。 */
-const GOVERNMENT = `${window.location.protocol}//${window.location.hostname}:8108/`
-
-const NAV_ITEMS: Array<{ label: string; href: string; key?: string }> = [
-  { label: '首页', href: PORTAL },
-  { label: '产业资讯', href: `${PORTAL}#/info` },
-  { label: '交易大厅', href: '/hall', key: 'hall' },
-  { label: '价格指数', href: `${PORTAL}#/info/market` },
-  { label: '供应链金融', href: `${PORTAL}#/finance` },
-  { label: '物流服务', href: `${PORTAL}#/logistics` },
-  { label: '政府监管', href: GOVERNMENT },
-]
+const GOVERNMENT = `${window.location.protocol}//${window.location.hostname}:8108/`;
+const NAV_ITEMS: Array<{
+  label: string;
+  href: string;
+  key?: string;
+}> = [{
+  label: '首页',
+  href: PORTAL
+}, {
+  label: '产业资讯',
+  href: `${PORTAL}#/info`
+}, {
+  label: '交易大厅',
+  href: '/hall',
+  key: 'hall'
+}, {
+  label: '价格指数',
+  href: `${PORTAL}#/info/market`
+}, {
+  label: '供应链金融',
+  href: `${PORTAL}#/finance`
+}, {
+  label: '物流服务',
+  href: `${PORTAL}#/logistics`
+}, {
+  label: '政府监管',
+  href: GOVERNMENT
+}];
 
 /** @param active 当前高亮项的 key；这四个页面都属于「交易大厅」这条主线，默认 hall。 */
-export function PortalNav({ active = 'hall' }: { active?: string }): JSX.Element {
-  return (
-    <nav className="main-nav">
-      {NAV_ITEMS.map((item) => (
-        <a key={item.label} className={item.key === active ? 'active' : undefined} href={item.href}>
+export const PortalNav = defineComponent({
+  name: "PortalNav",
+  props: {
+    active: null as unknown as PropType<{
+      active?: string;
+    }["active"]>
+  },
+  setup(__props: {
+    active?: string;
+  }, {
+    slots: __slots
+  }) {
+    return () => {
+      return <nav class="main-nav">
+      {NAV_ITEMS.map(item => <a key={item.label} class={item.key === (__props.active ?? 'hall') ? 'active' : undefined} href={item.href}>
           {item.label}
-        </a>
-      ))}
-    </nav>
-  )
-}
-
-export { PORTAL as PORTAL_ORIGIN }
+        </a>)}
+    </nav>;
+    };
+  }
+});
+export { PORTAL as PORTAL_ORIGIN };

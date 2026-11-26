@@ -1,5 +1,14 @@
-import { CertificationGuide } from '../components/CertificationGuide'
-
-export function CertifyPersonal(): JSX.Element {
-  return <CertificationGuide kind="personal" />
-}
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event;
+import { CertificationGuide } from '../components/CertificationGuide';
+export const CertifyPersonal = defineComponent({
+  name: "CertifyPersonal",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    return () => {
+      return <CertificationGuide kind="personal" />;
+    };
+  }
+});

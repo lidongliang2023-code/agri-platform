@@ -71,6 +71,8 @@ export interface VueListColumn {
   className?: string
   /** 支持排序（Element Plus 透传）。 */
   sortable?: boolean | 'custom'
+  /** Ant Design Vue 排序比较函数或服务端排序标记。 */
+  sorter?: boolean | ((a: any, b: any) => number)
   /** 格式化函数。 */
   formatter?: (row: Record<string, unknown>, value: unknown, index: number) => string
 }

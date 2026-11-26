@@ -29,6 +29,22 @@ function resolveSsoOrigin(): string {
 const VERIFIER_KEY = 'agri_sso_code_verifier'
 const STATE_KEY = 'agri_sso_state'
 const RETURN_KEY = 'agri_sso_return'
+let pendingRedirect: Promise<void> | null = null
+
+/** 规范化回跳目标：去掉 logout=1，避免跳回外部地址、历史登录路径或 /sso/callback */
+export function normalizeReturnTarget(target?: string | null): string | undefined {
+  if (!target || !target.startsWith('/') || target.startsWith('//')) {
+    return undefined
+  }
+  const cleaned = target
+    .replace(/([?&])logout=1(?=&|$)/, '$1')
+    .replace(/[?&]$/, '')
+  const pathname = cleaned.split(/[?#]/)[0].replace(/\/+$/, '') || '/'
+  if (/^\/(?:admin\/|production\/)?login$/.test(pathname) || pathname === '/sso/callback') {
+    return undefined
+  }
+  return cleaned || undefined
+}
 
 /** base64url（PKCE 要求 URL 安全且无填充） */
 function base64Url(bytes: Uint8Array): string {
@@ -56,23 +72,33 @@ export async function codeChallengeOf(verifier: string): Promise<string> {
  * 也不该跨标签页或跨浏览器复用（放 localStorage 反而会让它们长期留存）。</p>
  */
 export async function redirectToSso(clientId: string, returnTo?: string): Promise<void> {
-  const verifier = randomBase64Url()
-  const state = randomBase64Url(16)
-  sessionStorage.setItem(VERIFIER_KEY, verifier)
-  sessionStorage.setItem(STATE_KEY, state)
-  if (returnTo) {
-    sessionStorage.setItem(RETURN_KEY, returnTo)
-  } else {
-    sessionStorage.removeItem(RETURN_KEY)
+  if (pendingRedirect) {
+    return pendingRedirect
   }
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: `${window.location.origin}/sso/callback`,
-    state,
-    code_challenge: await codeChallengeOf(verifier),
-    code_challenge_method: 'S256',
+  pendingRedirect = (async () => {
+    const verifier = randomBase64Url()
+    const state = randomBase64Url(16)
+    sessionStorage.setItem(VERIFIER_KEY, verifier)
+    sessionStorage.setItem(STATE_KEY, state)
+    const normalized = normalizeReturnTarget(returnTo)
+    if (normalized) {
+      sessionStorage.setItem(RETURN_KEY, normalized)
+    } else {
+      sessionStorage.removeItem(RETURN_KEY)
+    }
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: `${window.location.origin}/sso/callback`,
+      state,
+      code_challenge: await codeChallengeOf(verifier),
+      code_challenge_method: 'S256',
+    })
+    window.location.replace(`${resolveSsoOrigin()}/authorize?${params.toString()}`)
+  })().catch((cause) => {
+    pendingRedirect = null
+    throw cause
   })
-  window.location.href = `${resolveSsoOrigin()}/authorize?${params.toString()}`
+  return pendingRedirect
 }
 
 const ssoRequest = axios.create({ baseURL: SSO_PATH, timeout: 20000, withCredentials: true })

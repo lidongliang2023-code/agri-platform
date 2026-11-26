@@ -1,0 +1,615 @@
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event & {
+  target: T;
+  currentTarget: T;
+  nativeEvent: Event;
+  key: string;
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+};
+import { useQuery, useMutation, useQueryClient } from '@/vue/query';
+import { Alert, App, Button, Card, Col, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Statistic, Table, Tabs, Tag, Timeline, Typography, Switch } from '@/vue/ui';
+import { CalendarOutlined, SettingOutlined, PlusOutlined, ReloadOutlined, DownloadOutlined } from '@ant-design/icons-vue';
+import { Link } from '@/vue/router';
+import dayjs from 'dayjs';
+import { PageContainer } from '@/vue/pro';
+import { getScheduleConfig, saveScheduleConfig, getScheduleSources, listSchedules, getSchedule, solveSchedule, scheduleAction, SCHEDULE_OPERATIONS, type ScheduleData } from '@/api/processing-schedule';
+const LABEL: Record<string, string> = {
+  DRAFT: '草稿待审',
+  APPROVED: '已审批',
+  PUBLISHED: '已发布',
+  SUPERSEDED: '被新版替换',
+  COMPLETED: '已结案',
+  CANCELED: '已取消',
+  READY: '待执行',
+  RUNNING: '加工中',
+  DONE: '已完成',
+  COMMISSIONED: '已委托',
+  ACCEPTED: '已验收'
+};
+const fmt = (v: unknown) => v ? dayjs(String(v)).format('MM-DD HH:mm') : '—';
+const operation = (v: string) => SCHEDULE_OPERATIONS.find(x => x.value === v)?.label ?? v;
+const dateRules = [{
+  required: true,
+  message: '请输入日期时间'
+}, {
+  validator: (_: unknown, v: string) => !v || dayjs(v).isValid() ? Promise.resolve() : Promise.reject(new Error('请输入 YYYY-MM-DDTHH:mm'))
+}];
+const dateInput = <Input type="datetime-local" />;
+const ProcessingSchedule = defineComponent({
+  name: "ProcessingSchedule",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const {
+      message
+    } = App.useApp();
+    const client = useQueryClient();
+    const [form] = Form.useForm();
+    const [configForm] = Form.useForm();
+    const [actionForm] = Form.useForm();
+    const current = shallowRef<ScheduleData>();
+    const setCurrent = (next: typeof current.value | ((previous: typeof current.value) => typeof current.value)) => {
+      current.value = typeof next === 'function' ? (next as (previous: typeof current.value) => typeof current.value)(current.value) : next;
+    };
+    const configOpen = shallowRef(false);
+    const setConfigOpen = (next: typeof configOpen.value | ((previous: typeof configOpen.value) => typeof configOpen.value)) => {
+      configOpen.value = typeof next === 'function' ? (next as (previous: typeof configOpen.value) => typeof configOpen.value)(configOpen.value) : next;
+    };
+    const action = shallowRef<{
+      title: string;
+      path: string;
+      kind: string;
+      jobKey?: string;
+    }>();
+    const setAction = (next: typeof action.value | ((previous: typeof action.value) => typeof action.value)) => {
+      action.value = typeof next === 'function' ? (next as (previous: typeof action.value) => typeof action.value)(action.value) : next;
+    };
+    const page = shallowRef(1);
+    const setPage = (next: typeof page.value | ((previous: typeof page.value) => typeof page.value)) => {
+      page.value = typeof next === 'function' ? (next as (previous: typeof page.value) => typeof page.value)(page.value) : next;
+    };
+    const config = useQuery(() => ({
+      queryKey: ['schedule-config'],
+      queryFn: getScheduleConfig
+    }));
+    const sources = useQuery(() => ({
+      queryKey: ['schedule-sources'],
+      queryFn: getScheduleSources
+    }));
+    const history = useQuery(() => ({
+      queryKey: ['schedules', page.value],
+      queryFn: () => listSchedules(page.value)
+    }));
+    const saveConfig = useMutation(() => ({
+      mutationFn: saveScheduleConfig,
+      onSuccess: () => {
+        setConfigOpen(false);
+        void client.invalidateQueries({
+          queryKey: ['schedule-config']
+        });
+        message.success('产能版本已保存，旧草稿必须重算');
+      },
+      onError: (e: Error) => message.error(e.message)
+    }));
+    const solve = useMutation(() => ({
+      mutationFn: solveSchedule,
+      onSuccess: row => {
+        setCurrent(row);
+        void client.invalidateQueries({
+          queryKey: ['schedules']
+        });
+        message.success('排程结果与输入快照已落库');
+      },
+      onError: (e: Error) => message.error(e.message)
+    }));
+    const mutate = useMutation(() => ({
+      mutationFn: ({
+        path,
+        values
+      }: {
+        path: string;
+        values: ScheduleData;
+      }) => scheduleAction(current.value!.id, path, values),
+      onSuccess: row => {
+        setCurrent(row);
+        setAction(undefined);
+        void client.invalidateQueries({
+          queryKey: ['schedules']
+        });
+        message.success('操作已保存并留痕');
+      },
+      onError: (e: Error) => message.error(e.message)
+    }));
+    const selectPlan = async (id: string) => {
+      try {
+        setCurrent(await getSchedule(id));
+      } catch (e) {
+        message.error((e as Error).message);
+      }
+    };
+    const openAction = (title: string, path: string, kind = 'reason', jobKey?: string) => {
+      actionForm.resetFields();
+      actionForm.setFieldsValue({
+        jobKey,
+        type: 'POSTPONE',
+        arrivalConfirmed: true
+      });
+      setAction({
+        title,
+        path,
+        kind,
+        jobKey
+      });
+    };
+    const orders = computed(() => sources.data?.orders ?? []);
+    const batches = computed(() => sources.data?.batches ?? []);
+    const slots = computed<ScheduleData[]>(() => current.value?.result?.slots ?? []);
+    const conflicts = computed<ScheduleData[]>(() => current.value?.result?.conflicts ?? []);
+    const works = computed<ScheduleData[]>(() => current.value?.works ?? []);
+    const providers = computed<ScheduleData[]>(() => current.value?.input?.capacity?.providers ?? []);
+    const exportResult = () => {
+      const _currentAtStart = current.value;
+      if (!_currentAtStart) return;
+      const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const csv = '\ufeff' + [['计划', '任务', '设备', '工序', '清洗开始', '开工', '完工', '数量kg', '换型分钟'], ...slots.value.map(s => [_currentAtStart.planNo, s.jobKey, s.resourceId, operation(s.operation), s.setupStart, s.start, s.end, s.kg, s.setupMinutes])].map(r => r.map(escape).join(',')).join('\r\n');
+      const url = URL.createObjectURL(new Blob([csv], {
+        type: 'text/csv;charset=utf-8'
+      }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${_currentAtStart.planNo}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    const loadReplan = () => {
+      form.setFieldsValue({
+        ...current.value?.input,
+        parentId: current.value?.id,
+        start: dayjs().add(15, 'minute').format('YYYY-MM-DDTHH:mm'),
+        reason: ''
+      });
+      message.info('已载入原计划需求，请修改拆批、到厂时间并填写重排原因');
+    };
+    const sourceError = computed(() => [sources.error, config.error, history.error].filter(Boolean).map(e => (e as Error).message).join('；'));
+    return () => {
+      const _currentSnapshot = current.value;
+      return <PageContainer title="加工产能与订单协同排产" subTitle="订单交期 × 原料到厂 × 有限产能 × 清洗换型 · 场景 203">
+    <Space direction="vertical" size={20} style={{
+          width: '100%'
+        }}>
+      <Card style={{
+            background: 'linear-gradient(120deg,#0b5566,#0c7482)',
+            color: '#fff'
+          }}><Space align="start"><CalendarOutlined style={{
+                fontSize: 34
+              }} /><div><Typography.Title level={3} style={{
+                  color: '#fff',
+                  marginTop: 0
+                }}>把订单与加工工序排到同一条时间轴</Typography.Title><p>七天滚动排程、交期冲突方案、24 小时锁定与厂长审批。建议不直接修改交易订单，也不下发设备指令。</p><Tag>产能版本 {config.data?.version ?? '未配置'}</Tag><Tag>有效产能 = 理论产能 × 可用率</Tag><Tag>实际执行以加工台账为准</Tag></div></Space></Card>
+      {sourceError.value && <Alert type="error" showIcon message="基础接口加载失败" description={sourceError.value} action={<Button onClick={() => {
+            void sources.refetch();
+            void history.refetch();
+            void config.refetch();
+          }}>重试</Button>} />}
+      <Row gutter={[16, 16]}><Col span={8}><Card><Statistic title="可读取卖方订单（最近200单）" value={orders.value.length} /></Card></Col><Col span={8}><Card><Statistic title="已登记原料批次" value={batches.value.length} /></Card></Col><Col span={8}><Card><Statistic title="排程设备工序资源" value={config.data?.payload?.resources?.length ?? 0} /></Card></Col></Row>
+      <Card title="① 输入与数据" extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void sources.refetch()}>刷新订单/批次</Button><Button icon={<SettingOutlined />} onClick={() => {
+              configForm.setFieldsValue({
+                categoryMinutes: 90,
+                gradeMinutes: 30,
+                maxChanges: 4,
+                resources: [],
+                providers: [],
+                ...config.data?.payload
+              });
+              setConfigOpen(true);
+            }}>产能与外协配置</Button></Space>}>
+        <Alert type="info" showIcon message="订单、批次使用真实来源；到厂时间为计划员核验的预报快照" description="首版按投入重量kg排程，须确认订单量与原料投入量采用同一口径；存在加工得率转换时请先转人工核定，不直接套用。设备运行窗口采用连续作业，非工作时段须纳入不可用区间。" />
+        <Form form={form} layout="vertical" initialValues={{
+              start: dayjs().add(15, 'minute').format('YYYY-MM-DDTHH:mm'),
+              jobs: []
+            }} onFinish={v => solve.mutate(v)} style={{
+              marginTop: 16
+            }}>
+          <Row gutter={16}><Col xs={24} md={8}><Form.Item name="start" label="七天排程起点" rules={dateRules}>{dateInput}</Form.Item></Col><Col xs={24} md={6}><Form.Item name="parentId" label="被替换计划编号"><Input readOnly placeholder="从已发布计划选择重排" /></Form.Item></Col><Col xs={24} md={10}><Form.Item name="reason" label="重排 / 插单原因"><Input placeholder="重排必填；锁定窗口内变更须厂长审批" /></Form.Item></Col></Row>
+          <Form.List name="jobs">{(fields: Array<{
+                  name: number;
+                  key: number;
+                }>, {
+                  add,
+                  remove
+                }: {
+                  add: (v?: any, i?: number) => void;
+                  remove: (i: number | number[]) => void;
+                }) => <Space direction="vertical" style={{
+                  width: '100%'
+                }}>{fields.map(({
+                    key,
+                    name,
+                    ...rest
+                  }) => <Card size="small" key={key} title={`拆批任务 ${name + 1}`} extra={<Button danger type="text" onClick={() => remove(name)}>移除此行</Button>}>
+            <Row gutter={12}><Col xs={24} md={5}><Form.Item {...rest} name={[name, 'key']} label="任务编号（唯一）" rules={[{
+                          required: true
+                        }, {
+                          pattern: /^[A-Za-z0-9_-]+$/,
+                          message: '仅字母数字下划线'
+                        }]}><Input /></Form.Item></Col><Col xs={24} md={7}><Form.Item {...rest} name={[name, 'orderId']} label="真实卖方订单" rules={[{
+                          required: true
+                        }]}><Select showSearch optionFilterProp="label" options={orders.value.filter(o => ['pending_confirm', 'pending', 'paid'].includes(o.status)).map(o => ({
+                            value: String(o.id),
+                            label: `${o.orderNo} · ${o.productName ?? ''}`
+                          }))} onChange={() => form.setFieldValue(['jobs', name, 'itemId'], undefined)} /></Form.Item></Col><Col xs={24} md={8}><Form.Item noStyle shouldUpdate>{() => <Form.Item {...rest} name={[name, 'itemId']} label="订单明细" rules={[{
+                            required: true
+                          }]}><Select options={(orders.value.find(o => String(o.id) === form.getFieldValue(['jobs', name, 'orderId']))?.items ?? []).map((i: ScheduleData) => ({
+                              value: String(i.id),
+                              label: `${i.productName} ${i.grade ?? ''} · ${i.quantity}${i.unit}`
+                            }))} /></Form.Item>}</Form.Item></Col><Col xs={24} md={4}><Form.Item {...rest} name={[name, 'kg']} label="本拆批数量 kg" rules={[{
+                          required: true
+                        }]}><InputNumber min={0.001} precision={3} style={{
+                            width: '100%'
+                          }} /></Form.Item></Col></Row>
+            <Row gutter={12}><Col xs={24} md={8}><Form.Item {...rest} name={[name, 'batchId']} label="原料采收批次" rules={[{
+                          required: true
+                        }]}><Select showSearch optionFilterProp="label" options={batches.value.map(b => ({
+                            value: String(b.id),
+                            label: `${b.batchNo} · ${b.cropName ?? ''} ${b.quantity}${b.unit}`
+                          }))} /></Form.Item></Col><Col xs={24} md={6}><Form.Item {...rest} name={[name, 'arrival']} label="预计到厂时间" rules={dateRules}>{dateInput}</Form.Item></Col><Col xs={24} md={7}><Form.Item {...rest} name={[name, 'route']} label="工序路线（按选择顺序）" rules={[{
+                          required: true
+                        }]}><Select mode="multiple" options={SCHEDULE_OPERATIONS} /></Form.Item></Col><Col xs={24} md={3}><Form.Item {...rest} name={[name, 'priority']} label="急单级别"><InputNumber min={0} max={9} /></Form.Item></Col></Row>
+          </Card>)}<Button icon={<PlusOutlined />} onClick={() => add({
+                    key: `J${Date.now()}`,
+                    route: ['DRYING', 'PACKAGING'],
+                    priority: 0
+                  })}>增加订单 / 拆批</Button></Space>}</Form.List>
+          <Space style={{
+                marginTop: 16
+              }}><Button type="primary" htmlType="submit" loading={solve.isPending} disabled={!config.data?.version}>计算并保存草稿</Button><Button onClick={() => {
+                  form.resetFields();
+                  setCurrent(undefined);
+                }}>新建独立计划</Button></Space>
+        </Form>
+      </Card>
+      <Card title="② 排程结果与协同处理" extra={_currentSnapshot && <Space><Tag>{LABEL[_currentSnapshot.status] ?? _currentSnapshot.status}</Tag><Button icon={<DownloadOutlined />} onClick={exportResult}>导出结果</Button><Button onClick={() => void selectPlan(_currentSnapshot.id)}>刷新</Button></Space>}>
+        {!_currentSnapshot ? <Empty description="尚未生成排程；没有演示订单或虚构产能" /> : <Space direction="vertical" size={16} style={{
+              width: '100%'
+            }}>
+          <Descriptions size="small" bordered items={[{
+                key: 'no',
+                label: '计划版本',
+                children: _currentSnapshot.planNo
+              }, {
+                key: 'v',
+                label: '产能版本',
+                children: _currentSnapshot.configVersion
+              }, {
+                key: 'cutoff',
+                label: '输入截止',
+                children: fmt(_currentSnapshot.input?.dataCutoff)
+              }, {
+                key: 'approval',
+                label: '锁定变更',
+                children: _currentSnapshot.approvalRequired ? '涉及未来24小时，必须厂长审批' : '发布仍须主体负责人审批'
+              }, {
+                key: 'owner',
+                label: '审批人',
+                children: _currentSnapshot.approvedBy ?? '未审批'
+              }, {
+                key: 'lock',
+                label: '发布锁定截至',
+                children: fmt(_currentSnapshot.lockUntil)
+              }]} />
+          <Space wrap>{_currentSnapshot.status === 'DRAFT' && <Button onClick={() => openAction('厂长审批（仅主体所有者）', 'approve')}>厂长审批</Button>}{_currentSnapshot.status === 'APPROVED' && <Button type="primary" loading={mutate.isPending} onClick={() => openAction('发布排产工单', 'publish', 'publish')}>发布工单 / 外协委托</Button>}{_currentSnapshot.status === 'PUBLISHED' && <><Button onClick={loadReplan}>重排 / 插单</Button><Button onClick={() => openAction('全部工单与外协验收后结案', 'close', 'publish')}>验收结案</Button></>}{['DRAFT', 'APPROVED', 'PUBLISHED'].includes(_currentSnapshot.status) && <Button danger onClick={() => openAction('取消计划（仅未执行计划）', 'cancel')}>取消计划</Button>}<Link to="/production/process">办理实际加工记录</Link></Space>
+          <Tabs items={[{
+                key: 'timeline',
+                label: '七天设备时间轴',
+                children: <Space direction="vertical" style={{
+                  width: '100%'
+                }}>{(_currentSnapshot.input?.capacity?.resources ?? []).map((r: ScheduleData) => <Card key={r.id} size="small" title={`${r.name} / ${operation(r.operation)} · ${r.kgPerHour} × ${r.availability} kg/h`}><Timeline items={slots.value.filter(s => s.resourceId === r.id && _currentSnapshot.result?.decisions?.[s.jobKey]?.type !== 'OUTSOURCE').map(s => ({
+                      color: s.late ? 'red' : 'green',
+                      children: <><strong>{s.jobKey}</strong> {fmt(s.start)} → {fmt(s.end)} · {s.kg}kg <Tag>清洗换型 {s.setupMinutes} 分钟</Tag>{s.late && <Tag color="red">晚于交期</Tag>}</>
+                    }))} /><Typography.Text type="secondary">设备检修/不可用区间 {(r.downtime ?? []).map((b: ScheduleData) => `${fmt(b.start)}~${fmt(b.end)}`).join('；') || '未登记'}</Typography.Text></Card>)}</Space>
+              }, {
+                key: 'loads',
+                label: '产能与瓶颈',
+                children: <><Alert type="info" message="负荷按七天有效可用分钟计算；未排入需求不会伪装成设备已占用，需同时查看冲突任务。" /><Table rowKey="resourceId" pagination={false} dataSource={_currentSnapshot.result?.loads ?? []} columns={[{
+                    title: '设备',
+                    dataIndex: 'name'
+                  }, {
+                    title: '工序',
+                    dataIndex: 'operation',
+                    render: operation
+                  }, {
+                    title: '可用分钟',
+                    dataIndex: 'availableMinutes'
+                  }, {
+                    title: '占用分钟',
+                    dataIndex: 'usedMinutes'
+                  }, {
+                    title: '负荷率',
+                    dataIndex: 'loadPercent',
+                    render: (v, r) => <Tag color={r.bottleneck ? 'red' : 'green'}>{v}%{r.bottleneck ? ' 瓶颈' : ''}</Tag>
+                  }]} /></>
+              }, {
+                key: 'conflicts',
+                label: `交期冲突 ${conflicts.value.length}`,
+                children: <Table rowKey="jobKey" dataSource={conflicts.value} pagination={false} columns={[{
+                  title: '订单/任务',
+                  render: (_, r) => `${r.orderNo} / ${r.jobKey}`
+                }, {
+                  title: '类型',
+                  dataIndex: 'type',
+                  render: v => v === 'LATE' ? '交期冲突' : '七天内未排入'
+                }, {
+                  title: '原交期',
+                  dataIndex: 'due',
+                  render: fmt
+                }, {
+                  title: '最早完成',
+                  dataIndex: 'finish',
+                  render: fmt
+                }, {
+                  title: '方案 / 成本 / 风险',
+                  render: (_, r) => <Space direction="vertical">{r.options?.map((o: ScheduleData) => <Typography.Text key={o.type}>{o.label}：{o.costStatus}；{o.risk}</Typography.Text>)}{_currentSnapshot.result?.decisions?.[r.jobKey] && <Tag color="blue">已选 {_currentSnapshot.result.decisions[r.jobKey].type === 'OUTSOURCE' ? '外协' : '顺延'} · 成本 {_currentSnapshot.result.decisions[r.jobKey].cost} 元</Tag>}</Space>
+                }, {
+                  title: '操作',
+                  render: (_, r) => _currentSnapshot.status === 'DRAFT' ? <Space><Button onClick={() => openAction('选择冲突方案', 'decisions', 'decision', r.jobKey)}>选择方案</Button><Button onClick={() => {
+                      form.setFieldsValue({
+                        ..._currentSnapshot.input,
+                        parentId: _currentSnapshot.input.parentId,
+                        start: dayjs().add(15, 'minute').format('YYYY-MM-DDTHH:mm')
+                      });
+                      message.info('已载入草稿，调整任务数量及编号后重新计算；原草稿可取消');
+                    }}>拆批重算</Button></Space> : '已锁定'
+                }]} />
+              }, {
+                key: 'works',
+                label: `执行工单 ${works.value.length}`,
+                children: <Table rowKey="id" dataSource={works.value} scroll={{
+                  x: 1000
+                }} columns={[{
+                  title: '任务',
+                  dataIndex: 'job_key'
+                }, {
+                  title: '工序',
+                  dataIndex: 'operation',
+                  render: operation
+                }, {
+                  title: '设备',
+                  dataIndex: 'resource_id'
+                }, {
+                  title: '数量kg',
+                  dataIndex: 'quantity_kg'
+                }, {
+                  title: '开工',
+                  dataIndex: 'starts_at',
+                  render: fmt
+                }, {
+                  title: '完工',
+                  dataIndex: 'ends_at',
+                  render: fmt
+                }, {
+                  title: '状态',
+                  dataIndex: 'status',
+                  render: v => <Tag>{LABEL[v] ?? v}</Tag>
+                }, {
+                  title: '加工记录',
+                  dataIndex: 'process_record_id',
+                  render: v => v ?? '未关联'
+                }, {
+                  title: '操作',
+                  render: (_, w) => <Space>{w.status === 'READY' && <Button onClick={() => openAction('核验原料到厂并开工', `works/${w.id}`, 'start')}>开工</Button>}{w.status === 'RUNNING' && <Button onClick={() => openAction('关联已完成加工记录', `works/${w.id}`, 'complete')}>登记完成</Button>}</Space>
+                }]} pagination={{
+                  defaultPageSize: 20,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  pageSizeOptions: [10, 20, 50, 100],
+                  showTotal: total => `共 ${total} 条`
+                }} />
+              }, {
+                key: 'outsourcing',
+                label: `外协委托 ${_currentSnapshot.outsource?.length ?? 0}`,
+                children: <Table rowKey="id" dataSource={_currentSnapshot.outsource ?? []} columns={[{
+                  title: '任务',
+                  dataIndex: 'job_key'
+                }, {
+                  title: '数量kg',
+                  dataIndex: 'quantity_kg'
+                }, {
+                  title: '核验成本',
+                  dataIndex: 'cost'
+                }, {
+                  title: '状态',
+                  dataIndex: 'status',
+                  render: v => LABEL[v] ?? v
+                }, {
+                  title: '操作',
+                  render: (_, o) => o.status === 'COMMISSIONED' ? <Button onClick={() => openAction('登记外协追溯及验收', `outsource/${o.id}/receipt`, 'receipt')}>验收</Button> : '已留痕'
+                }]} pagination={{
+                  defaultPageSize: 20,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  pageSizeOptions: [10, 20, 50, 100],
+                  showTotal: total => `共 ${total} 条`
+                }} />
+              }, {
+                key: 'events',
+                label: '调整与审批留痕',
+                children: <Timeline items={(_currentSnapshot.events ?? []).map((e: ScheduleData) => ({
+                  children: <><strong>{e.eventType}</strong> · {e.operator} · {fmt(e.createdAt)}<Typography.Paragraph style={{
+                      whiteSpace: 'pre-wrap'
+                    }}>{e.payload}</Typography.Paragraph></>
+                }))} />
+              }]} />
+        </Space>}
+      </Card>
+      <Card title="③ 历史计划" extra={<Button icon={<ReloadOutlined />} onClick={() => void history.refetch()}>刷新</Button>}><Table rowKey="id" loading={history.isLoading} dataSource={history.data?.list ?? []} pagination={{
+              current: page.value,
+              total: history.data?.total ?? 0,
+              pageSize: 20,
+              onChange: setPage,
+              showTotal: total => `共 ${total} 条`,
+              showQuickJumper: true
+            }} columns={[{
+              title: '计划版本',
+              dataIndex: 'planNo'
+            }, {
+              title: '产能版本',
+              dataIndex: 'configVersion'
+            }, {
+              title: '状态',
+              dataIndex: 'status',
+              render: v => <Tag>{LABEL[v] ?? v}</Tag>
+            }, {
+              title: '创建时间',
+              dataIndex: 'createdAt',
+              render: fmt
+            }, {
+              title: '操作',
+              render: (_, r) => <Button type="link" onClick={() => void selectPlan(r.id)}>打开计划</Button>
+            }]} /></Card>
+      <Alert type="warning" showIcon message="规则与领域边界" description="排产只生成建议、工单和外协委托，不改订单交期、不扣减库存、不下发PLC。未来24小时调整须厂长审批；锁定窗口外不自动通知客户。客户交期变更由销售登记同意证据。外协资质与追溯能力缺失禁止委托；变更产能口径前须处理全部在途计划。已执行工单不可覆盖。" />
+      <Modal title="产能口径 / 换型标准 / 外协核验" width={1080} open={configOpen.value} onCancel={() => setConfigOpen(false)} onOk={() => configForm.submit()} confirmLoading={saveConfig.isPending} destroyOnClose>
+        <Alert type="warning" message="仅主体所有者可保存。配置调整有在途计划时拒绝，需统一处理，避免新旧口径混排。设备按连续作业计算；停班和检修统一填不可用区间。" />
+        <Form form={configForm} layout="vertical" onFinish={v => saveConfig.mutate(v)} style={{
+              marginTop: 16
+            }}>
+          <Row gutter={12}><Col span={9}><Form.Item name="sourceVersion" label="产能与换型核验依据版本" rules={[{
+                    required: true
+                  }]}><Input placeholder="如厂内核定规程编号与日期" /></Form.Item></Col><Col span={5}><Form.Item name="categoryMinutes" label="品类切换清洗分钟" rules={[{
+                    required: true
+                  }]}><InputNumber min={0} max={480} /></Form.Item></Col><Col span={5}><Form.Item name="gradeMinutes" label="等级切换分钟" rules={[{
+                    required: true
+                  }]}><InputNumber min={0} max={480} /></Form.Item></Col><Col span={5}><Form.Item name="maxChanges" label="单设备每日最多切换" rules={[{
+                    required: true
+                  }]}><InputNumber min={1} max={20} /></Form.Item></Col></Row>
+          <Form.List name="resources">{(fields: Array<{
+                  name: number;
+                  key: number;
+                }>, {
+                  add,
+                  remove
+                }: {
+                  add: (v?: any, i?: number) => void;
+                  remove: (i: number | number[]) => void;
+                }) => <Space direction="vertical" style={{
+                  width: '100%'
+                }}>{fields.map(({
+                    key,
+                    name,
+                    ...rest
+                  }) => <Card key={key} size="small" title={`设备工序资源 ${name + 1}`} extra={<Button onClick={() => remove(name)}>移除</Button>}><Row gutter={10}><Col span={6}><Form.Item {...rest} name={[name, 'id']} label="物理设备资产编号" rules={[{
+                          required: true
+                        }]}><Input /></Form.Item></Col><Col span={6}><Form.Item {...rest} name={[name, 'name']} label="名称" rules={[{
+                          required: true
+                        }]}><Input /></Form.Item></Col><Col span={6}><Form.Item {...rest} name={[name, 'operation']} label="工序" rules={[{
+                          required: true
+                        }]}><Select options={SCHEDULE_OPERATIONS} /></Form.Item></Col><Col span={6}><Form.Item {...rest} name={[name, 'kgPerHour']} label="理论产能kg/h" rules={[{
+                          required: true
+                        }]}><InputNumber min={0.001} /></Form.Item></Col></Row><Row gutter={10}><Col span={5}><Form.Item {...rest} name={[name, 'availability']} label="可用率0-1" rules={[{
+                          required: true
+                        }]}><InputNumber min={0.01} max={1} step={0.01} /></Form.Item></Col><Col span={8}><Form.Item {...rest} name={[name, 'availableFrom']} label="最早可用" rules={dateRules}>{dateInput}</Form.Item></Col><Col span={11}><Form.Item {...rest} name={[name, 'sourceEvidence']} label="产能/设备核验凭证" rules={[{
+                          required: true
+                        }]}><Input /></Form.Item></Col></Row>
+            <Form.List name={[name, 'downtime']}>{(blocks: Array<{
+                        name: number;
+                        key: number;
+                      }>, tools: {
+                        add: (v?: any, i?: number) => void;
+                        remove: (i: number | number[]) => void;
+                      }) => <>{blocks.map(b => <Row key={b.key} gutter={10}><Col span={10}><Form.Item name={[b.name, 'start']} label="不可用开始" rules={dateRules}>{dateInput}</Form.Item></Col><Col span={10}><Form.Item name={[b.name, 'end']} label="不可用结束" rules={dateRules}>{dateInput}</Form.Item></Col><Col span={4}><Button onClick={() => tools.remove(b.name)}>移除区间</Button></Col></Row>)}<Button onClick={() => tools.add()}>添加检修 / 停班区间</Button></>}</Form.List>
+          </Card>)}<Button onClick={() => add({
+                    availability: 0.88,
+                    availableFrom: dayjs().format('YYYY-MM-DDTHH:mm'),
+                    downtime: []
+                  })}>添加设备资源</Button></Space>}</Form.List>
+          <Typography.Title level={5}>核验外协厂商（可不配置，不自动从供应商库推断资质）</Typography.Title>
+          <Form.List name="providers">{(fields: Array<{
+                  name: number;
+                  key: number;
+                }>, {
+                  add,
+                  remove
+                }: {
+                  add: (v?: any, i?: number) => void;
+                  remove: (i: number | number[]) => void;
+                }) => <Space direction="vertical" style={{
+                  width: '100%'
+                }}>{fields.map(({
+                    key,
+                    name,
+                    ...rest
+                  }) => <Card key={key} size="small" title={`外协 ${name + 1}`} extra={<Button onClick={() => remove(name)}>移除</Button>}><Row gutter={10}><Col span={6}><Form.Item {...rest} name={[name, 'id']} label="供应商编号" rules={[{
+                          required: true
+                        }]}><Input /></Form.Item></Col><Col span={6}><Form.Item {...rest} name={[name, 'name']} label="厂商名称" rules={[{
+                          required: true
+                        }]}><Input /></Form.Item></Col><Col span={6}><Form.Item {...rest} name={[name, 'pricePerKg']} label="加工报价元/kg" rules={[{
+                          required: true
+                        }]}><InputNumber min={0.001} /></Form.Item></Col><Col span={6}><Form.Item {...rest} name={[name, 'capacityKg']} label="核验承接能力kg" rules={[{
+                          required: true
+                        }]}><InputNumber min={0.001} /></Form.Item></Col></Row><Row gutter={10}><Col span={8}><Form.Item {...rest} name={[name, 'qualification']} label="资质凭证编号" rules={[{
+                          required: true
+                        }]}><Input /></Form.Item></Col><Col span={8}><Form.Item {...rest} name={[name, 'validUntil']} label="资质有效截至" rules={[{
+                          required: true
+                        }]}><Input type="date" /></Form.Item></Col><Col span={8}><Form.Item {...rest} name={[name, 'categories']} label="覆盖品类（与订单品类一致）" rules={[{
+                          required: true
+                        }]}><Select mode="tags" /></Form.Item></Col></Row><Row gutter={10}><Col span={6}><Form.Item {...rest} name={[name, 'traceable']} label="在制品可追溯" valuePropName="checked"><Switch /></Form.Item></Col><Col span={18}><Form.Item {...rest} name={[name, 'traceEvidence']} label="追溯能力核验凭证" rules={[{
+                          required: true
+                        }]}><Input /></Form.Item></Col></Row></Card>)}<Button onClick={() => add({
+                    traceable: false
+                  })}>添加外协核验快照</Button></Space>}</Form.List>
+        </Form>
+      </Modal>
+      <Modal title={action.value?.title} open={Boolean(action.value)} onCancel={() => setAction(undefined)} onOk={() => actionForm.submit()} confirmLoading={mutate.isPending} destroyOnClose>
+        <Form form={actionForm} layout="vertical" onFinish={v => mutate.mutate({
+              path: action.value!.path,
+              values: {
+                ...v,
+                ...(action.value?.kind === 'start' ? {
+                  action: 'START'
+                } : action.value?.kind === 'complete' ? {
+                  action: 'COMPLETE'
+                } : {})
+              }
+            })}>
+          {action.value?.kind === 'decision' && <><Form.Item name="jobKey" hidden><Input /></Form.Item><Form.Item name="type" label="选择方案"><Select options={[{
+                    value: 'POSTPONE',
+                    label: '顺延（需客户同意）'
+                  }, {
+                    value: 'OUTSOURCE',
+                    label: '外协（核验资质与追溯）'
+                  }]} /></Form.Item><Form.Item noStyle shouldUpdate>{() => actionForm.getFieldValue('type') === 'OUTSOURCE' ? <Form.Item name="providerId" label="核验厂商" rules={[{
+                    required: true
+                  }]}><Select options={providers.value.map(p => ({
+                      value: p.id,
+                      label: `${p.name} · ${p.pricePerKg}元/kg`
+                    }))} /></Form.Item> : <><Form.Item name="cost" label="核实顺延成本（元）" rules={[{
+                      required: true
+                    }]}><InputNumber min={0} /></Form.Item><Form.Item name="customerConfirmed" label="客户同意延期" valuePropName="checked"><Switch /></Form.Item><Form.Item name="customerEvidence" label="客户同意凭证" rules={[{
+                      required: true
+                    }]}><Input /></Form.Item></>}</Form.Item></>}
+          {['reason', 'decision'].includes(action.value?.kind ?? '') && <Form.Item name="reason" label="意见 / 原因" rules={[{
+                required: true
+              }]}><Input.TextArea rows={3} /></Form.Item>}
+          {action.value?.kind === 'publish' && <Alert type="warning" message="操作将按当前版本落库，并校验订单、原料、设备占用与完成状态。不会修改交易订单或下发设备指令。" />}
+          {action.value?.kind === 'start' && <><Form.Item name="arrivalConfirmed" label="原料实际已到厂" valuePropName="checked"><Switch /></Form.Item><Form.Item name="arrivalEvidence" label="到厂核验凭证" rules={[{
+                  required: true
+                }]}><Input /></Form.Item></>}
+          {action.value?.kind === 'complete' && <><Alert type="info" message="请先在原加工记录页面登记实际工序；仅可引用同主体、同批次、同工序、数量足够且已完成的记录。" /><Form.Item name="processRecordId" label="原加工记录ID" rules={[{
+                  required: true
+                }]}><Input /></Form.Item></>}
+          {action.value?.kind === 'receipt' && <><Form.Item name="traceCode" label="外协批次追溯码" rules={[{
+                  required: true
+                }]}><Input /></Form.Item><Form.Item name="acceptanceEvidence" label="验收凭证" rules={[{
+                  required: true
+                }]}><Input.TextArea /></Form.Item></>}
+        </Form>
+      </Modal>
+    </Space>
+  </PageContainer>;
+    };
+  }
+});
+export default ProcessingSchedule;

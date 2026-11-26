@@ -1,0 +1,368 @@
+{
+  "user": [
+    {
+      "key": "dashboard",
+      "label": "工作台",
+      "children": [
+        {
+          "key": "/production/dashboard",
+          "label": "生产数据看板"
+        },
+        {
+          "key": "/production/messages",
+          "label": "消息中心"
+        }
+      ]
+    },
+    {
+      "key": "farm",
+      "label": "农场与地块",
+      "children": [
+        {
+          "key": "/production/farms",
+          "label": "农场管理"
+        },
+        {
+          "key": "/production/plots",
+          "label": "地块管理"
+        }
+      ]
+    },
+    {
+      "key": "smart-farming",
+      "label": "农事生产",
+      "children": [
+        {
+          "key": "/production/plans",
+          "label": "农事计划"
+        },
+        {
+          "key": "/production/tasks",
+          "label": "农事任务"
+        },
+        {
+          "key": "/production/tasks/voice-records",
+          "label": "语音农事归档"
+        },
+        {
+          "key": "/production/plans/calendar",
+          "label": "农事日历"
+        }
+      ]
+    },
+    {
+      "key": "input",
+      "label": "农资管理",
+      "children": [
+        {
+          "key": "/production/inputs",
+          "label": "农资台账"
+        }
+      ]
+    },
+    {
+      "key": "growth",
+      "label": "生产监测与设备关联",
+      "children": [
+        {
+          "key": "/production/monitor",
+          "label": "生产监控看板"
+        },
+        {
+          "key": "/production/growth",
+          "label": "生长监测总览"
+        },
+        {
+          "key": "/production/growth/records",
+          "label": "生长记录"
+        },
+        {
+          "key": "/production/growth/environment",
+          "label": "环境数据"
+        },
+        {
+          "key": "/production/alerts",
+          "label": "告警处置与复盘"
+        },
+        {
+          "key": "/production/iot/bindings",
+          "label": "设备绑定管理"
+        }
+      ]
+    },
+    {
+      "key": "harvest",
+      "label": "采收与库存",
+      "children": [
+        {
+          "key": "/production/harvests/window-decision",
+          "label": "采收窗口决策与用工排程"
+        },
+        {
+          "key": "/production/harvests/labor-workers",
+          "label": "劳务人员库"
+        },
+        {
+          "key": "/production/harvests",
+          "label": "采收记录"
+        },
+        {
+          "key": "/production/harvests/inventory",
+          "label": "库存管理"
+        }
+      ]
+    },
+    {
+      "key": "quality",
+      "label": "质量检测与溯源",
+      "children": [
+        {
+          "key": "/production/quality",
+          "label": "质量检测与批次等级"
+        },
+        {
+          "key": "/production/process",
+          "label": "加工记录"
+        },
+        {
+          "key": "/production/trace",
+          "label": "单品溯源码管理"
+        },
+        {
+          "key": "/production/trace/full-chain",
+          "label": "生产溯源与报告"
+        },
+        {
+          "key": "/production/blockchain",
+          "label": "存证中心"
+        }
+      ]
+    },
+    {
+      "key": "p2t",
+      "label": "产销对接",
+      "children": [
+        {
+          "key": "/production/p2t",
+          "label": "产销工作台"
+        },
+        {
+          "key": "/production/p2t/offers",
+          "label": "供给管理"
+        },
+        {
+          "key": "/production/p2t/subscriptions",
+          "label": "认购台账"
+        },
+        {
+          "key": "/production/p2t/diffs",
+          "label": "差异协同"
+        },
+        {
+          "key": "/production/p2t/trace",
+          "label": "供给与履约追踪"
+        },
+        {
+          "key": "/production/p2t/demand",
+          "label": "需求分析"
+        }
+      ]
+    },
+    {
+      "key": "analytics",
+      "label": "分析与决策",
+      "children": [
+        {
+          "key": "/production/analytics",
+          "label": "数据分析总览"
+        },
+        {
+          "key": "/production/analytics/reports",
+          "label": "生产报表"
+        },
+        {
+          "key": "/production/ai/pest-detection",
+          "label": "多模态病虫害诊断"
+        },
+        {
+          "key": "/production/ai/input-safety",
+          "label": "投入品推荐与安全校验"
+        },
+        {
+          "key": "/production/ai/yield-forecast",
+          "label": "产量预估与销售建议"
+        },
+        {
+          "key": "/production/ai/process-optimization",
+          "label": "产后初加工工艺优化"
+        },
+        {
+          "key": "/production/ai/processing-schedule",
+          "label": "加工产能与订单协同排产"
+        },
+        {
+          "key": "/production/ai/assistant",
+          "label": "农事智能助手"
+        },
+        {
+          "key": "/production/ai/tech-learning",
+          "label": "农技知识问答与培训陪练"
+        }
+      ]
+    },
+    {
+      "key": "settings",
+      "label": "系统设置",
+      "children": [
+        {
+          "key": "/production/settings",
+          "label": "系统设置"
+        }
+      ]
+    }
+  ],
+  "admin": [
+    {
+      "key": "ops-dashboard",
+      "label": "运营仪表盘",
+      "children": [
+        {
+          "key": "/admin/production/dashboard",
+          "label": "运营管理大盘"
+        },
+        {
+          "key": "/admin/production/dashboard/overview",
+          "label": "生产总览"
+        },
+        {
+          "key": "/admin/production/dashboard/screen",
+          "label": "数据大屏驾驶舱"
+        }
+      ]
+    },
+    {
+      "key": "farm-supervision",
+      "label": "农场监管",
+      "children": [
+        {
+          "key": "/admin/production/farms",
+          "label": "农场监管"
+        },
+        {
+          "key": "/admin/production/farms/compliance",
+          "label": "合规检查"
+        }
+      ]
+    },
+    {
+      "key": "base-data",
+      "label": "基础数据",
+      "children": [
+        {
+          "key": "/admin/production/crops",
+          "label": "作物管理"
+        },
+        {
+          "key": "/admin/production/tasks/templates",
+          "label": "任务模板库"
+        }
+      ]
+    },
+    {
+      "key": "monitor",
+      "label": "生产监控",
+      "children": [
+        {
+          "key": "/admin/production/alerts",
+          "label": "生产告警处置与复盘"
+        },
+        {
+          "key": "/admin/production/alerts/emergency",
+          "label": "应急预案"
+        },
+        {
+          "key": "/admin/production/monitor/tasks",
+          "label": "任务执行监控"
+        },
+        {
+          "key": "/admin/production/monitor/iot",
+          "label": "IoT设备监控"
+        },
+        {
+          "key": "/admin/production/monitor/inputs",
+          "label": "投入品使用监管"
+        },
+        {
+          "key": "/admin/production/monitor/environment",
+          "label": "环境数据监控"
+        }
+      ]
+    },
+    {
+      "key": "trace",
+      "label": "质量安全与溯源",
+      "children": [
+        {
+          "key": "/admin/production/trace",
+          "label": "质量安全总览"
+        },
+        {
+          "key": "/admin/production/trace/codes",
+          "label": "单品溯源码管理"
+        },
+        {
+          "key": "/admin/production/quality/labs",
+          "label": "检测机构管理"
+        },
+        {
+          "key": "/admin/production/quality/recalls",
+          "label": "不合格品处置"
+        },
+        {
+          "key": "/admin/production/quality/inspections",
+          "label": "检测报告管理"
+        },
+        {
+          "key": "/admin/production/food-safety/circulation",
+          "label": "流通异常台账"
+        },
+        {
+          "key": "/admin/production/food-safety/compliance",
+          "label": "合规核验台账"
+        },
+        {
+          "key": "/admin/production/food-safety/trust-label",
+          "label": "产品认证台账"
+        }
+      ]
+    },
+    {
+      "key": "ai-center",
+      "label": "AI与知识中心",
+      "children": [
+        {
+          "key": "/admin/production/ai/models",
+          "label": "AI中台治理总览"
+        },
+        {
+          "key": "/admin/production/knowledge",
+          "label": "生产知识文章"
+        },
+        {
+          "key": "/admin/production/sop",
+          "label": "生产SOP规程"
+        }
+      ]
+    },
+    {
+      "key": "report",
+      "label": "统计报表",
+      "children": [
+        {
+          "key": "/admin/production/reports",
+          "label": "生产与质量报表"
+        }
+      ]
+    }
+  ]
+}

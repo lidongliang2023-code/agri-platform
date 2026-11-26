@@ -1,0 +1,198 @@
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event & {
+  target: T;
+  currentTarget: T;
+  nativeEvent: Event;
+  key: string;
+};
+import '@/components/ProductionListDense.css';
+import { AgriAntdvJsxList as Table } from '@agri/shared/vue/antdv/AgriAntdvJsxList';
+import { PageContainer } from '@/vue/pro';
+import { Alert, Card, Col, Descriptions, Empty, Row, Space, Statistic, Tabs, Tag, Typography } from '@/vue/ui';
+import { LinkOutlined, RobotOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue';
+import { useQuery } from '@/vue/query';
+import { getAiHubOverview, listAiHubCalls, listAiHubProviders, listAiHubScenes } from '@/api';
+import type { AiHubCall, AiHubProvider, AiHubScene } from '@/api';
+function boolTag(value?: boolean): VNodeChild {
+  return value ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>;
+}
+function dash(value: unknown): string {
+  return value === null || value === undefined || value === '' ? '—' : String(value);
+}
+const Models = defineComponent({
+  name: "Models",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const callPage = shallowRef(1);
+    const setCallPage = (next: typeof callPage.value | ((previous: typeof callPage.value) => typeof callPage.value)) => {
+      callPage.value = typeof next === 'function' ? (next as (previous: typeof callPage.value) => typeof callPage.value)(callPage.value) : next;
+    };
+    const callSize = shallowRef(20);
+    const setCallSize = (next: typeof callSize.value | ((previous: typeof callSize.value) => typeof callSize.value)) => {
+      callSize.value = typeof next === 'function' ? (next as (previous: typeof callSize.value) => typeof callSize.value)(callSize.value) : next;
+    };
+    const overview = useQuery(() => ({
+      queryKey: ['ai-hub-overview'],
+      queryFn: getAiHubOverview
+    }));
+    const scenes = useQuery(() => ({
+      queryKey: ['ai-hub-scenes'],
+      queryFn: listAiHubScenes
+    }));
+    const providers = useQuery(() => ({
+      queryKey: ['ai-hub-providers'],
+      queryFn: listAiHubProviders
+    }));
+    const calls = useQuery(() => ({
+      queryKey: ['ai-hub-calls', callPage.value, callSize.value],
+      queryFn: () => listAiHubCalls({
+        page: callPage.value,
+        pageSize: callSize.value
+      })
+    }));
+    const sceneColumns = computed(() => [{
+      title: '场景编码',
+      dataIndex: 'sceneCode',
+      width: 240
+    }, {
+      title: '场景名称',
+      dataIndex: 'sceneName',
+      render: (v: string) => dash(v)
+    }, {
+      title: '业务系统',
+      dataIndex: 'bizSystem',
+      render: (v: string) => dash(v)
+    }, {
+      title: '业务领域',
+      dataIndex: 'domain',
+      render: (v: string) => dash(v)
+    }, {
+      title: '状态',
+      dataIndex: 'enabled',
+      render: (v: boolean) => boolTag(v)
+    }, {
+      title: '当前模型',
+      dataIndex: 'model',
+      render: (v: string) => dash(v)
+    }, {
+      title: '提示词版本',
+      dataIndex: 'promptVersion',
+      render: (v: string) => dash(v)
+    }]);
+    const providerColumns = computed(() => [{
+      title: '渠道标识',
+      dataIndex: 'id',
+      width: 220
+    }, {
+      title: '渠道名称',
+      dataIndex: 'name',
+      render: (v: string, row: AiHubProvider) => dash(v ?? row.provider)
+    }, {
+      title: '状态',
+      dataIndex: 'enabled',
+      render: (v: boolean, row: AiHubProvider) => boolTag(v ?? row.active)
+    }, {
+      title: '版本',
+      dataIndex: 'revision',
+      render: (v: number) => dash(v)
+    }, {
+      title: '模型',
+      dataIndex: 'model',
+      render: (v: string) => dash(v)
+    }]);
+    const callColumns = computed(() => [{
+      title: '任务编号',
+      dataIndex: 'taskId',
+      render: (v: string) => dash(v)
+    }, {
+      title: '场景',
+      dataIndex: 'sceneCode',
+      render: (v: string) => dash(v)
+    }, {
+      title: '业务系统',
+      dataIndex: 'bizSystem',
+      render: (v: string) => dash(v)
+    }, {
+      title: '状态',
+      dataIndex: 'status',
+      render: (v: string) => <Tag color={v === 'SUCCESS' ? 'success' : 'error'}>{dash(v)}</Tag>
+    }, {
+      title: '耗时',
+      dataIndex: 'latencyMs',
+      render: (v: number) => v === undefined ? '—' : `${v} ms`
+    }, {
+      title: '链路',
+      dataIndex: 'traceId',
+      render: (v: string) => dash(v)
+    }]);
+    return () => {
+      if (overview.isError || scenes.isError || providers.isError) {
+        return <Alert type="error" showIcon message="AI中台数据加载失败" description="请检查 AI 中台服务和统一登录状态。生产域不再维护本地模型台账。" />;
+      }
+      const data = overview.data;
+      const callData = calls.data?.records ?? [];
+      return <PageContainer class="production-list-dense production-member-list" title="AI 中台治理" subTitle="生产域 AI 场景、模型渠道与调用审计总览">
+      <Space direction="vertical" size={12} style={{
+          width: '100%'
+        }}>
+      <Alert type="info" showIcon icon={<RobotOutlined />} message="模型、场景、渠道与提示词统一由 AI 中台治理" description="生产运营端只展示 AI 中台的真实状态，不再创建或编辑本机模型台账。生产知识文章、SOP 和诊断会话仍由生产域分别负责。需要配置模型或提示词时进入 AI 中台管理端。" action={<Typography.Link href="/ai-ops/" target="_blank"><LinkOutlined /> 打开 AI 中台</Typography.Link>} />
+      <Row gutter={16}>
+        <Col span={6}><Card><Statistic title="AI中台状态" value={dash(data?.status)} valueStyle={{
+                  color: data?.status === 'UP' ? '#13a05a' : undefined
+                }} /></Card></Col>
+        <Col span={6}><Card><Statistic title="治理场景" value={data?.sceneCount ?? 0} suffix="个" /></Card></Col>
+        <Col span={6}><Card><Statistic title="调用次数" value={data?.callCount ?? 0} suffix="次" /></Card></Col>
+        <Col span={6}><Card><Statistic title="平均耗时" value={data?.averageLatencyMs ?? 0} suffix="ms" /></Card></Col>
+      </Row>
+      <Card title={<Space><SafetyCertificateOutlined />领域边界</Space>}>
+        <Descriptions column={2} size="small">
+          <Descriptions.Item label="模型/渠道/场景">AI 中台统一配置、发布、故障切换和审计</Descriptions.Item>
+          <Descriptions.Item label="生产知识文章">生产域维护文章、分类、发布状态和来源</Descriptions.Item>
+          <Descriptions.Item label="生产 SOP">生产域维护规程、版本、适用阶段和发布状态</Descriptions.Item>
+          <Descriptions.Item label="生产 AI 会话">生产域保存会话、消息和业务引用，回答来源明确标记</Descriptions.Item>
+          <Descriptions.Item label="当前模型配置">{data?.modelConfigured ? '已配置' : '未配置'}</Descriptions.Item>
+          <Descriptions.Item label="调用审计持久化">{data?.auditWritable ? '文件审计已启用' : '文件不可写，当前仅内存审计'}</Descriptions.Item>
+        </Descriptions>
+      </Card>
+      <Card>
+        <Tabs items={[{
+              key: 'scenes',
+              label: `场景治理（${scenes.data?.length ?? 0}）`,
+              children: <Table rowKey="sceneCode" rowSelection={{}} columnSettingsStorageKey="agri:production:visible-columns:v1:admin-ai-scenes" columnWidthStorageKey="agri:production:column-widths:v1:admin-ai-scenes" onRefresh={() => void scenes.refetch()} loading={scenes.isLoading} columns={sceneColumns.value} dataSource={scenes.data ?? []} pagination={{
+                defaultPageSize: 20
+              }} scroll={{
+                x: 1050
+              }} />
+            }, {
+              key: 'providers',
+              label: `模型渠道（${providers.data?.length ?? 0}）`,
+              children: <Table rowKey="id" rowSelection={{}} columnSettingsStorageKey="agri:production:visible-columns:v1:admin-ai-providers" columnWidthStorageKey="agri:production:column-widths:v1:admin-ai-providers" onRefresh={() => void providers.refetch()} loading={providers.isLoading} columns={providerColumns.value} dataSource={providers.data ?? []} pagination={{
+                defaultPageSize: 20
+              }} scroll={{
+                x: 800
+              }} />
+            }, {
+              key: 'calls',
+              label: '调用审计',
+              children: <Table rowKey={row => `${row.taskId ?? ''}-${row.traceId ?? ''}`} rowSelection={{}} columnSettingsStorageKey="agri:production:visible-columns:v1:admin-ai-calls" columnWidthStorageKey="agri:production:column-widths:v1:admin-ai-calls" onRefresh={() => void calls.refetch()} loading={calls.isLoading} columns={callColumns.value} dataSource={callData} pagination={{
+                current: callPage.value,
+                pageSize: callSize.value,
+                total: calls.data?.total ?? 0,
+                onChange: (page, size) => {
+                  setCallPage(page);
+                  setCallSize(size);
+                }
+              }} scroll={{
+                x: 900
+              }} />
+            }]} />
+        {!scenes.isLoading && !providers.isLoading && (scenes.data?.length ?? 0) === 0 && (providers.data?.length ?? 0) === 0 ? <Empty description="AI中台暂无治理数据" /> : null}
+      </Card>
+    </Space>
+    </PageContainer>;
+    };
+  }
+});
+export default Models;

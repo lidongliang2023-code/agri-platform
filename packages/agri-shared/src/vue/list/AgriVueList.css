@@ -3,11 +3,15 @@
 
 .agri-vue-list-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
 }
 
 .agri-vue-filter-card {
+  container: agri-vue-filters / inline-size;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 14px;
   border: 1px solid var(--pc-border, #e8e8e8);
   border-radius: 8px;
@@ -15,6 +19,7 @@
 }
 
 .agri-vue-table-card {
+  box-sizing: border-box;
   padding: 10px 14px 12px;
   border: 1px solid var(--pc-border, #e8e8e8);
   border-radius: 8px;
@@ -49,6 +54,7 @@
 }
 
 .agri-vue-filter-grid > .agri-vue-filter-field > :not(label) {
+  box-sizing: border-box;
   flex: 1 1 auto;
   min-width: 0;
   width: 100% !important;
@@ -93,10 +99,11 @@
   justify-self: end;
   align-self: end;
   width: auto !important;
+  max-width: 100%;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
@@ -141,14 +148,15 @@
   transform: rotate(180deg);
 }
 
-@media (min-width: 1200px) {
-  .agri-vue-filter-grid:not(:has(.agri-vue-filter-span-2)):has(> :nth-child(4):last-child):has(> .agri-vue-filter-actions:last-child) {
+/* 按卡片可用宽度切换列数，避免侧栏展开或嵌入面板时仍套用桌面四列。 */
+@container agri-vue-filters (min-width: 1040px) {
+  .agri-vue-filter-grid:not(.has-uniform-columns):not(:has(.agri-vue-filter-span-2)):has(> :nth-child(4):last-child):has(> .agri-vue-filter-actions:last-child) {
     grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   }
-  .agri-vue-filter-grid:not(:has(.agri-vue-filter-span-2)):has(> :nth-child(5):last-child):has(> .agri-vue-filter-actions:last-child) {
+  .agri-vue-filter-grid:not(.has-uniform-columns):not(:has(.agri-vue-filter-span-2)):has(> :nth-child(5):last-child):has(> .agri-vue-filter-actions:last-child) {
     grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
   }
-  .agri-vue-filter-grid.is-collapsed {
+  .agri-vue-filter-grid.is-collapsed:not(.has-uniform-columns) {
     grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   }
 }
@@ -161,7 +169,7 @@
   display: none !important;
 }
 
-@media (max-width: 1199px) {
+@container agri-vue-filters (max-width: 1039px) {
   .agri-vue-filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -176,7 +184,7 @@
   }
 }
 
-@media (max-width: 767px) {
+@container agri-vue-filters (max-width: 559px) {
   .agri-vue-filter-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -186,6 +194,28 @@
   }
   .agri-vue-filter-grid.is-collapsed > :not(.agri-vue-filter-actions):nth-child(n + 2) {
     display: none !important;
+  }
+}
+
+/* 不支持容器查询的浏览器使用保守列数，优先保证输入框与操作按钮可用。 */
+@supports not (container-type: inline-size) {
+  .agri-vue-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .agri-vue-filter-grid.is-collapsed > :not(.agri-vue-filter-actions):nth-child(n + 3) {
+    display: none !important;
+  }
+  @media (max-width: 767px) {
+    .agri-vue-filter-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .agri-vue-filter-grid .agri-vue-filter-span-2,
+    .agri-vue-filter-grid .agri-vue-filter-actions {
+      grid-column: 1 / -1;
+    }
+    .agri-vue-filter-grid.is-collapsed > :not(.agri-vue-filter-actions):nth-child(n + 2) {
+      display: none !important;
+    }
   }
 }
 
@@ -315,6 +345,8 @@
 
 /* ==================== 3. 表格规范：固定列宽、复选框防省略号、选中行 #e8f5e9、状态圆点胶囊 ==================== */
 .agri-vue-table-scroll {
+  box-sizing: border-box;
+  min-width: 0;
   width: 100%;
   overflow-x: auto;
   border: 1px solid var(--pc-border, #e8e8e8);
@@ -682,7 +714,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  white-space: nowrap;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .agri-vue-pagination-selected {
@@ -695,6 +728,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  justify-content: flex-end;
   margin-inline-start: auto;
 }
 
@@ -802,4 +838,15 @@
 .agri-vue-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.agri-vue-list-page :is(.agri-vue-btn, .agri-vue-page-btn, .agri-vue-page-size, .agri-vue-tool-btn):focus-visible {
+  outline: 2px solid var(--pc-brand, #2d8f4e);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agri-vue-filter-chevron {
+    transition: none;
+  }
 }

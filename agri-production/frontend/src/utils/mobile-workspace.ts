@@ -1,8 +1,8 @@
 /**
  * uni-app 客户端（H5 / 微信小程序 / APP）web-view 内嵌模式。
  *
- * 独立的 React 移动 H5 已下线：手机端统一由 uni-app 提供登录、导航和账号管理，
- * React 只在客户端通过一次性票据（/mobile/session）打开时，以「纯业务内容」方式渲染。
+ * 独立的旧版移动 H5 已下线：手机端统一由 uni-app 提供登录、导航和账号管理，
+ * Vue 3 业务页只在客户端通过一次性票据（/mobile/session）打开时，以「纯业务内容」方式渲染。
  * 该标志只影响展示和会话结束后的去向，不参与服务端授权。
  */
 export function mobileWorkspace(): boolean {

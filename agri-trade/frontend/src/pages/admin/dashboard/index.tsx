@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { Alert, Card, Col, Empty, List, Row, Spin, Statistic, Table, Typography, message } from 'antd'
-import { getAdminOverview, type AdminOverview } from '@/api/admin'
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event;
+import { Alert, Card, Col, Empty, List, Row, Spin, Statistic, Table, Typography, message } from "@/vue/ui";
+import { getAdminOverview, type AdminOverview } from '@/api/admin';
 
 /**
  * 交易大盘（PRD 10.2 第一组）。
@@ -10,36 +11,63 @@ import { getAdminOverview, type AdminOverview } from '@/api/admin'
  * <p>（曾经另有一套 /api/trade/operation/*，那里的大盘数字是写死的字符串数组与随机数，
  * 且无人调用 —— 已整组删除，避免"两个大盘、一个真一个假"。）</p>
  */
-export default function AdminDashboard() {
-  const [data, setData] = useState<AdminOverview | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    getAdminOverview()
-      .then((res: { code: number; data?: AdminOverview; message?: string }) => {
-        if (res?.code === 200) setData(res.data ?? null)
-        else message.error(res?.message ?? '加载大盘失败')
-      })
-      .catch(() => message.error('加载大盘失败（检查后端是否在运行）'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) {
-    return (
-      <div style={{ padding: 80, textAlign: 'center' }}>
+const AdminDashboard = defineComponent({
+  name: "AdminDashboard",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const data = shallowRef<AdminOverview | null>(null);
+    const setData = (next: typeof data.value | ((previous: typeof data.value) => typeof data.value)) => {
+      data.value = typeof next === 'function' ? (next as (previous: typeof data.value) => typeof data.value)(data.value) : next;
+    };
+    const loading = shallowRef(true);
+    const setLoading = (next: typeof loading.value | ((previous: typeof loading.value) => typeof loading.value)) => {
+      loading.value = typeof next === 'function' ? (next as (previous: typeof loading.value) => typeof loading.value)(loading.value) : next;
+    };
+    (() => {
+      let dispose: void | (() => void);
+      onMounted(() => {
+        dispose = (() => {
+          getAdminOverview().then((res: {
+            code: number;
+            data?: AdminOverview;
+            message?: string;
+          }) => {
+            if (res?.code === 200) setData(res.data ?? null);else message.error(res?.message ?? '加载大盘失败');
+          }).catch(() => message.error('加载大盘失败（检查后端是否在运行）')).finally(() => setLoading(false));
+        })();
+      });
+      onBeforeUnmount(() => {
+        if (typeof dispose === 'function') dispose();
+      });
+    })();
+    return () => {
+      const view_data = data.value;
+      if (loading.value) {
+        return <div style={{
+          padding: 80,
+          textAlign: 'center'
+        }}>
         <Spin size="large" />
-      </div>
-    )
-  }
-  if (!data) {
-    return <Empty description="暂无大盘数据" style={{ padding: 80 }} />
-  }
-
-  const { summary, todos, trend, categoryStats, regionStats } = data
-  const todoCount = todos.pendingProductCount + todos.openDisputeCount + todos.refundingOrderCount
-
-  return (
-    <div style={{ padding: 20 }}>
+      </div>;
+      }
+      if (!view_data) {
+        return <Empty description="暂无大盘数据" style={{
+          padding: 80
+        }} />;
+      }
+      const {
+        summary,
+        todos,
+        trend,
+        categoryStats,
+        regionStats
+      } = view_data;
+      const todoCount = todos.pendingProductCount + todos.openDisputeCount + todos.refundingOrderCount;
+      return <div style={{
+        padding: 20
+      }}>
       <Row gutter={[16, 16]}>
         <Col xs={12} md={6}>
           <Card>
@@ -63,80 +91,65 @@ export default function AdminDashboard() {
         </Col>
       </Row>
 
-      <Alert
-        style={{ marginTop: 16 }}
-        type={todoCount > 0 ? 'warning' : 'success'}
-        showIcon
-        message={
-          <span>
+      <Alert style={{
+          marginTop: 16
+        }} type={todoCount > 0 ? 'warning' : 'success'} showIcon message={<span>
             待办：货源待审核 <b>{todos.pendingProductCount}</b> 条 · 待处理纠纷 <b>{todos.openDisputeCount}</b> 件 ·
             退款中订单 <b>{todos.refundingOrderCount}</b> 笔　　待付款 <b>{summary.pendingPaymentCount}</b> 笔 ·
             已完成 <b>{summary.completedCount}</b> 笔
-          </span>
-        }
-      />
+          </span>} />
 
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+      <Row gutter={[16, 16]} style={{
+          marginTop: 16
+        }}>
         <Col xs={24} lg={12}>
           <Card title="近 7 日交易趋势">
-            <Table
-              rowKey="date"
-              size="small"
-              dataSource={trend}
-              pagination={false}
-              columns={[
-                { title: '日期', dataIndex: 'date' },
-                { title: '订单数', dataIndex: 'count' },
-                { title: '交易额', dataIndex: 'amount', render: (val: number) => `¥${val}` }
-              ]}
-            />
+            <Table rowKey="date" size="small" dataSource={trend} pagination={false} columns={[{
+                title: '日期',
+                dataIndex: 'date'
+              }, {
+                title: '订单数',
+                dataIndex: 'count'
+              }, {
+                title: '交易额',
+                dataIndex: 'amount',
+                render: (val: number) => `¥${val}`
+              }]} />
           </Card>
         </Col>
         <Col xs={24} lg={6}>
           <Card title="品类分布">
-            {categoryStats.length === 0 ? (
-              <Empty description="暂无数据" />
-            ) : (
-              <List
-                size="small"
-                dataSource={categoryStats}
-                renderItem={(item) => (
-                  <List.Item>
+            {categoryStats.length === 0 ? <Empty description="暂无品类分布数据，产生有效成交后将自动汇总" /> : <List size="small" dataSource={categoryStats} renderItem={item => <List.Item>
                     <span>{item.name}</span>
-                    <span style={{ color: '#1565C0' }}>
+                    <span style={{
+                  color: '#1565C0'
+                }}>
                       {item.count} 笔 / ¥{item.amount}
                     </span>
-                  </List.Item>
-                )}
-              />
-            )}
+                  </List.Item>} />}
           </Card>
         </Col>
         <Col xs={24} lg={6}>
           <Card title="区域分布（按收货省份）">
-            {regionStats.length === 0 ? (
-              <Empty description="暂无数据" />
-            ) : (
-              <List
-                size="small"
-                dataSource={regionStats}
-                renderItem={(item) => (
-                  <List.Item>
+            {regionStats.length === 0 ? <Empty description="暂无区域分布数据，产生有效成交后将自动汇总" /> : <List size="small" dataSource={regionStats} renderItem={item => <List.Item>
                     <span>{item.name}</span>
-                    <span style={{ color: '#1565C0' }}>
+                    <span style={{
+                  color: '#1565C0'
+                }}>
                       {item.count} 笔 / ¥{item.amount}
                     </span>
-                  </List.Item>
-                )}
-              />
-            )}
+                  </List.Item>} />}
           </Card>
         </Col>
       </Row>
 
-      <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
+      <Typography.Paragraph type="secondary" style={{
+          marginTop: 16
+        }}>
         说明：数据取自订单 / 货源 / 纠纷三张真实表，没有一个数字是写死的。
       </Typography.Paragraph>
-    </div>
-  )
-}
+    </div>;
+    };
+  }
+});
+export default AdminDashboard;

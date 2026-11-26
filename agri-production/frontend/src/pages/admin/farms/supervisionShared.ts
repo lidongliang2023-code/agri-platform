@@ -14,7 +14,7 @@
  *
  * 注意：本文件属于页面私有工具，不属于 `@/utils` 公共层，其他模块不应引用。
  */
-import { useEffect, useSyncExternalStore } from 'react'
+import { shallowReactive, onMounted, onBeforeUnmount, computed } from 'vue'
 import type { BizId, ComplianceCheck, ComplianceResult } from '@/types'
 import type { FarmComplianceProfile } from '@/api/admin/farms'
 import { listComplianceChecks } from '@/api/admin/farms'
@@ -650,14 +650,10 @@ export function updateComplianceTask(
  * @returns 列表快照（含数据来源与降级原因）
  */
 export function useComplianceTaskState(): ComplianceTasksState {
-  const state = useSyncExternalStore(
-    subscribeComplianceTasks,
-    getComplianceTasksState,
-    getComplianceTasksState,
-  )
-  useEffect(() => {
-    void refreshComplianceTasks()
-  }, [])
+  const state = shallowReactive({ ...getComplianceTasksState() })
+  const unsubscribe = subscribeComplianceTasks(() => Object.assign(state, getComplianceTasksState()))
+  onBeforeUnmount(unsubscribe)
+  onMounted(() => { void refreshComplianceTasks() })
   return state
 }
 
@@ -666,8 +662,9 @@ export function useComplianceTaskState(): ComplianceTasksState {
  *
  * @returns 任务列表
  */
-export function useComplianceTasks(): ComplianceTaskItem[] {
-  return useComplianceTaskState().tasks
+export function useComplianceTasks() {
+  const state = useComplianceTaskState()
+  return computed(() => state.tasks)
 }
 
 /**

@@ -9,6 +9,10 @@ const BASE = '/farms'
 
 /** 农场列表查询参数 */
 export interface FarmListParams extends PageQuery {
+  /** 农场名称或编号。 */
+  keyword?: string
+  /** 页面展示的业务类型，服务端在分页前过滤。 */
+  typeLabel?: string
   farmName?: string
   farmType?: number
   status?: number

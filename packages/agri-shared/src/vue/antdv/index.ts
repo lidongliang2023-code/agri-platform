@@ -1,4 +1,5 @@
 export { antdvTheme, BRAND_COLOR, LAYOUT_SIZE } from './theme'
 export { default as AgriAntdvListTable } from './AgriAntdvListTable.vue'
+export { AgriAntdvJsxList, type JsxListColumn, type JsxListSelection } from './AgriAntdvJsxList'
 export * from '../list'
 export * from '../workspace'

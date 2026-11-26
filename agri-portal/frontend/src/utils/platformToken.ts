@@ -1,39 +1,41 @@
-const STORAGE_KEY = 'fengchain_platform_access_token'
-
-let memoryToken: string | null = null
-
+const STORAGE_KEY = 'fengchain_platform_access_token';
+let memoryToken: string | null = null;
 export function setPlatformAccessToken(token: string): void {
-  memoryToken = token
-  sessionStorage.setItem(STORAGE_KEY, token)
+  memoryToken = token;
+  sessionStorage.setItem(STORAGE_KEY, token);
 }
 
 /** 从 HttpOnly 刷新凭证换取短时访问令牌，仅保存于当前标签页。 */
 export async function getPlatformAccessToken(force = false): Promise<string> {
   if (!force) {
-    const cached = memoryToken || sessionStorage.getItem(STORAGE_KEY)
-    if (cached) return cached
+    const cached = memoryToken || sessionStorage.getItem(STORAGE_KEY);
+    if (cached) return cached;
   }
   const response = await fetch('/api/v1/auth/refresh', {
     method: 'POST',
     signal: AbortSignal.timeout(10000),
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', 'X-Sso-Client': 'portal' },
-    body: '{}',
-  })
-  const result = await response.json() as {
-    code?: number
-    message?: string
-    data?: { accessToken?: string }
-  }
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Sso-Client': 'portal'
+    },
+    body: '{}'
+  });
+  const result = (await response.json()) as {
+    code?: number;
+    message?: string;
+    data?: {
+      accessToken?: string;
+    };
+  };
   if (!response.ok || result.code !== 0 || !result.data?.accessToken) {
-    clearPlatformAccessToken()
-    throw new Error(result.message || '登录状态已失效，请重新登录')
+    clearPlatformAccessToken();
+    throw new Error(result.message || '登录状态已失效，请重新登录');
   }
-  setPlatformAccessToken(result.data.accessToken)
-  return result.data.accessToken
+  setPlatformAccessToken(result.data.accessToken);
+  return result.data.accessToken;
 }
-
 export function clearPlatformAccessToken(): void {
-  memoryToken = null
-  sessionStorage.removeItem(STORAGE_KEY)
+  memoryToken = null;
+  sessionStorage.removeItem(STORAGE_KEY);
 }

@@ -1,29 +1,33 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "skipLibCheck": true,
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
+    "jsx": "preserve",
+    "jsxImportSource": "vue",
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
       "@agri/shared": ["../../packages/agri-shared/src"],
       "@agri/shared/*": ["../../packages/agri-shared/src/*"],
-      "react": ["node_modules/@types/react/index.d.ts"],
-      "react/jsx-runtime": ["node_modules/@types/react/jsx-runtime.d.ts"]
-    }
+      "vue": ["node_modules/vue"],
+      "vue/*": ["node_modules/vue/*"],
+      "pinia": ["node_modules/pinia"],
+      "ant-design-vue": ["node_modules/ant-design-vue"],
+      "ant-design-vue/*": ["node_modules/ant-design-vue/*"]
+    },
+    "types": ["vite/client"]
   },
-  "include": ["src"],
+  "include": [
+    "src/**/*",
+    "../../packages/agri-shared/src/vue/map/AgriVueTiandituBoundaryEditor.vue"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

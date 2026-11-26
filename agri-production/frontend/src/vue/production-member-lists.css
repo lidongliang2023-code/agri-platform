@@ -1,0 +1,241 @@
+/* 用户端列表样例：筛选区 → 工具栏 → 固定列宽表格 → 分页。
+ * 作用域限定在用户端外壳，避免覆盖运营端及其他子系统。 */
+.production-member-shell {
+  --pc-brand: #2d8f4e;
+  --pc-active: #1b6332;
+  --pc-border: #e8e8e8;
+}
+
+.production-member-shell .production-list-filters .agri-vue-filter-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.production-member-shell .production-list-filters .agri-vue-filter-grid > .agri-vue-filter-field {
+  grid-column: auto;
+  display: flex !important;
+}
+
+.production-member-shell .production-list-filters .agri-vue-filter-grid.is-collapsed > .agri-vue-filter-field:nth-child(n + 5) {
+  display: none !important;
+}
+
+.production-member-shell .production-list-filters .agri-vue-filter-actions {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.production-member-shell .production-list-filters.is-embedded {
+  padding: 0;
+  border: 0;
+}
+
+.production-member-shell .production-list-filters:not(.is-embedded) {
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.production-member-shell .production-list-filters :is(.ant-input-affix-wrapper, .ant-input-number, .ant-picker),
+.production-member-shell .production-list-filters .ant-select-single,
+.production-member-shell .production-list-filters input.ant-input,
+.production-member-shell .production-list-filters .agri-vue-btn {
+  min-height: 40px;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.production-member-shell .production-list-filters .ant-input-affix-wrapper input.ant-input {
+  min-height: 0;
+}
+
+.production-member-shell .production-list-filters .ant-select-selector {
+  min-height: 40px;
+  align-items: center;
+}
+
+.production-member-shell .production-list-filters :is(.ant-form-item-label > label, .production-query-field > label, .agri-vue-filter-field > label) {
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.production-member-shell .production-list-filters .agri-vue-btn {
+  padding-inline: 18px;
+}
+
+.production-member-shell .production-list-filters .agri-vue-btn--primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #2d8f4e;
+  border-color: #2d8f4e;
+}
+
+.production-member-shell .production-list-filters .agri-vue-btn--primary::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='10' cy='10' r='7' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='m15 15 6 6' stroke='black' stroke-width='2'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.production-member-shell .production-list-dense .production-dense-filter-card {
+  margin-bottom: 16px !important;
+}
+
+.production-member-shell .production-list-dense .production-dense-filter-card > .ant-card-body {
+  padding: 20px !important;
+}
+
+.production-member-shell .production-unified-list {
+  gap: 16px;
+}
+
+.production-member-shell .production-unified-list > .agri-vue-table-card {
+  padding: 0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* 外层已有 Card 时只保留一层边框，工具栏、表格、分页占满卡片。 */
+.production-member-shell .production-section-card:has(> .ant-card-body > .production-business-list),
+.production-member-shell .production-section-card:has(> .ant-card-body > .production-unified-list) {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.production-member-shell .production-section-card:has(> .ant-card-body > .production-business-list) > .ant-card-body,
+.production-member-shell .production-section-card:has(> .ant-card-body > .production-unified-list) > .ant-card-body {
+  padding: 0 !important;
+}
+
+.production-member-shell .production-unified-list .agri-vue-toolbar {
+  min-height: 68px;
+  padding: 14px 20px;
+  margin: 0;
+  border-bottom: 1px solid #f0f0f0;
+  box-sizing: border-box;
+}
+
+.production-member-shell .agri-vue-toolbar-left > .ant-space > .ant-space-item:has(> .ant-btn-primary) {
+  order: -1;
+}
+
+.production-member-shell .production-unified-list .agri-vue-toolbar .ant-btn {
+  min-height: 40px;
+  padding-inline: 16px;
+  font-size: 14px;
+}
+
+.production-member-shell .production-unified-list .ant-table {
+  font-size: 14px;
+}
+
+html.pc-ui-v1 .production-member-shell .production-unified-list .ant-table-thead > tr > th {
+  height: 48px;
+  padding: 12px 16px !important;
+  background: #fafafa;
+  color: #595959;
+  font-size: 14px !important;
+  font-weight: 600;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+html.pc-ui-v1 .production-member-shell .production-unified-list .ant-table-tbody > tr:not(.ant-table-measure-row):not(.ant-table-placeholder) > td {
+  height: 52px !important;
+  padding: 12px 16px !important;
+  line-height: 24px !important;
+  font-size: 14px !important;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.production-member-shell .production-unified-list :is(th, td).pc-cell-number {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.production-member-shell .production-unified-list :is(th, td).pc-cell-actions {
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.production-member-shell .production-unified-list .agri-list-row-actions {
+  justify-content: flex-end;
+  gap: 12px !important;
+}
+
+.production-member-shell .production-unified-list .pc-cell-actions :is(.ant-btn-link, .ant-typography) {
+  padding: 0;
+  font-size: 14px;
+}
+
+.production-member-shell .production-unified-list .pc-cell-actions .anticon {
+  display: none;
+}
+
+html.pc-ui-v1 .production-member-shell .production-unified-list .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell,
+html.pc-ui-v1 .production-member-shell .production-unified-list .ant-table-tbody > tr.ant-table-row-selected:hover > td.ant-table-cell {
+  background: #e8f5e9 !important;
+}
+
+.production-member-shell .production-unified-list .agri-vue-status-cell .ant-tag {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.production-member-shell .production-unified-list .agri-vue-status-cell .ant-tag:not(:has(.ant-badge-status-dot))::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 5px;
+  vertical-align: 2px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.production-member-shell .production-unified-list .ant-checkbox-checked .ant-checkbox-inner {
+  background: #2d8f4e;
+  border-color: #2d8f4e;
+}
+
+.production-member-shell .agri-vue-pagination {
+  margin: 0;
+  min-height: 64px;
+  padding: 14px 20px;
+  border-top: 1px solid #f0f0f0;
+  box-sizing: border-box;
+}
+
+.production-member-shell .agri-vue-page-btn.is-active {
+  background: #2d8f4e;
+  border-color: #2d8f4e;
+}
+
+.production-member-shell .agri-sider .ant-menu-submenu-open > .ant-menu-submenu-title {
+  color: #fff;
+  background: #0a2d32;
+}
+
+.production-member-shell .agri-sider .ant-menu-sub {
+  background: #06212d !important;
+}
+
+.production-member-shell .agri-sider .ant-menu-sub .ant-menu-item {
+  padding-inline-start: 40px !important;
+}
+
+@media (max-width: 767px) {
+  .production-member-shell .production-list-filters .agri-vue-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 479px) {
+  .production-member-shell .production-list-filters .agri-vue-filter-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,295 +1,365 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Select, Statistic, Tag, message } from 'antd'
-import { SafetyOutlined } from '@ant-design/icons'
-import { ListRowActions } from '@agri/shared'
-import { getRiskAlerts, getRiskRules, getRiskSummary, handleRiskAlert, scanRisk, type RiskAlertRow, type RiskRule, type RiskSummary } from '@/api/risk'
-import { TradeFilters, TradeList } from '@/components/TradeList'
-
-const LEVEL: Record<string, { text: string; color: string }> = {
-  high: { text: '高', color: 'error' },
-  medium: { text: '中', color: 'warning' },
-  low: { text: '低', color: 'default' }
-}
-
-const STATUS: Record<string, { text: string; color: string }> = {
-  new: { text: '待处理', color: 'warning' },
-  handled: { text: '已处理', color: 'success' },
-  ignored: { text: '已忽略', color: 'default' }
-}
-
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event;
+import { Alert, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Select, Statistic, Tag, message } from "@/vue/ui";
+import { SafetyOutlined } from "@ant-design/icons-vue";
+import { ListRowActions } from "@/vue/shared";
+import { getRiskAlerts, getRiskRules, getRiskSummary, handleRiskAlert, scanRisk, type RiskAlertRow, type RiskRule, type RiskSummary } from '@/api/risk';
+import { TradeFilters, TradeList } from '@/components/TradeList';
+const LEVEL: Record<string, {
+  text: string;
+  color: string;
+}> = {
+  high: {
+    text: '高',
+    color: 'error'
+  },
+  medium: {
+    text: '中',
+    color: 'warning'
+  },
+  low: {
+    text: '低',
+    color: 'default'
+  }
+};
+const STATUS: Record<string, {
+  text: string;
+  color: string;
+}> = {
+  new: {
+    text: '待处理',
+    color: 'warning'
+  },
+  handled: {
+    text: '已处理',
+    color: 'success'
+  },
+  ignored: {
+    text: '已忽略',
+    color: 'default'
+  }
+};
 const SUBJECT_TYPE: Record<string, string> = {
   product: '货源',
   merchant: '经营主体',
   order: '订单'
-}
+};
 
 /**
  * 风控管理（运营端）。
  */
-export default function AdminRisk() {
-  const [summary, setSummary] = useState<RiskSummary | null>(null)
-  const [rules, setRules] = useState<RiskRule[]>([])
-  const [rows, setRows] = useState<RiskAlertRow[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
-  const [filters, setFilters] = useState<{ alertStatus?: string; alertLevel?: string; ruleCode?: string }>({})
-  const [draft, setDraft] = useState<{ alertStatus?: string; alertLevel?: string; ruleCode?: string }>({})
-  const [loading, setLoading] = useState(false)
-  const [scanning, setScanning] = useState(false)
-  const [detail, setDetail] = useState<RiskAlertRow | null>(null)
-  const [handleRow, setHandleRow] = useState<RiskAlertRow | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [form] = Form.useForm()
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const [s, r, a] = await Promise.all([
-        getRiskSummary(),
-        getRiskRules(),
-        getRiskAlerts({ pageNum: page, pageSize, ...filters })
-      ])
-      if (s?.code === 200) setSummary(s.data)
-      if (r?.code === 200) setRules(r.data ?? [])
-      if (a?.code === 200) {
-        setRows(a.data?.records ?? [])
-        setTotal(Number(a.data?.total ?? 0))
+const AdminRisk = defineComponent({
+  name: "AdminRisk",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const summary = shallowRef<RiskSummary | null>(null);
+    const setSummary = (next: typeof summary.value | ((previous: typeof summary.value) => typeof summary.value)) => {
+      summary.value = typeof next === 'function' ? (next as (previous: typeof summary.value) => typeof summary.value)(summary.value) : next;
+    };
+    const rules = shallowRef<RiskRule[]>([]);
+    const setRules = (next: typeof rules.value | ((previous: typeof rules.value) => typeof rules.value)) => {
+      rules.value = typeof next === 'function' ? (next as (previous: typeof rules.value) => typeof rules.value)(rules.value) : next;
+    };
+    const rows = shallowRef<RiskAlertRow[]>([]);
+    const setRows = (next: typeof rows.value | ((previous: typeof rows.value) => typeof rows.value)) => {
+      rows.value = typeof next === 'function' ? (next as (previous: typeof rows.value) => typeof rows.value)(rows.value) : next;
+    };
+    const total = shallowRef(0);
+    const setTotal = (next: typeof total.value | ((previous: typeof total.value) => typeof total.value)) => {
+      total.value = typeof next === 'function' ? (next as (previous: typeof total.value) => typeof total.value)(total.value) : next;
+    };
+    const page = shallowRef(1);
+    const setPage = (next: typeof page.value | ((previous: typeof page.value) => typeof page.value)) => {
+      page.value = typeof next === 'function' ? (next as (previous: typeof page.value) => typeof page.value)(page.value) : next;
+    };
+    const pageSize = shallowRef(20);
+    const setPageSize = (next: typeof pageSize.value | ((previous: typeof pageSize.value) => typeof pageSize.value)) => {
+      pageSize.value = typeof next === 'function' ? (next as (previous: typeof pageSize.value) => typeof pageSize.value)(pageSize.value) : next;
+    };
+    const filters = shallowRef<{
+      alertStatus?: string;
+      alertLevel?: string;
+      ruleCode?: string;
+    }>({});
+    const setFilters = (next: typeof filters.value | ((previous: typeof filters.value) => typeof filters.value)) => {
+      filters.value = typeof next === 'function' ? (next as (previous: typeof filters.value) => typeof filters.value)(filters.value) : next;
+    };
+    const draft = shallowRef<{
+      alertStatus?: string;
+      alertLevel?: string;
+      ruleCode?: string;
+    }>({});
+    const setDraft = (next: typeof draft.value | ((previous: typeof draft.value) => typeof draft.value)) => {
+      draft.value = typeof next === 'function' ? (next as (previous: typeof draft.value) => typeof draft.value)(draft.value) : next;
+    };
+    const loading = shallowRef(false);
+    const setLoading = (next: typeof loading.value | ((previous: typeof loading.value) => typeof loading.value)) => {
+      loading.value = typeof next === 'function' ? (next as (previous: typeof loading.value) => typeof loading.value)(loading.value) : next;
+    };
+    const scanning = shallowRef(false);
+    const setScanning = (next: typeof scanning.value | ((previous: typeof scanning.value) => typeof scanning.value)) => {
+      scanning.value = typeof next === 'function' ? (next as (previous: typeof scanning.value) => typeof scanning.value)(scanning.value) : next;
+    };
+    const detail = shallowRef<RiskAlertRow | null>(null);
+    const setDetail = (next: typeof detail.value | ((previous: typeof detail.value) => typeof detail.value)) => {
+      detail.value = typeof next === 'function' ? (next as (previous: typeof detail.value) => typeof detail.value)(detail.value) : next;
+    };
+    const handleRow = shallowRef<RiskAlertRow | null>(null);
+    const setHandleRow = (next: typeof handleRow.value | ((previous: typeof handleRow.value) => typeof handleRow.value)) => {
+      handleRow.value = typeof next === 'function' ? (next as (previous: typeof handleRow.value) => typeof handleRow.value)(handleRow.value) : next;
+    };
+    const saving = shallowRef(false);
+    const setSaving = (next: typeof saving.value | ((previous: typeof saving.value) => typeof saving.value)) => {
+      saving.value = typeof next === 'function' ? (next as (previous: typeof saving.value) => typeof saving.value)(saving.value) : next;
+    };
+    const form = Form.useForm();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [s, r, a] = await Promise.all([getRiskSummary(), getRiskRules(), getRiskAlerts({
+          pageNum: page.value,
+          pageSize: pageSize.value,
+          ...filters.value
+        })]);
+        if (s?.code === 200) setSummary(s.data);
+        if (r?.code === 200) setRules(r.data ?? []);
+        if (a?.code === 200) {
+          setRows(a.data?.records ?? []);
+          setTotal(Number(a.data?.total ?? 0));
+        }
+      } catch {
+        message.error('加载风控数据失败（请检查后端是否在运行）');
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      message.error('加载风控数据失败（请检查后端是否在运行）')
-    } finally {
-      setLoading(false)
-    }
-  }, [page, pageSize, filters])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  const doScan = async () => {
-    setScanning(true)
-    try {
-      const res = await scanRisk()
-      if (res?.code === 200) {
-        const d = res.data ?? {}
-        message.success(
-          `扫描完成：本次检出 ${d.detectedTotal ?? 0} 条，新增 ${(d.low_price?.created ?? 0) + (d.low_rating?.created ?? 0) + (d.delivery_timeout?.created ?? 0)} 条，` +
-          `其余为已有未处理告警（不重复入库）`
-        )
-        load()
-      } else {
-        message.error(res?.message ?? '扫描失败')
+    };
+    onMounted(() => {
+      watch(() => [page.value, pageSize.value, filters.value], (_next, _previous, onCleanup) => {
+        const dispose = (() => {
+          load();
+        })();
+        if (typeof dispose === 'function') onCleanup(dispose);
+      }, {
+        immediate: true,
+        flush: 'post'
+      });
+    });
+    const doScan = async () => {
+      setScanning(true);
+      try {
+        const res = await scanRisk();
+        if (res?.code === 200) {
+          const d = res.data ?? {};
+          message.success(`扫描完成：本次检出 ${d.detectedTotal ?? 0} 条，新增 ${(d.low_price?.created ?? 0) + (d.low_rating?.created ?? 0) + (d.delivery_timeout?.created ?? 0)} 条，` + `其余为已有未处理告警（不重复入库）`);
+          load();
+        } else {
+          message.error(res?.message ?? '扫描失败');
+        }
+      } catch {
+        message.error('扫描失败');
+      } finally {
+        setScanning(false);
       }
-    } catch {
-      message.error('扫描失败')
-    } finally {
-      setScanning(false)
-    }
-  }
-
-  const submitHandle = async () => {
-    if (!handleRow) return
-    const values = await form.validateFields()
-    setSaving(true)
-    try {
-      const res = await handleRiskAlert(handleRow.id, values.status, values.remark)
-      if (res?.code === 200) {
-        message.success(values.status === 'handled' ? '已标记处理' : '已忽略')
-        setHandleRow(null)
-        form.resetFields()
-        load()
-      } else {
-        message.error(res?.message ?? '操作失败')
+    };
+    const submitHandle = async () => {
+      if (!handleRow.value) return;
+      const values = await form.validateFields();
+      setSaving(true);
+      try {
+        const res = await handleRiskAlert(handleRow.value.id, values.status, values.remark);
+        if (res?.code === 200) {
+          message.success(values.status === 'handled' ? '已标记处理' : '已忽略');
+          setHandleRow(null);
+          form.resetFields();
+          load();
+        } else {
+          message.error(res?.message ?? '操作失败');
+        }
+      } catch {
+        message.error('操作失败');
+      } finally {
+        setSaving(false);
       }
-    } catch {
-      message.error('操作失败')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div style={{ padding: 20, display: 'grid', gap: 16 }}>
+    };
+    return () => {
+      const view_handleRow = handleRow.value;
+      const view_detail = detail.value;
+      const view_summary = summary.value;
+      return <div style={{
+        padding: 20,
+        display: 'grid',
+        gap: 16
+      }}>
       <Row gutter={16}>
-        <Col span={8}><Card><Statistic title="待处理告警" value={summary?.newCount ?? 0} suffix="条" /></Card></Col>
-        <Col span={8}><Card><Statistic title="已处理" value={summary?.handledCount ?? 0} suffix="条" /></Card></Col>
-        <Col span={8}><Card><Statistic title="已忽略" value={summary?.ignoredCount ?? 0} suffix="条" /></Card></Col>
+        <Col span={8}><Card><Statistic title="待处理告警" value={view_summary?.newCount ?? 0} suffix="条" /></Card></Col>
+        <Col span={8}><Card><Statistic title="已处理" value={view_summary?.handledCount ?? 0} suffix="条" /></Card></Col>
+        <Col span={8}><Card><Statistic title="已忽略" value={view_summary?.ignoredCount ?? 0} suffix="条" /></Card></Col>
       </Row>
 
-      <Alert
-        type="info"
-        showIcon
-        message="扫描是按需触发的，不是定时任务"
-        description="三条规则都依赖运营自己定的阈值，自动跑会让人不知道告警是按哪套阈值出来的。阈值在「系统配置 → 风控」里调整，改了下次扫描即生效。同一条规则 + 同一个对象在未处理时只保留一条，不会每次扫描都刷重复。"
-      />
+      <Alert type="info" showIcon message="扫描是按需触发的，不是定时任务" description="三条规则都依赖运营自己定的阈值，自动跑会让人不知道告警是按哪套阈值出来的。阈值在「系统配置 → 风控」里调整，改了下次扫描即生效。同一条规则 + 同一个对象在未处理时只保留一条，不会每次扫描都刷重复。" />
 
-      <TradeList<RiskRule>
-        listId="admin-risk-rules"
-        rowKey="ruleCode"
-        size="small"
-        loading={loading}
-        dataSource={rules}
-        onRefresh={load}
-        toolbarLeft={(
-          <>
-            <Button type="primary" icon={<SafetyOutlined />} loading={scanning} onClick={doScan}>
+      <TradeList listId="admin-risk-rules" rowKey="ruleCode" size="small" loading={loading.value} dataSource={rules.value} onRefresh={load} toolbarLeft={<>
+            <Button type="primary" icon={<SafetyOutlined />} loading={scanning.value} onClick={doScan}>
               执行扫描
             </Button>
-            <span style={{ fontWeight: 600 }}>风控规则（当期阈值）</span>
-          </>
-        )}
-        columns={[
-          { title: '规则', dataIndex: 'ruleName', width: 130, ellipsis: true },
-          {
-            title: '等级',
-            dataIndex: 'alertLevel',
-            width: 96,
-            render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag>
-          },
-          {
-            title: '阈值配置键',
-            dataIndex: 'thresholdKey',
-            width: 260,
-            ellipsis: true,
-            render: (v: string) => <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{v}</span>
-          },
-          { title: '当前阈值', dataIndex: 'thresholdValue', width: 120, render: (v: string) => v ?? '（用默认值）' },
-          { title: '判定依据', dataIndex: 'description', width: 320, ellipsis: true }
-        ]}
-      />
+            <span style={{
+            fontWeight: 600
+          }}>风控规则（当期阈值）</span>
+          </>} columns={[{
+          title: '规则',
+          dataIndex: 'ruleName',
+          width: 130,
+          ellipsis: true
+        }, {
+          title: '等级',
+          dataIndex: 'alertLevel',
+          width: 96,
+          render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag>
+        }, {
+          title: '阈值配置键',
+          dataIndex: 'thresholdKey',
+          width: 260,
+          ellipsis: true,
+          render: (v: string) => <span style={{
+            fontFamily: 'monospace',
+            fontSize: 12
+          }}>{v}</span>
+        }, {
+          title: '当前阈值',
+          dataIndex: 'thresholdValue',
+          width: 120,
+          render: (v: string) => v ?? '（用默认值）'
+        }, {
+          title: '判定依据',
+          dataIndex: 'description',
+          width: 320,
+          ellipsis: true
+        }]} />
 
-      <TradeList<RiskAlertRow>
-        listId="admin-risk-alerts"
-        rowKey="id"
-        loading={loading}
-        dataSource={rows}
-        onRefresh={load}
-        toolbarLeft={<span style={{ fontWeight: 600 }}>风控告警（共 {total} 条）</span>}
-        filterSlot={(
-          <TradeFilters
-            loading={loading}
-            onQuery={() => {
-              setPage(1)
-              setFilters(draft)
-            }}
-            onReset={() => {
-              setDraft({})
-              setFilters({})
-              setPage(1)
-            }}
-            fields={[
-              {
-                label: '处理状态',
-                control: (
-                  <Select
-                    allowClear
-                    value={draft.alertStatus}
-                    placeholder="全部状态"
-                    onChange={(v) => setDraft((p) => ({ ...p, alertStatus: v }))}
-                    options={Object.entries(STATUS).map(([value, item]) => ({ value, label: item.text }))}
-                  />
-                ),
-              },
-              {
-                label: '告警等级',
-                control: (
-                  <Select
-                    allowClear
-                    value={draft.alertLevel}
-                    placeholder="全部等级"
-                    onChange={(v) => setDraft((p) => ({ ...p, alertLevel: v }))}
-                    options={Object.entries(LEVEL).map(([value, item]) => ({ value, label: item.text }))}
-                  />
-                ),
-              },
-              {
-                label: '风控规则',
-                control: (
-                  <Select
-                    allowClear
-                    value={draft.ruleCode}
-                    placeholder="全部规则"
-                    onChange={(v) => setDraft((p) => ({ ...p, ruleCode: v }))}
-                    options={rules.map((r) => ({ value: r.ruleCode, label: r.ruleName }))}
-                  />
-                ),
-              },
-            ]}
-          />
-        )}
-        locale={{ emptyText: '还没有告警，点上方「执行扫描」跑一次' }}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
+      <TradeList listId="admin-risk-alerts" rowKey="id" loading={loading.value} dataSource={rows.value} onRefresh={load} toolbarLeft={<span style={{
+          fontWeight: 600
+        }}>风控告警（共 {total.value} 条）</span>} filterSlot={<TradeFilters loading={loading.value} onQuery={() => {
+          setPage(1);
+          setFilters(draft.value);
+        }} onReset={() => {
+          setDraft({});
+          setFilters({});
+          setPage(1);
+        }} fields={[{
+          label: '处理状态',
+          control: <Select allowClear value={draft.value.alertStatus} placeholder="全部状态" onChange={v => setDraft(p => ({
+            ...p,
+            alertStatus: v
+          }))} options={Object.entries(STATUS).map(([value, item]) => ({
+            value,
+            label: item.text
+          }))} />
+        }, {
+          label: '告警等级',
+          control: <Select allowClear value={draft.value.alertLevel} placeholder="全部等级" onChange={v => setDraft(p => ({
+            ...p,
+            alertLevel: v
+          }))} options={Object.entries(LEVEL).map(([value, item]) => ({
+            value,
+            label: item.text
+          }))} />
+        }, {
+          label: '风控规则',
+          control: <Select allowClear value={draft.value.ruleCode} placeholder="全部规则" onChange={v => setDraft(p => ({
+            ...p,
+            ruleCode: v
+          }))} options={rules.value.map(r => ({
+            value: r.ruleCode,
+            label: r.ruleName
+          }))} />
+        }]} />} locale={{
+          emptyText: '还没有告警，点上方「执行扫描」跑一次'
+        }} pagination={{
+          current: page.value,
+          pageSize: pageSize.value,
+          total: total.value,
           onChange: (nextPage, nextSize) => {
-            setPage(nextPage)
-            setPageSize(nextSize)
-          },
-        }}
-        columns={[
-          { title: '告警编号', dataIndex: 'alertNo', width: 190, ellipsis: true },
-          { title: '规则', dataIndex: 'ruleName', width: 110, ellipsis: true },
-          {
-            title: '等级',
-            dataIndex: 'alertLevel',
-            width: 92,
-            render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag>
-          },
-          {
-            title: '对象',
-            dataIndex: 'subjectName',
-            width: 190,
-            ellipsis: true,
-            render: (v: string, row: RiskAlertRow) => `${SUBJECT_TYPE[row.subjectType] ?? row.subjectType}：${v ?? row.subjectId}`
-          },
-          { title: '告警', dataIndex: 'title', width: 200, ellipsis: true },
-          { title: '判定依据', dataIndex: 'detail', width: 240, ellipsis: true },
-          {
-            title: '状态',
-            dataIndex: 'alertStatus',
-            width: 104,
-            render: (v: string) => <Tag color={STATUS[v]?.color ?? 'default'}>{STATUS[v]?.text ?? v}</Tag>
-          },
-          { title: '检出时间', dataIndex: 'detectedAt', width: 170 },
-          {
-            title: '操作',
-            key: 'action',
-            width: 130,
-            render: (_: unknown, row: RiskAlertRow) => (
-              <ListRowActions
-                items={[
-                  <Button key="detail" type="link" size="small" onClick={() => setDetail(row)}>详情</Button>,
-                  row.alertStatus === 'new' && (
-                    <Button key="handle" type="link" size="small" onClick={() => { setHandleRow(row); form.setFieldsValue({ status: 'handled' }) }}>
-                      处理
-                    </Button>
-                  ),
-                ]}
-              />
-            )
+            setPage(nextPage);
+            setPageSize(nextSize);
           }
-        ]}
-      />
+        }} columns={[{
+          title: '告警编号',
+          dataIndex: 'alertNo',
+          width: 190,
+          ellipsis: true
+        }, {
+          title: '规则',
+          dataIndex: 'ruleName',
+          width: 110,
+          ellipsis: true
+        }, {
+          title: '等级',
+          dataIndex: 'alertLevel',
+          width: 92,
+          render: (v: string) => <Tag color={LEVEL[v]?.color ?? 'default'}>{LEVEL[v]?.text ?? v}</Tag>
+        }, {
+          title: '对象',
+          dataIndex: 'subjectName',
+          width: 190,
+          ellipsis: true,
+          render: (v: string, row: RiskAlertRow) => `${SUBJECT_TYPE[row.subjectType] ?? row.subjectType}：${v ?? row.subjectId}`
+        }, {
+          title: '告警',
+          dataIndex: 'title',
+          width: 200,
+          ellipsis: true
+        }, {
+          title: '判定依据',
+          dataIndex: 'detail',
+          width: 240,
+          ellipsis: true
+        }, {
+          title: '状态',
+          dataIndex: 'alertStatus',
+          width: 104,
+          render: (v: string) => <Tag color={STATUS[v]?.color ?? 'default'}>{STATUS[v]?.text ?? v}</Tag>
+        }, {
+          title: '检出时间',
+          dataIndex: 'detectedAt',
+          width: 170
+        }, {
+          title: '操作',
+          key: 'action',
+          width: 130,
+          render: (_: unknown, row: RiskAlertRow) => <ListRowActions items={[<Button key="detail" type="link" size="small" onClick={() => setDetail(row)}>详情</Button>, row.alertStatus === 'new' && <Button key="handle" type="link" size="small" onClick={() => {
+            setHandleRow(row);
+            form.setFieldsValue({
+              status: 'handled'
+            });
+          }}>
+                      处理
+                    </Button>]} />
+        }]} />
 
-      <Modal title="处理告警" open={!!handleRow} onCancel={() => setHandleRow(null)} onOk={submitHandle}
-        confirmLoading={saving} destroyOnClose>
-        {handleRow && (
-          <Descriptions bordered column={1} size="small" style={{ marginBottom: 12 }}>
-            <Descriptions.Item label="告警">{handleRow.title}</Descriptions.Item>
-            <Descriptions.Item label="判定依据">{handleRow.detail}</Descriptions.Item>
-          </Descriptions>
-        )}
-        <Alert type="info" showIcon style={{ marginBottom: 12 }}
-          message="这里只标记处理结果，不做处置动作"
-          description="需要下架就走「商品与品类 → 违规下架」，需要介入交易就走纠纷仲裁 —— 各自留痕。忽略必须写原因，事后要能回答「当时为什么不看」。" />
+      <Modal title="处理告警" open={!!view_handleRow} onCancel={() => setHandleRow(null)} onOk={submitHandle} confirmLoading={saving.value} destroyOnClose>
+        {view_handleRow && <Descriptions bordered column={1} size="small" style={{
+            marginBottom: 12
+          }}>
+            <Descriptions.Item label="告警">{view_handleRow.title}</Descriptions.Item>
+            <Descriptions.Item label="判定依据">{view_handleRow.detail}</Descriptions.Item>
+          </Descriptions>}
+        <Alert type="info" showIcon style={{
+            marginBottom: 12
+          }} message="这里只标记处理结果，不做处置动作" description="需要下架就走「商品与品类 → 违规下架」，需要介入交易就走纠纷仲裁 —— 各自留痕。忽略必须写原因，事后要能回答「当时为什么不看」。" />
         <Form form={form} layout="vertical">
-          <Form.Item name="status" label="处理结果" rules={[{ required: true, message: '请选择' }]}>
-            <Select options={[
-              { value: 'handled', label: '已处理（核实过并采取了动作）' },
-              { value: 'ignored', label: '已忽略（判定为误报或无需处理）' }
-            ]} />
+          <Form.Item name="status" label="处理结果" rules={[{
+              required: true,
+              message: '请选择'
+            }]}>
+            <Select options={[{
+                value: 'handled',
+                label: '已处理（核实过并采取了动作）'
+              }, {
+                value: 'ignored',
+                label: '已忽略（判定为误报或无需处理）'
+              }]} />
           </Form.Item>
           <Form.Item name="remark" label="备注" extra="忽略时必填">
             <Input.TextArea rows={3} placeholder="例如：核实为同规格不同包装，价格正常" />
@@ -297,26 +367,26 @@ export default function AdminRisk() {
         </Form>
       </Modal>
 
-      <Modal title="告警详情" open={!!detail} onCancel={() => setDetail(null)} footer={null} width={720}>
-        {detail && (
-          <Descriptions bordered column={1} size="small">
-            <Descriptions.Item label="告警编号">{detail.alertNo}</Descriptions.Item>
-            <Descriptions.Item label="规则">{detail.ruleName}（{detail.ruleCode}）</Descriptions.Item>
+      <Modal title="告警详情" open={!!view_detail} onCancel={() => setDetail(null)} footer={null} width={720}>
+        {view_detail && <Descriptions bordered column={1} size="small">
+            <Descriptions.Item label="告警编号">{view_detail.alertNo}</Descriptions.Item>
+            <Descriptions.Item label="规则">{view_detail.ruleName}（{view_detail.ruleCode}）</Descriptions.Item>
             <Descriptions.Item label="对象">
-              {SUBJECT_TYPE[detail.subjectType] ?? detail.subjectType}：{detail.subjectName ?? detail.subjectId}
+              {SUBJECT_TYPE[view_detail.subjectType] ?? view_detail.subjectType}：{view_detail.subjectName ?? view_detail.subjectId}
             </Descriptions.Item>
-            <Descriptions.Item label="告警">{detail.title}</Descriptions.Item>
-            <Descriptions.Item label="判定依据">{detail.detail}</Descriptions.Item>
+            <Descriptions.Item label="告警">{view_detail.title}</Descriptions.Item>
+            <Descriptions.Item label="判定依据">{view_detail.detail}</Descriptions.Item>
             <Descriptions.Item label="状态">
-              <Tag color={STATUS[detail.alertStatus]?.color ?? 'default'}>{STATUS[detail.alertStatus]?.text ?? detail.alertStatus}</Tag>
+              <Tag color={STATUS[view_detail.alertStatus]?.color ?? 'default'}>{STATUS[view_detail.alertStatus]?.text ?? view_detail.alertStatus}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="检出时间">{detail.detectedAt}</Descriptions.Item>
-            <Descriptions.Item label="处理人">{detail.handler ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="处理时间">{detail.handleTime ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="处理备注">{detail.handleRemark ?? '—'}</Descriptions.Item>
-          </Descriptions>
-        )}
+            <Descriptions.Item label="检出时间">{view_detail.detectedAt}</Descriptions.Item>
+            <Descriptions.Item label="处理人">{view_detail.handler ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="处理时间">{view_detail.handleTime ?? '—'}</Descriptions.Item>
+            <Descriptions.Item label="处理备注">{view_detail.handleRemark ?? '—'}</Descriptions.Item>
+          </Descriptions>}
       </Modal>
-    </div>
-  )
-}
+    </div>;
+    };
+  }
+});
+export default AdminRisk;

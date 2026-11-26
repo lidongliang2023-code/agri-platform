@@ -1,0 +1,814 @@
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event & {
+  target: T;
+  currentTarget: T;
+  nativeEvent: Event;
+  key: string;
+};
+/**
+ * 页面名称：数据大屏驾驶舱
+ * 路由路径：/admin/production/dashboard/screen
+ * 所属模块：运营仪表盘
+ * PRD 序号：PRD 6.2 #3
+ * 说明：原型无此页，按 PRD「投屏展示、区域地图、实时滚动指标」实现；
+ * 深色背景为业务大屏设计要求，页面内所有文本均使用高对比度浅色，确保在深色下可读。
+ *
+ * ====================== 数据源实测结论（已连后端验证） ======================
+ * 可用（真实数据）：
+ * - GET /admin/dashboard              农场 / 地块 / 待办任务 / 在库批次 / 检测合格与不合格 / 待处理告警 / 在线设备
+ * - GET /admin/dashboard/rank         TOP 农场种植面积排行
+ * - GET /admin/dashboard/alert-trend  告警级别分布（INFO / WARN / CRITICAL）
+ * 不可用（后端无此端点，code=500）：
+ * - GET /admin/dashboard/screen                → 大屏专用聚合
+ * - GET /admin/dashboard/region-distribution   → 区域生产分布
+ * - GET /admin/dashboard/realtime              → 实时滚动指标流
+ * 后端亦无「近 12 小时趋势」「在田作物结构」端点。
+ *
+ * 处置：真实端点出真数；不可用端点**不再用硬编码示例数据顶替**，统一空态 + 明确提示。
+ * =========================================================================
+ */
+
+import { Alert, Button, Empty, Space, Tooltip, Typography } from '@/vue/ui';
+import { ExclamationCircleOutlined, FullscreenExitOutlined, FullscreenOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import { useQuery, useQueryClient } from '@/vue/query';
+import { fetchAlertLevelMap, fetchOpsOverviewMetrics, fetchOverviewRows, fetchRealtimeMetrics, fetchRegionStats, fetchRankItems, fetchTrendPoints } from '@/api/admin/dashboard';
+import { TiandituMap, chinaRegionCenter, type TiandituMapPoint } from '@/vue/business/shared';
+const {
+  Text
+} = Typography;
+
+/** 大屏配色常量（深色底 + 霓虹强调色，文本均为高对比浅色） */
+const SCREEN_THEME = {
+  /** 背景起始色 */
+  bgFrom: '#04102a',
+  /** 背景结束色 */
+  bgTo: '#0a1c3d',
+  /** 面板底色 */
+  panel: 'rgba(16, 40, 82, 0.55)',
+  /** 面板描边 */
+  border: 'rgba(64, 158, 255, 0.35)',
+  /** 主文本色（高对比） */
+  text: '#eaf3ff',
+  /** 次级文本色（保持 >4.5:1 对比度） */
+  subText: '#a9c8ef',
+  /** 强调色 青柠 */
+  accent: '#2be7c4',
+  /** 强调色 蓝 */
+  accentBlue: '#4facfe',
+  /** 强调色 橙（告警） */
+  accentOrange: '#ffb84d',
+  /** 强调色 红（预警） */
+  accentRed: '#ff7875'
+} as const;
+
+/** 大屏核心指标定义 */
+interface ScreenKpi {
+  /** 唯一标识 */
+  key: string;
+  /** 标题 */
+  title: string;
+  /** 数值文本（后端未返回时为 undefined，渲染为「未接入」） */
+  value?: number;
+  /** 单位 */
+  unit: string;
+  /** 小数位 */
+  precision: number;
+  /** 强调色 */
+  color: string;
+}
+
+/**
+ * 将后端返回的「可能是字符串的数字」安全转为 number。
+ *
+ * @param value 后端原始值
+ * @returns 数字；无法解析时返回 undefined（保持「未接入」语义，绝不填 0）
+ */
+function toNumber(value: string | number | undefined): number | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * 告警级别中文名。
+ *
+ * 兼容两套键名（枚举迁移还没执行完，**旧键必须留着**）：
+ * - 迁移前：`INFO / WARN / CRITICAL`（实测 `GET /admin/dashboard/alert-trend`
+ *   当前返回 `{"INFO":"6","WARN":"7","CRITICAL":"4"}`）
+ * - 迁移后：`info / normal / important / urgent`，对应关系
+ *   `INFO→info`、`WARN→normal`、`CRITICAL→important`、`URGENT→urgent`
+ *   （**不是**大小写转换）。两套并存时只是多几个键，不会互相顶掉。
+ */
+const ALERT_LEVEL_TEXT: Record<string, string> = {
+  INFO: '提示级',
+  WARN: '预警级',
+  CRITICAL: '严重级',
+  URGENT: '紧急级',
+  info: '提示级',
+  normal: '预警级',
+  important: '严重级',
+  urgent: '紧急级'
+};
+
+/**
+ * 告警级别配色。
+ *
+ * 键名兼容说明见 {@link ALERT_LEVEL_TEXT}；未命中的键回落到
+ * {@link SCREEN_THEME.accentBlue}（调用方兜底），不会变成"无色"。
+ */
+const ALERT_LEVEL_COLOR: Record<string, string> = {
+  INFO: SCREEN_THEME.accentBlue,
+  WARN: SCREEN_THEME.accentOrange,
+  CRITICAL: SCREEN_THEME.accentRed,
+  URGENT: SCREEN_THEME.accentRed,
+  info: SCREEN_THEME.accentBlue,
+  normal: SCREEN_THEME.accentOrange,
+  important: SCREEN_THEME.accentRed,
+  urgent: SCREEN_THEME.accentRed
+};
+
+/** 不可用面板的空态（深色底适配） */
+const PanelEmpty = defineComponent({
+  name: "PanelEmpty",
+  props: {
+    text: null as unknown as PropType<{
+      text: string;
+    }["text"]>
+  },
+  setup(__props: {
+    text: string;
+  }, {
+    slots: __slots
+  }) {
+    return () => {
+      return <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 200
+      }}>
+      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{
+          color: SCREEN_THEME.subText,
+          fontSize: 12
+        }}>{__props.text}</span>} />
+    </div>;
+    };
+  }
+});
+/**
+ * 数据大屏驾驶舱
+ *
+ * 业务职责：面向投屏的运营驾驶舱，含大字号核心指标、TOP 农场榜、告警级别分布；
+ * 区域分布 / 实时滚动流 / 近 12 小时趋势 / 作物结构因后端无对应端点，统一呈现空态并明示。
+ *
+ * @returns 页面内容
+ */
+const OpsDataScreen = defineComponent({
+  name: "OpsDataScreen",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    /** 大屏容器引用（用于全屏切换） */
+    const containerRef = shallowRef<HTMLDivElement | null>(null);
+    /** 是否已进入全屏 */
+    const isFullscreen = shallowRef<boolean>(false);
+    /** 当前时间 */
+    const setIsFullscreen = (next: typeof isFullscreen.value | ((previous: typeof isFullscreen.value) => typeof isFullscreen.value)) => {
+      isFullscreen.value = typeof next === 'function' ? (next as (previous: typeof isFullscreen.value) => typeof isFullscreen.value)(isFullscreen.value) : next;
+    };
+    const now = shallowRef<string>(new Date().toLocaleString('zh-CN', {
+      hour12: false
+    }));
+    const setNow = (next: typeof now.value | ((previous: typeof now.value) => typeof now.value)) => {
+      now.value = typeof next === 'function' ? (next as (previous: typeof now.value) => typeof now.value)(now.value) : next;
+    };
+    const queryClient = useQueryClient();
+
+    /** 运营大盘真实指标（每 5 分钟自动刷新） */
+    const overviewQuery = useQuery(() => ({
+      queryKey: ['admin', 'dashboard', 'overview'],
+      queryFn: () => fetchOpsOverviewMetrics(),
+      retry: false,
+      refetchInterval: 300_000
+    }));
+
+    /** TOP 农场种植面积排行（真实） */
+    const rankQuery = useQuery(() => ({
+      queryKey: ['admin', 'dashboard', 'rank'],
+      queryFn: () => fetchRankItems(10),
+      retry: false,
+      refetchInterval: 300_000
+    }));
+
+    /** 告警级别分布（真实） */
+    const alertQuery = useQuery(() => ({
+      queryKey: ['admin', 'dashboard', 'alert-trend'],
+      queryFn: () => fetchAlertLevelMap(),
+      retry: false,
+      refetchInterval: 300_000
+    }));
+
+    /** 区域分布：使用生产域真实区域聚合 */
+    const regionQuery = useQuery(() => ({
+      queryKey: ['admin', 'dashboard', 'region-distribution'],
+      queryFn: () => fetchRegionStats(),
+      retry: false,
+      refetchInterval: 300_000
+    }));
+
+    /** 近 7 天趋势：真实任务完成率、作业人数和告警数 */
+    const trendQuery = useQuery(() => ({
+      queryKey: ['admin', 'dashboard', 'trend'],
+      queryFn: () => fetchTrendPoints(),
+      retry: false,
+      refetchInterval: 300_000
+    }));
+
+    /** 在田作物结构：按当前地块作物聚合真实面积 */
+    const cropQuery = useQuery(() => ({
+      queryKey: ['admin', 'dashboard', 'crop-rows'],
+      queryFn: () => fetchOverviewRows({
+        dimension: 'crop'
+      }),
+      retry: false,
+      refetchInterval: 300_000
+    }));
+
+    /** 最近生产动态：任务与告警事实合并后的真实列表 */
+    const realtimeQuery = useQuery(() => ({
+      queryKey: ['admin', 'dashboard', 'realtime'],
+      queryFn: () => fetchRealtimeMetrics(20),
+      retry: false,
+      refetchInterval: 60_000
+    }));
+
+    /** 时钟：每秒刷新一次，组件卸载时清理 */
+    (() => {
+      let dispose: void | (() => void);
+      onMounted(() => {
+        dispose = (() => {
+          const timer = window.setInterval(() => {
+            setNow(new Date().toLocaleString('zh-CN', {
+              hour12: false
+            }));
+          }, 1000);
+          return () => window.clearInterval(timer);
+        })();
+      });
+      onBeforeUnmount(() => {
+        if (typeof dispose === 'function') dispose();
+      });
+    })();
+
+    /** 核心指标（全部来自 GET /admin/dashboard；未返回则显示「未接入」） */
+    const kpiList = computed<ScreenKpi[]>(() => {
+      const raw = overviewQuery.data;
+      return [{
+        key: 'farm',
+        title: '接入农场',
+        value: toNumber(raw?.farmCount),
+        unit: '个',
+        precision: 0,
+        color: SCREEN_THEME.accent
+      }, {
+        key: 'plot',
+        title: '地块总数',
+        value: toNumber(raw?.plotCount),
+        unit: '个',
+        precision: 0,
+        color: SCREEN_THEME.accentBlue
+      }, {
+        key: 'device',
+        title: '在线设备',
+        value: toNumber(raw?.deviceOnline),
+        unit: `/ ${raw?.deviceTotal ?? '—'} 台`,
+        precision: 0,
+        color: '#69b1ff'
+      }, {
+        key: 'task',
+        title: '待办任务',
+        value: toNumber(raw?.taskPending),
+        unit: '条',
+        precision: 0,
+        color: SCREEN_THEME.accentOrange
+      }, {
+        key: 'batch',
+        title: '在库批次',
+        value: toNumber(raw?.batchInStock),
+        unit: '个',
+        precision: 0,
+        color: '#7ee787'
+      }, {
+        key: 'alert',
+        title: '待处理告警',
+        value: toNumber(raw?.alertPending),
+        unit: '条',
+        precision: 0,
+        color: SCREEN_THEME.accentRed
+      }, {
+        key: 'inspection',
+        title: '检测合格 / 不合格',
+        value: undefined,
+        unit: '',
+        precision: 0,
+        color: SCREEN_THEME.accent
+      }];
+    });
+
+    /** 检测合格 / 不合格（后端返回的两个真实计数，不做比率换算） */
+    const inspectionText = computed<string>(() => {
+      const pass = toNumber(overviewQuery.data?.inspectionPass);
+      const fail = toNumber(overviewQuery.data?.inspectionFail);
+      if (pass === undefined && fail === undefined) {
+        return '未接入';
+      }
+      return `${pass ?? '—'} / ${fail ?? '—'}`;
+    });
+
+    /** 告警级别分布行（真实） */
+    const alertRows = computed(() => {
+      const raw = alertQuery.data ?? {};
+      return Object.entries(raw).map(([level, count]) => ({
+        level,
+        label: ALERT_LEVEL_TEXT[level] ?? level,
+        count: toNumber(count as string | number) ?? 0,
+        color: ALERT_LEVEL_COLOR[level] ?? SCREEN_THEME.accentBlue
+      })).filter(item => item.count > 0);
+    });
+    const regionMapPoints = computed<TiandituMapPoint[]>(() => {
+      return (regionQuery.data ?? []).flatMap(item => {
+        const center = chinaRegionCenter(item.region);
+        return center ? [{
+          id: item.region,
+          longitude: center.longitude,
+          latitude: center.latitude,
+          title: item.region,
+          meta: `${item.farmCount} 个农场 · ${Number(item.fieldArea).toLocaleString('zh-CN')} 亩`,
+          tone: item.activityLevel === 'high' ? 'green' : item.activityLevel === 'middle' ? 'orange' : 'red'
+        }] : [];
+      });
+    });
+    const cropRows = computed(() => (cropQuery.data ?? []).map(item => ({
+      name: item.name,
+      area: Number(item.fieldArea) || 0,
+      farmCount: Number(item.farmCount) || 0
+    })).sort((a, b) => b.area - a.area));
+
+    /** 切换全屏 */
+    const toggleFullscreen = (): void => {
+      if (document.fullscreenElement) {
+        void document.exitFullscreen();
+        setIsFullscreen(false);
+        return;
+      }
+      void containerRef.value?.requestFullscreen();
+      setIsFullscreen(true);
+    };
+
+    /** 手动刷新全部真实指标 */
+    const handleRefresh = (): void => {
+      void queryClient.invalidateQueries({
+        queryKey: ['admin', 'dashboard']
+      });
+    };
+
+    /** 通用面板样式 */
+    const panelStyle = computed<CSSProperties>(() => ({
+      background: SCREEN_THEME.panel,
+      border: `1px solid ${SCREEN_THEME.border}`,
+      borderRadius: 8,
+      padding: 12,
+      height: '100%'
+    }));
+
+    /** 真实数据是否至少有一个源成功 */
+    const hasRealData = computed(() => Boolean(overviewQuery.data || rankQuery.data || alertQuery.data || regionQuery.data || trendQuery.data || cropQuery.data || realtimeQuery.data));
+    return () => {
+      return <div ref={containerRef} style={{
+        background: `linear-gradient(160deg, ${SCREEN_THEME.bgFrom} 0%, ${SCREEN_THEME.bgTo} 100%)`,
+        borderRadius: 10,
+        padding: 16,
+        minHeight: 'calc(100vh - 120px)',
+        color: SCREEN_THEME.text
+      }}>
+      <Alert banner type="warning" showIcon style={{
+          marginBottom: 12
+        }} message="大屏口径说明：核心指标、区域分布、近 7 天趋势、作物结构、生产动态、TOP 农场榜和告警级别均取真实生产接口；没有历史设备小时数据，因此不虚构设备趋势" />
+
+      {/* 大屏顶栏 */}
+      <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: `1px solid ${SCREEN_THEME.border}`,
+          paddingBottom: 10,
+          marginBottom: 12
+        }}>
+        <div style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: 12
+          }}>
+          <span style={{
+              fontSize: 26,
+              fontWeight: 700,
+              letterSpacing: 2,
+              color: SCREEN_THEME.text,
+              textShadow: `0 0 12px ${SCREEN_THEME.accentBlue}`
+            }}>
+            农业生产数字化运营大屏
+          </span>
+          <span style={{
+              color: SCREEN_THEME.subText,
+              fontSize: 13
+            }}>
+            {hasRealData.value ? '实时数据模式' : '未取到数据'} · 数据每 5 分钟自动刷新
+          </span>
+        </div>
+        <Space size={8}>
+          <span style={{
+              color: SCREEN_THEME.accent,
+              fontSize: 16,
+              fontWeight: 600
+            }}>{now.value}</span>
+          <Tooltip title="重新拉取大屏数据">
+            <Button size="small" icon={<ReloadOutlined />} onClick={handleRefresh} style={{
+                background: 'rgba(79,172,254,0.2)',
+                color: SCREEN_THEME.text,
+                borderColor: SCREEN_THEME.border
+              }} />
+          </Tooltip>
+          <Tooltip title={isFullscreen.value ? '退出全屏' : '进入全屏'}>
+            <Button size="small" icon={isFullscreen.value ? <FullscreenExitOutlined /> : <FullscreenOutlined />} onClick={toggleFullscreen} style={{
+                background: 'rgba(79,172,254,0.2)',
+                color: SCREEN_THEME.text,
+                borderColor: SCREEN_THEME.border
+              }} />
+          </Tooltip>
+        </Space>
+      </div>
+
+      {/* 核心指标区 */}
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: 10,
+          marginBottom: 12
+        }}>
+        {kpiList.value.map(item => <div key={item.key} style={{
+            ...panelStyle.value,
+            padding: 14,
+            background: 'rgba(12, 34, 72, 0.72)',
+            boxShadow: `inset 0 0 24px rgba(43, 231, 196, 0.08)`
+          }}>
+            <div style={{
+              color: SCREEN_THEME.subText,
+              fontSize: 13
+            }}>{item.title}</div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 4,
+              marginTop: 6
+            }}>
+              <span style={{
+                fontSize: 30,
+                fontWeight: 700,
+                color: item.value === undefined ? SCREEN_THEME.subText : item.color,
+                textShadow: item.value === undefined ? 'none' : `0 0 10px ${item.color}55`
+              }}>
+                {item.key === 'inspection' ? inspectionText.value : item.value === undefined ? '未接入' : item.value.toLocaleString('zh-CN', {
+                  minimumFractionDigits: item.precision,
+                  maximumFractionDigits: item.precision
+                })}
+              </span>
+              {item.unit && item.key !== 'inspection' ? <span style={{
+                color: SCREEN_THEME.subText,
+                fontSize: 13
+              }}>{item.unit}</span> : null}
+            </div>
+            <div style={{
+              marginTop: 4,
+              color: SCREEN_THEME.subText,
+              fontSize: 12
+            }}>
+              {item.key === 'inspection' ? '条（后端未返回比率，不做换算）' : `来源：GET /admin/dashboard`}
+            </div>
+          </div>)}
+      </div>
+
+      {/* 中部：区域分布 / 实时指标 / 告警播报 */}
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1.1fr 1.2fr 1fr',
+          gap: 12,
+          marginBottom: 12
+        }}>
+        {/* 区域生产分布：真实生产域区域聚合 */}
+        <div style={panelStyle.value}>
+          <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 8
+            }}>
+            <span style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: SCREEN_THEME.text
+              }}>区域生产分布</span>
+            <span style={{
+                fontSize: 12,
+                color: SCREEN_THEME.accent
+              }}>{regionMapPoints.value.length > 0 ? '实时口径' : '暂无数据'}</span>
+          </div>
+          <TiandituMap points={regionMapPoints.value} height={190} showLegend={false} compact />
+          <div style={{
+              marginTop: 6,
+              color: SCREEN_THEME.subText,
+              fontSize: 12
+            }}>来源：GET /admin/dashboard/region-distribution；按省级区域聚合。</div>
+        </div>
+
+        {/* 实时滚动指标：任务与告警事实 */}
+        <div style={panelStyle.value}>
+          <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 8
+            }}>
+            <span style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: SCREEN_THEME.text
+              }}>实时生产动态</span>
+            <span style={{
+                fontSize: 12,
+                color: SCREEN_THEME.accent
+              }}>{realtimeQuery.data?.length ? '实时口径' : '暂无数据'}</span>
+          </div>
+          {realtimeQuery.data?.length ? <div style={{
+              maxHeight: 205,
+              overflowY: 'auto'
+            }}>
+              {realtimeQuery.data.map(item => <div key={item.metricId} style={{
+                padding: '7px 8px',
+                marginBottom: 6,
+                borderRadius: 6,
+                background: 'rgba(160,200,240,0.08)',
+                borderLeft: `3px solid ${item.isAlert ? SCREEN_THEME.accentRed : SCREEN_THEME.accent}`
+              }}>
+                  <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 8
+                }}>
+                    <span style={{
+                    color: SCREEN_THEME.text,
+                    fontSize: 12
+                  }}>{item.targetName}</span>
+                    <span style={{
+                    color: SCREEN_THEME.subText,
+                    fontSize: 12
+                  }}>{item.time}</span>
+                  </div>
+                  <div style={{
+                  color: item.isAlert ? SCREEN_THEME.accentRed : SCREEN_THEME.subText,
+                  fontSize: 12,
+                  marginTop: 3
+                }}>{item.content}</div>
+                </div>)}
+            </div> : <PanelEmpty text="暂无任务或告警动态" />}
+        </div>
+
+        {/* 告警播报：真实告警级别分布 */}
+        <div style={panelStyle.value}>
+          <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginBottom: 8
+            }}>
+            <span style={{
+                fontSize: 15,
+                fontWeight: 600,
+                color: SCREEN_THEME.text
+              }}>
+              告警级别分布
+            </span>
+            <span style={{
+                color: SCREEN_THEME.accentOrange,
+                fontSize: 12
+              }}>
+              {alertRows.value.length > 0 ? '实时口径' : '未接入'}
+            </span>
+          </div>
+          {alertRows.value.length === 0 ? <PanelEmpty text="后端 /admin/dashboard/alert-trend 未返回数据" /> : <div style={{
+              maxHeight: 230,
+              overflowY: 'auto'
+            }}>
+              {alertRows.value.map(item => <div key={item.level} style={{
+                padding: '8px 10px',
+                marginBottom: 8,
+                borderRadius: 6,
+                background: 'rgba(160,200,240,0.08)',
+                borderLeft: `3px solid ${item.color}`
+              }}>
+                  <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between'
+                }}>
+                    <Space size={6}>
+                      <ExclamationCircleOutlined style={{
+                      color: item.color
+                    }} />
+                      <span style={{
+                      color: SCREEN_THEME.text,
+                      fontSize: 13
+                    }}>{item.label}</span>
+                    </Space>
+                    <span style={{
+                    color: item.color,
+                    fontSize: 16,
+                    fontWeight: 700
+                  }}>
+                      {item.count}
+                    </span>
+                  </div>
+                </div>)}
+            </div>}
+          <div style={{
+              marginTop: 12
+            }}>
+            <Text style={{
+                color: SCREEN_THEME.subText,
+                fontSize: 12
+              }}>
+              处置闭环：告警自动派单 → 责任人确认 → 现场处置 → 复盘归档
+            </Text>
+          </div>
+        </div>
+      </div>
+
+      {/* 底部：趋势 + 作物结构 + TOP 主体 */}
+      <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1.4fr 1fr 1fr',
+          gap: 12
+        }}>
+        <div style={panelStyle.value}>
+          <div style={{
+              fontSize: 15,
+              fontWeight: 600,
+              marginBottom: 6,
+              color: SCREEN_THEME.text
+            }}>近 7 天任务与告警趋势</div>
+          {trendQuery.data?.length ? <div style={{
+              maxHeight: 220,
+              overflowY: 'auto'
+            }}>
+              {trendQuery.data.map(item => <div key={item.label} style={{
+                display: 'grid',
+                gridTemplateColumns: '52px 1fr 54px',
+                gap: 8,
+                alignItems: 'center',
+                padding: '8px 0',
+                borderBottom: '1px solid rgba(160,200,240,0.12)'
+              }}>
+                  <span style={{
+                  color: SCREEN_THEME.subText,
+                  fontSize: 12
+                }}>{item.label}</span>
+                  <div>
+                    <div style={{
+                    height: 7,
+                    borderRadius: 4,
+                    background: 'rgba(79,172,254,0.18)',
+                    overflow: 'hidden'
+                  }}><div style={{
+                      width: `${Math.min(100, Math.max(0, Number(item.taskRate) || 0))}%`,
+                      height: '100%',
+                      background: SCREEN_THEME.accentBlue
+                    }} /></div>
+                    <span style={{
+                    color: SCREEN_THEME.subText,
+                    fontSize: 12
+                  }}>完成率 {Number(item.taskRate) || 0}% · 作业人数 {Number(item.activeWorkers) || 0}</span>
+                  </div>
+                  <span style={{
+                  color: SCREEN_THEME.accentOrange,
+                  fontSize: 12,
+                  textAlign: 'right'
+                }}>告警 {Number(item.alertCount) || 0}</span>
+                </div>)}
+            </div> : <PanelEmpty text="暂无近 7 天任务趋势" />}
+          <div style={{
+              marginTop: 6,
+              color: SCREEN_THEME.subText,
+              fontSize: 12
+            }}>来源：GET /admin/dashboard/trend；设备历史小时率暂无数据。</div>
+        </div>
+
+        <div style={panelStyle.value}>
+          <div style={{
+              fontSize: 15,
+              fontWeight: 600,
+              marginBottom: 6,
+              color: SCREEN_THEME.text
+            }}>在田作物结构</div>
+          {cropRows.value.length ? <div style={{
+              maxHeight: 220,
+              overflowY: 'auto'
+            }}>
+              {cropRows.value.map(item => <div key={item.name} style={{
+                marginBottom: 9
+              }}>
+                  <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  color: SCREEN_THEME.text,
+                  fontSize: 12
+                }}><span>{item.name}</span><span>{item.area.toLocaleString('zh-CN')} 亩</span></div>
+                  <div style={{
+                  height: 6,
+                  marginTop: 4,
+                  borderRadius: 4,
+                  background: 'rgba(43,231,196,0.16)',
+                  overflow: 'hidden'
+                }}><div style={{
+                    width: `${Math.min(100, cropRows.value[0].area > 0 ? item.area / cropRows.value[0].area * 100 : 0)}%`,
+                    height: '100%',
+                    background: SCREEN_THEME.accent
+                  }} /></div>
+                  <div style={{
+                  color: SCREEN_THEME.subText,
+                  fontSize: 12
+                }}>{item.farmCount} 个农场</div>
+                </div>)}
+            </div> : <PanelEmpty text="暂无已标注作物的地块数据" />}
+          <div style={{
+              marginTop: 6,
+              color: SCREEN_THEME.subText,
+              fontSize: 12
+            }}>来源：GET /admin/dashboard/overview-rows?dimension=crop。</div>
+        </div>
+
+        <div style={panelStyle.value}>
+          <div style={{
+              fontSize: 15,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: SCREEN_THEME.text
+            }}>
+            TOP 农场榜（按种植面积）
+          </div>
+          {rankQuery.data && rankQuery.data.length > 0 ? <div style={{
+              maxHeight: 230,
+              overflowY: 'auto'
+            }}>
+              {rankQuery.data.map((item, index) => <div key={item.farmId} style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 8px',
+                marginBottom: 6,
+                borderRadius: 6,
+                background: 'rgba(160,200,240,0.08)'
+              }}>
+                  <span style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 4,
+                  textAlign: 'center',
+                  lineHeight: '20px',
+                  fontSize: 12,
+                  background: index < 3 ? SCREEN_THEME.accentOrange : 'rgba(160,200,240,0.2)',
+                  color: index < 3 ? '#0a1c3d' : SCREEN_THEME.text,
+                  fontWeight: 700
+                }}>
+                    {index + 1}
+                  </span>
+                  <span style={{
+                  flex: 1,
+                  color: SCREEN_THEME.text,
+                  fontSize: 13
+                }}>
+                    {item.farmName ?? item.farmId}
+                  </span>
+                  <span style={{
+                  color: SCREEN_THEME.subText,
+                  fontSize: 12
+                }}>
+                    {toNumber(item.areaTotal)?.toLocaleString('zh-CN') ?? '—'} 亩 /{' '}
+                    {toNumber(item.plotCount as string | number) ?? '—'} 地块
+                  </span>
+                </div>)}
+            </div> : <PanelEmpty text="后端 /admin/dashboard/rank 未返回数据" />}
+        </div>
+      </div>
+    </div>;
+    };
+  }
+});
+export default OpsDataScreen;

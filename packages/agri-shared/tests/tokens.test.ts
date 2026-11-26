@@ -26,8 +26,8 @@ function declaredVariables(css: string): Record<string, string> {
 /**
  * 令牌的"一份定义、两份投影"必须有机器把关。
  *
- * 这套抽象的价值全在「只有一个真源」：TS 定义给 React 侧，CSS 变量给 Vue / 任意栈。
- * 一旦两边各改各的，Vue 侧看到的品牌色就会和 React 侧不一样 —— 那正好是当初要治的病。
+ * 这套抽象的价值全在「只有一个真源」：TS 定义供主题配置使用，CSS 变量供各 Vue 3 应用使用。
+ * 一旦两边各改各的，CSS 变量呈现的品牌色就会和主题配置不一样 —— 那正好是当初要治的病。
  */
 describe('设计令牌：CSS 变量投影与 TS 定义逐项一致', () => {
   const declared = declaredVariables(tokensCss)

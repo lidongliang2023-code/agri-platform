@@ -1,5 +1,5 @@
 /**
- * React 公共列表组件纯逻辑工具：列角色判定、列宽持久化校验、列显隐过滤与总宽计算。
+ * 公共列表组件纯逻辑工具：列角色判定、列宽持久化校验、列显隐过滤与总宽计算。
  */
 
 export type ColumnWidths = Record<string, number>

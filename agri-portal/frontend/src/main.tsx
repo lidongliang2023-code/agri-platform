@@ -1,16 +1,10 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import './theme.css'
 import './portal.css'
 import App from './App'
+import '../../../shared/pc-ui-v1.mjs'
 
-const root = document.getElementById('root')
-if (!root) {
-  throw new Error('未找到 #root 挂载节点')
-}
-
-ReactDOM.createRoot(root).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+const router = createRouter({ history: createWebHashHistory(), routes: [{ path: '/:pathMatch(.*)*', component: { render: () => null } }] })
+createApp(App).use(createPinia()).use(router).mount('#root')

@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties } from 'vue'
 
 /**
  * 列表表格的横向滚动口径：列多、列内容长的表统一从这里取，不再每页自己写一个数字。

@@ -1,0 +1,215 @@
+import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
+type PortalEvent<T = HTMLElement> = Event & {
+  target: T;
+  currentTarget: T;
+  nativeEvent: Event;
+  key: string;
+};
+import { Alert, App, Button, Form, Input, Modal, Popconfirm, Select, Tag } from '@/vue/ui';
+import { useMutation, useQuery, useQueryClient } from '@/vue/query';
+import type { ProColumns } from '@/vue/pro';
+import { fetchQualityLabs, accreditQualityLab, rejectQualityLab, type QualityLab } from '@/api/admin/trace';
+import { saveQualityLab, type LabForm } from '@/api/admin/quality-workbench';
+import ListRowActions from '@/vue/business/components/ListRowActions';
+import { Card, Table, QualityPage, LoadError } from './QualityShared';
+const LabManage = defineComponent({
+  name: "LabManage",
+  props: {},
+  setup(__props: {}, {
+    slots: __slots
+  }) {
+    const {
+        message
+      } = App.useApp(),
+      qc = useQueryClient();
+    const keyword = shallowRef(''),
+      page = shallowRef(1),
+      size = shallowRef(20),
+      editing = shallowRef<QualityLab | null>(),
+      rejecting = shallowRef<QualityLab>(),
+      form = Form.useForm<LabForm>(),
+      reasonForm = Form.useForm<{
+        reason: string;
+      }>();
+    const setRejecting = (next: typeof rejecting.value | ((previous: typeof rejecting.value) => typeof rejecting.value)) => {
+      rejecting.value = typeof next === 'function' ? (next as (previous: typeof rejecting.value) => typeof rejecting.value)(rejecting.value) : next;
+    };
+    const setEditing = (next: typeof editing.value | ((previous: typeof editing.value) => typeof editing.value)) => {
+      editing.value = typeof next === 'function' ? (next as (previous: typeof editing.value) => typeof editing.value)(editing.value) : next;
+    };
+    const setSize = (next: typeof size.value | ((previous: typeof size.value) => typeof size.value)) => {
+      size.value = typeof next === 'function' ? (next as (previous: typeof size.value) => typeof size.value)(size.value) : next;
+    };
+    const setPage = (next: typeof page.value | ((previous: typeof page.value) => typeof page.value)) => {
+      page.value = typeof next === 'function' ? (next as (previous: typeof page.value) => typeof page.value)(page.value) : next;
+    };
+    const setKeyword = (next: typeof keyword.value | ((previous: typeof keyword.value) => typeof keyword.value)) => {
+      keyword.value = typeof next === 'function' ? (next as (previous: typeof keyword.value) => typeof keyword.value)(keyword.value) : next;
+    };
+    const query = useQuery(() => ({
+      queryKey: ['quality-labs', page.value, size.value, keyword.value],
+      queryFn: () => fetchQualityLabs({
+        pageNum: page.value,
+        pageSize: size.value,
+        keyword: keyword.value
+      }),
+      retry: false
+    }));
+    const refresh = () => {
+      void qc.invalidateQueries({
+        queryKey: ['quality-labs']
+      });
+      void qc.invalidateQueries({
+        queryKey: ['quality-lab-options']
+      });
+    };
+    const save = useMutation(() => ({
+      mutationFn: async () => saveQualityLab(editing.value?.labId, await form.validateFields()),
+      onSuccess: () => {
+        message.success('机构档案已保存到服务端');
+        setEditing(undefined);
+        refresh();
+      },
+      onError: (e: Error) => message.error(e.message)
+    }));
+    const accredit = useMutation(() => ({
+      mutationFn: accreditQualityLab,
+      onSuccess: () => {
+        message.success('已准入，用户端可选择该机构');
+        refresh();
+      },
+      onError: (e: Error) => message.error(e.message)
+    }));
+    const reject = useMutation(() => ({
+      mutationFn: async () => {
+        const v = await reasonForm.validateFields();
+        return rejectQualityLab(rejecting.value!.labId, v.reason);
+      },
+      onSuccess: () => {
+        message.success('机构已停用，历史检测单保留');
+        setRejecting(undefined);
+        refresh();
+      },
+      onError: (e: Error) => message.error(e.message)
+    }));
+    const open = (row: QualityLab | null) => {
+      setEditing(row);
+      form.resetFields();
+      form.setFieldsValue(row ? {
+        ...row,
+        region: row.region,
+        certNo: row.qualificationNo
+      } : {
+        status: 2
+      });
+    };
+    const cols = computed<ProColumns<QualityLab>[]>(() => [{
+      title: '机构名称',
+      dataIndex: 'labName',
+      width: 240,
+      render: (_, r) => <Button type="link" onClick={() => open(r)}>{r.labName}</Button>
+    }, {
+      title: '机构编码',
+      dataIndex: 'labCode',
+      width: 170
+    }, {
+      title: '资质等级',
+      dataIndex: 'labLevel',
+      width: 110,
+      render: (_, r) => ({
+        1: '国家级',
+        2: '省级',
+        3: '市级'
+      } as Record<number, string>)[r.labLevel ?? 0] || '未登记'
+    }, {
+      title: '资质编号',
+      dataIndex: 'qualificationNo',
+      width: 200
+    }, {
+      title: '联系人',
+      dataIndex: 'contactName',
+      width: 110
+    }, {
+      title: '联系电话',
+      dataIndex: 'contactPhone',
+      width: 150
+    }, {
+      title: '地区 / 地址',
+      dataIndex: 'region',
+      width: 180
+    }, {
+      title: '合作状态',
+      width: 110,
+      render: (_, r) => <Tag color={r.status === 1 ? 'green' : r.status === 2 ? 'orange' : 'default'}>{r.status === 1 ? '合作中' : r.status === 2 ? '待准入' : '已停用'}</Tag>
+    }, {
+      title: '操作',
+      valueType: 'option',
+      fixed: 'right',
+      width: 165,
+      render: (_, r) => <ListRowActions items={[<Button key="e" type="link" size="small" onClick={() => open(r)}>编辑</Button>, r.status !== 1 ? <Popconfirm key="a" title="确认该机构资质已核验并准入？" onConfirm={() => accredit.mutateAsync(r.labId)}><Button type="link" size="small">准入</Button></Popconfirm> : <Button key="r" type="link" size="small" danger onClick={() => {
+        setRejecting(r);
+        reasonForm.resetFields();
+      }}>停用</Button>]} />
+    }]);
+    return () => {
+      return <QualityPage title="检测机构管理" subTitle="平台维护机构资质档案与准入状态，用户端送检复用已准入机构"><Alert showIcon type="info" message="仅维护可落库的机构档案与准入状态；检测结果由用户端登记。机构停用不删除历史检测记录。" /><LoadError error={query.error} /><Card class="production-dense-filter-card"><div class="production-filter-grid"><div class="production-filter-field"><label>机构名称</label><Input value={keyword.value} allowClear placeholder="请输入检测机构名称" onChange={e => {
+                setKeyword(e.target.value);
+                setPage(1);
+              }} /></div><div class="production-filter-actions"><Button onClick={() => {
+                setKeyword('');
+                setPage(1);
+              }}>重置</Button><Button type="primary" loading={query.isFetching} onClick={() => {
+                setPage(1);
+                void query.refetch();
+              }}>查询</Button></div></div></Card><Card><Table rowKey="labId" memberListToolbar rowSelection={{}} cardProps={false} headerTitle={<Button type="primary" onClick={() => open(null)}>新增机构</Button>} columns={cols.value} dataSource={query.data?.list ?? []} loading={query.isFetching} search={false} columnWidthStorageKey="quality-labs" options={{
+            reload: () => void query.refetch()
+          }} pagination={{
+            current: page.value,
+            pageSize: size.value,
+            total: query.data?.total ?? 0,
+            showSizeChanger: true,
+            onChange: (p, s) => {
+              setPage(s === size.value ? p : 1);
+              setSize(s);
+            }
+          }} /></Card><Modal title={editing.value ? '编辑检测机构' : '新增检测机构'} class="quality-dialog" open={editing.value !== undefined} onCancel={() => {
+          if (!save.isPending) setEditing(undefined);
+        }} onOk={() => save.mutate()} confirmLoading={save.isPending} width={660} destroyOnClose><Form form={form} layout="horizontal" labelCol={{
+            span: 5
+          }} wrapperCol={{
+            span: 19
+          }}><Form.Item name="labName" label="机构名称" rules={[{
+              required: true,
+              whitespace: true
+            }, {
+              max: 200
+            }]}><Input maxLength={200} /></Form.Item><Form.Item name="labCode" label="机构编码"><Input maxLength={50} /></Form.Item><Form.Item name="labLevel" label="资质等级"><Select allowClear options={[{
+                value: 1,
+                label: '国家级'
+              }, {
+                value: 2,
+                label: '省级'
+              }, {
+                value: 3,
+                label: '市级'
+              }]} /></Form.Item><Form.Item name="certNo" label="资质编号"><Input maxLength={100} /></Form.Item><Form.Item name="region" label="地区 / 地址"><Input maxLength={200} /></Form.Item><Form.Item name="contactName" label="联系人"><Input maxLength={50} /></Form.Item><Form.Item name="contactPhone" label="联系电话"><Input maxLength={30} /></Form.Item><Form.Item name="status" label="合作状态" rules={[{
+              required: true
+            }]}><Select options={[{
+                value: 2,
+                label: '待准入'
+              }, {
+                value: 1,
+                label: '合作中'
+              }, {
+                value: 0,
+                label: '已停用'
+              }]} /></Form.Item><Form.Item name="remark" label="备注"><Input.TextArea rows={3} maxLength={500} /></Form.Item>{editing.value?.rejectReason && <Alert type="warning" message={`历史停用原因：${editing.value.rejectReason}`} />}</Form></Modal><Modal title="停用检测机构" class="quality-dialog" open={!!rejecting.value} onCancel={() => setRejecting(undefined)} onOk={() => reject.mutate()} confirmLoading={reject.isPending}><Form form={reasonForm}><Form.Item name="reason" label="停用原因" rules={[{
+              required: true,
+              whitespace: true
+            }, {
+              max: 200
+            }]}><Input.TextArea maxLength={200} rows={3} /></Form.Item></Form></Modal></QualityPage>;
+    };
+  }
+});
+export default LabManage;

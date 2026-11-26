@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import vue from '@vitejs/plugin-vue'
+import vueJsx from '@vitejs/plugin-vue-jsx'
 import path from 'path'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [vue(), vueJsx()],
   resolve: {
     alias: {
       // 必须排在 '@' 之前：Vite 的 alias 按插入顺序做前缀匹配，

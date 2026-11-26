@@ -10,6 +10,7 @@
 packages:
   - 'packages/*'
   - 'agri-production/frontend'
+  - 'agri-trade/frontend'
   - 'agri-production/miniprogram'
   # 交易撮合移动端：独立 uni-app 工程，可同时构建 H5、小程序和 APP。
   - 'agri-trade/miniprogram'

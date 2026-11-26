@@ -1,59 +1,43 @@
-/** 生产管理用户端 / 运营端：在共享 antd 主题上收口到买家中心绿色视觉。 */
-import type { ThemeConfig } from 'antd'
-import { antdTheme } from '@agri/shared'
+/** 生产管理用户端 / 运营端：在共享 antdv 主题上收口到买家中心绿色视觉。 */
+import type { ThemeConfig } from 'ant-design-vue/es/config-provider/context'
+import { antdvTheme } from '@agri/shared/vue/antdv'
 
-export const productionTheme: ThemeConfig = {
-  ...antdTheme,
+export const productionTheme = {
   token: {
-    ...antdTheme.token,
-    colorPrimary: '#12764a',
-    colorLink: '#12764a',
-    colorLinkHover: '#159a5e',
-    colorText: '#0b1a12',
-    colorTextSecondary: '#6b7c72',
-    colorBorder: '#e3eae5',
-    colorBorderSecondary: '#e3eae5',
-    colorBgLayout: '#f4f7f5',
+    ...antdvTheme.token,
+    colorPrimary: '#2d8f4e',
+    colorLink: '#2d8f4e',
+    colorLinkHover: '#247a3f',
+    colorText: '#1a1a1a',
+    colorTextSecondary: '#595959',
+    colorBorder: '#e8e8e8',
+    colorBorderSecondary: '#f0f0f0',
+    colorBgLayout: '#f5f6fa',
     colorBgContainer: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 6,
   },
   components: {
-    ...antdTheme.components,
     Layout: {
-      ...antdTheme.components?.Layout,
-      bodyBg: '#f4f7f5',
-      headerBg: '#ffffff',
-      headerHeight: 60,
-      siderBg: '#06281a',
+      colorBgBody: '#f5f6fa',
+      colorBgHeader: '#ffffff',
     },
     Menu: {
-      ...antdTheme.components?.Menu,
-      itemBorderRadius: 8,
-      itemMarginInline: 10,
-    },
-    Card: {
-      ...antdTheme.components?.Card,
-      headerFontSize: 15,
+      radiusItem: 8,
     },
     Table: {
-      ...antdTheme.components?.Table,
-      headerBg: '#f4f7f5',
-      headerColor: '#4b5d53',
-      borderColor: '#e3eae5',
-      rowHoverBg: '#f1fbf5',
+      colorFillAlter: '#fafafa',
+      colorTextHeading: '#4b5d53',
+      colorBorderSecondary: '#e3eae5',
     },
     Button: {
-      ...antdTheme.components?.Button,
-      borderRadius: 8,
+      borderRadius: 4,
     },
     Input: {
-      ...antdTheme.components?.Input,
-      activeBorderColor: '#159a5e',
-      hoverBorderColor: '#6fd6a2',
+      colorPrimaryHover: '#6fd6a2',
+      colorPrimary: '#159a5e',
     },
     Select: {
-      ...antdTheme.components?.Select,
-      optionSelectedBg: '#e4f6ec',
+      controlItemBgActive: '#e4f6ec',
     },
   },
-}
+} as ThemeConfig

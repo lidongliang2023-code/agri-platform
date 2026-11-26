@@ -1,12 +1,13 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import vue from '@vitejs/plugin-vue'
+import vueJsx from '@vitejs/plugin-vue-jsx'
 import path from 'path'
 
 // 官网门户（独立工程）。
 //
 // 本地开发期把平台接口与交易接口代理到网关/后端；生产由 8098 网关按路径转发。
 export default defineConfig({
-  plugins: [react()],
+  plugins: [vue(), vueJsx()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
