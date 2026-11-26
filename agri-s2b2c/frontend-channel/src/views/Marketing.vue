@@ -5,63 +5,69 @@
         <h2>营销中心</h2>
         <p>活动由平台运营统一创建；本页只展示平台券与适用于本店在架商品的秒杀/拼团，并提供店铺分享链接。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
       <div class="stat-card"><span>平台券</span><b>{{ summary.coupons || 0 }}</b><small>进行中</small></div>
       <div class="stat-card"><span>可用秒杀</span><b>{{ summary.flashes || 0 }}</b><small>本店商品</small></div>
       <div class="stat-card"><span>可用拼团</span><b>{{ summary.groups || 0 }}</b><small>本店商品</small></div>
-      <div class="stat-card"><span>在架商品</span><b>{{ summary.shelfProducts || 0 }}</b><small>货架 ACTIVE</small></div>
+      <div class="stat-card"><span>在架商品</span><b>{{ summary.shelfProducts || 0 }}</b><small>货架在售</small></div>
     </div>
 
     <el-tabs v-model="tab" @tab-change="onTabChange">
       <el-tab-pane label="优惠券" name="coupon">
-        <el-table :data="data.coupons || []" border>
-          <el-table-column prop="name" label="优惠券" min-width="180" />
-          <el-table-column label="类型/门槛" min-width="160">
-            <template #default="{ row }">
-              {{ row.type === 'DISCOUNT' ? `折扣 ${Number(row.discountRate || 0)} 折` : `满减 ¥${money(row.amount)}` }}
-              · 满 ¥{{ money(row.minAmount) }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="remainCount" label="剩余" width="90" />
-          <el-table-column label="有效期" min-width="180">
-            <template #default="{ row }">{{ row.validStart }} ~ {{ row.validEnd }}</template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-if="!(data.coupons || []).length" description="暂无进行中的平台券" :image-size="70" />
+        <AgriElementListTable
+          :columns="couponColumns"
+          :data="data.coupons || []"
+          row-key="id"
+          :loading="loading"
+          client-pagination
+          column-settings-storage-key="agri-s2b2c-channel:marketing-coupons"
+          empty-text="暂无进行中的平台券"
+          @refresh="load"
+        >
+          <template #cell-type="{ row }">
+            {{ row.type === 'DISCOUNT' ? `折扣 ${Number(row.discountRate || 0)} 折` : `满减 ¥${money(row.amount)}` }}
+            · 满 ¥{{ money(row.minAmount) }}
+          </template>
+          <template #cell-valid="{ row }">{{ row.validStart }} ~ {{ row.validEnd }}</template>
+        </AgriElementListTable>
         <p class="note">平台券由平台承担或联合供应商承担，渠道不参与创建与改价。</p>
       </el-tab-pane>
 
       <el-tab-pane label="秒杀" name="flash">
-        <el-table :data="data.flashes || []" border>
-          <el-table-column prop="productName" label="商品" min-width="190" />
-          <el-table-column label="秒杀价" width="100"><template #default="{ row }">¥{{ money(row.salePrice) }}</template></el-table-column>
-          <el-table-column label="剩余/总库存" width="130">
-            <template #default="{ row }">{{ row.remainStock }} / {{ row.totalStock }}</template>
-          </el-table-column>
-          <el-table-column label="时间" min-width="220">
-            <template #default="{ row }">{{ row.startTime }} ~ {{ row.endTime }}</template>
-          </el-table-column>
-          <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag>{{ row.status }}</el-tag></template></el-table-column>
-        </el-table>
-        <el-empty v-if="!(data.flashes || []).length" description="本店商品暂无秒杀活动" :image-size="70" />
+        <AgriElementListTable
+          :columns="flashColumns"
+          :data="data.flashes || []"
+          row-key="id"
+          :loading="loading"
+          client-pagination
+          column-settings-storage-key="agri-s2b2c-channel:marketing-flashes"
+          empty-text="本店商品暂无秒杀活动"
+          @refresh="load"
+        >
+          <template #cell-salePrice="{ row }">¥{{ money(row.salePrice) }}</template>
+          <template #cell-stock="{ row }">{{ row.remainStock }} / {{ row.totalStock }}</template>
+          <template #cell-time="{ row }">{{ row.startTime }} ~ {{ row.endTime }}</template>
+          <template #cell-status="{ row }"><el-tag>{{ row.status }}</el-tag></template>
+        </AgriElementListTable>
         <p class="note">秒杀价由平台活动配置，下单时按活动价结算；售罄自动不可用。</p>
       </el-tab-pane>
 
       <el-tab-pane label="拼团" name="group">
-        <el-table :data="data.groups || []" border>
-          <el-table-column prop="name" label="活动" min-width="170" />
-          <el-table-column prop="productName" label="商品" min-width="180" />
-          <el-table-column label="团价 / 单买" width="160">
-            <template #default="{ row }">¥{{ money(row.groupPrice) }} / ¥{{ money(row.singlePrice) }}</template>
-          </el-table-column>
-          <el-table-column prop="groupSize" label="成团人数" width="100" />
-          <el-table-column prop="validHours" label="有效期(小时)" width="110" />
-          <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag>{{ row.status }}</el-tag></template></el-table-column>
-        </el-table>
-        <el-empty v-if="!(data.groups || []).length" description="本店商品暂无拼团活动" :image-size="70" />
+        <AgriElementListTable
+          :columns="groupColumns"
+          :data="data.groups || []"
+          row-key="id"
+          :loading="loading"
+          client-pagination
+          column-settings-storage-key="agri-s2b2c-channel:marketing-groups"
+          empty-text="本店商品暂无拼团活动"
+          @refresh="load"
+        >
+          <template #cell-price="{ row }">¥{{ money(row.groupPrice) }} / ¥{{ money(row.singlePrice) }}</template>
+          <template #cell-status="{ row }"><el-tag>{{ row.status }}</el-tag></template>
+        </AgriElementListTable>
       </el-tab-pane>
 
       <el-tab-pane label="分享推广" name="share">
@@ -72,8 +78,12 @@
             <el-input v-model="shareLink" readonly />
             <el-button type="primary" @click="copyShare">复制链接</el-button>
           </div>
-          <el-alert type="info" :closable="false" show-icon
-            title="分享链接不包含追踪参数：当前仅按渠道店铺归属成交，无分销层级归因。" />
+          <el-alert
+            type="info"
+            :closable="false"
+            show-icon
+            title="分享链接不包含追踪参数：当前仅按渠道店铺归属成交，无分销层级归因。"
+          />
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -84,13 +94,39 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const route = useRoute()
 const router = useRouter()
 const data = ref({})
 const summary = ref({})
+const loading = ref(false)
 const tab = ref('coupon')
+
+const couponColumns = [
+  { key: 'name', prop: 'name', label: '优惠券', minWidth: 180 },
+  { key: 'type', label: '类型/门槛', minWidth: 160 },
+  { key: 'remainCount', prop: 'remainCount', label: '剩余', width: 90 },
+  { key: 'valid', label: '有效期', minWidth: 180 },
+]
+
+const flashColumns = [
+  { key: 'productName', prop: 'productName', label: '商品', minWidth: 190 },
+  { key: 'salePrice', prop: 'salePrice', label: '秒杀价', width: 100 },
+  { key: 'stock', label: '剩余/总库存', width: 130 },
+  { key: 'time', label: '时间', minWidth: 220 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+]
+
+const groupColumns = [
+  { key: 'name', prop: 'name', label: '活动', minWidth: 170 },
+  { key: 'productName', prop: 'productName', label: '商品', minWidth: 180 },
+  { key: 'price', label: '团价 / 单买', width: 160 },
+  { key: 'groupSize', prop: 'groupSize', label: '成团人数', width: 100 },
+  { key: 'validHours', prop: 'validHours', label: '有效期(小时)', width: 110 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+]
 
 const tabByPath = {
   '/marketing/coupons': 'coupon',
@@ -114,11 +150,14 @@ watch(() => route.path, (path) => {
 })
 
 async function load() {
+  loading.value = true
   try {
     data.value = (await channelApi.getMarketing()) || {}
     summary.value = data.value.summary || {}
   } catch (e) {
     ElMessage.error(e?.message || '营销数据读取失败')
+  } finally {
+    loading.value = false
   }
 }
 

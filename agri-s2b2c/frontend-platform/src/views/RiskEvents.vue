@@ -5,7 +5,6 @@
         <h2>风控事件</h2>
         <p>基于真实订单、售后与价盘数据计算的信号，仅用于人工复核；不自动拦截订单或限制账号。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
@@ -16,49 +15,48 @@
       <div class="stat-card"><span>已处置</span><b>{{ summary.handled || 0 }}</b><small>复核 / 忽略留痕</small></div>
     </div>
 
-    <div class="filter-bar">
-      <el-select v-model="ruleCode" placeholder="规则类型" style="width: 260px" @change="load">
-        <el-option label="全部规则" value="" />
-        <el-option v-for="rule in rules" :key="rule.code" :label="rule.name" :value="rule.code" />
-      </el-select>
-      <el-button @click="$router.push('/risk-rules')">风控规则</el-button>
-    </div>
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      :row-key="(row) => String(row.eventKey ?? `${row.ruleName}-${row.subject}-${row.occurredAt}`)"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:risk-events"
+      empty-text="当前阈值下没有风险信号"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="load" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>规则类型</label>
+            <el-select v-model="ruleCode" placeholder="全部规则">
+              <el-option label="全部规则" value="" />
+              <el-option v-for="rule in rules" :key="rule.code" :label="rule.name" :value="rule.code" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <el-table :data="rows" border>
-      <el-table-column label="等级" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.level === 'HIGH' ? 'danger' : 'warning'">{{ row.level === 'HIGH' ? '高危' : '中风险' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="ruleName" label="规则" width="200" />
-      <el-table-column prop="subject" label="对象" min-width="190" show-overflow-tooltip />
-      <el-table-column prop="evidence" label="证据" min-width="260" show-overflow-tooltip />
-      <el-table-column label="金额" width="110">
-        <template #default="{ row }">{{ Number(row.amount) > 0 ? `¥${money(row.amount)}` : '—' }}</template>
-      </el-table-column>
-      <el-table-column label="发生时间" width="180">
-        <template #default="{ row }">{{ row.occurredAt || '持续状态' }}</template>
-      </el-table-column>
-      <el-table-column prop="actionNote" label="建议" min-width="180" show-overflow-tooltip />
-      <el-table-column label="处置" width="110">
-        <template #default="{ row }">
-          <el-tag :type="row.handleStatus === 'HANDLED' ? 'success' : row.handleStatus === 'IGNORED' ? 'info' : 'warning'">
-            {{ row.handleStatus === 'HANDLED' ? '已复核' : row.handleStatus === 'IGNORED' ? '已忽略' : '待处理' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="handleRemark" label="处置意见" min-width="140" show-overflow-tooltip />
-      <el-table-column label="操作" width="170" fixed="right">
-        <template #default="{ row }">
-          <template v-if="row.handleStatus === 'PENDING'">
-            <el-button link type="primary" @click="handle(row, 'HANDLED')">标记复核</el-button>
-            <el-button link type="info" @click="handle(row, 'IGNORED')">忽略</el-button>
-          </template>
-          <span v-else class="muted">{{ row.handleOperator }} {{ row.handleTime }}</span>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" description="当前阈值下没有风险信号" />
+      <template #toolbar-left>
+        <el-button @click="$router.push('/risk-rules')">风控规则</el-button>
+      </template>
+
+      <template #cell-level="{ row }">
+        <el-tag :type="row.level === 'HIGH' ? 'danger' : 'warning'">{{ row.level === 'HIGH' ? '高危' : '中风险' }}</el-tag>
+      </template>
+      <template #cell-amount="{ row }">{{ Number(row.amount) > 0 ? `¥${money(row.amount)}` : '—' }}</template>
+      <template #cell-occurredAt="{ row }">{{ row.occurredAt || '持续状态' }}</template>
+      <template #cell-handleStatus="{ row }">
+        <el-tag :type="row.handleStatus === 'HANDLED' ? 'success' : row.handleStatus === 'IGNORED' ? 'info' : 'warning'">
+          {{ row.handleStatus === 'HANDLED' ? '已复核' : row.handleStatus === 'IGNORED' ? '已忽略' : '待处理' }}
+        </el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions v-if="row.handleStatus === 'PENDING'" :actions="rowActions(row)" />
+        <span v-else class="muted">{{ row.handleOperator }} {{ row.handleTime }}</span>
+      </template>
+    </AgriElementListTable>
+
     <p class="note">{{ note }}</p>
   </div>
 </template>
@@ -66,6 +64,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const rows = ref([])
@@ -73,6 +72,27 @@ const rules = ref([])
 const summary = ref({})
 const note = ref('')
 const ruleCode = ref('')
+const loading = ref(false)
+
+const columns = [
+  { key: 'level', prop: 'level', label: '等级', width: 100 },
+  { key: 'ruleName', prop: 'ruleName', label: '规则', width: 200 },
+  { key: 'subject', prop: 'subject', label: '对象', minWidth: 190 },
+  { key: 'evidence', prop: 'evidence', label: '证据', minWidth: 240 },
+  { key: 'amount', prop: 'amount', label: '金额', width: 110 },
+  { key: 'occurredAt', prop: 'occurredAt', label: '发生时间', width: 180 },
+  { key: 'actionNote', prop: 'actionNote', label: '建议', minWidth: 180 },
+  { key: 'handleStatus', prop: 'handleStatus', label: '处置', width: 110 },
+  { key: 'handleRemark', prop: 'handleRemark', label: '处置意见', minWidth: 140 },
+  { key: 'actions', label: '操作', width: 165 },
+]
+
+function rowActions(row) {
+  return [
+    { key: 'handled', label: '标记复核', onClick: () => handle(row, 'HANDLED') },
+    { key: 'ignored', label: '忽略', onClick: () => handle(row, 'IGNORED') },
+  ]
+}
 
 onMounted(async () => {
   try {
@@ -84,6 +104,7 @@ onMounted(async () => {
 })
 
 async function load() {
+  loading.value = true
   try {
     const data = (await platformApi.getRiskEvents(ruleCode.value || undefined)) || {}
     rows.value = data.records || []
@@ -92,7 +113,14 @@ async function load() {
   } catch (e) {
     rows.value = []
     ElMessage.error(e?.message || '风险事件读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function reset() {
+  ruleCode.value = ''
+  load()
 }
 
 async function handle(row, status) {
@@ -125,15 +153,14 @@ const money = (value) => Number(value || 0).toFixed(2)
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 820px; }
-.stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
 .stat-card { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 24px; }
 .stat-card b.danger { color: #c54b4b; }
 .stat-card b.warn { color: #a96a08; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.filter-bar { display: flex; gap: 10px; align-items: center; }
 .note { margin: 0; color: #84938a; font-size: 12px; line-height: 1.7; }
 .muted { color: #94a198; font-size: var(--agri-font-size-micro); }
-@media (max-width: 1000px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1100px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 </style>

@@ -5,43 +5,57 @@
         <h2>库存管理</h2>
         <p>本渠道在架商品的供货侧库存与渠道内 7 日动销；门店现货与安全库存未建模，补货/集采归交易撮合。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
-      <div class="stat-card"><span>在架 SKU</span><b>{{ summary.skuCount || 0 }}</b><small>渠道货架 ACTIVE</small></div>
+      <div class="stat-card"><span>在架 SKU</span><b>{{ summary.skuCount || 0 }}</b><small>渠道货架在售</small></div>
       <div class="stat-card"><span>总库存</span><b>{{ summary.totalStock || 0 }}</b><small>供货侧件数</small></div>
       <div class="stat-card"><span>库存预警</span><b>{{ summary.lowCount || 0 }}</b><small>可售天数 &lt; 7 天</small></div>
       <div class="stat-card"><span>缺货</span><b>{{ summary.outCount || 0 }}</b><small>库存 ≤ 0</small></div>
     </div>
 
-    <el-table :data="rows" border>
-      <el-table-column prop="name" label="商品" min-width="200" />
-      <el-table-column label="零售价" width="110">
-        <template #default="{ row }">¥{{ money(row.effectivePrice) }}</template>
-      </el-table-column>
-      <el-table-column label="货架" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.shelfStatus === 'OFF' ? 'info' : 'success'">{{ row.shelfStatus === 'OFF' ? '已下架' : '在售' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="库存" width="90"><template #default="{ row }">{{ row.stock }}{{ row.unit || '' }}</template></el-table-column>
-      <el-table-column prop="sales7" label="本渠道 7 日销量" width="130" />
-      <el-table-column label="可售天数" width="100">
-        <template #default="{ row }">{{ row.daysOfSupply == null ? '—' : row.daysOfSupply }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="110">
-        <template #default="{ row }">
-          <el-tag :type="statusType(row.stockStatus)">{{ statusText(row.stockStatus) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="130" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="$router.push('/products')">去货架</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" description="货架暂无在架商品" />
+    <AgriElementListTable
+      :columns="columns"
+      :data="filteredRows"
+      :row-key="(row) => String(row.id ?? row.productId ?? row.name)"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-channel:inventory"
+      empty-text="货架暂无在架商品"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>商品名称</label>
+            <el-input v-model="draft.keyword" placeholder="搜索商品名称" clearable @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>库存状态</label>
+            <el-select v-model="draft.status" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="正常" value="NORMAL" />
+              <el-option label="预警" value="LOW" />
+              <el-option label="缺货" value="OUT" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-effectivePrice="{ row }">¥{{ money(row.effectivePrice) }}</template>
+      <template #cell-shelfStatus="{ row }">
+        <el-tag :type="row.shelfStatus === 'OFF' ? 'info' : 'success'">{{ row.shelfStatus === 'OFF' ? '已下架' : '在售' }}</el-tag>
+      </template>
+      <template #cell-stock="{ row }">{{ row.stock }}{{ row.unit || '' }}</template>
+      <template #cell-daysOfSupply="{ row }">{{ row.daysOfSupply == null ? '—' : row.daysOfSupply }}</template>
+      <template #cell-stockStatus="{ row }">
+        <el-tag :type="statusType(row.stockStatus)">{{ statusText(row.stockStatus) }}</el-tag>
+      </template>
+      <template #cell-actions>
+        <AgriVueRowActions :actions="[{ key: 'shelf', label: '去货架', onClick: () => $router.push('/products') }]" />
+      </template>
+    </AgriElementListTable>
+
     <div class="card">
       <h3>说明</h3>
       <ul>
@@ -54,16 +68,41 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const rows = ref([])
 const summary = ref({})
+const loading = ref(false)
+const draft = reactive({ keyword: '', status: '' })
+const activeFilter = reactive({ keyword: '', status: '' })
+
+const columns = [
+  { key: 'name', prop: 'name', label: '商品', minWidth: 200 },
+  { key: 'effectivePrice', prop: 'effectivePrice', label: '零售价', width: 110 },
+  { key: 'shelfStatus', prop: 'shelfStatus', label: '货架', width: 100 },
+  { key: 'stock', prop: 'stock', label: '库存', width: 95 },
+  { key: 'sales7', prop: 'sales7', label: '本渠道 7 日销量', width: 135 },
+  { key: 'daysOfSupply', prop: 'daysOfSupply', label: '可售天数', width: 100 },
+  { key: 'stockStatus', prop: 'stockStatus', label: '状态', width: 110 },
+  { key: 'actions', label: '操作', width: 100 },
+]
+
+const filteredRows = computed(() => {
+  const kw = activeFilter.keyword.trim().toLowerCase()
+  return rows.value.filter((row) => {
+    if (activeFilter.status && row.stockStatus !== activeFilter.status) return false
+    if (kw && !String(row.name || '').toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const data = (await channelApi.getInventory()) || {}
     rows.value = data.records || []
@@ -71,7 +110,21 @@ async function load() {
   } catch (e) {
     rows.value = []
     ElMessage.error(e?.message || '库存数据读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function applyFilter() {
+  activeFilter.keyword = draft.keyword
+  activeFilter.status = draft.status
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = ''
+  activeFilter.keyword = ''
+  activeFilter.status = ''
 }
 
 const money = (value) => Number(value || 0).toFixed(2)

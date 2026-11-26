@@ -5,7 +5,6 @@
         <h2>商家列表与分层</h2>
         <p>按渠道聚合近 30 天经营表现；复购率、售后率为渠道内真实订单口径，健康度仅作运营标记（非平台评分）。</p>
       </div>
-      <el-button @click="$router.push('/channel-onboard')">入驻审核</el-button>
     </div>
 
     <div class="stat-row">
@@ -16,80 +15,77 @@
       <div class="stat-card"><span>30 天 GMV</span><b>¥{{ money(summary.gmv30) }}</b><small>非取消订单</small></div>
     </div>
 
-    <div class="filter-bar">
-      <el-input v-model="keyword" placeholder="搜索店铺/公司/联系人/手机" style="width: 280px" clearable @keyup.enter="search" @clear="search" />
-      <el-select v-model="grade" placeholder="等级" style="width: 130px" @change="search">
-        <el-option label="全部" value="" />
-        <el-option label="铜牌" value="LEVEL_1" />
-        <el-option label="银牌" value="LEVEL_2" />
-        <el-option label="金牌" value="LEVEL_3" />
-      </el-select>
-      <el-select v-model="auditStatus" placeholder="审核状态" style="width: 140px" @change="search">
-        <el-option label="全部" value="" />
-        <el-option label="待审核" value="PENDING" />
-        <el-option label="已通过" value="APPROVED" />
-        <el-option label="已驳回" value="REJECTED" />
-      </el-select>
-      <el-button type="primary" @click="search">查询</el-button>
-    </div>
-
-    <el-table :data="rows" border>
-      <el-table-column label="渠道" min-width="180">
-        <template #default="{ row }">
-          <b>{{ row.shopName || row.companyName || '未命名渠道' }}</b><br>
-          <small>{{ row.id }}</small>
-        </template>
-      </el-table-column>
-      <el-table-column label="区域" width="150">
-        <template #default="{ row }">{{ [row.province, row.city].filter(Boolean).join(' ') || '—' }}</template>
-      </el-table-column>
-      <el-table-column label="等级" width="100">
-        <template #default="{ row }"><el-tag>{{ gradeText(row.grade) }}</el-tag></template>
-      </el-table-column>
-      <el-table-column label="30 天 GMV" width="125">
-        <template #default="{ row }">¥{{ money(row.gmv30) }}</template>
-      </el-table-column>
-      <el-table-column prop="orders30" label="30 天订单" width="100" />
-      <el-table-column label="累计 GMV" width="125">
-        <template #default="{ row }">¥{{ money(row.gmvTotal) }}</template>
-      </el-table-column>
-      <el-table-column label="复购率" width="100">
-        <template #default="{ row }">{{ Number(row.repeatRate || 0).toFixed(1) }}%</template>
-      </el-table-column>
-      <el-table-column label="售后率" width="100">
-        <template #default="{ row }">{{ Number(row.afterSaleRate || 0).toFixed(1) }}%</template>
-      </el-table-column>
-      <el-table-column prop="productCount" label="在售商品" width="100" />
-      <el-table-column label="审核" width="100">
-        <template #default="{ row }">
-          <el-tag :type="auditType(row.auditStatus)">{{ auditText(row.auditStatus) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="健康度" width="110">
-        <template #default="{ row }">
-          <el-tag :type="healthType(row.health)">{{ healthText(row.health) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="$router.push(`/channel-partner-detail/${row.id}`)">详情</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" description="当前筛选条件下没有商家" />
-    <el-pagination
-      v-model:current-page="page"
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="page"
       :page-size="size"
       :total="total"
-      layout="prev, pager, next, jumper"
-      @current-change="load"
-    />
+      column-settings-storage-key="agri-s2b2c-platform:channel-partners"
+      empty-text="当前筛选条件下没有商家"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="keyword" placeholder="搜索店铺/公司/联系人/手机" clearable @keyup.enter="search" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>等级</label>
+            <el-select v-model="grade" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="铜牌" value="LEVEL_1" />
+              <el-option label="银牌" value="LEVEL_2" />
+              <el-option label="金牌" value="LEVEL_3" />
+            </el-select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>审核状态</label>
+            <el-select v-model="auditStatus" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="待审核" value="PENDING" />
+              <el-option label="已通过" value="APPROVED" />
+              <el-option label="已驳回" value="REJECTED" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <el-button type="primary" @click="$router.push('/channel-onboard')">入驻审核</el-button>
+      </template>
+
+      <template #cell-channel="{ row }">
+        <b>{{ row.shopName || row.companyName || '未命名渠道' }}</b><br>
+        <small>{{ row.id }}</small>
+      </template>
+      <template #cell-region="{ row }">{{ [row.province, row.city].filter(Boolean).join(' ') || '—' }}</template>
+      <template #cell-grade="{ row }"><el-tag>{{ gradeText(row.grade) }}</el-tag></template>
+      <template #cell-gmv30="{ row }">¥{{ money(row.gmv30) }}</template>
+      <template #cell-gmvTotal="{ row }">¥{{ money(row.gmvTotal) }}</template>
+      <template #cell-repeatRate="{ row }">{{ Number(row.repeatRate || 0).toFixed(1) }}%</template>
+      <template #cell-afterSaleRate="{ row }">{{ Number(row.afterSaleRate || 0).toFixed(1) }}%</template>
+      <template #cell-auditStatus="{ row }">
+        <el-tag :type="auditType(row.auditStatus)">{{ auditText(row.auditStatus) }}</el-tag>
+      </template>
+      <template #cell-health="{ row }">
+        <el-tag :type="healthType(row.health)">{{ healthText(row.health) }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="[{ key: 'detail', label: '详情', onClick: () => $router.push(`/channel-partner-detail/${row.id}`) }]" />
+      </template>
+    </AgriElementListTable>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const keyword = ref('')
@@ -97,13 +93,30 @@ const grade = ref('')
 const auditStatus = ref('')
 const rows = ref([])
 const summary = ref({})
+const loading = ref(false)
 const page = ref(1)
-const size = ref(10)
+const size = ref(20)
 const total = ref(0)
+
+const columns = [
+  { key: 'channel', prop: 'shopName', label: '渠道', minWidth: 180 },
+  { key: 'region', label: '区域', width: 150 },
+  { key: 'grade', prop: 'grade', label: '等级', width: 100 },
+  { key: 'gmv30', prop: 'gmv30', label: '30 天 GMV', width: 125 },
+  { key: 'orders30', prop: 'orders30', label: '30 天订单', width: 100 },
+  { key: 'gmvTotal', prop: 'gmvTotal', label: '累计 GMV', width: 125 },
+  { key: 'repeatRate', prop: 'repeatRate', label: '复购率', width: 100 },
+  { key: 'afterSaleRate', prop: 'afterSaleRate', label: '售后率', width: 100 },
+  { key: 'productCount', prop: 'productCount', label: '在售商品', width: 100 },
+  { key: 'auditStatus', prop: 'auditStatus', label: '审核', width: 100 },
+  { key: 'health', prop: 'health', label: '健康度', width: 110 },
+  { key: 'actions', label: '操作', width: 100 },
+]
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const data = (await platformApi.getChannelPerformance({
       page: page.value,
@@ -114,16 +127,32 @@ async function load() {
     })) || {}
     rows.value = data.records || []
     summary.value = data.summary || {}
-    total.value = data.total || 0
+    total.value = Number(data.total || 0)
   } catch (e) {
     rows.value = []
     total.value = 0
     ElMessage.error(e?.message || '渠道经营数据读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
 function search() {
   page.value = 1
+  load()
+}
+
+function reset() {
+  keyword.value = ''
+  grade.value = ''
+  auditStatus.value = ''
+  page.value = 1
+  load()
+}
+
+function handlePageChange(nextPage, nextSize) {
+  page.value = nextPage
+  size.value = nextSize
   load()
 }
 
@@ -145,6 +174,5 @@ const healthType = (value) => ({ HEALTHY: 'success', NORMAL: 'primary', RISK: 'd
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 22px; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 1200px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 </style>

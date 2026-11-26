@@ -5,26 +5,52 @@
         <h2>类目与溯源模板</h2>
         <p>类目树主数据归主数据管理；本页维护分销展示类目。溯源模板需生产管理提供批次字段定义，当前未接入，不做占位假数据。</p>
       </div>
-      <el-button type="primary" @click="showAddDialog = true">添加分类</el-button>
     </div>
-    <el-table :data="categories" border>
-      <el-table-column prop="id" label="ID" />
-      <el-table-column prop="name" label="名称" />
-      <el-table-column prop="icon" label="图标" />
-      <el-table-column prop="level" label="层级" />
-      <el-table-column prop="sortOrder" label="排序" />
-      <el-table-column prop="status" label="状态">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'danger'">{{ row.status === 'ACTIVE' ? '启用' : '禁用' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作">
-        <template #default="{ row }">
-          <el-button type="text" @click="editCategory(row)">编辑</el-button>
-          <el-button type="text" @click="deleteCategory(row.id)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+
+    <AgriElementListTable
+      :columns="columns"
+      :data="filteredCategories"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:categories"
+      empty-text="暂无符合条件的类目"
+      @refresh="loadCategories"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>类目名称</label>
+            <el-input v-model="draft.keyword" placeholder="搜索类目名称" clearable @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <el-select v-model="draft.status" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="启用" value="ACTIVE" />
+              <el-option label="禁用" value="INACTIVE" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <el-button type="primary" @click="openAdd">添加分类</el-button>
+      </template>
+
+      <template #cell-status="{ row }">
+        <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'danger'">{{ row.status === 'ACTIVE' ? '启用' : '禁用' }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions
+          :actions="[
+            { key: 'edit', label: '编辑', onClick: () => editCategory(row) },
+            { key: 'delete', label: '删除', danger: true, onClick: () => deleteCategory(row.id) },
+          ]"
+        />
+      </template>
+    </AgriElementListTable>
+
     <el-dialog v-model="showAddDialog" :title="isEdit ? '编辑分类' : '添加分类'">
       <el-form :model="form" label-width="80px">
         <el-form-item label="分类名称">
@@ -59,11 +85,25 @@
 
 <script setup>
 import { ref, onMounted, reactive, computed } from 'vue'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const categories = ref([])
+const loading = ref(false)
 const showAddDialog = ref(false)
 const isEdit = ref(false)
+const draft = reactive({ keyword: '', status: '' })
+const activeFilter = reactive({ keyword: '', status: '' })
+
+const columns = [
+  { key: 'id', prop: 'id', label: 'ID', width: 90 },
+  { key: 'name', prop: 'name', label: '名称', minWidth: 180 },
+  { key: 'icon', prop: 'icon', label: '图标', width: 140 },
+  { key: 'level', prop: 'level', label: '层级', width: 90 },
+  { key: 'sortOrder', prop: 'sortOrder', label: '排序', width: 90 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+  { key: 'actions', label: '操作', width: 130 },
+]
 
 const form = reactive({
   id: null,
@@ -71,20 +111,48 @@ const form = reactive({
   parentId: 0,
   icon: '',
   sortOrder: 0,
-  status: 'ACTIVE'
+  status: 'ACTIVE',
 })
 
-const parentCategories = computed(() => {
-  return categories.value.filter(c => c.level === 1)
+const parentCategories = computed(() => categories.value.filter((c) => c.level === 1))
+
+const filteredCategories = computed(() => {
+  const kw = activeFilter.keyword.trim().toLowerCase()
+  return categories.value.filter((c) => {
+    if (activeFilter.status && c.status !== activeFilter.status) return false
+    if (kw && !String(c.name || '').toLowerCase().includes(kw)) return false
+    return true
+  })
 })
 
-onMounted(() => {
-  loadCategories()
-})
+async function loadCategories() {
+  loading.value = true
+  try {
+    const res = await platformApi.getCategories()
+    categories.value = res || []
+  } finally {
+    loading.value = false
+  }
+}
 
-const loadCategories = async () => {
-  const res = await platformApi.getCategories()
-  categories.value = res
+onMounted(loadCategories)
+
+const applyFilter = () => {
+  activeFilter.keyword = draft.keyword
+  activeFilter.status = draft.status
+}
+
+const resetFilter = () => {
+  draft.keyword = ''
+  draft.status = ''
+  activeFilter.keyword = ''
+  activeFilter.status = ''
+}
+
+const openAdd = () => {
+  isEdit.value = false
+  Object.assign(form, { id: null, name: '', parentId: 0, icon: '', sortOrder: 0, status: 'ACTIVE' })
+  showAddDialog.value = true
 }
 
 const editCategory = (row) => {
@@ -111,12 +179,8 @@ const deleteCategory = async (id) => {
 </script>
 
 <style scoped>
-.categories-page {
-  background: #fff;
-  border-radius: 12px;
-  padding: 20px;
-}
-.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.categories-page { display: flex; flex-direction: column; gap: 16px; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 760px; }
 </style>

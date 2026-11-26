@@ -5,7 +5,6 @@
         <h2>账户与提现</h2>
         <p>可提现余额 = 已结算佣金 −（申请中 + 已打款）。提现由平台运营审核并登记打款流水号，线下打款。</p>
       </div>
-      <el-button type="primary" @click="applyWithdraw">申请提现</el-button>
     </div>
 
     <div class="stat-row">
@@ -15,28 +14,44 @@
       <div class="stat-card"><span>提现中</span><b>¥{{ money(summary.frozenTotal) }}</b><small>待审核 / 待打款</small></div>
     </div>
 
-    <div class="card">
-      <div class="card-head">
-        <h3>提现记录</h3>
-        <span class="muted">打款流水号由平台运营登记</span>
-      </div>
-      <el-table :data="withdrawals" border>
-        <el-table-column prop="id" label="提现单号" width="190" show-overflow-tooltip />
-        <el-table-column label="金额" width="120">
-          <template #default="{ row }">¥{{ money(row.amount) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="130">
-          <template #default="{ row }">
-            <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="applyTime" label="申请时间" width="180" />
-        <el-table-column prop="reviewer" label="处理人" width="110" />
-        <el-table-column prop="payoutNo" label="打款流水号" min-width="170" />
-        <el-table-column prop="remark" label="审核意见" min-width="140" />
-      </el-table>
-      <el-empty v-if="!withdrawals.length" description="还没有提现记录" :image-size="70" />
-    </div>
+    <AgriElementListTable
+      :columns="columns"
+      :data="filteredWithdrawals"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-channel:wallet-withdrawals"
+      empty-text="还没有提现记录"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>提现单号 / 流水号</label>
+            <el-input v-model="draft.keyword" placeholder="搜索提现单号或打款流水号" clearable @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <el-select v-model="draft.status" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="待审核" value="PENDING" />
+              <el-option label="已通过待打款" value="APPROVED" />
+              <el-option label="已驳回" value="REJECTED" />
+              <el-option label="已打款" value="PAID" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <el-button type="primary" @click="applyWithdraw">申请提现</el-button>
+      </template>
+
+      <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+      </template>
+    </AgriElementListTable>
 
     <div class="card">
       <h3>规则说明</h3>
@@ -51,16 +66,40 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const summary = ref({})
 const withdrawals = ref([])
+const loading = ref(false)
+const draft = reactive({ keyword: '', status: '' })
+const activeFilter = reactive({ keyword: '', status: '' })
+
+const columns = [
+  { key: 'id', prop: 'id', label: '提现单号', width: 190 },
+  { key: 'amount', prop: 'amount', label: '金额', width: 120 },
+  { key: 'status', prop: 'status', label: '状态', width: 130 },
+  { key: 'applyTime', prop: 'applyTime', label: '申请时间', width: 180 },
+  { key: 'reviewer', prop: 'reviewer', label: '处理人', width: 110 },
+  { key: 'payoutNo', prop: 'payoutNo', label: '打款流水号', minWidth: 170 },
+  { key: 'remark', prop: 'remark', label: '审核意见', minWidth: 140 },
+]
+
+const filteredWithdrawals = computed(() => {
+  const kw = activeFilter.keyword.trim().toLowerCase()
+  return withdrawals.value.filter((row) => {
+    if (activeFilter.status && row.status !== activeFilter.status) return false
+    if (kw && !`${row.id || ''} ${row.payoutNo || ''}`.toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const [sum, records] = await Promise.all([
       channelApi.getCommissionSummary(),
@@ -70,7 +109,21 @@ async function load() {
     withdrawals.value = records || []
   } catch (e) {
     ElMessage.error(e?.message || '提现数据读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function applyFilter() {
+  activeFilter.keyword = draft.keyword
+  activeFilter.status = draft.status
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = ''
+  activeFilter.keyword = ''
+  activeFilter.status = ''
 }
 
 async function applyWithdraw() {
@@ -115,10 +168,7 @@ const statusType = (value) => ({
 .stat-card b { color: #173e2a; font-size: 24px; }
 .stat-card small { color: #94a198; font-size: 12px; }
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .card h3 { margin: 0 0 12px; font-size: 15px; }
-.card-head h3 { margin: 0; }
-.muted { color: #84938a; font-size: 12px; }
 .rules { margin: 0; padding-left: 18px; color: #52665a; font-size: 13px; line-height: 2; }
 @media (max-width: 1000px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 </style>

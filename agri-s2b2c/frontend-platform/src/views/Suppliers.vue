@@ -1,47 +1,54 @@
 <template>
   <div class="suppliers-page">
-    <div class="search-bar">
-      <el-input v-model="keyword" placeholder="搜索公司名称" style="width: 300px" @keyup.enter="loadSuppliers" />
-      <el-select v-model="auditStatus" placeholder="审核状态" style="width: 150px" @change="loadSuppliers">
-        <el-option label="全部" value="" />
-        <el-option label="待审核" value="PENDING" />
-        <el-option label="已通过" value="APPROVED" />
-        <el-option label="已拒绝" value="REJECTED" />
-      </el-select>
+    <div class="page-head">
+      <div>
+        <h2>货源档案管理</h2>
+        <p>统一管理平台合作货源企业与店铺档案，支持按公司名称与审核状态检索和业务审核。</p>
+      </div>
     </div>
-    <el-table :data="suppliers" border>
-      <el-table-column prop="companyName" label="公司名称" />
-      <el-table-column prop="creditCode" label="信用代码" />
-      <el-table-column prop="industry" label="所属行业" />
-      <el-table-column prop="legalName" label="法定代表人" />
-      <el-table-column prop="contactPhone" label="联系电话" />
-      <el-table-column prop="shopName" label="店铺名称" />
-      <el-table-column prop="status" label="状态">
-        <template #default="{ row }">
-          <el-tag :type="getStatusType(row.status)">{{ row.status === 'ACTIVE' ? '正常' : '禁用' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="auditStatus" label="审核状态">
-        <template #default="{ row }">
-          <el-tag :type="getAuditType(row.auditStatus)">{{ getAuditText(row.auditStatus) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="auditOpinion" label="审核意见" min-width="160" />
-      <el-table-column prop="createTime" label="申请时间" />
-      <el-table-column label="操作">
-        <template #default="{ row }">
-          <el-button type="text" @click="goDetail(row.id)">查看</el-button>
-          <el-button type="primary" size="small" v-if="row.auditStatus === 'PENDING'" @click="audit(row.id)">审核</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-pagination
-      @current-change="handlePageChange"
-      :current-page="page"
+
+    <AgriElementListTable
+      :columns="columns"
+      :data="suppliers"
+      row-key="id"
+      :loading="loading"
+      :page="page"
       :page-size="size"
       :total="total"
-      layout="prev, pager, next, jumper"
-    />
+      column-settings-storage-key="agri-s2b2c-platform:suppliers"
+      empty-text="暂无符合条件的货源档案"
+      @page-change="handlePageChange"
+      @refresh="loadSuppliers"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>公司名称</label>
+            <el-input v-model="keyword" placeholder="搜索公司名称" clearable @keyup.enter="search" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>审核状态</label>
+            <el-select v-model="auditStatus" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="待审核" value="PENDING" />
+              <el-option label="已通过" value="APPROVED" />
+              <el-option label="已拒绝" value="REJECTED" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-status="{ row }">
+        <el-tag :type="getStatusType(row.status)">{{ row.status === 'ACTIVE' ? '正常' : '禁用' }}</el-tag>
+      </template>
+      <template #cell-auditStatus="{ row }">
+        <el-tag :type="getAuditType(row.auditStatus)">{{ getAuditText(row.auditStatus) }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="rowActions(row)" />
+      </template>
+    </AgriElementListTable>
+
     <el-dialog v-model="showAudit" title="供应商审核">
       <el-form :model="auditForm" label-width="80px">
         <el-form-item label="审核结果">
@@ -50,7 +57,7 @@
             <el-radio label="REJECTED">拒绝</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="审核意见" v-if="auditForm.status === 'REJECTED'">
+        <el-form-item v-if="auditForm.status === 'REJECTED'" label="审核意见">
           <el-input v-model="auditForm.opinion" type="textarea" />
         </el-form-item>
       </el-form>
@@ -66,57 +73,87 @@
 import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const router = useRouter()
 const keyword = ref('')
 const auditStatus = ref('')
 const suppliers = ref([])
+const loading = ref(false)
 const page = ref(1)
-const size = ref(10)
+const size = ref(20)
 const total = ref(0)
 const showAudit = ref(false)
 const currentId = ref(null)
 const saving = ref(false)
 
+const columns = [
+  { key: 'companyName', prop: 'companyName', label: '公司名称', minWidth: 180 },
+  { key: 'creditCode', prop: 'creditCode', label: '信用代码', width: 170 },
+  { key: 'industry', prop: 'industry', label: '所属行业', width: 120 },
+  { key: 'legalName', prop: 'legalName', label: '法定代表人', width: 110 },
+  { key: 'contactPhone', prop: 'contactPhone', label: '联系电话', width: 130 },
+  { key: 'shopName', prop: 'shopName', label: '店铺名称', minWidth: 140 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'auditStatus', prop: 'auditStatus', label: '审核状态', width: 110 },
+  { key: 'auditOpinion', prop: 'auditOpinion', label: '审核意见', minWidth: 160 },
+  { key: 'createTime', prop: 'createTime', label: '申请时间', width: 170 },
+  { key: 'actions', label: '操作', width: 130 },
+]
+
 const auditForm = reactive({
   status: 'APPROVED',
-  opinion: ''
+  opinion: '',
 })
 
-onMounted(() => {
+function rowActions(row) {
+  const list = [{ key: 'detail', label: '查看', onClick: () => goDetail(row.id) }]
+  if (row.auditStatus === 'PENDING') {
+    list.push({ key: 'audit', label: '审核', onClick: () => audit(row.id) })
+  }
+  return list
+}
+
+async function loadSuppliers() {
+  loading.value = true
+  try {
+    const res = await platformApi.getSuppliers({
+      page: page.value,
+      size: size.value,
+      keyword: keyword.value.trim() || undefined,
+      auditStatus: auditStatus.value || undefined,
+    })
+    suppliers.value = res.records || []
+    total.value = Number(res.total || 0)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadSuppliers)
+
+const search = () => {
+  page.value = 1
   loadSuppliers()
-})
-
-const loadSuppliers = async () => {
-  const res = await platformApi.getSuppliers({
-    page: page.value,
-    size: size.value,
-    keyword: keyword.value,
-    auditStatus: auditStatus.value
-  })
-  suppliers.value = res.records || []
-  total.value = res.total || 0
 }
 
-const handlePageChange = (currentPage) => {
-  page.value = currentPage
+const reset = () => {
+  keyword.value = ''
+  auditStatus.value = ''
+  page.value = 1
   loadSuppliers()
 }
 
-const getStatusType = (status) => {
-  return status === 'ACTIVE' ? 'success' : 'danger'
+const handlePageChange = (nextPage, nextSize) => {
+  page.value = nextPage
+  size.value = nextSize
+  loadSuppliers()
 }
 
-const getAuditType = (status) => {
-  const types = { 'PENDING': 'warning', 'APPROVED': 'success', 'REJECTED': 'danger' }
-  return types[status] || 'default'
-}
-
-const getAuditText = (status) => {
-  const texts = { 'PENDING': '待审核', 'APPROVED': '已通过', 'REJECTED': '已拒绝' }
-  return texts[status] || status
-}
+const getStatusType = (status) => (status === 'ACTIVE' ? 'success' : 'danger')
+const getAuditType = (status) => ({ PENDING: 'warning', APPROVED: 'success', REJECTED: 'danger' }[status] || 'info')
+const getAuditText = (status) => ({ PENDING: '待审核', APPROVED: '已通过', REJECTED: '已拒绝' }[status] || status)
 
 const goDetail = (id) => {
   router.push(`/supplier-detail/${id}`)
@@ -139,7 +176,7 @@ const confirmAudit = async () => {
     const res = await platformApi.auditSupplier({
       id: currentId.value,
       auditStatus: auditForm.status,
-      auditOpinion: auditForm.opinion
+      auditOpinion: auditForm.opinion,
     })
     if (res?.success === false) {
       ElMessage.error(res.message || '审核失败')
@@ -157,15 +194,8 @@ const confirmAudit = async () => {
 </script>
 
 <style scoped>
-.suppliers-page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.search-bar {
-  display: flex;
-  gap: 15px;
-  align-items: center;
-}
+.suppliers-page { display: flex; flex-direction: column; gap: 16px; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-head h2 { margin: 0 0 6px; font-size: 18px; }
+.page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 780px; }
 </style>

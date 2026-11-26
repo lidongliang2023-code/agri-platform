@@ -3,13 +3,12 @@
     <div class="page-head">
       <div>
         <h2>分润结算</h2>
-        <p>只结算渠道佣金（PENDING → SETTLED，按渠道/账期生成批次）；供应商货款与区域分润分别归交易撮合/城市合伙人。</p>
+        <p>只结算渠道佣金（待结算 → 已结算，按渠道/账期生成批次）；供应商货款与区域分润分别归交易撮合/城市合伙人。</p>
         <p class="rule">
           佣金在<b>下单时</b>就按订单金额生成，但<b>不是当时就能结</b>：只有订单「已完成」（买家已确认收货）
           且没有进行中的售后，才会进入结算。未付款 / 已取消 / 退款中的单子一律不结，下面会逐条写明原因。
         </p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
@@ -29,7 +28,6 @@
       <p class="note">不传账期表示结算全部待结算佣金；没有可结算佣金时不会生成空批次。</p>
     </div>
 
-    <!-- 结算结果常驻：只弹一条 toast 的话，操作员三秒后就不知道"这次为什么没结" -->
     <div v-if="lastResult" class="card result-card">
       <div class="card-head">
         <h3>本次结算结果</h3>
@@ -39,60 +37,119 @@
         已结算 <b>{{ lastResult.count }}</b> 笔（¥{{ money(lastResult.amount) }}）；
         未结算 <b>{{ lastResult.blockedCount }}</b> 笔（¥{{ money(lastResult.blockedAmount) }}）
       </p>
-      <el-table v-if="lastResult.blocked?.length" :data="lastResult.blocked" border max-height="260">
-        <el-table-column prop="commissionId" label="佣金 ID" width="120" />
-        <el-table-column prop="orderId" label="订单" width="180" />
-        <el-table-column label="订单状态" width="120">
-          <template #default="{ row }">{{ row.orderStatus || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="金额" width="110">
-          <template #default="{ row }">¥{{ money(row.amount) }}</template>
-        </el-table-column>
-        <el-table-column prop="reason" label="为什么还没结算" />
-      </el-table>
+      <AgriElementListTable
+        v-if="lastResult.blocked?.length"
+        :columns="blockedColumns"
+        :data="lastResult.blocked"
+        :row-key="(row) => String(row.commissionId ?? row.orderId)"
+        client-pagination
+        :page-size="10"
+        :selectable="false"
+        :show-refresh="false"
+        column-settings-storage-key="agri-s2b2c-platform:settlement-blocked"
+        empty-text="本轮没有待结算佣金"
+      >
+        <template #cell-orderStatus="{ row }">{{ orderStatusText(row.orderStatus) }}</template>
+        <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+      </AgriElementListTable>
       <el-empty v-else description="本轮没有待结算佣金" :image-size="60" />
     </div>
 
-    <div class="card">
-      <div class="card-head"><h3>结算批次</h3><span class="muted">批次号不可重复，商家端可查看与自己相关的批次</span></div>
-      <el-table :data="rows" border>
-        <el-table-column prop="batchNo" label="批次号" width="210" />
-        <el-table-column prop="channelId" label="渠道" width="180" show-overflow-tooltip />
-        <el-table-column prop="commissionCount" label="笔数" width="90" />
-        <el-table-column label="金额" width="120">
-          <template #default="{ row }">¥{{ money(row.amount) }}</template>
-        </el-table-column>
-        <el-table-column prop="operator" label="操作人" width="120" />
-        <el-table-column prop="createdAt" label="结算时间" />
-      </el-table>
-      <el-empty v-if="!rows.length" description="还没有结算批次" :image-size="70" />
-    </div>
+    <AgriElementListTable
+      :columns="batchColumns"
+      :data="filteredRows"
+      :row-key="(row) => String(row.id ?? row.batchNo)"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:settlement-batches"
+      empty-text="还没有结算批次"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="draftKeyword" placeholder="搜索批次号 / 渠道 / 操作人" clearable @keyup.enter="applyFilter" />
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <div class="section-title">
+          <h3>结算批次</h3>
+          <span class="muted">批次号不可重复，商家端可查看与自己相关的批次</span>
+        </div>
+      </template>
+
+      <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+    </AgriElementListTable>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const rows = ref([])
+const loading = ref(false)
 const channelId = ref('')
 const periodStart = ref('')
 const periodEnd = ref('')
 const settling = ref(false)
 const lastResult = ref(null)
+const draftKeyword = ref('')
+const activeKeyword = ref('')
+
+const blockedColumns = [
+  { key: 'commissionId', prop: 'commissionId', label: '佣金 ID', width: 120 },
+  { key: 'orderId', prop: 'orderId', label: '订单', width: 180 },
+  { key: 'orderStatus', prop: 'orderStatus', label: '订单状态', width: 120 },
+  { key: 'amount', prop: 'amount', label: '金额', width: 110 },
+  { key: 'reason', prop: 'reason', label: '为什么还没结算', minWidth: 200 },
+]
+
+const batchColumns = [
+  { key: 'batchNo', prop: 'batchNo', label: '批次号', width: 210 },
+  { key: 'channelId', prop: 'channelId', label: '渠道', width: 180 },
+  { key: 'commissionCount', prop: 'commissionCount', label: '笔数', width: 90 },
+  { key: 'amount', prop: 'amount', label: '金额', width: 120 },
+  { key: 'operator', prop: 'operator', label: '操作人', width: 120 },
+  { key: 'createdAt', prop: 'createdAt', label: '结算时间', minWidth: 180 },
+]
+
+const filteredRows = computed(() => {
+  const kw = activeKeyword.value.trim().toLowerCase()
+  if (!kw) return rows.value
+  return rows.value.filter((row) =>
+    `${row.batchNo || ''} ${row.channelId || ''} ${row.operator || ''}`.toLowerCase().includes(kw),
+  )
+})
 
 const totalAmount = computed(() => rows.value.reduce((sum, row) => sum + Number(row.amount || 0), 0))
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     rows.value = (await platformApi.getSettlements()) || []
   } catch (e) {
     rows.value = []
     ElMessage.error(e?.message || '结算批次读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function applyFilter() {
+  activeKeyword.value = draftKeyword.value
+}
+
+function resetFilter() {
+  draftKeyword.value = ''
+  activeKeyword.value = ''
 }
 
 async function settle() {
@@ -125,6 +182,10 @@ async function settle() {
 }
 
 const money = (value) => Number(value || 0).toFixed(2)
+const orderStatusText = (value) => ({
+  PENDING_PAY: '待付款', PENDING_SHIP: '待发货', SHIPPED: '已发货', PENDING_RECEIVE: '待收货',
+  COMPLETED: '已完成', CANCELLED: '已取消', REFUNDING: '退款中', REFUNDED: '已退款',
+}[value] || value || '—')
 </script>
 
 <style scoped>
@@ -140,6 +201,8 @@ const money = (value) => Number(value || 0).toFixed(2)
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; display: flex; flex-direction: column; gap: 10px; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .card-head h3 { margin: 0; font-size: 15px; }
+.section-title { display: flex; align-items: baseline; gap: 10px; }
+.section-title h3 { margin: 0; font-size: 15px; color: #173e2a; }
 .muted { color: #84938a; font-size: 12px; }
 .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .note { margin: 0; color: #84938a; font-size: 12px; }

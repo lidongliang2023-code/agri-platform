@@ -5,63 +5,74 @@
         <h2>投放规则配置</h2>
         <p>按商品控制渠道能否投放、允许的渠道白名单、最大授权渠道数与限售区域；规则收紧会自动撤销不符合的既有授权并通知渠道。</p>
       </div>
-      <div class="head-actions">
-        <el-button :loading="scanning" @click="scanPriceGuard">扫描超低价并下架</el-button>
-        <el-button @click="load">刷新</el-button>
-      </div>
     </div>
 
-    <div class="card">
-      <el-table :data="rows" border>
-        <el-table-column prop="name" label="商品" min-width="180" />
-        <el-table-column label="审核状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="允许渠道投放" width="140">
-          <template #default="{ row }">
-            <el-switch v-model="row.distributionEnabled" @change="(value) => save(row, value)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="最大授权渠道" width="150">
-          <template #default="{ row }">
-            <el-input-number v-model="row.maxChannels" :min="0" :precision="0" size="small" style="width: 96px" />
-            <span class="unit">0=不限</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="最低零售价" width="150">
-          <template #default="{ row }">
-            <el-input-number v-model="row.minRetailPrice" :min="0" :precision="2" size="small" style="width: 100px" />
-          </template>
-        </el-table-column>
-        <el-table-column label="最高零售价" width="150">
-          <template #default="{ row }">
-            <el-input-number v-model="row.maxRetailPrice" :min="0" :precision="2" size="small" style="width: 100px" />
-          </template>
-        </el-table-column>
-        <el-table-column label="渠道白名单" width="170">
-          <template #default="{ row }">
-            <span v-if="!row.whitelistIds.length" class="muted">不限渠道</span>
-            <span v-else>已限定 {{ row.whitelistIds.length }} 个渠道</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="限售区域" width="220">
-          <template #default="{ row }">
-            <span v-if="!row.regionNames.length" class="muted">全国（不限）</span>
-            <span v-else>{{ row.regionNames.join('、') }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openWhitelist(row)">白名单</el-button>
-            <el-button link type="primary" @click="openRegions(row)">限售区域</el-button>
-            <el-button link type="primary" @click="save(row, row.distributionEnabled)">保存</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!rows.length" description="暂无商品" :image-size="70" />
-    </div>
+    <AgriElementListTable
+      :columns="columns"
+      :data="filteredRows"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:supply-listing-config"
+      empty-text="暂无商品"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>商品名称</label>
+            <el-input v-model="draft.keyword" placeholder="搜索商品名称" clearable @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>审核状态</label>
+            <el-select v-model="draft.status" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="待审核" value="PENDING" />
+              <el-option label="已通过" value="APPROVED" />
+              <el-option label="已拒绝" value="REJECTED" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <el-button type="primary" :loading="scanning" @click="scanPriceGuard">扫描超低价并下架</el-button>
+      </template>
+
+      <template #cell-status="{ row }">
+        <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+      </template>
+      <template #cell-distributionEnabled="{ row }">
+        <el-switch v-model="row.distributionEnabled" @change="(value) => save(row, value)" />
+      </template>
+      <template #cell-maxChannels="{ row }">
+        <el-input-number v-model="row.maxChannels" :min="0" :precision="0" size="small" style="width: 90px" />
+        <span class="unit">0=不限</span>
+      </template>
+      <template #cell-minRetailPrice="{ row }">
+        <el-input-number v-model="row.minRetailPrice" :min="0" :precision="2" size="small" style="width: 100px" />
+      </template>
+      <template #cell-maxRetailPrice="{ row }">
+        <el-input-number v-model="row.maxRetailPrice" :min="0" :precision="2" size="small" style="width: 100px" />
+      </template>
+      <template #cell-whitelist="{ row }">
+        <span v-if="!row.whitelistIds.length" class="muted">不限渠道</span>
+        <span v-else>已限定 {{ row.whitelistIds.length }} 个渠道</span>
+      </template>
+      <template #cell-regions="{ row }">
+        <span v-if="!row.regionNames.length" class="muted">全国（不限）</span>
+        <span v-else>{{ row.regionNames.join('、') }}</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions
+          :actions="[
+            { key: 'save', label: '保存', onClick: () => save(row, row.distributionEnabled) },
+            { key: 'whitelist', label: '白名单', onClick: () => openWhitelist(row) },
+            { key: 'regions', label: '限售区域', onClick: () => openRegions(row) },
+          ]"
+        />
+      </template>
+    </AgriElementListTable>
 
     <div class="card">
       <h3>规则说明</h3>
@@ -77,8 +88,12 @@
     <el-dialog v-model="whitelistVisible" title="渠道白名单" width="560px">
       <p class="muted">当前商品：{{ current?.name }}。留空表示不限制渠道；保存后会自动撤销不在白名单内的现有授权。</p>
       <el-select v-model="whitelistSelection" multiple filterable placeholder="选择允许投放的渠道" style="width: 100%">
-        <el-option v-for="channel in channels" :key="channel.channelId"
-          :label="`${channel.shopName || channel.channelId}（${gradeText(channel.grade)}）`" :value="channel.channelId" />
+        <el-option
+          v-for="channel in channels"
+          :key="channel.channelId"
+          :label="`${channel.shopName || channel.channelId}（${gradeText(channel.grade)}）`"
+          :value="channel.channelId"
+        />
       </el-select>
       <template #footer>
         <el-button @click="whitelistVisible = false">取消</el-button>
@@ -100,13 +115,15 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { supplierApi } from '../api'
 import { currentSupplierId } from '../api/supplierSession'
 import { PROVINCES } from '../../../../frontend-shared/constants/regions.js'
 
 const rows = ref([])
+const loading = ref(false)
 const channels = ref([])
 const scanning = ref(false)
 const whitelistVisible = ref(false)
@@ -117,6 +134,29 @@ const provinces = PROVINCES
 const regionVisible = ref(false)
 const regionSelection = ref([])
 const savingRegion = ref(false)
+const draft = reactive({ keyword: '', status: '' })
+const activeFilter = reactive({ keyword: '', status: '' })
+
+const columns = [
+  { key: 'name', prop: 'name', label: '商品', minWidth: 180 },
+  { key: 'status', prop: 'status', label: '审核状态', width: 100 },
+  { key: 'distributionEnabled', label: '允许渠道投放', width: 120, align: 'center' },
+  { key: 'maxChannels', prop: 'maxChannels', label: '最大授权渠道', width: 150 },
+  { key: 'minRetailPrice', prop: 'minRetailPrice', label: '最低零售价', width: 140 },
+  { key: 'maxRetailPrice', prop: 'maxRetailPrice', label: '最高零售价', width: 140 },
+  { key: 'whitelist', label: '渠道白名单', width: 150 },
+  { key: 'regions', label: '限售区域', width: 180 },
+  { key: 'actions', label: '操作', width: 155 },
+]
+
+const filteredRows = computed(() => {
+  const kw = activeFilter.keyword.trim().toLowerCase()
+  return rows.value.filter((row) => {
+    if (activeFilter.status && row.status !== activeFilter.status) return false
+    if (kw && !String(row.name || '').toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 
 onMounted(async () => {
   try {
@@ -128,6 +168,7 @@ onMounted(async () => {
 })
 
 async function load() {
+  loading.value = true
   try {
     const supplierId = await currentSupplierId()
     if (!supplierId) {
@@ -149,16 +190,36 @@ async function load() {
           regionNames: rule?.regionNames || [],
         }
       } catch {
-        return { ...row, distributionEnabled: row.distributionEnabled !== false,
-          maxChannels: Number(row.maxChannels || 0), minRetailPrice: null, maxRetailPrice: null,
-          whitelistIds: [], regionNames: [] }
+        return {
+          ...row,
+          distributionEnabled: row.distributionEnabled !== false,
+          maxChannels: Number(row.maxChannels || 0),
+          minRetailPrice: null,
+          maxRetailPrice: null,
+          whitelistIds: [],
+          regionNames: [],
+        }
       }
     }))
     rows.value = withRules
   } catch (e) {
     rows.value = []
     ElMessage.error(e?.message || '投放规则读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function applyFilter() {
+  activeFilter.keyword = draft.keyword
+  activeFilter.status = draft.status
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = ''
+  activeFilter.keyword = ''
+  activeFilter.status = ''
 }
 
 async function persist(row, channelIds, regionNames = row.regionNames || []) {
@@ -209,9 +270,7 @@ async function saveRegions() {
   savingRegion.value = true
   try {
     await persist(current.value, current.value.whitelistIds || [], regionSelection.value)
-    ElMessage.success(regionSelection.value.length
-      ? `已限制 ${regionSelection.value.length} 个销售省份`
-      : '已改为全国可售')
+    ElMessage.success(regionSelection.value.length ? `已限制 ${regionSelection.value.length} 个销售省份` : '已改为全国可售')
     regionVisible.value = false
     await load()
   } catch (e) {
@@ -264,6 +323,5 @@ const gradeText = (value) => ({ LEVEL_1: '铜牌', LEVEL_2: '银牌', LEVEL_3: '
 .card h3 { margin: 0 0 10px; font-size: 15px; }
 .card ul { margin: 0; padding-left: 18px; color: #52665a; font-size: 13px; line-height: 1.9; }
 .unit { margin-left: 6px; color: #94a198; font-size: var(--agri-font-size-micro); }
-.head-actions { display: flex; gap: 8px; }
 .muted { color: #84938a; font-size: 12px; }
 </style>

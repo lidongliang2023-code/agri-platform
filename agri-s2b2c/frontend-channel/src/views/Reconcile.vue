@@ -16,62 +16,83 @@
       <div class="stat-card"><span>净收益（已结佣 - 已打款）</span><b>¥{{ money(summary.netIncome) }}</b><small>账期 {{ data.month || month }}</small></div>
     </div>
 
-    <div class="card">
-      <h3>账期流水</h3>
-      <el-table :data="data.ledger || []" border size="small">
-        <el-table-column prop="t" label="时间" width="180" />
-        <el-table-column label="类型" width="110">
-          <template #default="{ row }">{{ row.type === 'COMMISSION' ? '佣金' : '提现' }}</template>
-        </el-table-column>
-        <el-table-column prop="ref_no" label="关联订单" min-width="180" />
-        <el-table-column prop="summary" label="摘要" min-width="160" />
-        <el-table-column label="金额" width="120">
-          <template #default="{ row }">
-            <span :class="{ minus: Number(row.amount) < 0 }">{{ Number(row.amount) < 0 ? '-' : '+' }}¥{{ money(Math.abs(Number(row.amount))) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">{{ ledgerStatus(row.status) }}</template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!(data.ledger || []).length" description="该账期暂无流水" :image-size="70" />
-    </div>
+    <AgriElementListTable
+      :columns="ledgerColumns"
+      :data="data.ledger || []"
+      :row-key="(row) => String(row.id ?? `${row.t}-${row.ref_no}-${row.type}`)"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-channel:reconcile-ledger"
+      empty-text="该账期暂无流水"
+      @refresh="load"
+    >
+      <template #toolbar-left><h3 class="inline-title">账期流水</h3></template>
+      <template #cell-type="{ row }">{{ row.type === 'COMMISSION' ? '佣金' : '提现' }}</template>
+      <template #cell-amount="{ row }">
+        <span :class="{ minus: Number(row.amount) < 0 }">{{ Number(row.amount) < 0 ? '-' : '+' }}¥{{ money(Math.abs(Number(row.amount))) }}</span>
+      </template>
+      <template #cell-status="{ row }">{{ ledgerStatus(row.status) }}</template>
+    </AgriElementListTable>
 
-    <div class="card">
-      <h3>结算批次</h3>
-      <el-table :data="data.settlements || []" border size="small">
-        <el-table-column prop="batch_no" label="批次号" width="200" />
-        <el-table-column prop="commission_count" label="笔数" width="90" />
-        <el-table-column label="金额" width="120">
-          <template #default="{ row }">¥{{ money(row.amount) }}</template>
-        </el-table-column>
-        <el-table-column prop="operator" label="操作人" width="120" />
-        <el-table-column prop="created_at" label="结算时间" />
-      </el-table>
-      <el-empty v-if="!(data.settlements || []).length" description="该账期没有批次结算" :image-size="70" />
-      <p class="note">对账口径：GMV 取渠道订单实付；佣金按订单归属渠道统计；提现按申请时间归入账期。若需逐笔核对订单号、支付单号与售后单，请在订单详情中查看。</p>
-    </div>
+    <AgriElementListTable
+      :columns="settlementColumns"
+      :data="data.settlements || []"
+      :row-key="(row) => String(row.id ?? row.batch_no)"
+      :loading="loading"
+      client-pagination
+      :page-size="10"
+      column-settings-storage-key="agri-s2b2c-channel:reconcile-settlements"
+      empty-text="该账期没有批次结算"
+      @refresh="load"
+    >
+      <template #toolbar-left><h3 class="inline-title">结算批次</h3></template>
+      <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+    </AgriElementListTable>
+
+    <p class="note">对账口径：GMV 取渠道订单实付；佣金按订单归属渠道统计；提现按申请时间归入账期。若需逐笔核对订单号、支付单号与售后单，请在订单详情中查看。</p>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const now = new Date()
 const month = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
 const data = ref({})
 const summary = ref({})
+const loading = ref(false)
+
+const ledgerColumns = [
+  { key: 't', prop: 't', label: '时间', width: 180 },
+  { key: 'type', prop: 'type', label: '类型', width: 100 },
+  { key: 'ref_no', prop: 'ref_no', label: '关联订单', minWidth: 180 },
+  { key: 'summary', prop: 'summary', label: '摘要', minWidth: 160 },
+  { key: 'amount', prop: 'amount', label: '金额', width: 120 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+]
+
+const settlementColumns = [
+  { key: 'batch_no', prop: 'batch_no', label: '批次号', width: 200 },
+  { key: 'commission_count', prop: 'commission_count', label: '笔数', width: 90 },
+  { key: 'amount', prop: 'amount', label: '金额', width: 120 },
+  { key: 'operator', prop: 'operator', label: '操作人', width: 120 },
+  { key: 'created_at', prop: 'created_at', label: '结算时间', minWidth: 170 },
+]
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     data.value = (await channelApi.getReconcile(month.value)) || {}
     summary.value = data.value.summary || {}
   } catch (e) {
     ElMessage.error(e?.message || '对账单读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -91,9 +112,8 @@ const ledgerStatus = (value) => ({
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 22px; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.card h3 { margin: 0 0 12px; font-size: 15px; }
+.inline-title { margin: 0; font-size: 15px; color: #173e2a; }
 .minus { color: #c54b4b; }
-.note { margin: 12px 0 0; color: #84938a; font-size: 12px; line-height: 1.7; }
+.note { margin: 0; color: #84938a; font-size: 12px; line-height: 1.7; }
 @media (max-width: 1200px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 </style>

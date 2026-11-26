@@ -24,17 +24,20 @@
         <h3>销售走势</h3>
         <div ref="trendChart" class="chart" />
       </div>
-      <div class="card">
-        <h3>商品销售排行 Top 5</h3>
-        <el-table :data="data.topProducts || []" border size="small">
-          <el-table-column prop="name" label="商品" min-width="180" />
-          <el-table-column prop="qty" label="销量" width="90" />
-          <el-table-column label="销售额" width="110">
-            <template #default="{ row }">¥{{ money(row.amount) }}</template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-if="!(data.topProducts || []).length" description="区间内暂无成交" :image-size="60" />
-      </div>
+      <AgriElementListTable
+        :columns="productColumns"
+        :data="data.topProducts || []"
+        :row-key="(row) => String(row.productId ?? row.name)"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-s2b2c-channel:analytics-top-products"
+        empty-text="区间内暂无成交"
+        @refresh="load"
+      >
+        <template #toolbar-left><h3 class="inline-title">商品销售排行 Top 5</h3></template>
+        <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+      </AgriElementListTable>
     </div>
 
     <div class="card">
@@ -53,23 +56,34 @@
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const days = ref(30)
 const data = ref({})
+const loading = ref(false)
 const trendChart = ref(null)
 let chart = null
+
+const productColumns = [
+  { key: 'name', prop: 'name', label: '商品', minWidth: 160 },
+  { key: 'qty', prop: 'qty', label: '销量', width: 90 },
+  { key: 'amount', prop: 'amount', label: '销售额', width: 110 },
+]
 
 onMounted(load)
 onUnmounted(() => chart?.dispose())
 
 async function load() {
+  loading.value = true
   try {
     data.value = (await channelApi.getAnalytics(days.value)) || {}
     await nextTick()
     renderTrend()
   } catch (e) {
     ElMessage.error(e?.message || '经营分析读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -97,7 +111,7 @@ function renderTrend() {
       symbol: 'none',
       data: trend.map((p) => Number(p.amount || 0)),
       areaStyle: { color: 'rgba(18,118,74,0.12)' },
-      lineStyle: { color: '#12764a', width: 2 },
+      lineStyle: { color: '#2d8f4e', width: 2 },
     }],
   }, true)
 }
@@ -119,9 +133,10 @@ const statusText = (value) => ({
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 24px; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+.grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .card h3 { margin: 0 0 12px; font-size: 15px; }
+.inline-title { margin: 0; font-size: 15px; color: #173e2a; }
 .chart { height: 300px; }
 .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .status-item { display: flex; justify-content: space-between; padding: 10px 12px; border-radius: 10px; background: #f6faf7; color: #52665a; font-size: 13px; }

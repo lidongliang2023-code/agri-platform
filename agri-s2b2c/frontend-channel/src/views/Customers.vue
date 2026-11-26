@@ -5,7 +5,6 @@
         <h2>客户列表</h2>
         <p>在本渠道店铺下过单的客户资产；客户来源与账号实名由用户中心主责，本页只做渠道内消费聚合与分层。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
@@ -15,52 +14,50 @@
       <div class="stat-card"><span>沉睡客户</span><b>{{ summary.sleeping || 0 }}</b><small>30 天未下单</small></div>
     </div>
 
-    <div class="filter-bar">
-      <el-input v-model="keyword" placeholder="搜索昵称 / 手机号" style="width: 240px" clearable @keyup.enter="search" @clear="search" />
-      <el-select v-model="layer" placeholder="客户分层" style="width: 150px" @change="search">
-        <el-option label="全部" value="" />
-        <el-option label="新客" value="NEW" />
-        <el-option label="活跃客" value="ACTIVE" />
-        <el-option label="高价值" value="HIGH_VALUE" />
-        <el-option label="沉睡客" value="SLEEPING" />
-      </el-select>
-      <el-button type="primary" @click="search">查询</el-button>
-    </div>
-
-    <el-table :data="rows" border>
-      <el-table-column label="客户" min-width="180">
-        <template #default="{ row }">
-          <b>{{ row.name }}</b><br><small>{{ row.phone }}</small>
-        </template>
-      </el-table-column>
-      <el-table-column label="分层" width="110">
-        <template #default="{ row }">
-          <el-tag :type="layerType(row.layer)">{{ layerText(row.layer) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="orderCount" label="下单次数" width="100" />
-      <el-table-column label="累计消费" width="120">
-        <template #default="{ row }">¥{{ money(row.totalAmount) }}</template>
-      </el-table-column>
-      <el-table-column label="客单价" width="110">
-        <template #default="{ row }">¥{{ money(row.avgAmount) }}</template>
-      </el-table-column>
-      <el-table-column prop="lastOrderTime" label="最近下单" width="180" />
-      <el-table-column prop="memberLevel" label="会员等级" width="110" />
-      <el-table-column label="操作" width="100" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="$router.push(`/customers/${row.consumerId}`)">画像</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" description="当前筛选条件下没有客户" />
-    <el-pagination
-      v-model:current-page="page"
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      row-key="consumerId"
+      :loading="loading"
+      :page="page"
       :page-size="size"
       :total="total"
-      layout="prev, pager, next, jumper"
-      @current-change="load"
-    />
+      column-settings-storage-key="agri-s2b2c-channel:customers"
+      empty-text="当前筛选条件下没有客户"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>昵称 / 手机号</label>
+            <el-input v-model="keyword" placeholder="搜索昵称 / 手机号" clearable @keyup.enter="search" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>客户分层</label>
+            <el-select v-model="layer" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="新客" value="NEW" />
+              <el-option label="活跃客" value="ACTIVE" />
+              <el-option label="高价值" value="HIGH_VALUE" />
+              <el-option label="沉睡客" value="SLEEPING" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-customer="{ row }">
+        <b>{{ row.name }}</b><br><small>{{ row.phone }}</small>
+      </template>
+      <template #cell-layer="{ row }">
+        <el-tag :type="layerType(row.layer)">{{ layerText(row.layer) }}</el-tag>
+      </template>
+      <template #cell-totalAmount="{ row }">¥{{ money(row.totalAmount) }}</template>
+      <template #cell-avgAmount="{ row }">¥{{ money(row.avgAmount) }}</template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="[{ key: 'profile', label: '画像', onClick: () => $router.push(`/customers/${row.consumerId}`) }]" />
+      </template>
+    </AgriElementListTable>
   </div>
 </template>
 
@@ -68,6 +65,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const route = useRoute()
@@ -75,13 +73,26 @@ const keyword = ref('')
 const layer = ref(String(route.query.layer || ''))
 const rows = ref([])
 const summary = ref({})
+const loading = ref(false)
 const page = ref(1)
-const size = ref(10)
+const size = ref(20)
 const total = ref(0)
+
+const columns = [
+  { key: 'customer', prop: 'name', label: '客户', minWidth: 180 },
+  { key: 'layer', prop: 'layer', label: '分层', width: 110 },
+  { key: 'orderCount', prop: 'orderCount', label: '下单次数', width: 100 },
+  { key: 'totalAmount', prop: 'totalAmount', label: '累计消费', width: 120 },
+  { key: 'avgAmount', prop: 'avgAmount', label: '客单价', width: 110 },
+  { key: 'lastOrderTime', prop: 'lastOrderTime', label: '最近下单', width: 180 },
+  { key: 'memberLevel', prop: 'memberLevel', label: '会员等级', width: 110 },
+  { key: 'actions', label: '操作', width: 100 },
+]
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const data = await channelApi.getCustomers({
       page: page.value,
@@ -90,17 +101,32 @@ async function load() {
       layer: layer.value || undefined,
     })
     rows.value = data.records || []
-    total.value = data.total || 0
+    total.value = Number(data.total || 0)
     summary.value = data.summary || {}
   } catch (e) {
     rows.value = []
     total.value = 0
     ElMessage.error(e?.message || '客户列表读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
 function search() {
   page.value = 1
+  load()
+}
+
+function reset() {
+  keyword.value = ''
+  layer.value = ''
+  page.value = 1
+  load()
+}
+
+function handlePageChange(nextPage, nextSize) {
+  page.value = nextPage
+  size.value = nextSize
   load()
 }
 
@@ -119,6 +145,5 @@ const layerType = (value) => ({ NEW: 'info', ACTIVE: 'primary', HIGH_VALUE: 'suc
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 24px; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 @media (max-width: 1000px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 </style>

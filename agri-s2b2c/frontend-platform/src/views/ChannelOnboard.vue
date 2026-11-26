@@ -5,78 +5,103 @@
         <h2>入驻审核</h2>
         <p>商家主体实名与资质核验由用户中心主责；本页只做渠道入驻的业务审核（经营能力与渠道分层）。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
-    <div class="filter-bar">
-      <el-radio-group v-model="status" @change="search">
-        <el-radio-button value="PENDING">待审核</el-radio-button>
-        <el-radio-button value="APPROVED">已通过</el-radio-button>
-        <el-radio-button value="REJECTED">已驳回</el-radio-button>
-      </el-radio-group>
-      <span class="muted">共 {{ total }} 条</span>
-    </div>
-
-    <el-table :data="rows" border>
-      <el-table-column label="申请方" min-width="180">
-        <template #default="{ row }">
-          <b>{{ row.shopName || row.companyName || '未命名渠道' }}</b><br>
-          <small>{{ row.id }}</small>
-        </template>
-      </el-table-column>
-      <el-table-column label="类型/区域" min-width="160">
-        <template #default="{ row }">
-          {{ row.registerType === 'COMPANY' ? '企业' : '个人' }}<br>
-          <small>{{ [row.province, row.city, row.district].filter(Boolean).join(' ') || '未填' }}</small>
-        </template>
-      </el-table-column>
-      <el-table-column label="联系人" width="170">
-        <template #default="{ row }">{{ row.contactName || '—' }}<br><small>{{ row.contactPhone || '' }}</small></template>
-      </el-table-column>
-      <el-table-column label="等级" width="100">
-        <template #default="{ row }">{{ gradeText(row.grade) }}</template>
-      </el-table-column>
-      <el-table-column label="审核状态" width="110">
-        <template #default="{ row }">
-          <el-tag :type="auditType(row.auditStatus)">{{ auditText(row.auditStatus) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="auditTime" label="审核时间" width="180" />
-      <el-table-column label="操作" width="190" fixed="right">
-        <template #default="{ row }">
-          <template v-if="row.auditStatus === 'PENDING'">
-            <el-button link type="success" @click="review(row, true)">通过</el-button>
-            <el-button link type="danger" @click="review(row, false)">驳回</el-button>
-          </template>
-          <el-button link type="primary" @click="$router.push(`/channel-partner-detail/${row.id}`)">详情</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" :description="status === 'PENDING' ? '没有待审核的渠道入驻申请' : '当前筛选下没有记录'" />
-    <el-pagination
-      v-model:current-page="page"
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      :page="page"
       :page-size="size"
       :total="total"
-      layout="prev, pager, next, jumper"
-      @current-change="load"
-    />
+      column-settings-storage-key="agri-s2b2c-platform:channel-onboard"
+      :empty-text="status === 'PENDING' ? '没有待审核的渠道入驻申请' : '当前筛选下没有记录'"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="search" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>审核状态</label>
+            <el-select v-model="status" placeholder="请选择">
+              <el-option label="待审核" value="PENDING" />
+              <el-option label="已通过" value="APPROVED" />
+              <el-option label="已驳回" value="REJECTED" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <el-radio-group v-model="status" size="small" @change="search">
+          <el-radio-button value="PENDING">待审核</el-radio-button>
+          <el-radio-button value="APPROVED">已通过</el-radio-button>
+          <el-radio-button value="REJECTED">已驳回</el-radio-button>
+        </el-radio-group>
+      </template>
+
+      <template #cell-applicant="{ row }">
+        <b>{{ row.shopName || row.companyName || '未命名渠道' }}</b><br>
+        <small>{{ row.id }}</small>
+      </template>
+      <template #cell-region="{ row }">
+        {{ row.registerType === 'COMPANY' ? '企业' : '个人' }}<br>
+        <small>{{ [row.province, row.city, row.district].filter(Boolean).join(' ') || '未填' }}</small>
+      </template>
+      <template #cell-contact="{ row }">
+        {{ row.contactName || '—' }}<br><small>{{ row.contactPhone || '' }}</small>
+      </template>
+      <template #cell-grade="{ row }">{{ gradeText(row.grade) }}</template>
+      <template #cell-auditStatus="{ row }">
+        <el-tag :type="auditType(row.auditStatus)">{{ auditText(row.auditStatus) }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="rowActions(row)" />
+      </template>
+    </AgriElementListTable>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
+const router = useRouter()
 const status = ref('PENDING')
 const rows = ref([])
+const loading = ref(false)
 const page = ref(1)
-const size = ref(10)
+const size = ref(20)
 const total = ref(0)
+
+const columns = [
+  { key: 'applicant', prop: 'shopName', label: '申请方', minWidth: 180 },
+  { key: 'region', label: '类型/区域', minWidth: 160 },
+  { key: 'contact', label: '联系人', width: 170 },
+  { key: 'grade', prop: 'grade', label: '等级', width: 100 },
+  { key: 'auditStatus', prop: 'auditStatus', label: '审核状态', width: 110 },
+  { key: 'auditTime', prop: 'auditTime', label: '审核时间', width: 180 },
+  { key: 'actions', label: '操作', width: 150 },
+]
+
+function rowActions(row) {
+  const list = []
+  if (row.auditStatus === 'PENDING') {
+    list.push({ key: 'approve', label: '通过', onClick: () => review(row, true) })
+    list.push({ key: 'reject', label: '驳回', danger: true, onClick: () => review(row, false) })
+  }
+  list.push({ key: 'detail', label: '详情', onClick: () => router.push(`/channel-partner-detail/${row.id}`) })
+  return list
+}
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const res = await platformApi.getChannelPartners({
       page: page.value,
@@ -84,16 +109,30 @@ async function load() {
       auditStatus: status.value,
     })
     rows.value = res.records || []
-    total.value = res.total || 0
+    total.value = Number(res.total || 0)
   } catch (e) {
     rows.value = []
     total.value = 0
     ElMessage.error(e?.message || '入驻申请读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
 function search() {
   page.value = 1
+  load()
+}
+
+function reset() {
+  status.value = 'PENDING'
+  page.value = 1
+  load()
+}
+
+function handlePageChange(nextPage, nextSize) {
+  page.value = nextPage
+  size.value = nextSize
   load()
 }
 
@@ -140,6 +179,4 @@ const auditType = (value) => ({ PENDING: 'warning', APPROVED: 'success', REJECTE
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 780px; }
-.filter-bar { display: flex; align-items: center; gap: 16px; }
-.muted { color: #84938a; font-size: 12px; }
 </style>

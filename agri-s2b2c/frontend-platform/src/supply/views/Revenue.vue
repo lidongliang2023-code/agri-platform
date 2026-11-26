@@ -15,54 +15,62 @@
     </div>
 
     <div class="grid">
-      <div class="card">
-        <h3>按商品</h3>
-        <el-table :data="byProduct" border size="small">
-          <el-table-column prop="name" label="商品" min-width="190" />
-          <el-table-column prop="qty" label="数量" width="90" />
-          <el-table-column label="供货收入（估）" width="140"><template #default="{ row }">¥{{ money(row.revenue) }}</template></el-table-column>
-        </el-table>
-        <el-empty v-if="!byProduct.length" description="该账期暂无成交" :image-size="60" />
-      </div>
-      <div class="card">
-        <h3>按渠道</h3>
-        <el-table :data="byChannel" border size="small">
-          <el-table-column prop="channelName" label="渠道" min-width="150" />
-          <el-table-column prop="orders" label="订单" width="80" />
-          <el-table-column label="GMV" width="120"><template #default="{ row }">¥{{ money(row.gmv) }}</template></el-table-column>
-        </el-table>
-        <el-empty v-if="!byChannel.length" description="该账期暂无渠道成交" :image-size="60" />
-      </div>
+      <AgriElementListTable
+        :columns="productColumns"
+        :data="byProduct"
+        :row-key="(row) => String(row.productId ?? row.name)"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-s2b2c-platform:supply-revenue-product"
+        empty-text="该账期暂无成交"
+        @refresh="load"
+      >
+        <template #toolbar-left><h3 class="inline-title">按商品</h3></template>
+        <template #cell-revenue="{ row }">¥{{ money(row.revenue) }}</template>
+      </AgriElementListTable>
+
+      <AgriElementListTable
+        :columns="channelColumns"
+        :data="byChannel"
+        :row-key="(row) => String(row.channelId ?? row.channelName)"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-s2b2c-platform:supply-revenue-channel"
+        empty-text="该账期暂无渠道成交"
+        @refresh="load"
+      >
+        <template #toolbar-left><h3 class="inline-title">按渠道</h3></template>
+        <template #cell-gmv="{ row }">¥{{ money(row.gmv) }}</template>
+      </AgriElementListTable>
     </div>
 
-    <div class="card">
-      <div class="card-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">
-        <h3 style="margin:0">供货对账单</h3>
-        <span class="note">平台按已完成订单的供货价快照生成，确认/差异仅作对账记录，不含打款。</span>
-      </div>
-      <el-table :data="statements" border size="small">
-        <el-table-column label="账期" width="210">
-          <template #default="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template>
-        </el-table-column>
-        <el-table-column prop="batchNo" label="批次号" min-width="210" show-overflow-tooltip />
-        <el-table-column prop="orderCount" label="订单数" width="90" />
-        <el-table-column label="供货金额" width="120"><template #default="{ row }">¥{{ money(row.amount) }}</template></el-table-column>
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-tag :type="statementStatusType(row.status)">{{ statementStatusText(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="supplierRemark" label="差异说明" min-width="150" show-overflow-tooltip />
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openStatement(row)">明细</el-button>
-            <el-button v-if="row.status === 'OPEN'" link type="success" @click="confirmStatement(row)">确认</el-button>
-            <el-button v-if="row.status === 'OPEN'" link type="danger" @click="disputeStatement(row)">有差异</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!statements.length" description="暂无供货对账单" :image-size="60" />
-    </div>
+    <AgriElementListTable
+      :columns="statementColumns"
+      :data="statements"
+      row-key="id"
+      :loading="loadingStatements"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:supply-revenue-statements"
+      empty-text="暂无供货对账单"
+      @refresh="loadStatements"
+    >
+      <template #toolbar-left>
+        <div class="section-title">
+          <h3>供货对账单</h3>
+          <span class="note">平台按已完成订单的供货价快照生成，确认/差异仅作对账记录，不含打款。</span>
+        </div>
+      </template>
+      <template #cell-period="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template>
+      <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="statementStatusType(row.status)">{{ statementStatusText(row.status) }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="statementActions(row)" />
+      </template>
+    </AgriElementListTable>
 
     <div class="card">
       <h3>口径说明</h3>
@@ -90,6 +98,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueRowActions } from '@agri/shared/vue/element'
 import { supplierApi } from '../api'
 
 const now = new Date()
@@ -98,17 +107,53 @@ const summary = ref({})
 const byProduct = ref([])
 const byChannel = ref([])
 const statements = ref([])
+const loading = ref(false)
+const loadingStatements = ref(false)
 const statementVisible = ref(false)
 const statementDetail = ref(null)
 const note = ref('')
 
+const productColumns = [
+  { key: 'name', prop: 'name', label: '商品', minWidth: 180 },
+  { key: 'qty', prop: 'qty', label: '数量', width: 90 },
+  { key: 'revenue', prop: 'revenue', label: '供货收入（估）', width: 140 },
+]
+
+const channelColumns = [
+  { key: 'channelName', prop: 'channelName', label: '渠道', minWidth: 150 },
+  { key: 'orders', prop: 'orders', label: '订单', width: 85 },
+  { key: 'gmv', prop: 'gmv', label: 'GMV', width: 120 },
+]
+
+const statementColumns = [
+  { key: 'period', label: '账期', width: 210 },
+  { key: 'batchNo', prop: 'batchNo', label: '批次号', minWidth: 210 },
+  { key: 'orderCount', prop: 'orderCount', label: '订单数', width: 90 },
+  { key: 'amount', prop: 'amount', label: '供货金额', width: 120 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+  { key: 'supplierRemark', prop: 'supplierRemark', label: '差异说明', minWidth: 150 },
+  { key: 'actions', label: '操作', width: 155 },
+]
+
+function statementActions(row) {
+  const list = [{ key: 'detail', label: '明细', onClick: () => openStatement(row) }]
+  if (row.status === 'OPEN') {
+    list.push({ key: 'confirm', label: '确认', onClick: () => confirmStatement(row) })
+    list.push({ key: 'dispute', label: '有差异', danger: true, onClick: () => disputeStatement(row) })
+  }
+  return list
+}
+
 onMounted(() => { load(); loadStatements() })
 
 async function loadStatements() {
+  loadingStatements.value = true
   try {
     statements.value = (await supplierApi.getStatements()) || []
   } catch {
     statements.value = []
+  } finally {
+    loadingStatements.value = false
   }
 }
 
@@ -150,14 +195,11 @@ async function disputeStatement(row) {
   }
 }
 
-const statementStatusText = (value) => ({
-  OPEN: '待确认', CONFIRMED: '已确认', DISPUTED: '有差异',
-}[value] || value)
-const statementStatusType = (value) => ({
-  OPEN: 'warning', CONFIRMED: 'success', DISPUTED: 'danger',
-}[value] || 'info')
+const statementStatusText = (value) => ({ OPEN: '待确认', CONFIRMED: '已确认', DISPUTED: '有差异' }[value] || value)
+const statementStatusType = (value) => ({ OPEN: 'warning', CONFIRMED: 'success', DISPUTED: 'danger' }[value] || 'info')
 
 async function load() {
+  loading.value = true
   try {
     const data = (await supplierApi.getRevenue(month.value)) || {}
     summary.value = data.summary || {}
@@ -166,6 +208,8 @@ async function load() {
     note.value = data.note || ''
   } catch (e) {
     ElMessage.error(e?.message || '供货收入读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -185,6 +229,9 @@ const money = (value) => Number(value || 0).toFixed(2)
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .card h3 { margin: 0 0 10px; font-size: 15px; }
+.inline-title { margin: 0; font-size: 15px; color: #173e2a; }
+.section-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.section-title h3 { margin: 0; font-size: 15px; color: #173e2a; }
 .note { margin: 0; color: #84938a; font-size: 12px; line-height: 1.7; }
-@media (max-width: 1000px) { .grid, .stat-row { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1000px) { .grid, .stat-row { grid-template-columns: 1fr; } }
 </style>

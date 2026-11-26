@@ -5,7 +5,6 @@
         <h2>供应商对账单</h2>
         <p>按已完成订单的下单供货价快照生成；只做供应商对账确认，不含打款，付款仍归交易撮合/财务。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="card">
@@ -19,41 +18,44 @@
       <p class="note">同一供应商同账期只生成一次；没有已完成订单时会提示无可对账订单。</p>
     </div>
 
-    <div class="filter-bar">
-      <el-select v-model="status" placeholder="状态" style="width: 160px" @change="load">
-        <el-option label="全部" value="" />
-        <el-option label="待确认" value="OPEN" />
-        <el-option label="已确认" value="CONFIRMED" />
-        <el-option label="有差异" value="DISPUTED" />
-      </el-select>
-    </div>
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:supplier-statements"
+      empty-text="暂无供应商对账单"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="load" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>供应商 ID</label>
+            <el-input v-model="supplierId" placeholder="按供应商 ID 筛选" clearable @keyup.enter="load" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <el-select v-model="status" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="待确认" value="OPEN" />
+              <el-option label="已确认" value="CONFIRMED" />
+              <el-option label="有差异" value="DISPUTED" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <el-table :data="rows" border>
-      <el-table-column prop="batchNo" label="批次号" width="210" show-overflow-tooltip />
-      <el-table-column prop="supplierName" label="供应商" min-width="160">
-        <template #default="{ row }">{{ row.shopName || row.supplierName || row.supplierId }}</template>
-      </el-table-column>
-      <el-table-column label="账期" width="210">
-        <template #default="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template>
-      </el-table-column>
-      <el-table-column prop="orderCount" label="订单数" width="90" />
-      <el-table-column label="供货金额" width="130">
-        <template #default="{ row }">¥{{ money(row.amount) }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="110">
-        <template #default="{ row }">
-          <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="supplierRemark" label="供应商说明" min-width="160" show-overflow-tooltip />
-      <el-table-column prop="createTime" label="生成时间" width="180" />
-      <el-table-column label="操作" width="90" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row)">明细</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" description="暂无供应商对账单" />
+      <template #cell-supplier="{ row }">{{ row.shopName || row.supplierName || row.supplierId }}</template>
+      <template #cell-period="{ row }">{{ row.periodStart }} ~ {{ row.periodEnd }}</template>
+      <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="[{ key: 'detail', label: '明细', onClick: () => openDetail(row) }]" />
+      </template>
+    </AgriElementListTable>
 
     <el-dialog v-model="detailVisible" title="对账单明细" width="760px">
       <template v-if="detail">
@@ -76,9 +78,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const rows = ref([])
+const loading = ref(false)
 const status = ref('')
 const supplierId = ref('')
 const periodStart = ref('')
@@ -87,9 +91,22 @@ const generating = ref(false)
 const detailVisible = ref(false)
 const detail = ref(null)
 
+const columns = [
+  { key: 'batchNo', prop: 'batchNo', label: '批次号', width: 210 },
+  { key: 'supplier', prop: 'supplierName', label: '供应商', minWidth: 160 },
+  { key: 'period', label: '账期', width: 210 },
+  { key: 'orderCount', prop: 'orderCount', label: '订单数', width: 90 },
+  { key: 'amount', prop: 'amount', label: '供货金额', width: 130 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+  { key: 'supplierRemark', prop: 'supplierRemark', label: '供应商说明', minWidth: 160 },
+  { key: 'createTime', prop: 'createTime', label: '生成时间', width: 180 },
+  { key: 'actions', label: '操作', width: 100 },
+]
+
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     rows.value = (await platformApi.getSupplierStatements({
       supplierId: supplierId.value.trim() || undefined,
@@ -98,7 +115,15 @@ async function load() {
   } catch (e) {
     rows.value = []
     ElMessage.error(e?.message || '对账单读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function reset() {
+  supplierId.value = ''
+  status.value = ''
+  load()
 }
 
 async function generate() {
@@ -149,5 +174,4 @@ const statusType = (value) => ({ OPEN: 'warning', CONFIRMED: 'success', DISPUTED
 .card h3 { margin: 0 0 10px; font-size: 15px; }
 .form-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .note { margin: 8px 0 0; color: #84938a; font-size: 12px; }
-.filter-bar { display: flex; gap: 10px; }
 </style>

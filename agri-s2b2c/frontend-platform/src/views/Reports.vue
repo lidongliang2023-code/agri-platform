@@ -34,31 +34,36 @@
     </div>
 
     <div class="grid">
-      <div class="card">
-        <div class="card-head"><h3>渠道销售排行 Top 10</h3></div>
-        <el-table :data="data.channelRanking || []" border size="small">
-          <el-table-column label="#" width="50">
-            <template #default="{ $index }">{{ $index + 1 }}</template>
-          </el-table-column>
-          <el-table-column prop="channelName" label="渠道" min-width="160" />
-          <el-table-column prop="orders" label="订单" width="90" />
-          <el-table-column label="GMV" width="120">
-            <template #default="{ row }">¥{{ money(row.gmv) }}</template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-if="!(data.channelRanking || []).length" description="区间内没有渠道成交" :image-size="60" />
-      </div>
-      <div class="card">
-        <div class="card-head"><h3>商品销售 Top 5</h3></div>
-        <el-table :data="data.topProducts || []" border size="small">
-          <el-table-column prop="name" label="商品" min-width="160" />
-          <el-table-column prop="qty" label="销量" width="90" />
-          <el-table-column label="销售额" width="120">
-            <template #default="{ row }">¥{{ money(row.amount) }}</template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-if="!(data.topProducts || []).length" description="区间内没有成交商品" :image-size="60" />
-      </div>
+      <AgriElementListTable
+        :columns="channelColumns"
+        :data="data.channelRanking || []"
+        :row-key="(row) => String(row.channelId ?? row.channelName)"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-s2b2c-platform:reports-channel-ranking"
+        empty-text="区间内没有渠道成交"
+        @refresh="load"
+      >
+        <template #toolbar-left><h3 class="inline-title">渠道销售排行 Top 10</h3></template>
+        <template #cell-rank="{ index }">{{ index + 1 }}</template>
+        <template #cell-gmv="{ row }">¥{{ money(row.gmv) }}</template>
+      </AgriElementListTable>
+
+      <AgriElementListTable
+        :columns="productColumns"
+        :data="data.topProducts || []"
+        :row-key="(row) => String(row.productId ?? row.name)"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-s2b2c-platform:reports-top-products"
+        empty-text="区间内没有成交商品"
+        @refresh="load"
+      >
+        <template #toolbar-left><h3 class="inline-title">商品销售 Top 5</h3></template>
+        <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+      </AgriElementListTable>
     </div>
 
     <div class="grid three">
@@ -99,10 +104,12 @@
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const days = ref(30)
 const data = ref({})
+const loading = ref(false)
 const summary = ref({})
 const fulfillment = ref({})
 const finance = ref({})
@@ -112,6 +119,19 @@ const categoryChart = ref(null)
 let trendInstance = null
 let categoryInstance = null
 
+const channelColumns = [
+  { key: 'rank', label: '#', width: 60 },
+  { key: 'channelName', prop: 'channelName', label: '渠道', minWidth: 160 },
+  { key: 'orders', prop: 'orders', label: '订单', width: 90 },
+  { key: 'gmv', prop: 'gmv', label: 'GMV', width: 120 },
+]
+
+const productColumns = [
+  { key: 'name', prop: 'name', label: '商品', minWidth: 160 },
+  { key: 'qty', prop: 'qty', label: '销量', width: 90 },
+  { key: 'amount', prop: 'amount', label: '销售额', width: 120 },
+]
+
 onMounted(load)
 onUnmounted(() => {
   trendInstance?.dispose()
@@ -119,6 +139,7 @@ onUnmounted(() => {
 })
 
 async function load() {
+  loading.value = true
   try {
     data.value = (await platformApi.getReports(days.value)) || {}
     summary.value = data.value.summary || {}
@@ -130,6 +151,8 @@ async function load() {
     renderCategory()
   } catch (e) {
     ElMessage.error(e?.message || '报表数据读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -152,10 +175,14 @@ function renderTrend() {
       { type: 'value', axisLabel: { color: '#6b7c72' }, splitLine: { show: false } },
     ],
     series: [
-      { name: 'GMV', type: 'line', smooth: true, symbol: 'none', data: trend.map((p) => Number(p.amount || 0)),
-        lineStyle: { color: '#12764a', width: 2 }, areaStyle: { color: 'rgba(18,118,74,0.12)' } },
-      { name: '订单数', type: 'bar', yAxisIndex: 1, data: trend.map((p) => Number(p.orders || 0)),
-        itemStyle: { color: 'rgba(23,108,147,0.35)', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 14 },
+      {
+        name: 'GMV', type: 'line', smooth: true, symbol: 'none', data: trend.map((p) => Number(p.amount || 0)),
+        lineStyle: { color: '#2d8f4e', width: 2 }, areaStyle: { color: 'rgba(18,118,74,0.12)' },
+      },
+      {
+        name: '订单数', type: 'bar', yAxisIndex: 1, data: trend.map((p) => Number(p.orders || 0)),
+        itemStyle: { color: 'rgba(23,108,147,0.35)', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 14,
+      },
     ],
   }, true)
 }
@@ -195,6 +222,7 @@ const money = (value) => Number(value || 0).toFixed(2)
 .grid.three { grid-template-columns: repeat(3, 1fr); }
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .card h3 { margin: 0 0 12px; font-size: 15px; }
+.inline-title { margin: 0; font-size: 15px; color: #173e2a; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .card-head h3 { margin: 0; }
 .chart { height: 280px; }

@@ -795,6 +795,41 @@ html body .s2b2c-layout .growth-page .metrics b {
   color: var(--s2-ink-500) !important;
 }
 
+/* 接入共享四段式列表组件时的细节适配（保证筛选控件高度、标签状态胶囊圆点与按钮一致） */
+.s2b2c-layout .agri-vue-list-page .el-table {
+  border-radius: 6px;
+}
+
+.s2b2c-layout .agri-vue-list-page .el-table td.el-table__cell {
+  height: auto;
+}
+
+.s2b2c-layout .agri-vue-list-page .agri-vue-cell-status .el-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+}
+
+.s2b2c-layout .agri-vue-list-page .agri-vue-cell-status .el-tag::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.s2b2c-layout .agri-vue-filter-field .el-input__wrapper,
+.s2b2c-layout .agri-vue-filter-field .el-select__wrapper {
+  min-height: 32px;
+}
+
+.s2b2c-layout .agri-vue-toolbar .el-button {
+  height: 32px;
+  padding: 0 12px;
+}
+
 @media (max-width: 1200px) {
   .s2b2c-layout .stats-row {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;

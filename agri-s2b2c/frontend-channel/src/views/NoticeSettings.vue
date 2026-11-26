@@ -5,23 +5,23 @@
         <h2>通知设置</h2>
         <p>仅控制站内通知是否落库；短信、企业微信与推送通道尚未接入，本页不做开关承诺。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
-    <div class="card">
-      <el-table :data="rows" border>
-        <el-table-column prop="title" label="通知类型" min-width="220" />
-        <el-table-column prop="noticeType" label="事件编码" width="220" />
-        <el-table-column label="站内通知" width="140">
-          <template #default="{ row }">
-            <el-switch v-model="row.enabled" @change="(value) => save(row, value)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="说明" min-width="240">
-          <template #default="{ row }">{{ descriptions[row.noticeType] || '—' }}</template>
-        </el-table-column>
-      </el-table>
-    </div>
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      row-key="noticeType"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-channel:notice-settings"
+      empty-text="暂无通知配置项"
+      @refresh="load"
+    >
+      <template #cell-enabled="{ row }">
+        <el-switch v-model="row.enabled" @change="(value) => save(row, value)" />
+      </template>
+      <template #cell-desc="{ row }">{{ descriptions[row.noticeType] || '—' }}</template>
+    </AgriElementListTable>
 
     <div class="card">
       <h3>边界说明</h3>
@@ -37,9 +37,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const rows = ref([])
+const loading = ref(false)
 const descriptions = {
   ORDER_CREATED: '新渠道订单创建时提醒',
   SHIP_PROPOSED: '供应商提交发货信息待确认',
@@ -48,14 +50,24 @@ const descriptions = {
   SHIP_WITHDRAWN: '对方撤回发货信息',
 }
 
+const columns = [
+  { key: 'title', prop: 'title', label: '通知类型', minWidth: 220 },
+  { key: 'noticeType', prop: 'noticeType', label: '事件编码', width: 220 },
+  { key: 'enabled', prop: 'enabled', label: '站内通知', width: 130, align: 'center' },
+  { key: 'desc', label: '说明', minWidth: 240 },
+]
+
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     rows.value = (await channelApi.getNoticePreferences()) || []
   } catch (e) {
     rows.value = []
     ElMessage.error(e?.message || '通知偏好读取失败')
+  } finally {
+    loading.value = false
   }
 }
 

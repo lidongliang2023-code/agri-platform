@@ -5,10 +5,6 @@
         <h2>价格与价盘</h2>
         <p>供货价来自交易撮合；渠道成交价取渠道分销价（未设为商品价）。供应商可设零售价区间与省级限售；全量巡检会把低于底价的渠道货架自动下架并留痕。</p>
       </div>
-      <div class="head-actions">
-        <el-button type="primary" :loading="scanning" @click="scan">全量巡检</el-button>
-        <el-button @click="reload">刷新</el-button>
-      </div>
     </div>
 
     <div class="stat-row">
@@ -18,103 +14,128 @@
       <div class="stat-card"><span>今日巡检下架</span><b class="danger">{{ todayOffShelf }}</b><small>低于底价的渠道货架</small></div>
     </div>
 
-    <div class="filter-bar">
-      <el-input v-model="keyword" placeholder="搜索商品" style="width: 280px" clearable @keyup.enter="load" @clear="load" />
-      <el-select v-model="anomaly" placeholder="异常类型" style="width: 160px">
-        <el-option label="全部" value="" />
-        <el-option label="仅异常" value="ANY" />
-        <el-option label="低于供货价" value="BELOW_SUPPLY" />
-        <el-option label="高加价" value="HIGH_MARKUP" />
-      </el-select>
-      <el-button type="primary" @click="load">查询</el-button>
-    </div>
+    <AgriElementListTable
+      :columns="priceColumns"
+      :data="filtered"
+      :row-key="(row) => String(row.id ?? row.productId ?? row.name)"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:price-center"
+      empty-text="没有符合条件的商品"
+      @refresh="reload"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="load" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>商品</label>
+            <el-input v-model="keyword" placeholder="搜索商品" clearable @keyup.enter="load" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>异常类型</label>
+            <el-select v-model="anomaly" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="仅异常" value="ANY" />
+              <el-option label="低于供货价" value="BELOW_SUPPLY" />
+              <el-option label="高加价" value="HIGH_MARKUP" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <el-table :data="filtered" border>
-      <el-table-column prop="name" label="商品" min-width="200" />
-      <el-table-column prop="categoryName" label="类目" width="110" />
-      <el-table-column prop="supplierName" label="供应商" min-width="140" />
-      <el-table-column label="供货价" width="100">
-        <template #default="{ row }">¥{{ money(row.price) }}</template>
-      </el-table-column>
-      <el-table-column label="供应商限价" width="150">
-        <template #default="{ row }">
-          <span v-if="row.minRetailPrice != null || row.maxRetailPrice != null">
-            ¥{{ row.minRetailPrice != null ? money(row.minRetailPrice) : '—' }}
-            ~ ¥{{ row.maxRetailPrice != null ? money(row.maxRetailPrice) : '—' }}
-          </span>
-          <span v-else class="muted">未设置</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="限售区域" width="180">
-        <template #default="{ row }">
-          <span v-if="!row.regionNames?.length" class="muted">全国</span>
-          <span v-else>{{ row.regionNames.join('、') }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="listingCount" label="渠道上架" width="90" />
-      <el-table-column prop="onShelfCount" label="在售" width="80" />
-      <el-table-column label="渠道价区间" width="150">
-        <template #default="{ row }">
-          <span v-if="row.minRetail != null">¥{{ money(row.minRetail) }} ~ ¥{{ money(row.maxRetail) }}</span>
-          <span v-else class="muted">未上架</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="低于供货价" width="110">
-        <template #default="{ row }">
-          <el-tag v-if="row.belowSupplyCount > 0" type="danger">{{ row.belowSupplyCount }} 个渠道</el-tag>
-          <span v-else class="muted">—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="判定" width="120">
-        <template #default="{ row }">
-          <el-tag :type="anomalyType(row.anomaly)">{{ anomalyText(row.anomaly) }}</el-tag>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!filtered.length" description="没有符合条件的商品" />
+      <template #toolbar-left>
+        <el-button type="primary" :loading="scanning" @click="scan">全量巡检</el-button>
+      </template>
+
+      <template #cell-price="{ row }">¥{{ money(row.price) }}</template>
+      <template #cell-limitPrice="{ row }">
+        <span v-if="row.minRetailPrice != null || row.maxRetailPrice != null">
+          ¥{{ row.minRetailPrice != null ? money(row.minRetailPrice) : '—' }}
+          ~ ¥{{ row.maxRetailPrice != null ? money(row.maxRetailPrice) : '—' }}
+        </span>
+        <span v-else class="muted">未设置</span>
+      </template>
+      <template #cell-regionNames="{ row }">
+        <span v-if="!row.regionNames?.length" class="muted">全国</span>
+        <span v-else>{{ row.regionNames.join('、') }}</span>
+      </template>
+      <template #cell-retailRange="{ row }">
+        <span v-if="row.minRetail != null">¥{{ money(row.minRetail) }} ~ ¥{{ money(row.maxRetail) }}</span>
+        <span v-else class="muted">未上架</span>
+      </template>
+      <template #cell-belowSupplyCount="{ row }">
+        <el-tag v-if="row.belowSupplyCount > 0" type="danger">{{ row.belowSupplyCount }} 个渠道</el-tag>
+        <span v-else class="muted">—</span>
+      </template>
+      <template #cell-anomaly="{ row }">
+        <el-tag :type="anomalyType(row.anomaly)">{{ anomalyText(row.anomaly) }}</el-tag>
+      </template>
+    </AgriElementListTable>
+
     <p class="note">说明：巡检只下架低于底价（max(供货价, 供应商最低限价)）的渠道货架，不改价、不撤销授权；高于供货价 3 倍仅标记。定时任务每天 08:30 执行，可用 agri.s2b2c.price-guard.cron 调整。</p>
 
-    <div class="guard-card">
-      <div class="guard-head">
-        <div>
+    <AgriElementListTable
+      :columns="guardColumns"
+      :data="guardRecords"
+      :row-key="(row) => String(row.id ?? `${row.productName}-${row.channelName}-${row.createTime}`)"
+      :loading="loading"
+      client-pagination
+      :page-size="10"
+      column-settings-storage-key="agri-s2b2c-platform:price-guard-records"
+      empty-text="暂无巡检记录"
+      @refresh="loadGuardRecords"
+    >
+      <template #toolbar-left>
+        <div class="section-title">
           <h3>最近巡检记录</h3>
-          <p>手动巡检、投放规则保存、商品更新与每日定时任务共用同一套下架逻辑，每次下架都会留痕。</p>
+          <span class="muted">今日下架 {{ todayOffShelf }} 个货架</span>
         </div>
-        <span class="muted">今日下架 {{ todayOffShelf }} 个货架</span>
-      </div>
-      <el-table :data="guardRecords" border size="small">
-        <el-table-column label="时间" width="170">
-          <template #default="{ row }">{{ formatTime(row.createTime) }}</template>
-        </el-table-column>
-        <el-table-column prop="productName" label="商品" min-width="180" />
-        <el-table-column prop="supplierName" label="供应商" min-width="130" />
-        <el-table-column prop="channelName" label="渠道" min-width="130" />
-        <el-table-column label="渠道价 / 底价" width="150">
-          <template #default="{ row }">¥{{ money(row.retailPrice) }} / ¥{{ money(row.floorPrice) }}</template>
-        </el-table-column>
-        <el-table-column label="触发方式" width="110">
-          <template #default="{ row }">
-            <el-tag size="small" :type="triggerType(row.triggerSource)">{{ triggerText(row.triggerSource) }}</el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!guardRecords.length" description="暂无巡检记录" :image-size="60" />
-    </div>
+      </template>
+      <template #cell-createTime="{ row }">{{ formatTime(row.createTime) }}</template>
+      <template #cell-pricePair="{ row }">¥{{ money(row.retailPrice) }} / ¥{{ money(row.floorPrice) }}</template>
+      <template #cell-triggerSource="{ row }">
+        <el-tag size="small" :type="triggerType(row.triggerSource)">{{ triggerText(row.triggerSource) }}</el-tag>
+      </template>
+    </AgriElementListTable>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const keyword = ref('')
 const anomaly = ref('')
 const rows = ref([])
 const total = ref(0)
+const loading = ref(false)
 const scanning = ref(false)
 const guardRecords = ref([])
 const todayOffShelf = ref(0)
+
+const priceColumns = [
+  { key: 'name', prop: 'name', label: '商品', minWidth: 200 },
+  { key: 'categoryName', prop: 'categoryName', label: '类目', width: 110 },
+  { key: 'supplierName', prop: 'supplierName', label: '供应商', minWidth: 140 },
+  { key: 'price', prop: 'price', label: '供货价', width: 100 },
+  { key: 'limitPrice', label: '供应商限价', width: 150 },
+  { key: 'regionNames', label: '限售区域', width: 170 },
+  { key: 'listingCount', prop: 'listingCount', label: '渠道上架', width: 95 },
+  { key: 'onShelfCount', prop: 'onShelfCount', label: '在售', width: 80 },
+  { key: 'retailRange', label: '渠道价区间', width: 150 },
+  { key: 'belowSupplyCount', prop: 'belowSupplyCount', label: '低于供货价', width: 110 },
+  { key: 'anomaly', prop: 'anomaly', label: '判定', width: 120 },
+]
+
+const guardColumns = [
+  { key: 'createTime', prop: 'createTime', label: '时间', width: 170 },
+  { key: 'productName', prop: 'productName', label: '商品', minWidth: 180 },
+  { key: 'supplierName', prop: 'supplierName', label: '供应商', minWidth: 130 },
+  { key: 'channelName', prop: 'channelName', label: '渠道', minWidth: 130 },
+  { key: 'pricePair', label: '渠道价 / 底价', width: 150 },
+  { key: 'triggerSource', prop: 'triggerSource', label: '触发方式', width: 115 },
+]
 
 const filtered = computed(() => rows.value.filter((row) => {
   if (!anomaly.value) return true
@@ -124,13 +145,19 @@ const filtered = computed(() => rows.value.filter((row) => {
 const belowCount = computed(() => rows.value.filter((row) => row.anomaly === 'BELOW_SUPPLY').length)
 const highCount = computed(() => rows.value.filter((row) => row.anomaly === 'HIGH_MARKUP').length)
 
-onMounted(() => reload())
+onMounted(reload)
 
 async function reload() {
-  await Promise.all([load(), loadGuardRecords()])
+  loading.value = true
+  try {
+    await Promise.all([load(), loadGuardRecords()])
+  } finally {
+    loading.value = false
+  }
 }
 
 async function load() {
+  loading.value = true
   try {
     const data = (await platformApi.getPriceCenter(keyword.value.trim() || undefined)) || {}
     rows.value = data.records || []
@@ -139,7 +166,15 @@ async function load() {
     rows.value = []
     total.value = 0
     ElMessage.error(e?.message || '价盘数据读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function reset() {
+  keyword.value = ''
+  anomaly.value = ''
+  load()
 }
 
 async function loadGuardRecords() {
@@ -180,7 +215,6 @@ const anomalyType = (value) => ({ OK: 'success', BELOW_SUPPLY: 'danger', HIGH_MA
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 820px; }
-.head-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-width: 1000px; }
 .stat-card { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .stat-card span { color: #84938a; font-size: 12px; }
@@ -188,11 +222,8 @@ const anomalyType = (value) => ({ OK: 'success', BELOW_SUPPLY: 'danger', HIGH_MA
 .stat-card b.danger { color: #c54b4b; }
 .stat-card b.warn { color: #a96a08; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.filter-bar { display: flex; gap: 10px; align-items: center; }
+.section-title { display: flex; align-items: baseline; gap: 10px; }
+.section-title h3 { margin: 0; font-size: 15px; color: #173e2a; }
 .muted { color: #94a198; font-size: 12px; }
 .note { margin: 0; color: #84938a; font-size: 12px; line-height: 1.7; }
-.guard-card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.guard-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
-.guard-head h3 { margin: 0 0 4px; font-size: 15px; }
-.guard-head p { margin: 0; color: #84938a; font-size: 12px; line-height: 1.6; }
 </style>

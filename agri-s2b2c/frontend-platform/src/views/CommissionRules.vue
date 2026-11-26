@@ -5,107 +5,98 @@
         <h2>渠道等级与佣金规则</h2>
         <p>渠道订单结算时按渠道等级取这里的比例；等级由「等级考核规则」按周期内有效订单与 GMV 自动评定，未配置的等级回落到商品自带佣金率。</p>
       </div>
-      <el-button type="primary" @click="openEdit()">新增 / 修改规则</el-button>
     </div>
 
-    <el-table :data="rules" border>
-      <el-table-column prop="grade" label="渠道等级" width="140" />
-      <el-table-column label="佣金比例" width="140">
-        <template #default="{ row }">{{ Number(row.rate) }}%</template>
-      </el-table-column>
-      <el-table-column label="状态" width="120">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">
-            {{ row.status === 'ACTIVE' ? '启用' : '停用' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="remark" label="备注" />
-      <el-table-column label="操作" width="120">
-        <template #default="{ row }">
-          <el-button type="text" @click="openEdit(row)">编辑</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <AgriElementListTable
+      :columns="ruleColumns"
+      :data="rules"
+      :row-key="(row) => String(row.id ?? row.grade)"
+      :loading="loadingRules"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:commission-rules"
+      empty-text="还没有配置佣金规则，渠道订单将使用商品自带佣金率"
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <el-button type="primary" @click="openEdit()">新增 / 修改规则</el-button>
+      </template>
+      <template #cell-rate="{ row }">{{ Number(row.rate) }}%</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '启用' : '停用' }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="[{ key: 'edit', label: '编辑', onClick: () => openEdit(row) }]" />
+      </template>
+    </AgriElementListTable>
 
-    <el-empty v-if="!rules.length" description="还没有配置佣金规则，渠道订单将使用商品自带佣金率" />
-
-    <div class="grade-block">
-      <div class="grade-head">
-        <div>
-          <h3>等级考核规则</h3>
-          <p>按近 N 天「已支付且未取消/退款」订单的订单数与 GMV 自动定级；每月 1 日 03:00 自动执行，也可手动考核。</p>
-        </div>
-        <div class="grade-actions">
-          <el-input-number v-model="evalDays" :min="1" :max="365" :precision="0" style="width: 120px" />
-          <el-button type="primary" :loading="evaluating" @click="evaluate">立即考核</el-button>
-          <el-button @click="openGradeEdit()">新增 / 修改门槛</el-button>
-        </div>
+    <div class="section-header">
+      <div>
+        <h3>等级考核规则</h3>
+        <p>按近 N 天「已支付且未取消/退款」订单的订单数与 GMV 自动定级；每月 1 日 03:00 自动执行，也可手动考核。</p>
       </div>
-      <el-table :data="gradeRules" border size="small">
-        <el-table-column prop="grade" label="渠道等级" width="110" />
-        <el-table-column label="订单数门槛" width="130">
-          <template #default="{ row }">≥ {{ row.minOrders }}</template>
-        </el-table-column>
-        <el-table-column label="GMV 门槛" width="150">
-          <template #default="{ row }">≥ ¥{{ money(row.minGmv) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">
-              {{ row.status === 'ACTIVE' ? '启用' : '停用' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注" />
-        <el-table-column label="操作" width="90">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openGradeEdit(row)">编辑</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!gradeRules.length" description="未配置考核规则，立即考核会被拒绝" :image-size="60" />
-
-      <h4 class="sub-title">最近等级调整</h4>
-      <el-table :data="gradeChanges" border size="small">
-        <el-table-column prop="createTime" label="时间" width="180" />
-        <el-table-column label="渠道" min-width="160">
-          <template #default="{ row }">{{ row.shopName || row.channelId }}</template>
-        </el-table-column>
-        <el-table-column label="调整" width="160">
-          <template #default="{ row }">{{ row.fromGrade }} → {{ row.toGrade }}</template>
-        </el-table-column>
-        <el-table-column prop="orders" label="订单数" width="90" />
-        <el-table-column label="GMV" width="120">
-          <template #default="{ row }">¥{{ money(row.gmv) }}</template>
-        </el-table-column>
-        <el-table-column prop="operator" label="操作人" width="110" />
-      </el-table>
-      <el-empty v-if="!gradeChanges.length" description="暂无等级调整记录" :image-size="60" />
     </div>
 
-    <div class="settle-block">
-      <div class="settle-head">
-        <h3>佣金结算批次</h3>
-        <div class="settle-actions">
-          <el-input v-model="settleChannelId" placeholder="渠道 ID（留空=全部渠道）" style="width: 220px" />
-          <el-button type="primary" :loading="settling" @click="settle">批量结算待结算佣金</el-button>
-        </div>
-      </div>
-      <p class="settle-hint">每次结算会生成批次号，佣金行会记录批次；商家端可在「佣金管理」看到自己相关的批次。</p>
-      <el-table :data="settlements" border size="small">
-        <el-table-column prop="batchNo" label="批次号" width="200" />
-        <el-table-column label="渠道" width="120">
-          <template #default="{ row }">{{ row.channelId || '全部' }}</template>
-        </el-table-column>
-        <el-table-column prop="commissionCount" label="笔数" width="90" />
-        <el-table-column label="金额(元)" width="130">
-          <template #default="{ row }">{{ Number(row.amount).toFixed(2) }}</template>
-        </el-table-column>
-        <el-table-column prop="operator" label="操作人" width="120" />
-        <el-table-column prop="createdAt" label="结算时间" />
-      </el-table>
-    </div>
+    <AgriElementListTable
+      :columns="gradeRuleColumns"
+      :data="gradeRules"
+      :row-key="(row) => String(row.id ?? row.grade)"
+      :loading="loadingGrades"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:grade-rules"
+      empty-text="未配置考核规则，立即考核会被拒绝"
+      @refresh="loadGrades"
+    >
+      <template #toolbar-left>
+        <el-input-number v-model="evalDays" :min="1" :max="365" :precision="0" style="width: 110px" />
+        <el-button type="primary" :loading="evaluating" @click="evaluate">立即考核</el-button>
+        <el-button @click="openGradeEdit()">新增 / 修改门槛</el-button>
+      </template>
+      <template #cell-minOrders="{ row }">≥ {{ row.minOrders }}</template>
+      <template #cell-minGmv="{ row }">≥ ¥{{ money(row.minGmv) }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '启用' : '停用' }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="[{ key: 'edit', label: '编辑', onClick: () => openGradeEdit(row) }]" />
+      </template>
+    </AgriElementListTable>
+
+    <AgriElementListTable
+      :columns="gradeChangeColumns"
+      :data="gradeChanges"
+      :row-key="(row) => String(row.id ?? `${row.channelId}-${row.createTime}`)"
+      :loading="loadingGrades"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:grade-changes"
+      empty-text="暂无等级调整记录"
+      @refresh="loadGrades"
+    >
+      <template #toolbar-left>
+        <h3 class="inline-title">最近等级调整</h3>
+      </template>
+      <template #cell-channel="{ row }">{{ row.shopName || row.channelId }}</template>
+      <template #cell-change="{ row }">{{ row.fromGrade }} → {{ row.toGrade }}</template>
+      <template #cell-gmv="{ row }">¥{{ money(row.gmv) }}</template>
+    </AgriElementListTable>
+
+    <AgriElementListTable
+      :columns="settlementColumns"
+      :data="settlements"
+      :row-key="(row) => String(row.id ?? row.batchNo)"
+      :loading="loadingSettlements"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:commission-rule-settlements"
+      empty-text="暂无佣金结算批次"
+      @refresh="loadSettlements"
+    >
+      <template #toolbar-left>
+        <h3 class="inline-title">佣金结算批次</h3>
+        <el-input v-model="settleChannelId" placeholder="渠道 ID（留空=全部渠道）" style="width: 210px" />
+        <el-button type="primary" :loading="settling" @click="settle">批量结算待结算佣金</el-button>
+      </template>
+      <template #cell-channelId="{ row }">{{ row.channelId || '全部' }}</template>
+      <template #cell-amount="{ row }">{{ Number(row.amount).toFixed(2) }}</template>
+    </AgriElementListTable>
 
     <el-dialog v-model="gradeDialog" title="等级考核门槛" width="460px">
       <el-form label-width="110px">
@@ -171,10 +162,14 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const rules = ref([])
 const settlements = ref([])
+const loadingRules = ref(false)
+const loadingGrades = ref(false)
+const loadingSettlements = ref(false)
 const settleChannelId = ref('')
 const settling = ref(false)
 const showEdit = ref(false)
@@ -188,13 +183,51 @@ const evaluating = ref(false)
 const evalDays = ref(30)
 const gradeForm = reactive({ grade: 'LEVEL_1', minOrders: 0, minGmv: 0, status: 'ACTIVE', remark: '' })
 
+const ruleColumns = [
+  { key: 'grade', prop: 'grade', label: '渠道等级', width: 140 },
+  { key: 'rate', prop: 'rate', label: '佣金比例', width: 140 },
+  { key: 'status', prop: 'status', label: '状态', width: 120 },
+  { key: 'remark', prop: 'remark', label: '备注', minWidth: 200 },
+  { key: 'actions', label: '操作', width: 100 },
+]
+
+const gradeRuleColumns = [
+  { key: 'grade', prop: 'grade', label: '渠道等级', width: 120 },
+  { key: 'minOrders', prop: 'minOrders', label: '订单数门槛', width: 130 },
+  { key: 'minGmv', prop: 'minGmv', label: 'GMV 门槛', width: 150 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'remark', prop: 'remark', label: '备注', minWidth: 180 },
+  { key: 'actions', label: '操作', width: 100 },
+]
+
+const gradeChangeColumns = [
+  { key: 'createTime', prop: 'createTime', label: '时间', width: 180 },
+  { key: 'channel', prop: 'shopName', label: '渠道', minWidth: 160 },
+  { key: 'change', label: '调整', width: 160 },
+  { key: 'orders', prop: 'orders', label: '订单数', width: 90 },
+  { key: 'gmv', prop: 'gmv', label: 'GMV', width: 120 },
+  { key: 'operator', prop: 'operator', label: '操作人', width: 110 },
+]
+
+const settlementColumns = [
+  { key: 'batchNo', prop: 'batchNo', label: '批次号', width: 200 },
+  { key: 'channelId', prop: 'channelId', label: '渠道', width: 130 },
+  { key: 'commissionCount', prop: 'commissionCount', label: '笔数', width: 90 },
+  { key: 'amount', prop: 'amount', label: '金额(元)', width: 130 },
+  { key: 'operator', prop: 'operator', label: '操作人', width: 120 },
+  { key: 'createdAt', prop: 'createdAt', label: '结算时间', minWidth: 170 },
+]
+
 onMounted(() => { load(); loadSettlements(); loadGrades() })
 
 async function loadSettlements() {
+  loadingSettlements.value = true
   try {
     settlements.value = (await platformApi.getSettlements()) || []
   } catch {
     settlements.value = []
+  } finally {
+    loadingSettlements.value = false
   }
 }
 
@@ -217,14 +250,18 @@ async function settle() {
 }
 
 async function load() {
+  loadingRules.value = true
   try {
     rules.value = (await platformApi.getCommissionRules()) || []
   } catch (e) {
     ElMessage.error(e?.message || '佣金规则读取失败')
+  } finally {
+    loadingRules.value = false
   }
 }
 
 async function loadGrades() {
+  loadingGrades.value = true
   try {
     const [gradeRuleRows, changeRows] = await Promise.all([
       platformApi.getGradeRules(),
@@ -236,6 +273,8 @@ async function loadGrades() {
     gradeRules.value = []
     gradeChanges.value = []
     ElMessage.error(e?.message || '等级考核数据读取失败')
+  } finally {
+    loadingGrades.value = false
   }
 }
 
@@ -322,40 +361,11 @@ async function save() {
 </script>
 
 <style scoped>
-.commission-rules-page {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.page-head h2 {
-  margin: 0 0 6px;
-  font-size: 18px;
-}
-
-.page-head p {
-  margin: 0;
-  color: #6b7c72;
-  font-size: 13px;
-  line-height: 1.6;
-  max-width: 760px;
-}
-.grade-block { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.grade-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.grade-head h3 { margin: 0 0 4px; font-size: 15px; }
-.grade-head p { margin: 0; color: #84938a; font-size: 12px; line-height: 1.6; }
-.grade-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.sub-title { margin: 14px 0 6px; color: #52665a; font-size: 13px; }
-.settle-block { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.settle-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.settle-head h3 { margin: 0; font-size: 15px; }
-.settle-actions { display: flex; gap: 8px; }
-.settle-hint { margin: 0; color: #84938a; font-size: 12px; }
+.commission-rules-page { display: flex; flex-direction: column; gap: 16px; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-head h2 { margin: 0 0 6px; font-size: 18px; }
+.page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 760px; }
+.section-header h3 { margin: 4px 0 4px; font-size: 15px; color: #173e2a; }
+.section-header p { margin: 0; color: #84938a; font-size: 12px; line-height: 1.6; }
+.inline-title { margin: 0; font-size: 15px; color: #173e2a; }
 </style>

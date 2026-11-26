@@ -5,7 +5,6 @@
         <h2>待办与预警</h2>
         <p>基于真实商品、订单与库存数据；处理动作跳转到对应页面，不在此处直接改状态。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
@@ -24,24 +23,41 @@
     </div>
 
     <div class="grid">
-      <div class="card">
-        <div class="card-head"><h3>待审核商品</h3><el-button link type="primary" @click="$router.push('/supply/products')">全部</el-button></div>
-        <el-table :data="pendingProducts" border size="small">
-          <el-table-column prop="name" label="商品" min-width="180" />
-          <el-table-column label="供货价" width="100"><template #default="{ row }">¥{{ money(row.price) }}</template></el-table-column>
-          <el-table-column prop="createTime" label="提交时间" width="180" />
-        </el-table>
-        <el-empty v-if="!pendingProducts.length" description="没有待审核商品" :image-size="60" />
-      </div>
-      <div class="card">
-        <div class="card-head"><h3>待发货订单</h3><el-button link type="primary" @click="$router.push('/supply/orders')">全部</el-button></div>
-        <el-table :data="pendingOrders" border size="small">
-          <el-table-column prop="orderNo" label="订单号" min-width="180" />
-          <el-table-column label="实付" width="100"><template #default="{ row }">¥{{ money(row.payAmount) }}</template></el-table-column>
-          <el-table-column prop="payTime" label="支付时间" width="180" />
-        </el-table>
-        <el-empty v-if="!pendingOrders.length" description="没有待发货订单" :image-size="60" />
-      </div>
+      <AgriElementListTable
+        :columns="productColumns"
+        :data="pendingProducts"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-s2b2c-platform:supply-todo-products"
+        empty-text="没有待审核商品"
+        @refresh="load"
+      >
+        <template #toolbar-left>
+          <h3 class="inline-title">待审核商品</h3>
+          <el-button link type="primary" @click="$router.push('/supply/products')">全部</el-button>
+        </template>
+        <template #cell-price="{ row }">¥{{ money(row.price) }}</template>
+      </AgriElementListTable>
+
+      <AgriElementListTable
+        :columns="orderColumns"
+        :data="pendingOrders"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-s2b2c-platform:supply-todo-orders"
+        empty-text="没有待发货订单"
+        @refresh="load"
+      >
+        <template #toolbar-left>
+          <h3 class="inline-title">待发货订单</h3>
+          <el-button link type="primary" @click="$router.push('/supply/orders')">全部</el-button>
+        </template>
+        <template #cell-payAmount="{ row }">¥{{ money(row.payAmount) }}</template>
+      </AgriElementListTable>
     </div>
 
     <div class="card">
@@ -58,28 +74,45 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import { supplierApi } from '../api'
 import { currentSupplierId } from '../api/supplierSession'
 
 const kpi = ref({})
 const pendingProducts = ref([])
 const pendingOrders = ref([])
+const loading = ref(false)
+
+const productColumns = [
+  { key: 'name', prop: 'name', label: '商品', minWidth: 160 },
+  { key: 'price', prop: 'price', label: '供货价', width: 100 },
+  { key: 'createTime', prop: 'createTime', label: '提交时间', width: 170 },
+]
+
+const orderColumns = [
+  { key: 'orderNo', prop: 'orderNo', label: '订单号', minWidth: 170 },
+  { key: 'payAmount', prop: 'payAmount', label: '实付', width: 100 },
+  { key: 'payTime', prop: 'payTime', label: '支付时间', width: 170 },
+]
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const supplierId = await currentSupplierId()
     const [overview, products, orders] = await Promise.all([
       supplierApi.getOverview(7),
-      supplierApi.getProducts({ supplierId, page: 1, size: 5, status: 'PENDING' }),
-      supplierApi.getOrders({ page: 1, size: 5, status: 'PENDING_SHIP' }),
+      supplierApi.getProducts({ supplierId, page: 1, size: 20, status: 'PENDING' }),
+      supplierApi.getOrders({ page: 1, size: 20, status: 'PENDING_SHIP' }),
     ])
     kpi.value = overview?.kpi || {}
     pendingProducts.value = products?.records || []
     pendingOrders.value = orders?.records || []
   } catch (e) {
     ElMessage.error(e?.message || '待办数据读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -99,9 +132,8 @@ const money = (value) => Number(value || 0).toFixed(2)
 .stat-card small { color: #94a198; font-size: 12px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .card h3 { margin: 0 0 10px; font-size: 15px; }
-.card-head h3 { margin: 0; }
+.inline-title { margin: 0; font-size: 15px; color: #173e2a; }
 .card ul { margin: 0; padding-left: 18px; color: #52665a; font-size: 13px; line-height: 1.9; }
-@media (max-width: 1000px) { .stat-row, .grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 1000px) { .stat-row, .grid { grid-template-columns: 1fr; } }
 </style>

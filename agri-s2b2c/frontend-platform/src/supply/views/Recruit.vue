@@ -5,55 +5,60 @@
         <h2>分销商招募</h2>
         <p>生成邀请码给商家；渠道带码入驻后在此形成招募关系，平台审核通过后状态同步。合同与佣金仍由平台统一规则管理。</p>
       </div>
-      <div class="head-actions">
-        <el-button @click="load">刷新</el-button>
+    </div>
+
+    <AgriElementListTable
+      :columns="inviteColumns"
+      :data="invites"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      :page-size="10"
+      column-settings-storage-key="agri-s2b2c-platform:supply-recruit-invites"
+      empty-text="还没有邀请码"
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <div class="section-title"><h3>我的邀请码</h3><span class="muted">渠道入驻时填写邀请码即绑定招募关系</span></div>
         <el-button type="primary" @click="createVisible = true">生成邀请码</el-button>
-      </div>
-    </div>
+      </template>
+      <template #cell-usage="{ row }">{{ row.usedCount || 0 }} / {{ row.channelLimit > 0 ? row.channelLimit : '不限' }}</template>
+      <template #cell-expireAt="{ row }">{{ row.expireAt || '长期有效' }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '启用' : '停用' }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions
+          :actions="[
+            { key: 'copy', label: '复制', onClick: () => copy(row.code) },
+            row.status === 'ACTIVE'
+              ? { key: 'disable', label: '停用', danger: true, onClick: () => changeStatus(row, 'DISABLED') }
+              : { key: 'enable', label: '启用', onClick: () => changeStatus(row, 'ACTIVE') },
+          ]"
+        />
+      </template>
+    </AgriElementListTable>
 
-    <div class="card">
-      <div class="card-head"><h3>我的邀请码</h3><span class="muted">渠道入驻时填写邀请码即绑定招募关系</span></div>
-      <el-table :data="invites" border>
-        <el-table-column prop="code" label="邀请码" width="180" />
-        <el-table-column label="使用情况" width="140">
-          <template #default="{ row }">{{ row.usedCount || 0 }} / {{ row.channelLimit > 0 ? row.channelLimit : '不限' }}</template>
-        </el-table-column>
-        <el-table-column label="过期时间" width="180">
-          <template #default="{ row }">{{ row.expireAt || '长期有效' }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '启用' : '停用' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" width="180" />
-        <el-table-column label="操作" width="200" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="copy(row.code)">复制</el-button>
-            <el-button v-if="row.status === 'ACTIVE'" link type="danger" @click="changeStatus(row, 'DISABLED')">停用</el-button>
-            <el-button v-else link type="success" @click="changeStatus(row, 'ACTIVE')">启用</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!invites.length" description="还没有邀请码" :image-size="60" />
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h3>招募到的渠道</h3><span class="muted">审核状态由平台入驻审核同步</span></div>
-      <el-table :data="recruits" border>
-        <el-table-column prop="channelName" label="商家" min-width="180" />
-        <el-table-column prop="inviteCode" label="邀请码" width="180" />
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'APPROVED' ? 'success' : row.status === 'REJECTED' ? 'danger' : 'warning'">
-              {{ statusText(row.status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="绑定时间" width="180" />
-      </el-table>
-      <el-empty v-if="!recruits.length" description="还没有渠道通过邀请码入驻" :image-size="60" />
-    </div>
+    <AgriElementListTable
+      :columns="recruitColumns"
+      :data="recruits"
+      :row-key="(row) => String(row.id ?? `${row.channelName}-${row.inviteCode}-${row.createTime}`)"
+      :loading="loading"
+      client-pagination
+      :page-size="10"
+      column-settings-storage-key="agri-s2b2c-platform:supply-recruit-channels"
+      empty-text="还没有渠道通过邀请码入驻"
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <div class="section-title"><h3>招募到的渠道</h3><span class="muted">审核状态由平台入驻审核同步</span></div>
+      </template>
+      <template #cell-status="{ row }">
+        <el-tag :type="row.status === 'APPROVED' ? 'success' : row.status === 'REJECTED' ? 'danger' : 'warning'">
+          {{ statusText(row.status) }}
+        </el-tag>
+      </template>
+    </AgriElementListTable>
 
     <el-dialog v-model="createVisible" title="生成邀请码" width="480px">
       <el-form label-width="110px">
@@ -76,17 +81,36 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueRowActions } from '@agri/shared/vue/element'
 import { supplierApi } from '../api'
 
 const invites = ref([])
 const recruits = ref([])
+const loading = ref(false)
 const createVisible = ref(false)
 const creating = ref(false)
 const form = reactive({ channelLimit: '0', expireAt: '' })
 
+const inviteColumns = [
+  { key: 'code', prop: 'code', label: '邀请码', width: 180 },
+  { key: 'usage', label: '使用情况', width: 140 },
+  { key: 'expireAt', prop: 'expireAt', label: '过期时间', width: 180 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'createTime', prop: 'createTime', label: '创建时间', width: 180 },
+  { key: 'actions', label: '操作', width: 140 },
+]
+
+const recruitColumns = [
+  { key: 'channelName', prop: 'channelName', label: '商家', minWidth: 180 },
+  { key: 'inviteCode', prop: 'inviteCode', label: '邀请码', width: 180 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+  { key: 'createTime', prop: 'createTime', label: '绑定时间', width: 180 },
+]
+
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const [inviteRows, recruitRows] = await Promise.all([
       supplierApi.getInvites(),
@@ -96,6 +120,8 @@ async function load() {
     recruits.value = recruitRows || []
   } catch (e) {
     ElMessage.error(e?.message || '招募数据读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -145,9 +171,7 @@ const statusText = (value) => ({ PENDING: '待审核', APPROVED: '已通过', RE
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 820px; }
-.head-actions { display: flex; gap: 8px; }
-.card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.card-head h3 { margin: 0; font-size: 15px; }
+.section-title { display: flex; align-items: baseline; gap: 10px; }
+.section-title h3 { margin: 0; font-size: 15px; color: #173e2a; }
 .muted { color: #84938a; font-size: 12px; }
 </style>

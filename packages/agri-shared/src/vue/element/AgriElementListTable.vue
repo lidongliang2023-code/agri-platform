@@ -44,6 +44,7 @@
           :resizable="false"
           align="center"
           :reserve-selection="reserveSelection"
+          :selectable="rowSelectable"
         />
 
         <el-table-column
@@ -124,6 +125,7 @@ const props = withDefaults(
     border?: boolean
     emptyText?: string
     selectable?: boolean
+    rowSelectable?: (row: RowRecord, index: number) => boolean
     selectionWidth?: number
     /** 翻页时保留勾选项，默认 true（对应「已选 N 项」跨页保留规范）。 */
     reserveSelection?: boolean
@@ -152,6 +154,7 @@ const props = withDefaults(
     border: false,
     emptyText: '暂无符合条件的记录，请调整筛选条件或稍后再试',
     selectable: true,
+    rowSelectable: undefined,
     selectionWidth: DEFAULT_SELECTION_COLUMN_WIDTH,
     reserveSelection: true,
     showToolbar: true,

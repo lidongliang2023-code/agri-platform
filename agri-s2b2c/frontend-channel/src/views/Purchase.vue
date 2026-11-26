@@ -5,7 +5,6 @@
         <h2>集采采购补货</h2>
         <p>总部集采批次报名：只登记采购意向与数量，合同、付款与到货入库由交易撮合/仓储完成。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
@@ -15,58 +14,56 @@
       <div class="stat-card"><span>报名金额</span><b>¥{{ money(myAmount) }}</b><small>集采价 × 数量</small></div>
     </div>
 
-    <div class="card">
-      <div class="card-head"><h3>进行中的集采批次</h3><span class="muted">报名截止前可改量或取消</span></div>
-      <el-table :data="openBatches" border>
-        <el-table-column label="批次" min-width="200">
-          <template #default="{ row }">
-            <b>{{ row.title }}</b><br><small>{{ row.productName }} · {{ row.supplierName || '供应商待定' }}</small>
-          </template>
-        </el-table-column>
-        <el-table-column label="集采价" width="100">
-          <template #default="{ row }">¥{{ money(row.purchase_price) }}</template>
-        </el-table-column>
-        <el-table-column label="起订/目标" width="110">
-          <template #default="{ row }">{{ row.min_quantity || 0 }} / {{ row.target_quantity || 0 }}</template>
-        </el-table-column>
-        <el-table-column label="已报名" width="130">
-          <template #default="{ row }">{{ row.stats?.channels || 0 }} 家 · {{ row.stats?.quantity || 0 }} 件</template>
-        </el-table-column>
-        <el-table-column label="截止" width="180"><template #default="{ row }">{{ row.end_time }}</template></el-table-column>
-        <el-table-column label="我的报名" width="150">
-          <template #default="{ row }">
-            <template v-if="row.myCommitment && row.myCommitment.status !== 'CANCELLED'">
-              {{ row.myCommitment.quantity }} 件 · ¥{{ money(row.myCommitment.amount) }}
-            </template>
-            <span v-else class="muted">未报名</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" :disabled="row.status !== 'OPEN'" @click="openJoin(row)">
-              {{ row.myCommitment && row.myCommitment.status === 'RESERVED' ? '改量' : '报名' }}
-            </el-button>
-            <el-button v-if="row.myCommitment && row.myCommitment.status === 'RESERVED'" link type="danger" @click="cancel(row)">取消</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!openBatches.length" description="当前没有可报名的集采批次" :image-size="70" />
-    </div>
+    <AgriElementListTable
+      :columns="batchColumns"
+      :data="openBatches"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      :page-size="10"
+      column-settings-storage-key="agri-s2b2c-channel:purchase-batches"
+      empty-text="当前没有可报名的集采批次"
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <div class="section-title"><h3>进行中的集采批次</h3><span class="muted">报名截止前可改量或取消</span></div>
+      </template>
+      <template #cell-batch="{ row }">
+        <b>{{ row.title }}</b><br><small>{{ row.productName }} · {{ row.supplierName || '供应商待定' }}</small>
+      </template>
+      <template #cell-purchase_price="{ row }">¥{{ money(row.purchase_price) }}</template>
+      <template #cell-qty="{ row }">{{ row.min_quantity || 0 }} / {{ row.target_quantity || 0 }}</template>
+      <template #cell-enrolled="{ row }">{{ row.stats?.channels || 0 }} 家 · {{ row.stats?.quantity || 0 }} 件</template>
+      <template #cell-myCommitment="{ row }">
+        <template v-if="row.myCommitment && row.myCommitment.status !== 'CANCELLED'">
+          {{ row.myCommitment.quantity }} 件 · ¥{{ money(row.myCommitment.amount) }}
+        </template>
+        <span v-else class="muted">未报名</span>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="batchRowActions(row)" />
+      </template>
+    </AgriElementListTable>
 
-    <div class="card">
-      <div class="card-head"><h3>我的集采记录</h3></div>
-      <el-table :data="history" border size="small">
-        <el-table-column prop="title" label="批次" min-width="180" />
-        <el-table-column prop="productName" label="商品" min-width="160" />
-        <el-table-column prop="quantity" label="数量" width="90" />
-        <el-table-column label="金额" width="120"><template #default="{ row }">¥{{ money(row.amount) }}</template></el-table-column>
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }"><el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag></template>
-        </el-table-column>
-        <el-table-column prop="createTime" label="报名时间" width="180" />
-      </el-table>
-      <el-empty v-if="!history.length" description="还没有集采报名记录" :image-size="70" />
-    </div>
+    <AgriElementListTable
+      :columns="historyColumns"
+      :data="history"
+      :row-key="(row) => String(row.id ?? `${row.title}-${row.createTime}`)"
+      :loading="loading"
+      client-pagination
+      :page-size="10"
+      column-settings-storage-key="agri-s2b2c-channel:purchase-history"
+      empty-text="还没有集采报名记录"
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <h3 class="inline-title">我的集采记录</h3>
+      </template>
+      <template #cell-amount="{ row }">¥{{ money(row.amount) }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+      </template>
+    </AgriElementListTable>
 
     <el-dialog v-model="joinVisible" title="集采报名" width="460px">
       <el-form label-width="100px">
@@ -87,13 +84,49 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueRowActions } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 
 const batches = ref([])
 const history = ref([])
+const loading = ref(false)
 const joinVisible = ref(false)
 const submitting = ref(false)
 const joinForm = reactive({ id: '', title: '', price: 0, quantity: '', remark: '' })
+
+const batchColumns = [
+  { key: 'batch', prop: 'title', label: '批次', minWidth: 200 },
+  { key: 'purchase_price', prop: 'purchase_price', label: '集采价', width: 100 },
+  { key: 'qty', label: '起订/目标', width: 110 },
+  { key: 'enrolled', label: '已报名', width: 130 },
+  { key: 'end_time', prop: 'end_time', label: '截止', width: 180 },
+  { key: 'myCommitment', label: '我的报名', width: 150 },
+  { key: 'actions', label: '操作', width: 135 },
+]
+
+const historyColumns = [
+  { key: 'title', prop: 'title', label: '批次', minWidth: 180 },
+  { key: 'productName', prop: 'productName', label: '商品', minWidth: 160 },
+  { key: 'quantity', prop: 'quantity', label: '数量', width: 90 },
+  { key: 'amount', prop: 'amount', label: '金额', width: 120 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+  { key: 'createTime', prop: 'createTime', label: '报名时间', width: 180 },
+]
+
+function batchRowActions(row) {
+  const list = [
+    {
+      key: 'join',
+      label: row.myCommitment && row.myCommitment.status === 'RESERVED' ? '改量' : '报名',
+      disabled: row.status !== 'OPEN',
+      onClick: () => openJoin(row),
+    },
+  ]
+  if (row.myCommitment && row.myCommitment.status === 'RESERVED') {
+    list.push({ key: 'cancel', label: '取消', danger: true, onClick: () => cancel(row) })
+  }
+  return list
+}
 
 const openBatches = computed(() => batches.value)
 const activeMine = computed(() => (history.value || []).filter((row) => row.status !== 'CANCELLED'))
@@ -103,6 +136,7 @@ const myAmount = computed(() => activeMine.value.reduce((sum, row) => sum + Numb
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     const data = (await channelApi.getGroupPurchases()) || {}
     batches.value = data.batches || []
@@ -111,6 +145,8 @@ async function load() {
     batches.value = []
     history.value = []
     ElMessage.error(e?.message || '集采数据读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -172,9 +208,8 @@ const statusType = (value) => ({ RESERVED: 'success', CONFIRMED: 'primary', FULF
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 23px; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.card-head h3 { margin: 0; font-size: 15px; }
+.section-title { display: flex; align-items: baseline; gap: 10px; }
+.section-title h3, .inline-title { margin: 0; font-size: 15px; color: #173e2a; }
 .muted { color: #94a198; font-size: 12px; }
 .note { margin: 0; color: #84938a; font-size: 12px; }
 @media (max-width: 1000px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }

@@ -5,51 +5,62 @@
         <h2>{{ isEditPage ? '商品编辑' : '我的货架' }}</h2>
         <p>管理已选商品的分销价与货架状态；商品标题、图片与供货价归交易撮合，本页只维护渠道层信息。</p>
       </div>
-      <el-button @click="$router.push('/product-pool')">去选品中心</el-button>
     </div>
 
-    <div class="filter-bar">
-      <el-button @click="loadProducts">刷新货架</el-button>
-    </div>
-
-    <el-table :data="products" border>
-      <el-table-column prop="name" label="商品名称" min-width="200" />
-      <el-table-column prop="categoryName" label="分类" width="120" />
-      <el-table-column label="供货价" width="110">
-        <template #default="{ row }">¥{{ money(row.price) }}</template>
-      </el-table-column>
-      <el-table-column label="渠道零售价" width="140">
-        <template #default="{ row }">
-          <b v-if="row.retailPrice">¥{{ money(row.retailPrice) }}</b>
-          <span v-else class="muted">未设置（¥{{ money(row.price) }}）</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="佣金比例" width="100">
-        <template #default="{ row }">{{ Number(row.commissionRate) }}%</template>
-      </el-table-column>
-      <el-table-column prop="sales" label="销量" width="90" />
-      <el-table-column prop="stock" label="库存" width="90" />
-      <el-table-column label="货架" width="100">
-        <template #default="{ row }">
-          <el-tag :type="isOn(row) ? 'success' : 'info'">{{ isOn(row) ? '在售' : '已下架' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="190" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openEdit(row)">改价</el-button>
-          <el-button v-if="isOn(row)" link type="warning" @click="toggleShelf(row, 'OFF')">下架</el-button>
-          <el-button v-else link type="success" @click="toggleShelf(row, 'ON')">上架</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!products.length" description="货架为空，先去平台商品池选品" />
-    <el-pagination
-      @current-change="handlePageChange"
-      :current-page="page"
+    <AgriElementListTable
+      :columns="columns"
+      :data="filteredProducts"
+      row-key="id"
+      :loading="loading"
+      :page="page"
       :page-size="size"
       :total="total"
-      layout="prev, pager, next, jumper"
-    />
+      column-settings-storage-key="agri-s2b2c-channel:products"
+      empty-text="货架为空，先去平台商品池选品"
+      @page-change="handlePageChange"
+      @refresh="loadProducts"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>商品名称</label>
+            <el-input v-model="draft.keyword" placeholder="搜索当前页商品名称" clearable @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>货架状态</label>
+            <el-select v-model="draft.shelf" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="在售" value="ON" />
+              <el-option label="已下架" value="OFF" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #toolbar-left>
+        <el-button type="primary" @click="$router.push('/product-pool')">去选品中心</el-button>
+      </template>
+
+      <template #cell-price="{ row }">¥{{ money(row.price) }}</template>
+      <template #cell-retailPrice="{ row }">
+        <b v-if="row.retailPrice">¥{{ money(row.retailPrice) }}</b>
+        <span v-else class="muted">未设置（¥{{ money(row.price) }}）</span>
+      </template>
+      <template #cell-commissionRate="{ row }">{{ Number(row.commissionRate) }}%</template>
+      <template #cell-shelfStatus="{ row }">
+        <el-tag :type="isOn(row) ? 'success' : 'info'">{{ isOn(row) ? '在售' : '已下架' }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions
+          :actions="[
+            { key: 'edit', label: '改价', onClick: () => openEdit(row) },
+            isOn(row)
+              ? { key: 'off', label: '下架', danger: true, onClick: () => toggleShelf(row, 'OFF') }
+              : { key: 'on', label: '上架', onClick: () => toggleShelf(row, 'ON') },
+          ]"
+        />
+      </template>
+    </AgriElementListTable>
 
     <el-dialog v-model="editVisible" title="渠道改价" width="460px">
       <el-form label-width="110px">
@@ -76,6 +87,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { channelApi } from '../api'
 import { currentChannelId } from '../api/channelSession'
 
@@ -83,44 +95,84 @@ const route = useRoute()
 const isEditPage = computed(() => route.path === '/listing')
 
 const products = ref([])
+const loading = ref(false)
 const page = ref(1)
-const size = ref(10)
+const size = ref(20)
 const total = ref(0)
 const editVisible = ref(false)
 const saving = ref(false)
 const editForm = reactive({ id: '', name: '', supplyPrice: 0, retailPrice: '', minRetailPrice: null, maxRetailPrice: null })
+const draft = reactive({ keyword: '', shelf: '' })
+const activeFilter = reactive({ keyword: '', shelf: '' })
+
+const columns = [
+  { key: 'name', prop: 'name', label: '商品名称', minWidth: 200 },
+  { key: 'categoryName', prop: 'categoryName', label: '分类', width: 120 },
+  { key: 'price', prop: 'price', label: '供货价', width: 110 },
+  { key: 'retailPrice', prop: 'retailPrice', label: '渠道零售价', width: 140 },
+  { key: 'commissionRate', prop: 'commissionRate', label: '佣金比例', width: 100 },
+  { key: 'sales', prop: 'sales', label: '销量', width: 90 },
+  { key: 'stock', prop: 'stock', label: '库存', width: 90 },
+  { key: 'shelfStatus', prop: 'shelfStatus', label: '货架', width: 100 },
+  { key: 'actions', label: '操作', width: 135 },
+]
+
+const isOn = (row) => (row.shelfStatus || 'ON') !== 'OFF'
+
+const filteredProducts = computed(() => {
+  const kw = activeFilter.keyword.trim().toLowerCase()
+  return products.value.filter((row) => {
+    if (activeFilter.shelf === 'ON' && !isOn(row)) return false
+    if (activeFilter.shelf === 'OFF' && isOn(row)) return false
+    if (kw && !String(row.name || '').toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 
 onMounted(loadProducts)
 
 async function loadProducts() {
-  const channelId = await currentChannelId()
-  if (!channelId) {
-    products.value = []
-    total.value = 0
-    return
-  }
+  loading.value = true
   try {
+    const channelId = await currentChannelId()
+    if (!channelId) {
+      products.value = []
+      total.value = 0
+      return
+    }
     const res = await channelApi.getProducts({
       channelId,
       page: page.value,
       size: size.value,
     })
     products.value = res.records || []
-    total.value = res.total || 0
+    total.value = Number(res.total || 0)
   } catch (e) {
     products.value = []
     total.value = 0
     ElMessage.error(e?.message || '货架读取失败')
+  } finally {
+    loading.value = false
   }
 }
 
-
-function handlePageChange(currentPage) {
-  page.value = currentPage
-  loadProducts()
+function applyFilter() {
+  activeFilter.keyword = draft.keyword
+  activeFilter.shelf = draft.shelf
 }
 
-const isOn = (row) => (row.shelfStatus || 'ON') !== 'OFF'
+function resetFilter() {
+  draft.keyword = ''
+  draft.shelf = ''
+  activeFilter.keyword = ''
+  activeFilter.shelf = ''
+}
+
+function handlePageChange(nextPage, nextSize) {
+  page.value = nextPage
+  size.value = nextSize
+  loadProducts()
+}
 
 function openEdit(row) {
   editForm.id = row.id
@@ -184,7 +236,6 @@ const money = (value) => Number(value || 0).toFixed(2)
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 760px; }
-.filter-bar { display: flex; gap: 10px; align-items: center; }
 .muted { color: #94a198; font-size: 12px; }
 .dialog-tip { margin: 0; color: #84938a; font-size: 12px; line-height: 1.6; }
 </style>

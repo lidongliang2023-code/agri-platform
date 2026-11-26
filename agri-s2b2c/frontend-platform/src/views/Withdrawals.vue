@@ -5,57 +5,94 @@
         <h2>提现审核</h2>
         <p>渠道申请提现后在这里审核；通过后线下打款，再登记打款流水号并标记「已打款」。状态只能按 待审核 → 通过/驳回 → 已打款 流转。</p>
       </div>
-      <el-select v-model="status" placeholder="状态" style="width: 160px" @change="load">
-        <el-option label="全部" value="" />
-        <el-option label="待审核" value="PENDING" />
-        <el-option label="已通过待打款" value="APPROVED" />
-        <el-option label="已驳回" value="REJECTED" />
-        <el-option label="已打款" value="PAID" />
-      </el-select>
     </div>
 
-    <el-table :data="rows" border>
-      <el-table-column prop="channelName" label="渠道" />
-      <el-table-column label="金额(元)" width="120">
-        <template #default="{ row }">{{ Number(row.amount).toFixed(2) }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="130">
-        <template #default="{ row }">
-          <el-tag :type="tagType(row.status)">{{ statusText(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="applyTime" label="申请时间" width="180" />
-      <el-table-column prop="reviewer" label="处理人" width="110" />
-      <el-table-column prop="payoutNo" label="打款流水号" width="180" show-overflow-tooltip />
-      <el-table-column prop="remark" label="备注" />
-      <el-table-column label="操作" width="220">
-        <template #default="{ row }">
-          <el-button v-if="row.status === 'PENDING'" type="success" size="small" @click="review(row, 'APPROVED')">通过</el-button>
-          <el-button v-if="row.status === 'PENDING'" type="danger" size="small" @click="review(row, 'REJECTED')">驳回</el-button>
-          <el-button v-if="row.status === 'APPROVED'" type="primary" size="small" @click="review(row, 'PAID')">标记已打款</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" description="当前没有提现申请" />
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:withdrawals"
+      empty-text="当前没有提现申请"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="load" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>提现状态</label>
+            <el-select v-model="status" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="待审核" value="PENDING" />
+              <el-option label="已通过待打款" value="APPROVED" />
+              <el-option label="已驳回" value="REJECTED" />
+              <el-option label="已打款" value="PAID" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+
+      <template #cell-amount="{ row }">{{ Number(row.amount).toFixed(2) }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="tagType(row.status)">{{ statusText(row.status) }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="rowActions(row)" />
+      </template>
+    </AgriElementListTable>
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const rows = ref([])
+const loading = ref(false)
 const status = ref('')
+
+const columns = [
+  { key: 'channelName', prop: 'channelName', label: '渠道', minWidth: 160 },
+  { key: 'amount', prop: 'amount', label: '金额(元)', width: 120 },
+  { key: 'status', prop: 'status', label: '状态', width: 130 },
+  { key: 'applyTime', prop: 'applyTime', label: '申请时间', width: 180 },
+  { key: 'reviewer', prop: 'reviewer', label: '处理人', width: 110 },
+  { key: 'payoutNo', prop: 'payoutNo', label: '打款流水号', width: 180 },
+  { key: 'remark', prop: 'remark', label: '备注', minWidth: 160 },
+  { key: 'actions', label: '操作', width: 150 },
+]
+
+function rowActions(row) {
+  if (row.status === 'PENDING') {
+    return [
+      { key: 'approve', label: '通过', onClick: () => review(row, 'APPROVED') },
+      { key: 'reject', label: '驳回', danger: true, onClick: () => review(row, 'REJECTED') },
+    ]
+  }
+  if (row.status === 'APPROVED') {
+    return [{ key: 'paid', label: '标记已打款', onClick: () => review(row, 'PAID') }]
+  }
+  return []
+}
 
 onMounted(load)
 
 async function load() {
+  loading.value = true
   try {
     rows.value = (await platformApi.getWithdrawals({ status: status.value || undefined })) || []
   } catch (e) {
     ElMessage.error(e?.message || '提现列表读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function reset() {
+  status.value = ''
+  load()
 }
 
 const statusText = (s) => ({ PENDING: '待审核', APPROVED: '已通过待打款', REJECTED: '已驳回', PAID: '已打款' }[s] || s)

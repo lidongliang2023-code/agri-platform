@@ -5,7 +5,6 @@
         <h2>履约调度</h2>
         <p>平台视角的待发货与在途订单；发货动作回传物流单号，实际仓储/承运由云仓与承运商完成。</p>
       </div>
-      <el-button @click="load">刷新</el-button>
     </div>
 
     <div class="stat-row">
@@ -15,41 +14,46 @@
       <div class="stat-card"><span>待处理售后</span><b>{{ stats.pendingAfterSale || 0 }}</b><small>售后页处理</small></div>
     </div>
 
-    <div class="card">
-      <div class="card-head"><h3>待发货订单</h3><span class="muted">按支付时间升序，优先处理早期订单</span></div>
-      <el-table :data="pendingOrders" border>
-        <el-table-column prop="orderNo" label="订单号" min-width="190" />
-        <el-table-column prop="channelId" label="渠道归属" width="170" show-overflow-tooltip />
-        <el-table-column label="实付" width="110">
-          <template #default="{ row }">¥{{ money(row.payAmount) }}</template>
-        </el-table-column>
-        <el-table-column prop="payTime" label="支付时间" width="180" />
-        <el-table-column prop="createTime" label="下单时间" width="180" />
-        <el-table-column label="操作" width="140" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="success" @click="openShip(row)">发货</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty v-if="!pendingOrders.length" description="没有待发货订单" :image-size="70" />
-      <el-pagination v-model:current-page="page" :page-size="size" :total="total" layout="prev, pager, next, jumper" @current-change="loadPending" />
-    </div>
+    <AgriElementListTable
+      :columns="pendingColumns"
+      :data="pendingOrders"
+      row-key="id"
+      :loading="loading"
+      :page="page"
+      :page-size="size"
+      :total="total"
+      column-settings-storage-key="agri-s2b2c-platform:fulfillment-pending"
+      empty-text="没有待发货订单"
+      @page-change="handlePageChange"
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <div class="section-title"><h3>待发货订单</h3><span class="muted">按支付时间升序，优先处理早期订单</span></div>
+      </template>
+      <template #cell-payAmount="{ row }">¥{{ money(row.payAmount) }}</template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="[{ key: 'ship', label: '发货', onClick: () => openShip(row) }]" />
+      </template>
+    </AgriElementListTable>
 
-    <div class="card">
-      <div class="card-head"><h3>在途 / 已发货</h3><span class="muted">最近 10 单</span></div>
-      <el-table :data="shippedOrders" border>
-        <el-table-column prop="orderNo" label="订单号" min-width="190" />
-        <el-table-column prop="logisticsCompany" label="承运商" width="130" />
-        <el-table-column prop="logisticsNo" label="物流单号" min-width="160" show-overflow-tooltip />
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'COMPLETED' ? 'success' : 'primary'">{{ statusText(row.status) }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="updateTime" label="更新时间" width="180" />
-      </el-table>
-      <el-empty v-if="!shippedOrders.length" description="暂无在途订单" :image-size="70" />
-    </div>
+    <AgriElementListTable
+      :columns="shippedColumns"
+      :data="shippedOrders"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      :page-size="10"
+      column-settings-storage-key="agri-s2b2c-platform:fulfillment-shipped"
+      empty-text="暂无在途订单"
+      @refresh="loadShipped"
+    >
+      <template #toolbar-left>
+        <div class="section-title"><h3>在途 / 已发货</h3><span class="muted">最近 10 单</span></div>
+      </template>
+      <template #cell-status="{ row }">
+        <el-tag :type="row.status === 'COMPLETED' ? 'success' : 'primary'">{{ statusText(row.status) }}</el-tag>
+      </template>
+    </AgriElementListTable>
 
     <el-dialog v-model="shipVisible" title="订单发货" width="460px">
       <el-form label-width="90px">
@@ -68,22 +72,46 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const stats = ref({})
 const pendingOrders = ref([])
 const shippedOrders = ref([])
+const loading = ref(false)
 const page = ref(1)
-const size = ref(10)
+const size = ref(20)
 const total = ref(0)
 const shipVisible = ref(false)
 const shipping = ref(false)
 const shipForm = reactive({ id: '', orderNo: '', company: '云仓代发', logisticsNo: '' })
 
+const pendingColumns = [
+  { key: 'orderNo', prop: 'orderNo', label: '订单号', minWidth: 190 },
+  { key: 'channelId', prop: 'channelId', label: '渠道归属', width: 170 },
+  { key: 'payAmount', prop: 'payAmount', label: '实付', width: 110 },
+  { key: 'payTime', prop: 'payTime', label: '支付时间', width: 180 },
+  { key: 'createTime', prop: 'createTime', label: '下单时间', width: 180 },
+  { key: 'actions', label: '操作', width: 110 },
+]
+
+const shippedColumns = [
+  { key: 'orderNo', prop: 'orderNo', label: '订单号', minWidth: 190 },
+  { key: 'logisticsCompany', prop: 'logisticsCompany', label: '承运商', width: 130 },
+  { key: 'logisticsNo', prop: 'logisticsNo', label: '物流单号', minWidth: 160 },
+  { key: 'status', prop: 'status', label: '状态', width: 110 },
+  { key: 'updateTime', prop: 'updateTime', label: '更新时间', width: 180 },
+]
+
 onMounted(load)
 
 async function load() {
-  await Promise.all([loadStats(), loadPending(), loadShipped()])
+  loading.value = true
+  try {
+    await Promise.all([loadStats(), loadPending(), loadShipped()])
+  } finally {
+    loading.value = false
+  }
 }
 
 async function loadStats() {
@@ -98,7 +126,7 @@ async function loadPending() {
   try {
     const res = await platformApi.getOrders({ page: page.value, size: size.value, status: 'PENDING_SHIP' })
     pendingOrders.value = res.records || []
-    total.value = res.total || 0
+    total.value = Number(res.total || 0)
   } catch (e) {
     ElMessage.error(e?.message || '待发货订单读取失败')
   }
@@ -116,6 +144,12 @@ async function loadShipped() {
   } catch {
     shippedOrders.value = []
   }
+}
+
+function handlePageChange(nextPage, nextSize) {
+  page.value = nextPage
+  size.value = nextSize
+  loadPending()
 }
 
 function openShip(row) {
@@ -162,9 +196,8 @@ const statusText = (value) => ({ SHIPPED: '已发货', PENDING_RECEIVE: '待收�
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 24px; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
-.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.card-head h3 { margin: 0; font-size: 15px; }
+.section-title { display: flex; align-items: baseline; gap: 10px; }
+.section-title h3 { margin: 0; font-size: 15px; color: #173e2a; }
 .muted { color: #84938a; font-size: 12px; }
 @media (max-width: 1000px) { .stat-row { grid-template-columns: repeat(2, 1fr); } }
 </style>

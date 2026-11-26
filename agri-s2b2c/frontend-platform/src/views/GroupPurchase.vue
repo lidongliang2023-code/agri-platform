@@ -5,10 +5,6 @@
         <h2>集采管理</h2>
         <p>平台发起总部集采批次，渠道报名数量；本模块只登记集采需求与到货状态，不生成采购合同、不代收货款、不写库存。</p>
       </div>
-      <div class="head-actions">
-        <el-button @click="load">刷新</el-button>
-        <el-button type="primary" @click="openCreate">新建集采批次</el-button>
-      </div>
     </div>
 
     <div class="stat-row">
@@ -18,57 +14,55 @@
       <div class="stat-card"><span>报名金额</span><b>¥{{ money(totalAmount) }}</b><small>集采价 × 数量</small></div>
     </div>
 
-    <div class="filter-bar">
-      <el-select v-model="status" placeholder="批次状态" style="width: 170px" @change="load">
-        <el-option label="全部" value="" />
-        <el-option label="未开始" value="UPCOMING" />
-        <el-option label="报名中" value="OPEN" />
-        <el-option label="已截止" value="CLOSED" />
-        <el-option label="已到货" value="FULFILLED" />
-        <el-option label="已取消" value="CANCELLED" />
-      </el-select>
-    </div>
+    <AgriElementListTable
+      :columns="columns"
+      :data="rows"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-s2b2c-platform:group-purchases"
+      empty-text="暂无集采批次"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="1" :loading="loading" @search="load" @reset="reset">
+          <div class="agri-vue-filter-field">
+            <label>批次状态</label>
+            <el-select v-model="status" placeholder="全部">
+              <el-option label="全部" value="" />
+              <el-option label="未开始" value="UPCOMING" />
+              <el-option label="报名中" value="OPEN" />
+              <el-option label="已截止" value="CLOSED" />
+              <el-option label="已到货" value="FULFILLED" />
+              <el-option label="已取消" value="CANCELLED" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
 
-    <el-table :data="rows" border>
-      <el-table-column label="批次" min-width="200">
-        <template #default="{ row }">
-          <b>{{ row.title }}</b><br>
-          <small>{{ row.productName }} · {{ row.supplierName || '供应商待定' }}</small>
-        </template>
-      </el-table-column>
-      <el-table-column label="集采价" width="100">
-        <template #default="{ row }">¥{{ money(row.purchase_price) }}</template>
-      </el-table-column>
-      <el-table-column label="起订/目标" width="120">
-        <template #default="{ row }">{{ row.min_quantity || 0 }} / {{ row.target_quantity || 0 }}</template>
-      </el-table-column>
-      <el-table-column label="报名" width="140">
-        <template #default="{ row }">{{ row.stats?.channels || 0 }} 家 · {{ row.stats?.quantity || 0 }} 件</template>
-      </el-table-column>
-      <el-table-column label="进度" width="160">
-        <template #default="{ row }">
-          <el-progress :percentage="progress(row)" :stroke-width="8" />
-        </template>
-      </el-table-column>
-      <el-table-column label="时间" min-width="220">
-        <template #default="{ row }">{{ row.start_time }} ~ {{ row.end_time }}</template>
-      </el-table-column>
-      <el-table-column label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="statusType(row)">{{ statusText(row) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-          <el-button v-if="row.status === 'OPEN' || row.status === 'UPCOMING'" link type="warning" @click="changeStatus(row, 'CLOSED')">截止</el-button>
-          <el-button v-if="row.status === 'CLOSED'" link type="success" @click="changeStatus(row, 'FULFILLED')">到货</el-button>
-          <el-button v-if="row.status === 'CLOSED'" link type="primary" @click="changeStatus(row, 'OPEN')">开放</el-button>
-          <el-button v-if="row.status !== 'CANCELLED' && row.status !== 'FULFILLED'" link type="danger" @click="changeStatus(row, 'CANCELLED')">取消</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-    <el-empty v-if="!rows.length" description="暂无集采批次" />
+      <template #toolbar-left>
+        <el-button type="primary" @click="openCreate">新建集采批次</el-button>
+      </template>
+
+      <template #cell-batch="{ row }">
+        <b>{{ row.title }}</b><br>
+        <small>{{ row.productName }} · {{ row.supplierName || '供应商待定' }}</small>
+      </template>
+      <template #cell-purchase_price="{ row }">¥{{ money(row.purchase_price) }}</template>
+      <template #cell-qty="{ row }">{{ row.min_quantity || 0 }} / {{ row.target_quantity || 0 }}</template>
+      <template #cell-commit="{ row }">{{ row.stats?.channels || 0 }} 家 · {{ row.stats?.quantity || 0 }} 件</template>
+      <template #cell-progress="{ row }">
+        <el-progress :percentage="progress(row)" :stroke-width="8" />
+      </template>
+      <template #cell-time="{ row }">{{ row.start_time }} ~ {{ row.end_time }}</template>
+      <template #cell-status="{ row }">
+        <el-tag :type="statusType(row)">{{ statusText(row) }}</el-tag>
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="rowActions(row)" />
+      </template>
+    </AgriElementListTable>
+
     <p class="note">边界：供应商合同与付款归交易撮合/财务；到货入库由仓储/交易撮合完成，本模块只记录状态。</p>
 
     <el-dialog v-model="createVisible" title="新建集采批次" width="620px">
@@ -128,9 +122,11 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import { platformApi } from '../api'
 
 const rows = ref([])
+const loading = ref(false)
 const status = ref('')
 const products = ref([])
 const createVisible = ref(false)
@@ -141,6 +137,32 @@ const form = reactive({
   productId: '', title: '', purchasePrice: '', minQuantity: '0', targetQuantity: '100',
   startTime: '', endTime: '', warehouse: '', remark: '',
 })
+
+const columns = [
+  { key: 'batch', prop: 'title', label: '批次', minWidth: 200 },
+  { key: 'purchase_price', prop: 'purchase_price', label: '集采价', width: 100 },
+  { key: 'qty', label: '起订/目标', width: 120 },
+  { key: 'commit', label: '报名', width: 140 },
+  { key: 'progress', label: '进度', width: 160 },
+  { key: 'time', label: '时间', minWidth: 220 },
+  { key: 'status', prop: 'status', label: '状态', width: 100 },
+  { key: 'actions', label: '操作', width: 150 },
+]
+
+function rowActions(row) {
+  const list = [{ key: 'detail', label: '详情', onClick: () => openDetail(row) }]
+  if (row.status === 'OPEN' || row.status === 'UPCOMING') {
+    list.push({ key: 'close', label: '截止', onClick: () => changeStatus(row, 'CLOSED') })
+  }
+  if (row.status === 'CLOSED') {
+    list.push({ key: 'fulfill', label: '到货', onClick: () => changeStatus(row, 'FULFILLED') })
+    list.push({ key: 'reopen', label: '开放', onClick: () => changeStatus(row, 'OPEN') })
+  }
+  if (row.status !== 'CANCELLED' && row.status !== 'FULFILLED') {
+    list.push({ key: 'cancel', label: '取消', danger: true, onClick: () => changeStatus(row, 'CANCELLED') })
+  }
+  return list
+}
 
 const openCount = computed(() => rows.value.filter((row) => ['OPEN', 'UPCOMING'].includes(row.status)).length)
 const totalChannels = computed(() => rows.value.reduce((sum, row) => sum + Number(row.stats?.channels || 0), 0))
@@ -162,12 +184,20 @@ onMounted(async () => {
 })
 
 async function load() {
+  loading.value = true
   try {
     rows.value = (await platformApi.getGroupPurchases({ status: status.value || undefined })) || []
   } catch (e) {
     rows.value = []
     ElMessage.error(e?.message || '集采批次读取失败')
+  } finally {
+    loading.value = false
   }
+}
+
+function reset() {
+  status.value = ''
+  load()
 }
 
 function openCreate() {
@@ -245,13 +275,11 @@ const statusType = (row) => {
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 860px; }
-.head-actions { display: flex; gap: 8px; }
 .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .stat-card { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .stat-card span { color: #84938a; font-size: 12px; }
 .stat-card b { color: #173e2a; font-size: 23px; }
 .stat-card small { color: #94a198; font-size: 12px; }
-.filter-bar { display: flex; gap: 10px; }
 .note { margin: 0; color: #84938a; font-size: 12px; line-height: 1.7; }
 .sep { margin: 0 8px; color: #84938a; font-size: 12px; }
 h4 { margin: 16px 0 8px; font-size: 14px; }
