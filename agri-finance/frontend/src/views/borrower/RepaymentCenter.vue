@@ -93,41 +93,106 @@
       </aside>
     </div>
 
-    <section class="finance-card">
-      <div class="finance-card-head"><strong>全部还款计划</strong><small>{{ plans.length }} 条计划</small></div>
-      <el-table :data="plans" style="width: 100%">
-        <el-table-column prop="loanNo" label="借款编号" min-width="145" />
-        <el-table-column prop="period" label="期次" width="65" align="center" />
-        <el-table-column label="应还本金" min-width="105" align="right">
-          <template #default="{ row }">{{ money(row.principal) }}</template>
-        </el-table-column>
-        <el-table-column label="应还利息" min-width="100" align="right">
-          <template #default="{ row }">{{ money(row.interest) }}</template>
-        </el-table-column>
-        <el-table-column label="应还总额" min-width="110" align="right">
-          <template #default="{ row }">{{ money(row.totalAmount) }}</template>
-        </el-table-column>
-        <el-table-column label="还款日期" min-width="125">
-          <template #default="{ row }">{{ shortDate(row.dueDate) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="90">
-          <template #default="{ row }"><FinanceStatus :value="row.status" /></template>
-        </el-table-column>
-      </el-table>
-    </section>
+    <AgriElementListTable
+      :columns="planColumns"
+      :data="filteredAllPlans"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-finance:borrower-repayment-plans"
+      empty-text="暂无匹配的还款计划"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>借款编号</label>
+            <el-input v-model="draft.keyword" clearable placeholder="请输入借款编号" @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>还款状态</label>
+            <el-select v-model="draft.status" clearable placeholder="全部状态">
+              <el-option label="全部" value="" />
+              <el-option label="待还款" value="待还款" />
+              <el-option label="已还款" value="已还款" />
+              <el-option label="逾期" value="逾期" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #toolbar-left>
+        <strong class="finance-table-title">全部还款计划</strong>
+      </template>
+      <template #cell-principal="{ row }">{{ money(row.principal) }}</template>
+      <template #cell-interest="{ row }">{{ money(row.interest) }}</template>
+      <template #cell-totalAmount="{ row }">{{ money(row.totalAmount) }}</template>
+      <template #cell-dueDate="{ row }">{{ shortDate(row.dueDate) }}</template>
+      <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="planRowActions(row)" />
+      </template>
+    </AgriElementListTable>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { financeApi, money, shortDate } from '@/api/finance'
+
+const planColumns = [
+  { key: 'loanNo', prop: 'loanNo', label: '借款编号', kind: 'code', minWidth: 155, locked: true },
+  { key: 'period', prop: 'period', label: '期次', kind: 'number', width: 76, align: 'center' },
+  { key: 'principal', prop: 'principal', label: '应还本金', kind: 'number', minWidth: 110 },
+  { key: 'interest', prop: 'interest', label: '应还利息', kind: 'number', minWidth: 105 },
+  { key: 'totalAmount', prop: 'totalAmount', label: '应还总额', kind: 'number', minWidth: 115 },
+  { key: 'dueDate', prop: 'dueDate', label: '还款日期', minWidth: 130 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+  { key: 'actions', label: '操作', kind: 'action', width: 100 },
+]
 
 const loading = ref(true)
 const payingId = ref('')
 const plans = ref([])
 const planStatus = ref('unpaid')
+const draft = reactive({ keyword: '', status: '' })
+const filters = reactive({ keyword: '', status: '' })
+
+function applyFilter() {
+  filters.keyword = draft.keyword
+  filters.status = draft.status
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = ''
+  applyFilter()
+}
+
+const filteredAllPlans = computed(() => {
+  const kw = filters.keyword.trim().toLowerCase()
+  return plans.value.filter((item) => {
+    if (filters.status && item.status !== filters.status) return false
+    if (kw && !String(item.loanNo || '').toLowerCase().includes(kw)) return false
+    return true
+  })
+})
+
+function planRowActions(row) {
+  if (row.status !== '已还款') {
+    return [
+      {
+        key: 'repay',
+        label: payingId.value === row.id ? '处理中…' : '立即还款',
+        disabled: payingId.value === row.id,
+        onClick: () => repay(row),
+      },
+    ]
+  }
+  return [{ key: 'done', label: '已结清', disabled: true }]
+}
 
 const unpaidPlans = computed(() => plans.value.filter((item) => item.status !== '已还款'))
 const paidPlans = computed(() => plans.value.filter((item) => item.status === '已还款'))
@@ -210,7 +275,7 @@ onMounted(load)
   margin-bottom: 6px;
   color: #3f5b49;
   font-size: var(--fin-fs-xs);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .repayment-main strong {
@@ -273,7 +338,7 @@ onMounted(load)
 
 .repay-summary {
   padding: 18px;
-  border-radius: 15px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at 88% 10%, rgba(131, 228, 170, .18), transparent 10rem),
     linear-gradient(135deg, #083c27, #0f7048);
@@ -289,7 +354,7 @@ onMounted(load)
 .repay-summary > small {
   color: #a8dfbd;
   font-size: var(--fin-fs-xs);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 

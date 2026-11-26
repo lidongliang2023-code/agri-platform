@@ -231,7 +231,7 @@ const {
   toggleColumn,
   resetColumns,
 } = useVueListColumns(() => props.columns, {
-  storageKey: props.columnSettingsStorageKey,
+  storageKey: () => props.columnSettingsStorageKey,
   lockedKeys: props.lockedColumnKeys,
 })
 

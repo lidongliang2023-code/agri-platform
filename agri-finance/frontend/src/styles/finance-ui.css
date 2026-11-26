@@ -1146,6 +1146,13 @@ html.pc-ui-v1 .finance-form-card .el-form-item__label { color:var(--pc-text); fo
 html.pc-ui-v1 .finance-tabs button { min-height:32px; font-size:14px; border-radius:4px; }
 html.pc-ui-v1 .finance-tabs button.on { box-shadow:none; }
 html.pc-ui-v1 .finance-status { border-radius:4px; }
+html.pc-ui-v1 .agri-vue-status-cell .finance-status { border-radius:999px; padding:2px 8px; }
+html.pc-ui-v1 .agri-vue-list-page .el-table { font-size:14px; }
+html.pc-ui-v1 .agri-vue-list-page .el-table th.el-table__cell { font-size:12px; color:#595959; }
+html.pc-ui-v1 .agri-vue-list-page .agri-vue-filter-field .el-input__wrapper,
+html.pc-ui-v1 .agri-vue-list-page .agri-vue-filter-field .el-select__wrapper { min-height:32px; }
+.finance-table-title { font-size:16px; font-weight:600; color:var(--pc-text,#1a1a1a); line-height:24px; }
+.finance-table-hint { font-size:12px; color:var(--pc-secondary,#595959); }
 html.pc-ui-v1 .finance-status.green { background:#e8f5e9; color:#1b6332; }
 html.pc-ui-v1 .finance-status.amber { background:#fff3e0; color:#8f4500; }
 html.pc-ui-v1 .finance-status.red { background:#ffebee; color:#b71c1c; }

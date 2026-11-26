@@ -7,7 +7,6 @@
         <p>仓单的品种、折算率上限与最长期限都由这份字典决定；停用品种后融资方就开不出该品种的仓单。</p>
       </div>
       <div class="finance-page-heading-actions">
-        <el-button class="finance-ghost-button" :loading="loading" @click="load">刷新</el-button>
         <el-button class="finance-action-button" @click="openForm()">新增品种</el-button>
       </div>
     </header>
@@ -19,33 +18,51 @@
       <article class="finance-kpi"><span>高波动品种</span><strong>{{ risky.length }}<em> 个</em></strong><small>价格波动阈值 ≥ 20%</small></article>
     </div>
 
-    <section class="finance-card">
-      <div class="finance-card-head">
-        <strong>品种与质押参数</strong>
+    <AgriElementListTable
+      :columns="goodsColumns"
+      :data="filtered"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-finance:admin-pledge-goods"
+      empty-text="目录暂无匹配品种，可调整筛选条件或点击新增品种"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="3" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="draft.keyword" clearable placeholder="品种编码 / 名称 / 质量标准" @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>类别</label>
+            <el-select v-model="draft.category" clearable placeholder="全部类别">
+              <el-option label="全部" value="" />
+              <el-option v-for="cat in categories" :key="cat" :label="cat" :value="cat" />
+            </el-select>
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>状态</label>
+            <el-select v-model="draft.status" placeholder="全部状态">
+              <el-option v-for="item in filters" :key="item.key" :label="item.label" :value="item.key" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #toolbar-left>
+        <el-button class="finance-action-button" @click="openForm()">+ 新增品种</el-button>
         <div class="finance-tabs">
-          <button v-for="item in filters" :key="item.key" type="button" :class="{ on: filter === item.key }" @click="filter = item.key">{{ item.label }}</button>
+          <button v-for="item in filters" :key="item.key" type="button" :class="{ on: filter === item.key }" @click="selectTab(item.key)">{{ item.label }}</button>
         </div>
-      </div>
-      <el-table :data="filtered" style="width: 100%">
-        <el-table-column prop="goodsCode" label="品种编码" min-width="120" />
-        <el-table-column prop="goodsName" label="品种名称" min-width="110" />
-        <el-table-column prop="category" label="类别" min-width="90" />
-        <el-table-column label="折算率上限" width="105" align="right"><template #default="{ row }">{{ row.pledgeRateMax }}%</template></el-table-column>
-        <el-table-column label="最长期限" width="100" align="right"><template #default="{ row }">{{ row.maxPledgeTerm }} 天</template></el-table-column>
-        <el-table-column label="波动阈值" width="100" align="right"><template #default="{ row }">{{ row.priceVolatilityThreshold }}%</template></el-table-column>
-        <el-table-column prop="priceSource" label="估值来源" min-width="170" />
-        <el-table-column prop="qualityStandard" label="质量标准" min-width="100" />
-        <el-table-column label="状态" width="85"><template #default="{ row }"><FinanceStatus :value="row.status" /></template></el-table-column>
-        <el-table-column label="操作" width="150" align="right">
-          <template #default="{ row }">
-            <el-button link class="finance-link-button" @click="openForm(row)">编辑</el-button>
-            <el-button v-if="row.status === '启用'" link class="finance-link-button" @click="toggle(row, false)">停用</el-button>
-            <el-button v-else link class="finance-link-button" @click="toggle(row, true)">启用</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div v-if="!filtered.length" class="finance-empty"><strong>目录是空的</strong><p>没有字典就没有可用的折算率上限，融资方开不出仓单。先新增品种。</p></div>
-    </section>
+      </template>
+      <template #cell-pledgeRateMax="{ row }">{{ row.pledgeRateMax }}%</template>
+      <template #cell-maxPledgeTerm="{ row }">{{ row.maxPledgeTerm }} 天</template>
+      <template #cell-priceVolatilityThreshold="{ row }">{{ row.priceVolatilityThreshold }}%</template>
+      <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="goodsRowActions(row)" />
+      </template>
+    </AgriElementListTable>
 
     <el-dialog v-model="formOpen" :title="form.id ? `编辑品种 · ${form.goodsName}` : '新增质押物品种'" width="min(600px, 92vw)">
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
@@ -89,8 +106,22 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
+
+const goodsColumns = [
+  { key: 'goodsCode', prop: 'goodsCode', label: '品种编码', kind: 'code', minWidth: 125, locked: true },
+  { key: 'goodsName', prop: 'goodsName', label: '品种名称', minWidth: 115 },
+  { key: 'category', prop: 'category', label: '类别', minWidth: 96 },
+  { key: 'pledgeRateMax', prop: 'pledgeRateMax', label: '折算率上限', kind: 'number', width: 108 },
+  { key: 'maxPledgeTerm', prop: 'maxPledgeTerm', label: '最长期限', kind: 'number', width: 100 },
+  { key: 'priceVolatilityThreshold', prop: 'priceVolatilityThreshold', label: '波动阈值', kind: 'number', width: 100 },
+  { key: 'priceSource', prop: 'priceSource', label: '估值来源', minWidth: 170 },
+  { key: 'qualityStandard', prop: 'qualityStandard', label: '质量标准', minWidth: 110 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 92 },
+  { key: 'actions', label: '操作', kind: 'action', width: 125 },
+]
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -98,7 +129,38 @@ const formOpen = ref(false)
 const formRef = ref()
 const rows = ref([])
 const filter = ref('all')
+const draft = reactive({ keyword: '', category: '', status: 'all' })
+const query = reactive({ keyword: '', category: '' })
 const filters = [{ key: 'all', label: '全部' }, { key: '启用', label: '启用' }, { key: '禁用', label: '已停用' }]
+
+function applyFilter() {
+  query.keyword = draft.keyword
+  query.category = draft.category
+  filter.value = draft.status || 'all'
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.category = ''
+  draft.status = 'all'
+  applyFilter()
+}
+
+function selectTab(key) {
+  filter.value = key
+  draft.status = key
+}
+
+const categories = computed(() => [...new Set(rows.value.map((item) => item.category).filter(Boolean))])
+
+function goodsRowActions(row) {
+  return [
+    { key: 'edit', label: '编辑', onClick: () => openForm(row) },
+    row.status === '启用'
+      ? { key: 'disable', label: '停用', onClick: () => toggle(row, false) }
+      : { key: 'enable', label: '启用', onClick: () => toggle(row, true) },
+  ]
+}
 const form = reactive({
   id: '', goodsName: '', category: '', pledgeRateMax: 60, maxPledgeTerm: 90,
   priceVolatilityThreshold: 10, qualityStandard: '', priceSource: '',
@@ -116,7 +178,15 @@ const avgRate = computed(() => {
   const total = enabled.value.reduce((sum, item) => sum + Number(item.pledgeRateMax || 0), 0)
   return (total / enabled.value.length).toFixed(1)
 })
-const filtered = computed(() => (filter.value === 'all' ? rows.value : rows.value.filter((item) => item.status === filter.value)))
+const filtered = computed(() => {
+  const kw = query.keyword.trim().toLowerCase()
+  return rows.value.filter((item) => {
+    if (filter.value !== 'all' && item.status !== filter.value) return false
+    if (query.category && item.category !== query.category) return false
+    if (kw && !`${item.goodsCode || ''}${item.goodsName || ''}${item.qualityStandard || ''}`.toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 
 function openForm(row) {
   Object.assign(form, row

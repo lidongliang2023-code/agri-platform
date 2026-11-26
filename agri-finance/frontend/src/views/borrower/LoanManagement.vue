@@ -7,7 +7,6 @@
         <p>统一查看融资申请、借款状态、剩余本金与还款进度。</p>
       </div>
       <div class="finance-page-heading-actions">
-        <el-button class="finance-ghost-button" :loading="loading" @click="load">刷新</el-button>
         <el-button class="finance-action-button" @click="$router.push('/borrower/loan-apply')">新增融资申请</el-button>
       </div>
     </header>
@@ -35,91 +34,97 @@
       </article>
     </div>
 
+    <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+      <div class="agri-vue-filter-field">
+        <label>关键字</label>
+        <el-input v-model="draft.keyword" clearable placeholder="搜索申请编号 / 借款编号 / 产品" @keyup.enter="applyFilter" />
+      </div>
+      <div class="agri-vue-filter-field">
+        <label>借款状态</label>
+        <el-select v-model="draft.status" clearable placeholder="全部状态">
+          <el-option label="全部" value="" />
+          <el-option label="待审批" value="待审批" />
+          <el-option label="已通过" value="已通过" />
+          <el-option label="已拒绝" value="已拒绝" />
+          <el-option label="还款中" value="还款中" />
+          <el-option label="已结清" value="已结清" />
+          <el-option label="逾期" value="逾期" />
+        </el-select>
+      </div>
+    </AgriVueFilterBar>
+
     <div class="loan-toolbar">
       <div class="finance-tabs">
         <button v-for="item in tabs" :key="item.key" type="button" :class="{ on: activeTab === item.key }" @click="activeTab = item.key">
           {{ item.label }}
         </button>
       </div>
-      <el-input v-model="keyword" clearable placeholder="搜索申请编号 / 借款编号" class="loan-search" :prefix-icon="Search" />
     </div>
 
-    <section class="finance-card">
+    <section v-if="activeTab !== 'loan'" class="finance-card">
       <div class="finance-card-head">
-        <strong>{{ activeTab === 'application' ? '融资申请' : '借款记录' }}</strong>
-        <small>{{ displayedCount }} 条记录</small>
+        <strong>{{ activeTab === 'application' ? '审批中申请' : '全部融资申请' }}</strong>
+        <small>{{ filteredApplications.length }} 条记录</small>
       </div>
-
-      <template v-if="activeTab !== 'loan'">
-        <div v-if="filteredApplications.length" class="application-list">
-          <article v-for="item in filteredApplications" :key="item.id">
-            <div class="application-icon"><DocumentChecked /></div>
-            <div class="application-main">
-              <div><strong>{{ productName(item.productType) }}</strong><FinanceStatus :value="item.status" /></div>
-              <p>{{ item.applicationNo }} · {{ shortDate(item.applyTime) }}</p>
-              <span>{{ item.fundPurpose || '未填写融资用途' }}</span>
-            </div>
-            <div class="application-amount">
-              <span>申请金额</span>
-              <strong>{{ money(item.applyAmount) }}</strong>
-              <small>{{ item.applyTerm }} 个月 · {{ item.repaymentMethod }}</small>
-            </div>
-            <div class="application-action">
-              <el-button
-                v-if="item.status === '已通过'"
-                class="finance-action-button"
-                :loading="confirmingId === item.id"
-                @click="confirmLoan(item)"
-              >确认借款</el-button>
-              <span v-else>{{ statusHint(item) }}</span>
-            </div>
-          </article>
-        </div>
-        <div v-else class="finance-empty">
-          <strong>暂无匹配的融资申请</strong>
-          <p>发起融资申请后，可以在这里跟踪智能预审与人工审批进度。</p>
-        </div>
-      </template>
-
-      <template v-else>
-        <el-table v-if="filteredLoans.length" :data="filteredLoans" style="width: 100%">
-          <el-table-column prop="loanNo" label="借款编号" min-width="145" />
-          <el-table-column label="产品" min-width="0">
-            <template #default="{ row }">{{ productName(row.productType) }}</template>
-          </el-table-column>
-          <el-table-column label="借款金额" min-width="110" align="right">
-            <template #default="{ row }">{{ money(row.amount) }}</template>
-          </el-table-column>
-          <el-table-column label="年化利率" width="95" align="right">
-            <template #default="{ row }">{{ row.rate }}%</template>
-          </el-table-column>
-          <el-table-column label="剩余本金" min-width="110" align="right">
-            <template #default="{ row }">{{ money(row.remainingAmount) }}</template>
-          </el-table-column>
-          <el-table-column label="还款进度" min-width="145">
-            <template #default="{ row }">
-              <div class="loan-progress-cell">
-                <div class="finance-progress"><span :style="{ width: `${loanProgress(row)}%` }" /></div>
-                <small>{{ loanProgress(row).toFixed(0) }}%</small>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="状态" width="90">
-            <template #default="{ row }"><FinanceStatus :value="row.status" /></template>
-          </el-table-column>
-          <el-table-column label="操作" width="110" align="right">
-            <template #default="{ row }">
-              <el-button v-if="row.status === '还款中'" link class="finance-link-button" @click="$router.push({ path: '/borrower/repayment', query: { loanId: row.id } })">还款计划</el-button>
-              <el-button v-else link class="finance-link-button" @click="showLoan(row)">详情</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div v-else class="finance-empty">
-          <strong>暂无借款记录</strong>
-          <p>审批通过的融资申请确认借款后，会自动生成借款与还款计划。</p>
-        </div>
-      </template>
+      <div v-if="filteredApplications.length" class="application-list">
+        <article v-for="item in filteredApplications" :key="item.id">
+          <div class="application-icon"><DocumentChecked /></div>
+          <div class="application-main">
+            <div><strong>{{ productName(item.productType) }}</strong><FinanceStatus :value="item.status" /></div>
+            <p>{{ item.applicationNo }} · {{ shortDate(item.applyTime) }}</p>
+            <span>{{ item.fundPurpose || '未填写融资用途' }}</span>
+          </div>
+          <div class="application-amount">
+            <span>申请金额</span>
+            <strong>{{ money(item.applyAmount) }}</strong>
+            <small>{{ item.applyTerm }} 个月 · {{ item.repaymentMethod }}</small>
+          </div>
+          <div class="application-action">
+            <el-button
+              v-if="item.status === '已通过'"
+              class="finance-action-button"
+              :loading="confirmingId === item.id"
+              @click="confirmLoan(item)"
+            >确认借款</el-button>
+            <span v-else>{{ statusHint(item) }}</span>
+          </div>
+        </article>
+      </div>
+      <div v-else class="finance-empty">
+        <strong>暂无匹配的融资申请</strong>
+        <p>发起融资申请后，可以在这里跟踪智能预审与人工审批进度。</p>
+      </div>
     </section>
+
+    <AgriElementListTable
+      v-else
+      :columns="loanColumns"
+      :data="filteredLoans"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-finance:borrower-loans"
+      empty-text="暂无借款记录，审批通过的融资申请确认借款后会自动生成"
+      @refresh="load"
+    >
+      <template #toolbar-left>
+        <el-button class="finance-action-button" @click="$router.push('/borrower/loan-apply')">+ 新增融资申请</el-button>
+      </template>
+      <template #cell-productType="{ row }">{{ productName(row.productType) }}</template>
+      <template #cell-amount="{ row }">{{ money(row.amount) }}</template>
+      <template #cell-rate="{ row }">{{ row.rate }}%</template>
+      <template #cell-remainingAmount="{ row }">{{ money(row.remainingAmount) }}</template>
+      <template #cell-progress="{ row }">
+        <div class="loan-progress-cell">
+          <div class="finance-progress"><span :style="{ width: `${loanProgress(row)}%` }" /></div>
+          <small>{{ loanProgress(row).toFixed(0) }}%</small>
+        </div>
+      </template>
+      <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="loanRowActions(row)" />
+      </template>
+    </AgriElementListTable>
 
     <el-dialog v-model="detailOpen" title="借款详情" width="min(620px, 92vw)">
       <div v-if="selectedLoan" class="loan-detail-dialog">
@@ -137,12 +142,24 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { DocumentChecked, Search } from '@element-plus/icons-vue'
+import { DocumentChecked } from '@element-plus/icons-vue'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { financeApi, money, productName, shortDate } from '@/api/finance'
+
+const loanColumns = [
+  { key: 'loanNo', prop: 'loanNo', label: '借款编号', kind: 'code', minWidth: 155, locked: true },
+  { key: 'productType', prop: 'productType', label: '产品', minWidth: 120 },
+  { key: 'amount', prop: 'amount', label: '借款金额', kind: 'number', minWidth: 115 },
+  { key: 'rate', prop: 'rate', label: '年化利率', kind: 'number', width: 96 },
+  { key: 'remainingAmount', prop: 'remainingAmount', label: '剩余本金', kind: 'number', minWidth: 115 },
+  { key: 'progress', label: '还款进度', minWidth: 150, ellipsis: false },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+  { key: 'actions', label: '操作', kind: 'action', width: 130 },
+]
 
 const router = useRouter()
 const loading = ref(true)
@@ -150,7 +167,8 @@ const confirmingId = ref('')
 const applications = ref([])
 const loans = ref([])
 const activeTab = ref('all')
-const keyword = ref('')
+const draft = reactive({ keyword: '', status: '' })
+const filters = reactive({ keyword: '', status: '' })
 const detailOpen = ref(false)
 const selectedLoan = ref(null)
 const tabs = [
@@ -158,6 +176,17 @@ const tabs = [
   { key: 'application', label: '审批中' },
   { key: 'loan', label: '借款记录' },
 ]
+
+function applyFilter() {
+  filters.keyword = draft.keyword
+  filters.status = draft.status
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = ''
+  applyFilter()
+}
 
 const pendingApplications = computed(() => applications.value.filter((item) => item.status === '待审批').length)
 const totalBorrowed = computed(() => loans.value.reduce((total, item) => total + Number(item.amount || 0), 0))
@@ -168,16 +197,39 @@ const filteredApplications = computed(() => {
   const rows = activeTab.value === 'application'
     ? applications.value.filter((item) => item.status === '待审批')
     : applications.value
-  const value = keyword.value.trim().toLowerCase()
-  return value ? rows.filter((item) => `${item.applicationNo}${item.productType}${item.fundPurpose}`.toLowerCase().includes(value)) : rows
+  const value = filters.keyword.trim().toLowerCase()
+  return rows.filter((item) => {
+    if (filters.status && item.status !== filters.status) return false
+    if (value && !`${item.applicationNo}${productName(item.productType)}${item.fundPurpose || ''}`.toLowerCase().includes(value)) return false
+    return true
+  })
 })
 
 const filteredLoans = computed(() => {
-  const value = keyword.value.trim().toLowerCase()
-  return value ? loans.value.filter((item) => `${item.loanNo}${item.productType}`.toLowerCase().includes(value)) : loans.value
+  const value = filters.keyword.trim().toLowerCase()
+  return loans.value.filter((item) => {
+    if (filters.status && item.status !== filters.status) return false
+    if (value && !`${item.loanNo}${productName(item.productType)}`.toLowerCase().includes(value)) return false
+    return true
+  })
 })
 
-const displayedCount = computed(() => activeTab.value === 'loan' ? filteredLoans.value.length : filteredApplications.value.length)
+function loanRowActions(row) {
+  const list = []
+  if (row.status === '还款中') {
+    list.push({
+      key: 'repay',
+      label: '还款计划',
+      onClick: () => router.push({ path: '/borrower/repayment', query: { loanId: row.id } }),
+    })
+  }
+  list.push({
+    key: 'detail',
+    label: '详情',
+    onClick: () => showLoan(row),
+  })
+  return list
+}
 
 function loanProgress(loan) {
   const amount = Number(loan.amount || 0)

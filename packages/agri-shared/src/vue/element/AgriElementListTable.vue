@@ -81,22 +81,22 @@
 
       <AgriVuePagination
         v-if="showPagination"
-        :page="page"
-        :page-size="pageSize"
+        :page="activePage"
+        :page-size="activePageSize"
         :total="resolvedTotal"
         :selected-count="selectedRows.length"
         :unit="totalUnit"
         :page-size-options="pageSizeOptions"
-        @update:page="emit('update:page', $event)"
-        @update:page-size="emit('update:pageSize', $event)"
-        @change="(p, s) => emit('page-change', p, s)"
+        @update:page="handlePageUpdate"
+        @update:page-size="handlePageSizeUpdate"
+        @change="handlePageChange"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import AgriVueToolbar from '../list/AgriVueToolbar.vue'
 import AgriVuePagination from '../list/AgriVuePagination.vue'
 import { useVueListColumns } from '../list/useVueListColumns'
@@ -106,6 +106,7 @@ import {
   DEFAULT_VUE_PAGE_SIZE,
   DEFAULT_VUE_PAGE_SIZES,
   MIN_RESIZABLE_COLUMN_WIDTH,
+  clampPage,
   readCellValue,
   type NormalizedVueColumn,
   type VueListColumn,
@@ -136,6 +137,8 @@ const props = withDefaults(
     resizable?: boolean
     lockedColumnKeys?: string[]
     showPagination?: boolean
+    /** 开启客户端自动分页切片（适合接口一次返回全量数据的台账）。 */
+    clientPagination?: boolean
     page?: number
     pageSize?: number
     total?: number
@@ -159,8 +162,9 @@ const props = withDefaults(
     resizable: true,
     lockedColumnKeys: undefined,
     showPagination: true,
-    page: 1,
-    pageSize: DEFAULT_VUE_PAGE_SIZE,
+    clientPagination: false,
+    page: undefined,
+    pageSize: undefined,
     total: undefined,
     totalUnit: '条',
     pageSizeOptions: () => [...DEFAULT_VUE_PAGE_SIZES],
@@ -189,7 +193,7 @@ const {
   toggleColumn,
   resetColumns,
 } = useVueListColumns(() => props.columns, {
-  storageKey: props.columnSettingsStorageKey,
+  storageKey: () => props.columnSettingsStorageKey,
   lockedKeys: props.lockedColumnKeys,
 })
 
@@ -228,8 +232,63 @@ function handleResetColumns() {
   })
 }
 
-const tableData = computed(() => [...props.data])
+const internalPage = ref<number>(props.page ?? 1)
+const internalPageSize = ref<number>(props.pageSize ?? DEFAULT_VUE_PAGE_SIZE)
+
+watch(
+  () => props.page,
+  (val) => {
+    if (val !== undefined) internalPage.value = val
+  },
+)
+watch(
+  () => props.pageSize,
+  (val) => {
+    if (val !== undefined) internalPageSize.value = val
+  },
+)
+
 const resolvedTotal = computed(() => (props.total !== undefined ? props.total : props.data.length))
+const activePageSize = computed(() => props.pageSize ?? internalPageSize.value)
+const activePage = computed(() => {
+  const raw = props.page ?? internalPage.value
+  return props.clientPagination ? clampPage(raw, resolvedTotal.value, activePageSize.value) : raw
+})
+
+watch(
+  () => props.data.length,
+  (len) => {
+    if (!props.clientPagination) return
+    const clamped = clampPage(internalPage.value, len, activePageSize.value)
+    if (clamped !== internalPage.value) {
+      internalPage.value = clamped
+      emit('update:page', clamped)
+    }
+  },
+)
+
+const tableData = computed(() => {
+  if (!props.clientPagination || !props.showPagination) return [...props.data]
+  const start = (activePage.value - 1) * activePageSize.value
+  return props.data.slice(start, start + activePageSize.value)
+})
+
+function handlePageUpdate(nextPage: number) {
+  internalPage.value = nextPage
+  emit('update:page', nextPage)
+}
+
+function handlePageSizeUpdate(nextSize: number) {
+  internalPageSize.value = nextSize
+  internalPage.value = 1
+  emit('update:pageSize', nextSize)
+}
+
+function handlePageChange(nextPage: number, nextSize: number) {
+  internalPage.value = nextPage
+  internalPageSize.value = nextSize
+  emit('page-change', nextPage, nextSize)
+}
 
 function extractRowKey(row: RowRecord): string {
   if (typeof props.rowKey === 'function') return props.rowKey(row)

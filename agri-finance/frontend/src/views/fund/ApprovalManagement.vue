@@ -2,19 +2,27 @@
   <section class="finance-page approval-page">
     <header class="finance-page-heading">
       <div>
-        <small>FINANCING DECISION CENTER</small>
-        <h1>审批管理</h1>
-        <p>结合主体信用、贸易背景、质押保障与 AI 预审完成审批决策，审批通过后自动形成可投资产。</p>
+        <small>{{ isAdmin ? 'OPERATIONS APPROVAL LEDGER' : 'FINANCING DECISION CENTER' }}</small>
+        <h1>{{ isAdmin ? '借款审批' : '审批管理' }}</h1>
+        <p>{{ isAdmin
+          ? '集中查看全平台融资申请、AI 预审、审批流转与待签合同进度，保障风险可控。'
+          : '结合主体信用、贸易背景、质押保障与 AI 预审完成审批决策，审批通过后自动形成可投资产。' }}</p>
       </div>
       <div class="finance-page-heading-actions">
-        <el-button class="finance-ghost-button" :loading="loading" @click="load">刷新申请</el-button>
-        <el-button class="finance-action-button" @click="router.push('/fund/risk-center')">进入风控中台</el-button>
+        <el-button class="finance-action-button" @click="router.push(isAdmin ? '/admin/risk' : '/fund/risk-center')">
+          {{ isAdmin ? '查看风险规则' : '进入风控中台' }}
+        </el-button>
       </div>
     </header>
 
     <div v-if="error" class="approval-error">
       <span>{{ error }}</span>
       <el-button link @click="load">重新加载</el-button>
+    </div>
+
+    <div v-if="overview && isAdmin && !canSubmitReview" class="approval-notice">
+      <span>当前为平台运营全局监管视图（未绑定资金机构）：可查看全部审批台账与详情；执行放款审批与合同落签请使用已绑定资金机构的账号，或在「资金机构」中完成主体绑定。</span>
+      <el-button link class="finance-link-button" @click="router.push('/admin/fund-provider')">前往资金机构 →</el-button>
     </div>
 
     <el-skeleton v-if="loading && !overview" :rows="9" animated />
@@ -44,131 +52,125 @@
         </div>
       </section>
 
-      <section v-if="pendingContracts.length" class="finance-card approval-contracts">
-        <div class="finance-card-head">
-          <strong>待签署借款合同</strong>
-          <small>{{ pendingContracts.length }} 份 · 资金方签署后系统立即放款并生成还款计划</small>
-        </div>
-        <el-table :data="pendingContracts" style="width: 100%">
-          <el-table-column label="合同与主体" min-width="210">
-            <template #default="{ row }">
-              <div class="approval-subject">
-                <span>{{ row.userName?.slice(0, 1) || '合' }}</span>
-                <div>
-                  <strong>{{ row.userName || row.userId }}</strong>
-                  <small>{{ row.contractNo }}</small>
-                </div>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="金额/期限" min-width="130" align="right">
-            <template #default="{ row }">
-              <strong class="approval-amount">{{ money(row.amount) }}</strong>
-              <small class="approval-rate">{{ row.term || 0 }} 个月 · {{ number(row.rate) }}%</small>
-            </template>
-          </el-table-column>
-          <el-table-column label="融资方" width="110">
-            <template #default="{ row }">
-              <FinanceStatus :value="row.borrowerSignTime ? '已签署' : '待签署'" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="150" align="right">
-            <template #default="{ row }">
-              <el-button
-                v-if="row.borrowerSignTime"
-                class="finance-action-button"
-                :loading="signingId === row.id"
-                @click="lenderSign(row)"
-              >签署并放款</el-button>
-              <span v-else class="approval-muted">等待融资方签署</span>
-            </template>
-          </el-table-column>
-        </el-table>
-      </section>
+      <AgriElementListTable
+        v-if="pendingContracts.length"
+        :columns="contractColumns"
+        :data="pendingContracts"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        :column-settings-storage-key="isAdmin ? 'agri-finance:admin-approval-contracts' : 'agri-finance:fund-approval-contracts'"
+        empty-text="暂无待签署借款合同"
+        @refresh="load"
+      >
+        <template #toolbar-left>
+          <strong class="finance-table-title">待签署借款合同</strong>
+          <small class="approval-muted">{{ pendingContracts.length }} 份 · 资金方签署后系统立即放款并生成还款计划</small>
+        </template>
+        <template #cell-subject="{ row }">
+          <div class="approval-subject">
+            <span>{{ row.userName?.slice(0, 1) || '合' }}</span>
+            <div>
+              <strong>{{ row.userName || row.userId }}</strong>
+              <small>{{ row.contractNo }}</small>
+            </div>
+          </div>
+        </template>
+        <template #cell-amount="{ row }">
+          <strong class="approval-amount">{{ money(row.amount) }}</strong>
+          <small class="approval-rate">{{ row.term || 0 }} 个月 · {{ number(row.rate) }}%</small>
+        </template>
+        <template #cell-borrowerSign="{ row }">
+          <FinanceStatus :value="row.borrowerSignTime ? '已签署' : '待签署'" />
+        </template>
+        <template #cell-actions="{ row }">
+          <AgriVueRowActions v-if="row.borrowerSignTime && canSubmitReview" :actions="contractRowActions(row)" />
+          <span v-else-if="row.borrowerSignTime" class="approval-muted">待资金机构签署</span>
+          <span v-else class="approval-muted">等待融资方签署</span>
+        </template>
+      </AgriElementListTable>
 
       <section class="approval-workbench">
-        <main class="finance-card approval-table-card">
-          <div class="approval-toolbar">
+        <AgriElementListTable
+          :columns="approvalColumns"
+          :data="filteredItems"
+          :row-key="(row) => String(row.application?.id || '')"
+          :loading="loading"
+          client-pagination
+          :column-settings-storage-key="isAdmin ? 'agri-finance:admin-approvals' : 'agri-finance:fund-approvals'"
+          empty-text="暂无匹配申请，请调整筛选条件或等待新的融资申请"
+          @refresh="load"
+        >
+          <template #filter>
+            <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+              <div class="agri-vue-filter-field">
+                <label>关键字</label>
+                <el-input
+                  v-model="draft.keyword"
+                  clearable
+                  placeholder="搜索申请编号、主体、产品"
+                  @keyup.enter="applyFilter"
+                />
+              </div>
+              <div class="agri-vue-filter-field">
+                <label>审批状态</label>
+                <el-select v-model="draft.status" placeholder="全部状态">
+                  <el-option v-for="item in tabs" :key="item.key" :label="`${item.label}（${countFor(item.key)}）`" :value="item.key" />
+                </el-select>
+              </div>
+            </AgriVueFilterBar>
+          </template>
+          <template #toolbar-left>
             <div class="finance-tabs">
               <button
                 v-for="item in tabs"
                 :key="item.key"
                 type="button"
                 :class="{ on: filter === item.key }"
-                @click="filter = item.key"
+                @click="selectTab(item.key)"
               >
                 {{ item.label }}<span>{{ countFor(item.key) }}</span>
               </button>
             </div>
-            <el-input
-              v-model="keyword"
-              :prefix-icon="Search"
-              clearable
-              placeholder="搜索申请编号、主体、产品"
-            />
-          </div>
-
-          <el-table v-if="filteredItems.length" :data="filteredItems" style="width: 100%">
-            <el-table-column label="申请主体" min-width="205">
-              <template #default="{ row }">
-                <div class="approval-subject">
-                  <span>{{ row.application.userName?.slice(0, 1) || '农' }}</span>
-                  <div>
-                    <strong>{{ row.application.userName }}</strong>
-                    <small>{{ row.application.applicationNo }}</small>
-                  </div>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="产品与用途" min-width="175">
-              <template #default="{ row }">
-                <strong class="approval-product">{{ productName(row.application.productType) }}</strong>
-                <p class="approval-purpose">{{ row.application.fundPurpose || '未填写用途' }}</p>
-              </template>
-            </el-table-column>
-            <el-table-column label="申请/审批金额" min-width="145" align="right">
-              <template #default="{ row }">
-                <strong class="approval-amount">{{ money(row.application.applyAmount) }}</strong>
-                <small v-if="row.application.actualAmount" class="approval-approved-amount">批准 {{ money(row.application.actualAmount) }}</small>
-              </template>
-            </el-table-column>
-            <el-table-column label="期限/利率" width="105">
-              <template #default="{ row }">
-                <span class="approval-term">{{ row.application.applyTerm }} 个月</span>
-                <small class="approval-rate">{{ number(row.application.actualRate || row.application.suggestedRate) }}%</small>
-              </template>
-            </el-table-column>
-            <el-table-column label="AI 预审" width="115">
-              <template #default="{ row }">
-                <div class="approval-ai">
-                  <FinanceStatus :value="row.application.aiReviewResult" />
-                  <small>{{ confidencePercent(row.application.aiConfidence) }}%</small>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="95">
-              <template #default="{ row }"><FinanceStatus :value="row.application.status" /></template>
-            </el-table-column>
-            <el-table-column label="后续资产" min-width="125">
-              <template #default="{ row }">
-                <el-button v-if="row.generatedAsset" link class="finance-link-button" @click="openAsset(row)">已转资产 →</el-button>
-                <span v-else-if="row.application.status === '已通过'" class="approval-legacy">历史审批</span>
-                <span v-else class="approval-muted">审批后生成</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="105" align="right">
-              <template #default="{ row }">
-                <el-button v-if="row.canReview" class="finance-action-button" @click="openDecision(row)">审批</el-button>
-                <el-button v-else link class="finance-link-button" @click="openDecision(row)">详情</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div v-else class="finance-empty approval-empty">
-            <strong>暂无匹配申请</strong>
-            <p>请调整筛选条件或等待新的融资申请。</p>
-          </div>
-        </main>
+          </template>
+          <template #cell-subject="{ row }">
+            <div class="approval-subject">
+              <span>{{ row.application.userName?.slice(0, 1) || '农' }}</span>
+              <div>
+                <strong>{{ row.application.userName }}</strong>
+                <small>{{ row.application.applicationNo }}</small>
+              </div>
+            </div>
+          </template>
+          <template #cell-product="{ row }">
+            <strong class="approval-product">{{ productName(row.application.productType) }}</strong>
+            <p class="approval-purpose">{{ row.application.fundPurpose || '未填写用途' }}</p>
+          </template>
+          <template #cell-amount="{ row }">
+            <strong class="approval-amount">{{ money(row.application.applyAmount) }}</strong>
+            <small v-if="row.application.actualAmount" class="approval-approved-amount">批准 {{ money(row.application.actualAmount) }}</small>
+          </template>
+          <template #cell-term="{ row }">
+            <span class="approval-term">{{ row.application.applyTerm }} 个月</span>
+            <small class="approval-rate">{{ number(row.application.actualRate || row.application.suggestedRate) }}%</small>
+          </template>
+          <template #cell-ai="{ row }">
+            <div class="approval-ai">
+              <FinanceStatus :value="row.application.aiReviewResult" />
+              <small>{{ confidencePercent(row.application.aiConfidence) }}%</small>
+            </div>
+          </template>
+          <template #cell-status="{ row }"><FinanceStatus :value="row.application.status" /></template>
+          <template #cell-asset="{ row }">
+            <el-button v-if="row.generatedAsset && canOpenAsset" link class="finance-link-button" @click="openAsset(row)">已转资产 →</el-button>
+            <span v-else-if="row.generatedAsset" class="approval-legacy">已转资产</span>
+            <span v-else-if="row.application.status === '已通过'" class="approval-legacy">历史审批</span>
+            <span v-else class="approval-muted">审批后生成</span>
+          </template>
+          <template #cell-actions="{ row }">
+            <AgriVueRowActions :actions="approvalRowActions(row)" />
+          </template>
+        </AgriElementListTable>
 
         <aside class="approval-aside">
           <section class="finance-card">
@@ -192,7 +194,7 @@
       </section>
     </template>
 
-    <el-dialog v-model="decisionOpen" :title="selected?.canReview ? '融资审批决策' : '审批详情'" width="min(760px, 94vw)">
+    <el-dialog v-model="decisionOpen" :title="canReviewSelected ? '融资审批决策' : '审批详情'" width="min(760px, 94vw)">
       <div v-if="selected" class="approval-dialog">
         <section class="approval-dialog-head">
           <div class="approval-subject-mark">{{ selected.application.userName?.slice(0, 1) || '农' }}</div>
@@ -218,7 +220,7 @@
           <div><span>补充材料</span><p><a v-if="selected.application.evidenceUrl" :href="selected.application.evidenceUrl" target="_blank" rel="noreferrer">查看申请材料</a><template v-else>暂未上传</template></p></div>
         </section>
 
-        <template v-if="selected.canReview">
+        <template v-if="canReviewSelected">
           <section class="approval-check-list">
             <div><span>1</span><p><strong>主体与经营真实性</strong><small>平台交易、履约、结算与信用记录已交叉核验</small></p></div>
             <div><span>2</span><p><strong>资金用途与还款来源</strong><small>融资用途明确，销售回款可覆盖本息</small></p></div>
@@ -258,14 +260,15 @@
           </div>
           <div v-if="selected.generatedAsset">
             <span>形成的可投资产</span>
-            <el-button link class="finance-link-button" @click="openAsset(selected)">{{ selected.generatedAsset.assetName }} →</el-button>
+            <el-button v-if="canOpenAsset" link class="finance-link-button" @click="openAsset(selected)">{{ selected.generatedAsset.assetName }} →</el-button>
+            <p v-else>{{ selected.generatedAsset.assetName }}</p>
           </div>
         </section>
       </div>
 
       <template #footer>
-        <el-button class="finance-ghost-button" @click="decisionOpen = false">{{ selected?.canReview ? '取消' : '关闭' }}</el-button>
-        <template v-if="selected?.canReview">
+        <el-button class="finance-ghost-button" @click="decisionOpen = false">{{ canReviewSelected ? '取消' : '关闭' }}</el-button>
+        <template v-if="canReviewSelected">
           <el-button type="danger" plain :loading="reviewing" @click="submitDecision('已拒绝')">拒绝申请</el-button>
           <el-button class="finance-action-button" :loading="reviewing" @click="submitDecision('已通过')">通过并生成资产</el-button>
         </template>
@@ -275,28 +278,95 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, money, productName, shortDate } from '@/api/finance'
+import { hasFinancePermission } from '@/auth'
 
+const contractColumns = [
+  { key: 'subject', label: '合同与主体', minWidth: 215, locked: true, ellipsis: false },
+  { key: 'amount', label: '金额/期限', kind: 'number', minWidth: 140, ellipsis: false },
+  { key: 'borrowerSign', label: '融资方签署', kind: 'status', width: 118 },
+  { key: 'actions', label: '操作', kind: 'action', width: 130 },
+]
+
+const approvalColumns = [
+  { key: 'subject', label: '申请主体', minWidth: 210, locked: true, ellipsis: false },
+  { key: 'product', label: '产品与用途', minWidth: 180, ellipsis: false },
+  { key: 'amount', label: '申请/审批金额', kind: 'number', minWidth: 150, ellipsis: false },
+  { key: 'term', label: '期限/利率', kind: 'number', width: 110, ellipsis: false },
+  { key: 'ai', label: 'AI 预审', minWidth: 130, ellipsis: false },
+  { key: 'status', label: '状态', kind: 'status', width: 96 },
+  { key: 'asset', label: '后续资产', minWidth: 120, ellipsis: false },
+  { key: 'actions', label: '操作', kind: 'action', width: 110 },
+]
+
+const route = useRoute()
 const router = useRouter()
+const isAdmin = computed(() => route.path.startsWith('/admin'))
+const canOpenAsset = computed(() => hasFinancePermission('finance:fund'))
 const loading = ref(true)
 const reviewing = ref(false)
 const error = ref('')
 const overview = ref(null)
 const filter = ref('pending')
 const keyword = ref('')
+const draft = reactive({ keyword: '', status: 'pending' })
 const decisionOpen = ref(false)
+
+function applyFilter() {
+  keyword.value = draft.keyword
+  filter.value = draft.status || 'all'
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = 'all'
+  applyFilter()
+}
+
+function selectTab(key) {
+  filter.value = key
+  draft.status = key
+}
+
+function contractRowActions(row) {
+  return [
+    {
+      key: 'sign',
+      label: signingId.value === row.id ? '签署中…' : '签署并放款',
+      disabled: signingId.value === row.id,
+      onClick: () => lenderSign(row),
+    },
+  ]
+}
+
+function approvalRowActions(row) {
+  const list = []
+  if (canReviewRow(row)) {
+    list.push({ key: 'review', label: '审批', onClick: () => openDecision(row) })
+  } else {
+    list.push({ key: 'detail', label: '详情', onClick: () => openDecision(row) })
+  }
+  if (row.generatedAsset && canOpenAsset.value) {
+    list.push({ key: 'asset', label: '查看资产', onClick: () => openAsset(row) })
+  }
+  return list
+}
 const selected = ref(null)
 const reviewAmount = ref('')
 const reviewRate = ref('')
 const reviewOpinion = ref('')
 const contracts = ref([])
 const signingId = ref('')
+
+const canSubmitReview = computed(() => Boolean(overview.value?.canSubmitReview))
+const canReviewRow = (row) => Boolean(row?.canReview && canSubmitReview.value)
+const canReviewSelected = computed(() => canReviewRow(selected.value))
 
 const pendingContracts = computed(() => contracts.value.filter((item) => item.signStatus !== '已签署'))
 
@@ -429,7 +499,7 @@ async function load() {
   error.value = ''
   try {
     const [overviewData, contractData] = await Promise.all([
-      operationsApi.approvalOverview(),
+      operationsApi.approvalOverview(isAdmin.value ? 'admin' : ''),
       operationsApi.contracts(),
     ])
     overview.value = overviewData
@@ -442,11 +512,13 @@ async function load() {
 }
 
 onMounted(load)
+watch(isAdmin, () => { load() })
 </script>
 
 <style scoped>
-.approval-error { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border: 1px solid #efd4ce; border-radius: 10px; background: #fff8f6; color: #a44f3f; font-size: var(--fin-fs-xs); }
-.approval-overview { display: grid; grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--fin-line); border-radius: 14px; background: #fff; }
+.approval-error { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border: 1px solid #efd4ce; border-radius: 8px; background: #fff8f6; color: #a44f3f; font-size: var(--fin-fs-xs); }
+.approval-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid #d9ebe0; border-radius: 8px; background: #f3faf6; color: #24573a; font-size: var(--fin-fs-xs); line-height: 1.5; }
+.approval-overview { display: grid; grid-template-columns: 1.2fr repeat(3, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--fin-line); border-radius: 8px; background: #fff; }
 .approval-overview > div { min-width: 0; padding: 15px 17px; border-left: 1px solid #edf2ee; }
 .approval-overview > div:first-child { border-left: 0; }
 .approval-overview-primary { background: linear-gradient(135deg, #0a432c, #116b49); color: #fff; }
@@ -465,7 +537,7 @@ onMounted(load)
 .approval-toolbar :deep(.el-input) { width: 260px; }
 .finance-tabs button > span { margin-left: 4px; color: #91a097; font-size: var(--fin-fs-xs); }
 .approval-subject { display: flex; align-items: center; gap: 8px; }
-.approval-subject > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #e8f5ee; color: #27704d; font-size: var(--fin-fs-xs); font-weight: 700; }
+.approval-subject > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #e8f5ee; color: #27704d; font-size: var(--fin-fs-xs); font-weight: 600; }
 .approval-subject strong, .approval-subject small { display: block; }
 .approval-subject strong { color: #3a5544; font-size: var(--fin-fs-xs); }
 .approval-subject small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
@@ -483,19 +555,19 @@ onMounted(load)
 .approval-todo { padding: 4px 13px 10px; }
 .approval-todo > div { display: flex; gap: 8px; padding: 10px 0; border-top: 1px solid #edf2ee; }
 .approval-todo > div:first-child { border-top: 0; }
-.approval-todo-icon { display: grid; width: 30px; height: 30px; place-items: center; flex: 0 0 auto; border-radius: 8px; font-size: var(--fin-fs-xs); font-weight: 700; }
+.approval-todo-icon { display: grid; width: 30px; height: 30px; place-items: center; flex: 0 0 auto; border-radius: 8px; font-size: var(--fin-fs-xs); font-weight: 600; }
 .approval-todo-icon.amber { background: #fff3df; color: #a67426; }
 .approval-todo-icon.green { background: #e8f6ee; color: #20744c; }
 .approval-todo strong { color: #405948; font-size: var(--fin-fs-xs); }
 .approval-todo p { margin: 3px 0 0; color: #85958c; font-size: var(--fin-fs-xs); line-height: 1.5; }
-.approval-guideline { padding: 16px; border-radius: 13px; background: linear-gradient(145deg, #edf8f2, #f9fcfa); }
+.approval-guideline { padding: 16px; border-radius: 8px; background: linear-gradient(145deg, #edf8f2, #f9fcfa); }
 .approval-guideline > span { color: #6f8778; font-size: var(--fin-fs-xs); }
 .approval-guideline h3 { margin: 5px 0 7px; color: #28573b; font-size: 14px; }
 .approval-guideline p { margin: 0; color: #6d8275; font-size: var(--fin-fs-xs); line-height: 1.65; }
 .approval-guideline ul { margin: 9px 0 0; padding-left: 14px; color: #778b7e; font-size: var(--fin-fs-xs); line-height: 1.8; }
 .approval-dialog { display: grid; gap: 12px; }
 .approval-dialog-head { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 11px; background: #f5faf7; }
-.approval-subject-mark { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; border-radius: 11px; background: #e0f1e7; color: #1b7048; font-size: 13px; font-weight: 800; }
+.approval-subject-mark { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; border-radius: 11px; background: #e0f1e7; color: #1b7048; font-size: 13px; font-weight: 600; }
 .approval-dialog-head > div:nth-child(2) { min-width: 0; flex: 1; }
 .approval-dialog-head small, .approval-dialog-head h2, .approval-dialog-head p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .approval-dialog-head small { color: #8a9991; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }

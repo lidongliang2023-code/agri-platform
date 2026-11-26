@@ -28,16 +28,26 @@
     </div>
 
     <div class="ops-dashboard-layout">
-      <section class="finance-card">
-        <div class="finance-card-head"><strong>审批队列</strong><el-button link class="finance-link-button" @click="$router.push('/admin/approval')">全部 →</el-button></div>
-        <el-table v-if="applications.length" :data="applications.slice(0, 6)" style="width: 100%">
-          <el-table-column label="融资主体" min-width="160"><template #default="{ row }"><div class="ops-subject"><span>{{ row.userName?.slice(0, 1) || '农' }}</span><div><strong>{{ row.userName }}</strong><small>{{ row.applicationNo }}</small></div></div></template></el-table-column>
-          <el-table-column label="产品" min-width="100"><template #default="{ row }">{{ productName(row.productType) }}</template></el-table-column>
-          <el-table-column label="申请金额" min-width="110" align="right"><template #default="{ row }">{{ compactMoney(row.applyAmount) }}</template></el-table-column>
-          <el-table-column label="状态" width="90"><template #default="{ row }"><FinanceStatus :value="row.status" /></template></el-table-column>
-        </el-table>
-        <div v-else class="finance-empty"><strong>暂无融资申请</strong><p>新的融资申请会进入审批队列。</p></div>
-      </section>
+      <AgriElementListTable
+        :columns="queueColumns"
+        :data="applications"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-finance:admin-workbench-queue"
+        empty-text="暂无融资申请，新的融资申请会进入审批队列"
+        @refresh="load"
+      >
+        <template #toolbar-left>
+          <strong class="finance-table-title">审批队列</strong>
+          <el-button link class="finance-link-button" @click="$router.push('/admin/approval')">全部 →</el-button>
+        </template>
+        <template #cell-subject="{ row }"><div class="ops-subject"><span>{{ row.userName?.slice(0, 1) || '农' }}</span><div><strong>{{ row.userName }}</strong><small>{{ row.applicationNo }}</small></div></div></template>
+        <template #cell-productType="{ row }">{{ productName(row.productType) }}</template>
+        <template #cell-applyAmount="{ row }">{{ compactMoney(row.applyAmount) }}</template>
+        <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      </AgriElementListTable>
 
       <aside class="ops-side">
         <section class="finance-card">
@@ -77,9 +87,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, money, productName } from '@/api/finance'
+
+const queueColumns = [
+  { key: 'subject', label: '融资主体', minWidth: 175, locked: true, ellipsis: false },
+  { key: 'productType', prop: 'productType', label: '产品', minWidth: 105 },
+  { key: 'applyAmount', prop: 'applyAmount', label: '申请金额', kind: 'number', minWidth: 110 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+]
 
 const loading = ref(true)
 const applications = ref([])
@@ -125,8 +143,8 @@ onMounted(load)
 </script>
 
 <style scoped>
-.ops-hero { display: flex; min-height: 180px; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 28px; border-radius: 18px; background: radial-gradient(circle at 88% 9%, rgba(131, 228, 170, .18), transparent 13rem), linear-gradient(135deg, #083c27, #0f7048); color: #fff; }
-.ops-hero > div:first-child > span { color: #a9dfbe; font-size: var(--fin-fs-xs); letter-spacing: .12em; font-weight: 800; }
+.ops-hero { display: flex; min-height: 180px; align-items: center; justify-content: space-between; gap: 24px; padding: 24px 28px; border-radius: 8px; background: radial-gradient(circle at 88% 9%, rgba(131, 228, 170, .18), transparent 13rem), linear-gradient(135deg, #083c27, #0f7048); color: #fff; }
+.ops-hero > div:first-child > span { color: #a9dfbe; font-size: var(--fin-fs-xs); letter-spacing: .12em; font-weight: 600; }
 .ops-hero h1 { margin: 9px 0 5px; font-size: 26px; }
 .ops-hero p { margin: 0; color: rgba(255, 255, 255, .6); font-size: var(--fin-fs-xs); }
 .ops-hero > div:first-child > div { display: flex; align-items: baseline; gap: 5px; margin-top: 18px; }
@@ -141,7 +159,7 @@ onMounted(load)
 .finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 .ops-dashboard-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); align-items: start; gap: 14px; }
 .ops-subject { display: flex; align-items: center; gap: 8px; }
-.ops-subject > span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 700; }
+.ops-subject > span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 600; }
 .ops-subject strong, .ops-subject small { display: block; }
 .ops-subject strong { color: #3a5544; font-size: var(--fin-fs-xs); }
 .ops-subject small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
@@ -149,7 +167,7 @@ onMounted(load)
 .ops-alert-list { display: grid; }
 .ops-alert-list button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 11px 13px; border: 0; border-top: 1px solid #edf2ee; background: #fff; text-align: left; cursor: pointer; }
 .ops-alert-list button:first-child { border-top: 0; }
-.ops-alert-level { padding: 3px 7px; border-radius: 7px; background: #fff1e1; color: #a76712; font-size: var(--fin-fs-xs); font-weight: 700; }
+.ops-alert-level { padding: 3px 7px; border-radius: 7px; background: #fff1e1; color: #a76712; font-size: var(--fin-fs-xs); font-weight: 600; }
 .ops-alert-list button > div { min-width: 0; }
 .ops-alert-list strong, .ops-alert-list p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ops-alert-list strong { color: #425b4b; font-size: var(--fin-fs-xs); }

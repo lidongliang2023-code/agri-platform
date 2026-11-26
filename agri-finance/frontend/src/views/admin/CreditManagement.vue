@@ -27,17 +27,41 @@
     </div>
 
     <div class="credit-admin-layout">
-      <section class="finance-card">
-        <div class="finance-card-head"><strong>该主体融资申请</strong><small>{{ subjectApplications.length }} 条记录</small></div>
-        <el-table :data="subjectApplications" style="width: 100%">
-          <el-table-column prop="applicationNo" label="申请编号" min-width="150" />
-          <el-table-column label="产品" min-width="100"><template #default="{ row }">{{ productName(row.productType) }}</template></el-table-column>
-          <el-table-column label="申请金额" min-width="110" align="right"><template #default="{ row }">{{ compactMoney(row.applyAmount) }}</template></el-table-column>
-          <el-table-column label="期限" width="75" align="center"><template #default="{ row }">{{ row.applyTerm }} 月</template></el-table-column>
-          <el-table-column label="状态" width="90"><template #default="{ row }"><FinanceStatus :value="row.status" /></template></el-table-column>
-        </el-table>
-        <div v-if="!subjectApplications.length" class="finance-empty"><strong>暂无融资申请</strong><p>该主体还没有发起融资申请。</p></div>
-      </section>
+      <AgriElementListTable
+        :columns="applicationColumns"
+        :data="filteredSubjectApplications"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        column-settings-storage-key="agri-finance:admin-credit-applications"
+        empty-text="该主体暂无匹配的融资申请记录"
+        @refresh="loadSubjects"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+            <div class="agri-vue-filter-field">
+              <label>申请编号</label>
+              <el-input v-model="draft.keyword" clearable placeholder="请输入申请编号 / 产品" @keyup.enter="applyFilter" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>申请状态</label>
+              <el-select v-model="draft.status" clearable placeholder="全部状态">
+                <el-option label="全部" value="" />
+                <el-option label="待审批" value="待审批" />
+                <el-option label="已通过" value="已通过" />
+                <el-option label="已拒绝" value="已拒绝" />
+              </el-select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <strong class="finance-table-title">该主体融资申请</strong>
+        </template>
+        <template #cell-productType="{ row }">{{ productName(row.productType) }}</template>
+        <template #cell-applyAmount="{ row }">{{ compactMoney(row.applyAmount) }}</template>
+        <template #cell-applyTerm="{ row }">{{ row.applyTerm }} 月</template>
+        <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      </AgriElementListTable>
       <aside class="finance-card">
         <div class="finance-card-head"><strong>风险画像</strong><CreditCard /></div>
         <div class="credit-risk-list">
@@ -52,17 +76,40 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CreditCard } from '@element-plus/icons-vue'
+import { AgriElementListTable, AgriVueFilterBar } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, productName } from '@/api/finance'
+
+const applicationColumns = [
+  { key: 'applicationNo', prop: 'applicationNo', label: '申请编号', kind: 'code', minWidth: 155, locked: true },
+  { key: 'productType', prop: 'productType', label: '产品', minWidth: 110 },
+  { key: 'applyAmount', prop: 'applyAmount', label: '申请金额', kind: 'number', minWidth: 115 },
+  { key: 'applyTerm', prop: 'applyTerm', label: '期限', kind: 'number', width: 85, align: 'center' },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+]
 
 const loading = ref(true)
 const applications = ref([])
 const subjectId = ref('')
 const credit = ref(null)
+const draft = reactive({ keyword: '', status: '' })
+const query = reactive({ keyword: '', status: '' })
+
+function applyFilter() {
+  query.keyword = draft.keyword
+  query.status = draft.status
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = ''
+  applyFilter()
+}
+
 const subjects = computed(() => {
   const map = new Map()
   applications.value.forEach((item) => map.set(String(item.userId), item.userName || String(item.userId)))
@@ -70,6 +117,14 @@ const subjects = computed(() => {
 })
 const selectedSubjectName = computed(() => subjects.value.find((item) => item.id === subjectId.value)?.name || subjectId.value)
 const subjectApplications = computed(() => applications.value.filter((item) => String(item.userId) === String(subjectId.value)))
+const filteredSubjectApplications = computed(() => {
+  const kw = query.keyword.trim().toLowerCase()
+  return subjectApplications.value.filter((item) => {
+    if (query.status && item.status !== query.status) return false
+    if (kw && !`${item.applicationNo || ''}${productName(item.productType)}`.toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 
 async function loadSubjects() {
   loading.value = true
@@ -96,12 +151,12 @@ onMounted(loadSubjects)
 </script>
 
 <style scoped>
-.credit-search-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--fin-line); border-radius: 13px; background: #fff; }
+.credit-search-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--fin-line); border-radius: 8px; background: #fff; }
 .credit-search-card > div { display: flex; flex-direction: column; margin-right: auto; }
 .credit-search-card span { color: #8a9990; font-size: var(--fin-fs-xs); }
 .credit-search-card strong { margin-top: 2px; color: #3e5848; font-size: var(--fin-fs-xs); }
 .credit-search-card :deep(.el-select) { width: 280px; }
-.credit-profile-hero { display: flex; align-items: center; gap: 18px; padding: 21px 24px; border-radius: 16px; background: radial-gradient(circle at 88% 9%, rgba(131, 228, 170, .18), transparent 13rem), linear-gradient(135deg, #083c27, #0f7048); color: #fff; }
+.credit-profile-hero { display: flex; align-items: center; gap: 18px; padding: 21px 24px; border-radius: 8px; background: radial-gradient(circle at 88% 9%, rgba(131, 228, 170, .18), transparent 13rem), linear-gradient(135deg, #083c27, #0f7048); color: #fff; }
 .credit-profile-score { display: flex; width: 90px; height: 90px; align-items: center; justify-content: center; flex-direction: column; border: 1px solid rgba(255, 255, 255, .16); border-radius: 50%; background: rgba(255, 255, 255, .08); }
 .credit-profile-score strong { font-family: ui-monospace, Consolas, monospace; font-size: 27px; }
 .credit-profile-score span { color: rgba(255, 255, 255, .5); font-size: var(--fin-fs-xs); }

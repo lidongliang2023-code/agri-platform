@@ -15,7 +15,7 @@ import {
 } from './vueListUtils'
 
 export interface UseVueListColumnsOptions {
-  storageKey?: string | false
+  storageKey?: string | false | (() => string | false | undefined)
   lockedKeys?: string[]
   storage?: StorageLike | null
 }
@@ -52,16 +52,20 @@ export function useVueListColumns(
   const normalizedColumns = computed(() => meta.value.columns)
   const lockedKeys = computed(() => meta.value.lockedKeys)
 
+  const resolvedStorageKey = computed<string | false | undefined>(() =>
+    typeof options.storageKey === 'function' ? options.storageKey() : options.storageKey,
+  )
+
   const hiddenKeys = ref<string[]>(
-    loadStoredHiddenKeys(storage, options.storageKey, meta.value.lockedKeys, meta.value.defaultHiddenKeys),
+    loadStoredHiddenKeys(storage, resolvedStorageKey.value, meta.value.lockedKeys, meta.value.defaultHiddenKeys),
   )
 
   watch(
-    () => [options.storageKey, meta.value.lockedKeys.join('|')] as const,
+    () => [resolvedStorageKey.value, meta.value.lockedKeys.join('|')] as const,
     () => {
       hiddenKeys.value = loadStoredHiddenKeys(
         storage,
-        options.storageKey,
+        resolvedStorageKey.value,
         meta.value.lockedKeys,
         meta.value.defaultHiddenKeys,
       )
@@ -81,13 +85,13 @@ export function useVueListColumns(
     const next = nextVisible
       ? hiddenKeys.value.filter((item: string) => item !== key)
       : [...hiddenKeys.value, key]
-    hiddenKeys.value = saveStoredHiddenKeys(storage, options.storageKey, next, lockedKeys.value)
+    hiddenKeys.value = saveStoredHiddenKeys(storage, resolvedStorageKey.value, next, lockedKeys.value)
   }
 
   const resetColumns = (): void => {
     hiddenKeys.value = saveStoredHiddenKeys(
       storage,
-      options.storageKey,
+      resolvedStorageKey.value,
       meta.value.defaultHiddenKeys,
       lockedKeys.value,
     )

@@ -133,38 +133,32 @@
             </div>
           </div>
 
-          <section class="finance-card workbench-investments">
-            <div class="finance-card-head">
-              <strong>最近投资</strong>
+          <AgriElementListTable
+            :columns="investmentColumns"
+            :data="investments"
+            row-key="id"
+            :loading="loading"
+            client-pagination
+            :page-size="10"
+            column-settings-storage-key="agri-finance:fund-workbench-investments"
+            empty-text="尚未配置资产，从资产市场完成首笔资金配置后会显示投资和回款进度"
+            @refresh="load"
+          >
+            <template #toolbar-left>
+              <strong class="finance-table-title">最近投资</strong>
               <el-button link class="finance-link-button" @click="router.push('/fund/my-investment')">全部投资 →</el-button>
-            </div>
-            <el-table v-if="investments.length" :data="investments" style="width: 100%">
-              <el-table-column label="资产" min-width="210">
-                <template #default="{ row }">
-                  <div class="investment-asset-cell">
-                    <span>资</span>
-                    <div><strong>{{ row.assetName }}</strong><small>{{ row.investmentNo }}</small></div>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column label="配置金额" min-width="115" align="right">
-                <template #default="{ row }">{{ money(row.investmentAmount) }}</template>
-              </el-table-column>
-              <el-table-column label="预期收益" min-width="105" align="right">
-                <template #default="{ row }">{{ money(row.expectedReturn) }}</template>
-              </el-table-column>
-              <el-table-column label="到期日" min-width="110">
-                <template #default="{ row }">{{ dateOnly(row.expectedReturnTime) }}</template>
-              </el-table-column>
-              <el-table-column label="状态" width="90">
-                <template #default="{ row }"><FinanceStatus :value="row.status" /></template>
-              </el-table-column>
-            </el-table>
-            <div v-else class="finance-empty">
-              <strong>尚未配置资产</strong>
-              <p>从资产市场完成首笔资金配置后，这里会显示投资和回款进度。</p>
-            </div>
-          </section>
+            </template>
+            <template #cell-asset="{ row }">
+              <div class="investment-asset-cell">
+                <span>资</span>
+                <div><strong>{{ row.assetName }}</strong><small>{{ row.investmentNo }}</small></div>
+              </div>
+            </template>
+            <template #cell-investmentAmount="{ row }">{{ money(row.investmentAmount) }}</template>
+            <template #cell-expectedReturn="{ row }">{{ money(row.expectedReturn) }}</template>
+            <template #cell-expectedReturnTime="{ row }">{{ dateOnly(row.expectedReturnTime) }}</template>
+            <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+          </AgriElementListTable>
         </section>
 
         <aside class="workbench-aside">
@@ -215,9 +209,18 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Checked, DataAnalysis, Money } from '@element-plus/icons-vue'
+import { AgriElementListTable } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, money, shortDate } from '@/api/finance'
+
+const investmentColumns = [
+  { key: 'asset', label: '资产', minWidth: 215, locked: true, ellipsis: false },
+  { key: 'investmentAmount', prop: 'investmentAmount', label: '配置金额', kind: 'number', minWidth: 115 },
+  { key: 'expectedReturn', prop: 'expectedReturn', label: '预期收益', kind: 'number', minWidth: 105 },
+  { key: 'expectedReturnTime', prop: 'expectedReturnTime', label: '到期日', minWidth: 115 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+]
 
 const router = useRouter()
 const loading = ref(true)
@@ -267,16 +270,16 @@ onMounted(load)
 <style scoped>
 .fund-workbench { --workbench-ink: #203f2d; }
 .workbench-error { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border: 1px solid #f0d5cf; border-radius: 10px; background: #fff8f6; color: #a44d3c; font-size: var(--fin-fs-xs); }
-.fund-command { display: grid; grid-template-columns: minmax(0, 1fr) 310px; align-items: stretch; overflow: hidden; border-radius: 18px; background: radial-gradient(circle at 85% 5%, rgba(144, 232, 178, .22), transparent 15rem), linear-gradient(132deg, #073923, #0d6b47 68%, #12945a); color: #fff; }
+.fund-command { display: grid; grid-template-columns: minmax(0, 1fr) 310px; align-items: stretch; overflow: hidden; border-radius: 8px; background: radial-gradient(circle at 85% 5%, rgba(144, 232, 178, .22), transparent 15rem), linear-gradient(132deg, #073923, #0d6b47 68%, #12945a); color: #fff; }
 .fund-command-copy { padding: 25px 28px; }
-.fund-command-copy > span { color: #a8dfbd; font-size: var(--fin-fs-xs); font-weight: 800; letter-spacing: .13em; }
+.fund-command-copy > span { color: #a8dfbd; font-size: var(--fin-fs-xs); font-weight: 600; letter-spacing: .13em; }
 .fund-command-title { display: flex; align-items: center; gap: 9px; margin-top: 9px; }
 .fund-command-title h1 { margin: 0; font-size: 25px; }
 .fund-command-title i { padding: 3px 7px; border: 1px solid rgba(255, 255, 255, .18); border-radius: 6px; color: rgba(255, 255, 255, .64); font-size: var(--fin-fs-xs); font-style: normal; }
 .fund-command-copy > p { max-width: 660px; margin: 9px 0 0; color: rgba(255, 255, 255, .58); font-size: var(--fin-fs-xs); line-height: 1.7; }
 .fund-command-actions { display: flex; gap: 8px; margin-top: 18px; }
 .fund-command-actions :deep(.el-button) { height: 34px; border-radius: 8px; font-size: var(--fin-fs-xs); }
-.fund-command-actions :deep(.hero-primary) { border-color: #fff; background: #fff; color: #0d5d3d; font-weight: 700; }
+.fund-command-actions :deep(.hero-primary) { border-color: #fff; background: #fff; color: #0d5d3d; font-weight: 600; }
 .fund-command-actions :deep(.hero-ghost) { border-color: rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .07); color: #fff; }
 .fund-command-position { display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 18px; border-left: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .035); }
 .position-ring { position: relative; display: grid; width: 164px; height: 164px; place-items: center; border-radius: 50%; background: conic-gradient(#8be5ad var(--usage), rgba(255, 255, 255, .1) 0); }
@@ -318,7 +321,7 @@ onMounted(load)
 .task-card > b { color: #9aa69e; font-size: var(--fin-fs-xs); }
 .asset-section-head { margin-top: 5px; }
 .workbench-asset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
-.workbench-asset-grid article { min-width: 0; padding: 13px; border: 1px solid var(--fin-line); border-radius: 13px; background: #fff; cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease; }
+.workbench-asset-grid article { min-width: 0; padding: 13px; border: 1px solid var(--fin-line); border-radius: 8px; background: #fff; cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease; }
 .workbench-asset-grid article:hover { border-color: #9fceb2; box-shadow: 0 10px 24px rgba(21, 67, 43, .06); }
 .asset-card-top { display: flex; align-items: center; justify-content: space-between; }
 .asset-card-top > span { padding: 3px 6px; border-radius: 5px; background: #eef7f2; color: #337052; font-size: var(--fin-fs-xs); }
@@ -341,7 +344,7 @@ onMounted(load)
 .asset-empty { grid-column: 1 / -1; }
 .workbench-investments { overflow: hidden; }
 .investment-asset-cell { display: flex; align-items: center; gap: 8px; }
-.investment-asset-cell > span { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 8px; background: #e8f5ee; color: #23704d; font-size: var(--fin-fs-xs); font-weight: 700; }
+.investment-asset-cell > span { display: grid; width: 29px; height: 29px; place-items: center; border-radius: 8px; background: #e8f5ee; color: #23704d; font-size: var(--fin-fs-xs); font-weight: 600; }
 .investment-asset-cell strong, .investment-asset-cell small { display: block; }
 .investment-asset-cell strong { color: #3a5444; font-size: var(--fin-fs-xs); }
 .investment-asset-cell small { margin-top: 2px; color: #8b9991; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
@@ -361,13 +364,13 @@ onMounted(load)
 .risk-brief-list { padding: 3px 12px 10px; }
 .risk-brief-list > div { display: flex; gap: 8px; padding: 9px 0; border-top: 1px solid #edf2ee; }
 .risk-brief-list > div:first-child { border-top: 0; }
-.risk-brief-list > div > span { display: grid; width: 21px; height: 21px; place-items: center; flex: 0 0 auto; border-radius: 50%; font-size: var(--fin-fs-xs); font-weight: 800; }
+.risk-brief-list > div > span { display: grid; width: 21px; height: 21px; place-items: center; flex: 0 0 auto; border-radius: 50%; font-size: var(--fin-fs-xs); font-weight: 600; }
 .risk-brief-list .high > span { background: #fceae7; color: #bc4c3c; }
 .risk-brief-list .medium > span { background: #fff4e1; color: #a77628; }
 .risk-brief-list .low > span { background: #e9f6ee; color: #26754e; }
 .risk-brief-list strong { color: #415a49; font-size: var(--fin-fs-xs); }
 .risk-brief-list p { margin: 3px 0 0; color: #83938a; font-size: var(--fin-fs-xs); line-height: 1.55; }
-.workbench-market-note { padding: 15px; border-radius: 13px; background: linear-gradient(135deg, #edf8f1, #f7fbf8); }
+.workbench-market-note { padding: 15px; border-radius: 8px; background: linear-gradient(135deg, #edf8f1, #f7fbf8); }
 .workbench-market-note span, .workbench-market-note strong, .workbench-market-note p { display: block; }
 .workbench-market-note span { color: #6f8878; font-size: var(--fin-fs-xs); }
 .workbench-market-note strong { margin-top: 5px; color: #28563b; font-size: var(--fin-fs-xs); }

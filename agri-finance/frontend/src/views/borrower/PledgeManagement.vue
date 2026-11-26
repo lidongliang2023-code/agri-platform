@@ -82,35 +82,44 @@
       </div>
     </section>
 
-    <section class="finance-card">
-      <div class="finance-card-head">
-        <strong>质押记录</strong>
-        <div class="finance-tabs">
-          <button v-for="item in pledgeFilters" :key="item.key" type="button" :class="{ on: pledgeFilter === item.key }" @click="pledgeFilter = item.key">
-            {{ item.label }}
-          </button>
-        </div>
-      </div>
-      <el-table :data="filteredPledges" style="width: 100%">
-        <el-table-column prop="pledgeNo" label="质押编号" min-width="130" />
-        <el-table-column label="来源仓单" min-width="150">
-          <template #default="{ row }">
-            <span v-if="row.receiptNo">{{ row.receiptNo }}<em v-if="row.batchNo"> / {{ row.batchNo }}</em></span>
-            <span v-else class="cell-muted">历史记录（未关联仓单）</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="commodityType" label="质押物" min-width="100" />
-        <el-table-column label="数量" min-width="110"><template #default="{ row }">{{ num(row.quantity) }}</template></el-table-column>
-        <el-table-column label="货值" min-width="110" align="right"><template #default="{ row }">{{ compactMoney(row.totalValue) }}</template></el-table-column>
-        <el-table-column label="折算率" width="80" align="right"><template #default="{ row }">{{ row.pledgeRate }}%</template></el-table-column>
-        <el-table-column label="可融资" min-width="110" align="right"><template #default="{ row }">{{ compactMoney(row.loanAmount) }}</template></el-table-column>
-        <el-table-column label="状态" width="90"><template #default="{ row }"><FinanceStatus :value="row.status" /></template></el-table-column>
-      </el-table>
-      <div v-if="!filteredPledges.length" class="finance-empty">
-        <strong>暂无质押记录</strong>
-        <p>仓单开出来后，对状态为「待质押」的仓单点发起质押即可提交平台审核。</p>
-      </div>
-    </section>
+    <AgriElementListTable
+      :columns="pledgeColumns"
+      :data="filteredPledges"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-finance:borrower-pledges"
+      empty-text="暂无质押记录，仓单开出后对「待质押」仓单发起质押即可提交审核"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyPledgeFilter" @reset="resetPledgeFilter">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="pledgeDraft.keyword" clearable placeholder="质押编号 / 仓单号 / 质押物" @keyup.enter="applyPledgeFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>质押状态</label>
+            <el-select v-model="pledgeDraft.status" clearable placeholder="全部状态">
+              <el-option v-for="item in pledgeFilters" :key="item.key" :label="item.label" :value="item.key" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #toolbar-left>
+        <strong class="finance-table-title">质押记录</strong>
+        <el-button class="finance-action-button" @click="openReceipt">+ 从批次开仓单</el-button>
+      </template>
+      <template #cell-receiptNo="{ row }">
+        <span v-if="row.receiptNo">{{ row.receiptNo }}<em v-if="row.batchNo"> / {{ row.batchNo }}</em></span>
+        <span v-else class="cell-muted">历史记录（未关联仓单）</span>
+      </template>
+      <template #cell-quantity="{ row }">{{ num(row.quantity) }}</template>
+      <template #cell-totalValue="{ row }">{{ compactMoney(row.totalValue) }}</template>
+      <template #cell-pledgeRate="{ row }">{{ row.pledgeRate }}%</template>
+      <template #cell-loanAmount="{ row }">{{ compactMoney(row.loanAmount) }}</template>
+      <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+    </AgriElementListTable>
 
     <el-dialog v-model="receiptOpen" title="从采收批次开仓单" width="min(720px, 94vw)">
       <el-form ref="receiptFormRef" :model="receiptForm" :rules="receiptRules" label-position="top">
@@ -234,8 +243,20 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Box, Calendar, Link, OfficeBuilding, Tickets } from '@element-plus/icons-vue'
+import { AgriElementListTable, AgriVueFilterBar } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { compactMoney, financeApi, money, num, shortDate } from '@/api/finance'
+
+const pledgeColumns = [
+  { key: 'pledgeNo', prop: 'pledgeNo', label: '质押编号', kind: 'code', minWidth: 140, locked: true },
+  { key: 'receiptNo', prop: 'receiptNo', label: '来源仓单', minWidth: 165 },
+  { key: 'commodityType', prop: 'commodityType', label: '质押物', minWidth: 110 },
+  { key: 'quantity', prop: 'quantity', label: '数量', kind: 'number', minWidth: 105 },
+  { key: 'totalValue', prop: 'totalValue', label: '货值', kind: 'number', minWidth: 110 },
+  { key: 'pledgeRate', prop: 'pledgeRate', label: '折算率', kind: 'number', width: 90 },
+  { key: 'loanAmount', prop: 'loanAmount', label: '可融资', kind: 'number', minWidth: 110 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+]
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -245,7 +266,19 @@ const batches = ref([])
 const goodsList = ref([])
 const applications = ref([])
 const receiptFilter = ref('all')
-const pledgeFilter = ref('all')
+const pledgeDraft = reactive({ keyword: '', status: 'all' })
+const pledgeQuery = reactive({ keyword: '', status: 'all' })
+
+function applyPledgeFilter() {
+  pledgeQuery.keyword = pledgeDraft.keyword
+  pledgeQuery.status = pledgeDraft.status || 'all'
+}
+
+function resetPledgeFilter() {
+  pledgeDraft.keyword = ''
+  pledgeDraft.status = 'all'
+  applyPledgeFilter()
+}
 const receiptOpen = ref(false)
 const pledgeOpen = ref(false)
 const monitorOpen = ref(false)
@@ -291,9 +324,14 @@ const pledgeLoanLimit = computed(() => pledges.value
 const filteredReceipts = computed(() => (receiptFilter.value === 'all'
   ? receipts.value
   : receipts.value.filter((item) => item.status === receiptFilter.value)))
-const filteredPledges = computed(() => (pledgeFilter.value === 'all'
-  ? pledges.value
-  : pledges.value.filter((item) => item.status === pledgeFilter.value)))
+const filteredPledges = computed(() => {
+  const kw = pledgeQuery.keyword.trim().toLowerCase()
+  return pledges.value.filter((item) => {
+    if (pledgeQuery.status && pledgeQuery.status !== 'all' && item.status !== pledgeQuery.status) return false
+    if (kw && !`${item.pledgeNo || ''}${item.receiptNo || ''}${item.batchNo || ''}${item.commodityType || ''}`.toLowerCase().includes(kw)) return false
+    return true
+  })
+})
 const receiptValue = computed(() => Number(receiptForm.quantity || 0) * Number(receiptForm.unitPrice || 0))
 const pledgeRateCap = computed(() => {
   const goods = goodsList.value.find((item) => item.goodsCode === (pledgeTarget.value || {}).goodsCode)
@@ -489,7 +527,7 @@ onMounted(load)
 .pledge-target strong { display: block; color: #344f3f; font-size: var(--fin-fs-xs); }
 .pledge-target p, .pledge-target span { display: block; margin: 4px 0 0; color: #8b9a92; font-size: var(--fin-fs-xs); font-family: ui-monospace, Consolas, monospace; }
 .pledge-note { margin: 8px 0 0; color: #8b9a91; font-size: var(--fin-fs-xs); }
-.pledge-calc { display: flex; height: 32px; align-items: center; color: #d0523f; font-family: ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 700; }
+.pledge-calc { display: flex; height: 32px; align-items: center; color: #d0523f; font-family: ui-monospace, Consolas, monospace; font-size: 13px; font-weight: 600; }
 .monitor-body { padding: 0 4px; }
 .monitor-actions { margin-bottom: 12px; }
 .monitor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; border-radius: 10px; overflow: hidden; background: #edf2ee; }

@@ -2,7 +2,7 @@
   <section class="finance-page">
     <header class="finance-page-heading">
       <div><small>RISK STRATEGY</small><h1>风控策略</h1><p>配置信用、还款、质押与 IoT 风险规则，控制资产准入和贷后风险。</p></div>
-      <div class="finance-page-heading-actions"><el-button class="finance-ghost-button" :loading="loading" @click="load">刷新规则</el-button></div>
+      <div class="finance-page-heading-actions" />
     </header>
 
     <div class="finance-kpis">
@@ -13,18 +13,54 @@
     </div>
 
     <div class="risk-layout">
-      <section class="finance-card">
-        <div class="finance-card-head"><strong>风控规则</strong><small>调整后立即用于新申请预审</small></div>
-        <el-table :data="rules" style="width: 100%">
-          <el-table-column label="规则" min-width="180"><template #default="{ row }"><div class="rule-name"><span>{{ row.ruleType?.slice(0, 1) }}</span><div><strong>{{ row.ruleName }}</strong><small>{{ row.ruleNo }}</small></div></div></template></el-table-column>
-          <el-table-column prop="ruleType" label="类型" width="90" />
-          <el-table-column label="优先级" width="90"><template #default="{ row }"><FinanceStatus :value="row.priority" /></template></el-table-column>
-          <el-table-column prop="conditions" label="触发条件" min-width="220" />
-          <el-table-column prop="action" label="处置动作" min-width="100" />
-          <el-table-column label="状态" width="85"><template #default="{ row }"><span :class="['rule-status', row.status === '启用' ? 'on' : 'off']">{{ row.status }}</span></template></el-table-column>
-          <el-table-column label="操作" width="130" align="right"><template #default="{ row }"><el-button link class="finance-link-button" @click="editRule(row)">编辑</el-button><el-button link class="finance-link-button" @click="toggleRule(row)">{{ row.status === '启用' ? '停用' : '启用' }}</el-button></template></el-table-column>
-        </el-table>
-      </section>
+      <AgriElementListTable
+        :columns="ruleColumns"
+        :data="filteredRules"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        :column-settings-storage-key="canEditRules ? 'agri-finance:fund-risk-rules' : 'agri-finance:admin-risk-rules'"
+        empty-text="暂无匹配的风控规则"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="3" :loading="loading" @search="applyFilter" @reset="resetFilter">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <el-input v-model="draft.keyword" clearable placeholder="规则名称 / 编号 / 触发条件" @keyup.enter="applyFilter" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>优先级</label>
+              <el-select v-model="draft.priority" clearable placeholder="全部优先级">
+                <el-option label="全部" value="" />
+                <el-option label="高优先级" value="HIGH" />
+                <el-option label="中优先级" value="MEDIUM" />
+                <el-option label="低优先级" value="LOW" />
+              </el-select>
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>启用状态</label>
+              <el-select v-model="draft.status" clearable placeholder="全部状态">
+                <el-option label="全部" value="" />
+                <el-option label="启用" value="启用" />
+                <el-option label="停用" value="停用" />
+              </el-select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <strong class="finance-table-title">风控规则</strong>
+          <small class="finance-table-hint">{{ canEditRules ? '调整后立即用于新申请预审' : '只读查看 · 规则由资金机构维护' }}</small>
+        </template>
+        <template #cell-rule="{ row }">
+          <div class="rule-name"><span>{{ row.ruleType?.slice(0, 1) }}</span><div><strong>{{ row.ruleName }}</strong><small>{{ row.ruleNo }}</small></div></div>
+        </template>
+        <template #cell-priority="{ row }"><FinanceStatus :value="row.priority" /></template>
+        <template #cell-status="{ row }"><FinanceStatus :value="row.status === '启用' ? '启用' : '禁用'" :label="row.status" /></template>
+        <template #cell-actions="{ row }">
+          <AgriVueRowActions :actions="ruleRowActions(row)" />
+        </template>
+      </AgriElementListTable>
 
       <aside class="finance-card">
         <div class="finance-card-head"><strong>风险策略说明</strong><small>分层控制</small></div>
@@ -51,16 +87,67 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
+import { hasFinancePermission } from '@/auth'
 
 const loading = ref(true)
 const saving = ref(false)
 const rules = ref([])
 const editOpen = ref(false)
 const editing = ref(null)
+const draft = reactive({ keyword: '', priority: '', status: '' })
+const query = reactive({ keyword: '', priority: '', status: '' })
+// 规则新增/编辑/启停后端要求 finance:fund；平台运营只有 finance:review，只读查看，不显示会被 403 的操作。
+const canEditRules = computed(() => hasFinancePermission('finance:fund'))
+
+const ruleColumns = computed(() => {
+  const cols = [
+    { key: 'rule', label: '规则', minWidth: 190, locked: true, ellipsis: false },
+    { key: 'ruleType', prop: 'ruleType', label: '类型', width: 96 },
+    { key: 'priority', prop: 'priority', label: '优先级', kind: 'status', width: 105 },
+    { key: 'conditions', prop: 'conditions', label: '触发条件', minWidth: 210 },
+    { key: 'action', prop: 'action', label: '处置动作', minWidth: 110 },
+    { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 92 },
+  ]
+  if (canEditRules.value) {
+    cols.push({ key: 'actions', label: '操作', kind: 'action', width: 130 })
+  }
+  return cols
+})
+
+function applyFilter() {
+  query.keyword = draft.keyword
+  query.priority = draft.priority
+  query.status = draft.status
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.priority = ''
+  draft.status = ''
+  applyFilter()
+}
+
+const filteredRules = computed(() => {
+  const kw = query.keyword.trim().toLowerCase()
+  return rules.value.filter((row) => {
+    if (query.priority && row.priority !== query.priority) return false
+    if (query.status && row.status !== query.status) return false
+    if (kw && !`${row.ruleName || ''}${row.ruleNo || ''}${row.ruleType || ''}${row.conditions || ''}`.toLowerCase().includes(kw)) return false
+    return true
+  })
+})
+
+function ruleRowActions(row) {
+  return [
+    { key: 'edit', label: '编辑', onClick: () => editRule(row) },
+    { key: 'toggle', label: row.status === '启用' ? '停用' : '启用', onClick: () => toggleRule(row) },
+  ]
+}
 const enabledCount = computed(() => rules.value.filter((item) => item.status === '启用').length)
 const highPriorityCount = computed(() => rules.value.filter((item) => item.priority === 'HIGH').length)
 const triggerCount = computed(() => 3)
@@ -106,11 +193,11 @@ onMounted(load)
 .finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 .risk-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; gap: 14px; }
 .rule-name { display: flex; align-items: center; gap: 9px; }
-.rule-name > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 700; }
+.rule-name > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 600; }
 .rule-name strong, .rule-name small { display: block; }
 .rule-name strong { color: #395443; font-size: var(--fin-fs-xs); }
 .rule-name small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
-.rule-status { display: inline-flex; padding: 3px 8px; border-radius: 99px; font-size: var(--fin-fs-xs); font-weight: 700; }
+.rule-status { display: inline-flex; padding: 3px 8px; border-radius: 99px; font-size: var(--fin-fs-xs); font-weight: 600; }
 .rule-status.on { background: #e7f6ed; color: #18774d; }
 .rule-status.off { background: #eef2ef; color: #75827a; }
 .risk-strategy-guide { display: grid; padding: 14px 15px; }

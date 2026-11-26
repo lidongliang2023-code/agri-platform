@@ -49,7 +49,9 @@ export const operationsApi = {
   reviewPool: (status = '待审批') => request(axios.get('/api/v1/loan/applications/review-pool', {
     params: { status },
   })),
-  approvalOverview: () => withIdentity(() => axios.get('/api/v1/loan/approval/overview')),
+  approvalOverview: (scope = '') => withIdentity(() => axios.get('/api/v1/loan/approval/overview', {
+    params: scope ? { scope } : {},
+  })),
   review: (id, result, opinion, amount, rate) => withIdentity(() => axios.post('/api/v1/loan/review', {
     id,
     result,

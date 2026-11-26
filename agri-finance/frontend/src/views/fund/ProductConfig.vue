@@ -7,7 +7,6 @@
         <p>产品配置是官网门户、融资方产品中心和融资申请的唯一数据源，保存后即时联动。</p>
       </div>
       <div class="finance-page-heading-actions">
-        <el-button class="finance-ghost-button" :loading="loading" @click="load">刷新</el-button>
         <el-button class="finance-action-button" @click="openCreate">新增产品</el-button>
       </div>
     </header>
@@ -19,66 +18,53 @@
       <article class="finance-kpi"><span>最高额度</span><strong>{{ compactMoney(maxAmount) }}</strong><small>单产品配置上限</small></article>
     </div>
 
-    <section class="finance-card product-config-card">
-      <div class="finance-card-head">
-        <div>
-          <strong>融资产品目录</strong>
-          <small>停用或删除后，官网门户和融资方端不再展示</small>
+    <AgriElementListTable
+      :columns="productColumns"
+      :data="filteredProducts"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-finance:fund-product-config"
+      empty-text="暂无匹配产品，请调整筛选条件或新增一个融资产品"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilters" @reset="resetFilters">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="draft.keyword" clearable placeholder="产品名称 / 编码" @keyup.enter="applyFilters" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>产品状态</label>
+            <el-select v-model="draft.status" placeholder="全部状态">
+              <el-option label="全部状态" value="" />
+              <el-option label="启用" value="启用" />
+              <el-option label="停用" value="停用" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #toolbar-left>
+        <el-button class="finance-action-button" @click="openCreate">+ 新增产品</el-button>
+      </template>
+      <template #cell-product="{ row }">
+        <div class="product-name-cell">
+          <span>{{ row.productName.slice(0, 1) }}</span>
+          <div><strong>{{ row.productName }}</strong><small>{{ row.productCode }}</small></div>
         </div>
-        <div class="product-config-filters">
-          <el-input v-model="filters.keyword" clearable placeholder="产品名称 / 编码" style="width: 180px" />
-          <el-select v-model="filters.status" style="width: 105px">
-            <el-option label="全部状态" value="" />
-            <el-option label="启用" value="启用" />
-            <el-option label="停用" value="停用" />
-          </el-select>
-          <el-button @click="resetFilters">重置</el-button>
-        </div>
-      </div>
-
-      <el-table v-loading="loading" :data="filteredProducts" style="width: 100%" row-key="id">
-        <el-table-column label="产品" min-width="180">
-          <template #default="{ row }">
-            <div class="product-name-cell">
-              <span>{{ row.productName.slice(0, 1) }}</span>
-              <div><strong>{{ row.productName }}</strong><small>{{ row.productCode }}</small></div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="参考年化" width="95" align="right">
-          <template #default="{ row }"><b class="rate-text">{{ Number(row.rate).toFixed(2) }}%</b></template>
-        </el-table-column>
-        <el-table-column label="期限" width="105" align="center">
-          <template #default="{ row }">{{ row.termMin }}-{{ row.termMax }} 月</template>
-        </el-table-column>
-        <el-table-column label="额度范围" min-width="170">
-          <template #default="{ row }">{{ compactMoney(row.amountMin) }} - {{ compactMoney(row.amountMax) }}</template>
-        </el-table-column>
-        <el-table-column label="质押率" width="80" align="right">
-          <template #default="{ row }">{{ Number(row.pledgeRate || 0).toFixed(0) }}%</template>
-        </el-table-column>
-        <el-table-column label="更新时间" width="145">
-          <template #default="{ row }">{{ shortDate(row.updatedAt) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="80">
-          <template #default="{ row }">
-            <FinanceStatus :value="row.status === '启用' ? '正常' : row.status" :label="row.status" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="190" align="right">
-          <template #default="{ row }">
-            <el-button link class="finance-link-button" @click="openEdit(row)">编辑</el-button>
-            <el-button link class="finance-link-button" @click="toggle(row)">{{ row.status === '启用' ? '停用' : '启用' }}</el-button>
-            <el-button link class="finance-link-button danger-link" @click="remove(row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div v-if="!loading && !filteredProducts.length" class="finance-empty">
-        <strong>暂无匹配产品</strong>
-        <p>调整筛选条件，或新增一个融资产品。</p>
-      </div>
-    </section>
+      </template>
+      <template #cell-rate="{ row }"><b class="rate-text">{{ Number(row.rate).toFixed(2) }}%</b></template>
+      <template #cell-term="{ row }">{{ row.termMin }}-{{ row.termMax }} 月</template>
+      <template #cell-amountRange="{ row }">{{ compactMoney(row.amountMin) }} - {{ compactMoney(row.amountMax) }}</template>
+      <template #cell-pledgeRate="{ row }">{{ Number(row.pledgeRate || 0).toFixed(0) }}%</template>
+      <template #cell-updatedAt="{ row }">{{ shortDate(row.updatedAt) }}</template>
+      <template #cell-status="{ row }">
+        <FinanceStatus :value="row.status === '启用' ? '正常' : row.status" :label="row.status" />
+      </template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="productRowActions(row)" />
+      </template>
+    </AgriElementListTable>
 
     <section class="finance-card">
       <div class="finance-card-head"><strong>配置生效规则</strong><small>统一产品主数据</small></div>
@@ -143,16 +129,42 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, shortDate } from '@/api/finance'
+
+const productColumns = [
+  { key: 'product', label: '产品', minWidth: 190, locked: true, ellipsis: false },
+  { key: 'rate', prop: 'rate', label: '参考年化', kind: 'number', width: 100 },
+  { key: 'term', label: '期限', width: 108, align: 'center' },
+  { key: 'amountRange', label: '额度范围', kind: 'number', minWidth: 175 },
+  { key: 'pledgeRate', prop: 'pledgeRate', label: '质押率', kind: 'number', width: 90 },
+  { key: 'updatedAt', prop: 'updatedAt', label: '更新时间', width: 150 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+  { key: 'actions', label: '操作', kind: 'action', width: 130 },
+]
 
 const loading = ref(true)
 const saving = ref(false)
 const products = ref([])
 const dialogOpen = ref(false)
 const editingId = ref('')
+const draft = reactive({ keyword: '', status: '' })
 const filters = reactive({ keyword: '', status: '' })
+
+function applyFilters() {
+  filters.keyword = draft.keyword
+  filters.status = draft.status
+}
+
+function productRowActions(row) {
+  return [
+    { key: 'edit', label: '编辑', onClick: () => openEdit(row) },
+    { key: 'toggle', label: row.status === '启用' ? '停用' : '启用', onClick: () => toggle(row) },
+    { key: 'remove', label: '删除', danger: true, onClick: () => remove(row) },
+  ]
+}
 
 const blankForm = () => ({
   productCode: '',
@@ -279,8 +291,9 @@ async function remove(row) {
 }
 
 function resetFilters() {
-  filters.keyword = ''
-  filters.status = ''
+  draft.keyword = ''
+  draft.status = ''
+  applyFilters()
 }
 
 async function load() {
@@ -302,7 +315,7 @@ onMounted(load)
 .product-config-card { overflow: hidden; }
 .product-config-filters { display: flex; align-items: center; gap: 7px; }
 .product-name-cell { display: flex; align-items: center; gap: 9px; }
-.product-name-cell > span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 700; }
+.product-name-cell > span { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: #e8f5ee; color: var(--fin-green-700); font-size: var(--fin-fs-xs); font-weight: 600; }
 .product-name-cell strong, .product-name-cell small { display: block; }
 .product-name-cell strong { color: #3b5545; font-size: var(--fin-fs-xs); }
 .product-name-cell small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }

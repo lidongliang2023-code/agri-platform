@@ -6,10 +6,7 @@
         <h1>资金机构与主体绑定</h1>
         <p>维护资金机构的准入审核与「平台经营主体」绑定关系 —— 决定哪个登录账号能进哪家机构的资金工作台。</p>
       </div>
-      <div class="finance-page-heading-actions">
-        <el-input v-model="keyword" clearable placeholder="搜索机构名称 / 编号 / 信用代码" class="provider-search" :prefix-icon="Search" @change="load" />
-        <el-button class="finance-ghost-button" :loading="loading" @click="load">刷新</el-button>
-      </div>
+      <div class="finance-page-heading-actions" />
     </header>
 
     <div v-if="error" class="provider-error">
@@ -27,67 +24,68 @@
         <article class="finance-kpi"><span>待准入审核</span><strong>{{ summary.pendingCount || 0 }}<em> 家</em></strong><small>需核验牌照与资金能力</small></article>
       </div>
 
-      <section class="finance-card">
-        <div class="finance-card-head">
-          <strong>机构台账</strong>
+      <AgriElementListTable
+        :columns="providerColumns"
+        :data="items"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        column-settings-storage-key="agri-finance:admin-fund-providers"
+        empty-text="暂无资金机构，机构在资金方端提交注册后进入这里审核与绑定"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <el-input v-model="draft.keyword" clearable placeholder="搜索机构名称 / 编号 / 信用代码" @keyup.enter="applyFilter" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>绑定状态</label>
+              <el-select v-model="draft.bound" placeholder="全部状态">
+                <el-option label="全部" value="" />
+                <el-option label="已绑定" value="bound" />
+                <el-option label="未绑定" value="unbound" />
+              </el-select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
           <div class="finance-tabs">
             <button type="button" :class="{ on: bound === '' }" @click="switchBound('')">全部</button>
             <button type="button" :class="{ on: bound === 'bound' }" @click="switchBound('bound')">已绑定</button>
             <button type="button" :class="{ on: bound === 'unbound' }" @click="switchBound('unbound')">未绑定</button>
           </div>
-        </div>
-        <el-table v-if="items.length" :data="items" style="width: 100%">
-          <el-table-column label="机构" min-width="200">
-            <template #default="{ row }">
-              <div class="provider-subject">
-                <span>{{ row.institutionName?.slice(0, 1) || '机' }}</span>
-                <div>
-                  <strong>{{ row.institutionName }}</strong>
-                  <small>{{ row.providerNo }} · {{ row.creditCode || '无统一社会信用代码' }}</small>
-                </div>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="类型" width="100">
-            <template #default="{ row }">{{ institutionType(row.institutionType) }}</template>
-          </el-table-column>
-          <el-table-column label="准入状态" width="100">
-            <template #default="{ row }">
-              <FinanceStatus :value="row.reviewStatus || '待审核'" />
-              <small v-if="row.reviewOpinion" class="provider-opinion">{{ row.reviewOpinion }}</small>
-            </template>
-          </el-table-column>
-          <el-table-column label="绑定经营主体" min-width="210">
-            <template #default="{ row }">
-              <template v-if="row.merchantId">
-                <strong class="provider-merchant">{{ row.merchantName || row.merchantId }}</strong>
-                <small class="provider-merchant-id">{{ row.merchantId }}</small>
-              </template>
-              <span v-else class="provider-muted">未绑定 · 该机构账号无法进入资金工作台</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="联系人" width="130">
-            <template #default="{ row }">
-              <span>{{ row.contactName || '—' }}</span>
-              <small class="provider-merchant-id">{{ row.contactPhone || '' }}</small>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="190" align="right">
-            <template #default="{ row }">
-              <el-button link class="finance-link-button" @click="openBind(row)">{{ row.merchantId ? '换绑主体' : '绑定主体' }}</el-button>
-              <el-button v-if="row.merchantId" link class="finance-link-button" @click="unbind(row)">解绑</el-button>
-              <template v-if="(row.reviewStatus || '待审核') === '待审核'">
-                <el-button link class="finance-link-button" @click="decide(row, true)">通过</el-button>
-                <el-button link class="finance-link-button danger" @click="decide(row, false)">拒绝</el-button>
-              </template>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div v-else class="finance-empty">
-          <strong>暂无资金机构</strong>
-          <p>机构在资金方端提交注册后进入这里审核与绑定。</p>
-        </div>
-      </section>
+        </template>
+        <template #cell-institution="{ row }">
+          <div class="provider-subject">
+            <span>{{ row.institutionName?.slice(0, 1) || '机' }}</span>
+            <div>
+              <strong>{{ row.institutionName }}</strong>
+              <small>{{ row.providerNo }} · {{ row.creditCode || '无统一社会信用代码' }}</small>
+            </div>
+          </div>
+        </template>
+        <template #cell-institutionType="{ row }">{{ institutionType(row.institutionType) }}</template>
+        <template #cell-reviewStatus="{ row }">
+          <FinanceStatus :value="row.reviewStatus || '待审核'" />
+          <small v-if="row.reviewOpinion" class="provider-opinion">{{ row.reviewOpinion }}</small>
+        </template>
+        <template #cell-merchant="{ row }">
+          <template v-if="row.merchantId">
+            <strong class="provider-merchant">{{ row.merchantName || row.merchantId }}</strong>
+            <small class="provider-merchant-id">{{ row.merchantId }}</small>
+          </template>
+          <span v-else class="provider-muted">未绑定 · 该机构账号无法进入资金工作台</span>
+        </template>
+        <template #cell-contact="{ row }">
+          <span>{{ row.contactName || '—' }}</span>
+          <small class="provider-merchant-id">{{ row.contactPhone || '' }}</small>
+        </template>
+        <template #cell-actions="{ row }">
+          <AgriVueRowActions :actions="providerRowActions(row)" />
+        </template>
+      </AgriElementListTable>
     </template>
 
     <el-dialog v-model="bindOpen" :title="`绑定经营主体 · ${target?.institutionName || ''}`" width="min(620px, 94vw)">
@@ -131,11 +129,20 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
+
+const providerColumns = [
+  { key: 'institution', label: '机构', minWidth: 215, locked: true, ellipsis: false },
+  { key: 'institutionType', prop: 'institutionType', label: '类型', width: 96 },
+  { key: 'reviewStatus', prop: 'reviewStatus', label: '准入状态', kind: 'status', width: 112 },
+  { key: 'merchant', label: '绑定经营主体', minWidth: 210, ellipsis: false },
+  { key: 'contact', label: '联系人', width: 135, ellipsis: false },
+  { key: 'actions', label: '操作', kind: 'action', width: 130 },
+]
 
 const loading = ref(true)
 const saving = ref(false)
@@ -145,6 +152,7 @@ const items = ref([])
 const summary = ref({})
 const keyword = ref('')
 const bound = ref('')
+const draft = reactive({ keyword: '', bound: '' })
 const bindOpen = ref(false)
 const target = ref(null)
 const selectedMerchant = ref('')
@@ -156,9 +164,34 @@ function institutionType(value) {
   return { BANK: '银行', TRUST: '信托', FACTOR: '商业保理', GUARANTEE: '担保', LEASE: '融资租赁' }[value] || value || '其他'
 }
 
+function applyFilter() {
+  keyword.value = draft.keyword
+  bound.value = draft.bound
+  load()
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.bound = ''
+  applyFilter()
+}
+
 function switchBound(value) {
   bound.value = value
+  draft.bound = value
   load()
+}
+
+function providerRowActions(row) {
+  const list = [
+    { key: 'bind', label: row.merchantId ? '换绑主体' : '绑定主体', onClick: () => openBind(row) },
+  ]
+  if (row.merchantId) list.push({ key: 'unbind', label: '解绑', onClick: () => unbind(row) })
+  if ((row.reviewStatus || '待审核') === '待审核') {
+    list.push({ key: 'approve', label: '通过', onClick: () => decide(row, true) })
+    list.push({ key: 'reject', label: '拒绝', danger: true, onClick: () => decide(row, false) })
+  }
+  return list
 }
 
 async function load() {
@@ -254,7 +287,7 @@ onMounted(load)
 .provider-error { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border: 1px solid #efd4ce; border-radius: 10px; background: #fff8f6; color: #a44f3f; font-size: 12px; }
 .provider-search { width: 260px; }
 .provider-subject { display: flex; align-items: center; gap: 8px; }
-.provider-subject > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #e8f5ee; color: #27704d; font-size: 13px; font-weight: 700; }
+.provider-subject > span { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #e8f5ee; color: #27704d; font-size: 13px; font-weight: 600; }
 .provider-subject strong, .provider-subject small { display: block; }
 .provider-subject strong { color: #3a5544; font-size: 13px; }
 .provider-subject small { margin-top: 2px; color: #8b9a92; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }

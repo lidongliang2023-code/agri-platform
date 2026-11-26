@@ -120,35 +120,65 @@
         </div>
       </section>
 
-      <section class="finance-card">
-        <div class="finance-card-head">
-          <strong>评估快照</strong>
-          <small>每次评估形成可追溯的信用依据</small>
-        </div>
-        <el-table :data="snapshots" style="width: 100%">
-          <el-table-column prop="assessmentNo" label="快照编号" min-width="165" />
-          <el-table-column prop="subjectName" label="评估主体" min-width="120" />
-          <el-table-column label="四维得分" min-width="190">
-            <template #default="{ row }">{{ row.transactionScore }} / {{ row.logisticsScore }} / {{ row.warehouseScore }} / {{ row.productionScore }}</template>
-          </el-table-column>
-          <el-table-column prop="compositeScore" label="综合分" width="80" align="right" />
-          <el-table-column prop="riskLevel" label="风险等级" width="95" />
-          <el-table-column prop="decision" label="处置建议" min-width="130" />
-          <el-table-column prop="dataCompleteness" label="完整度" width="80" align="right">
-            <template #default="{ row }">{{ row.dataCompleteness }}%</template>
-          </el-table-column>
-          <el-table-column prop="evaluatedAt" label="评估时间" width="150" />
-        </el-table>
-      </section>
+      <AgriElementListTable
+        :columns="snapshotColumns"
+        :data="filteredSnapshots"
+        row-key="assessmentNo"
+        :loading="loading"
+        client-pagination
+        column-settings-storage-key="agri-finance:fund-risk-snapshots"
+        empty-text="暂无评估快照，点击运行交叉风控评估生成可追溯信用依据"
+        @refresh="load"
+      >
+        <template #filter>
+          <AgriVueFilterBar :field-count="2" :loading="loading" @search="applySnapshotFilter" @reset="resetSnapshotFilter">
+            <div class="agri-vue-filter-field">
+              <label>关键字</label>
+              <el-input v-model="snapshotDraft.keyword" clearable placeholder="快照编号 / 评估主体 / 处置建议" @keyup.enter="applySnapshotFilter" />
+            </div>
+            <div class="agri-vue-filter-field">
+              <label>风险等级</label>
+              <el-select v-model="snapshotDraft.riskLevel" clearable placeholder="全部等级">
+                <el-option label="全部" value="" />
+                <el-option label="低风险" value="低风险" />
+                <el-option label="中低风险" value="中低风险" />
+                <el-option label="中高风险" value="中高风险" />
+                <el-option label="高风险" value="高风险" />
+              </el-select>
+            </div>
+          </AgriVueFilterBar>
+        </template>
+        <template #toolbar-left>
+          <strong class="finance-table-title">评估快照</strong>
+          <el-button class="finance-action-button" :loading="assessing" @click="assess">运行交叉风控评估</el-button>
+        </template>
+        <template #cell-scores="{ row }">{{ row.transactionScore }} / {{ row.logisticsScore }} / {{ row.warehouseScore }} / {{ row.productionScore }}</template>
+        <template #cell-riskLevel="{ row }">
+          <span :class="['agri-vue-status-pill', `tone-${riskLevelPillTone(row.riskLevel)}`]">{{ row.riskLevel || '—' }}</span>
+        </template>
+        <template #cell-dataCompleteness="{ row }">{{ row.dataCompleteness }}%</template>
+      </AgriElementListTable>
     </template>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar } from '@agri/shared/vue/element'
 import { operationsApi } from '@/api/operations'
 import { compactMoney } from '@/api/finance'
+
+const snapshotColumns = [
+  { key: 'assessmentNo', prop: 'assessmentNo', label: '快照编号', kind: 'code', minWidth: 165, locked: true },
+  { key: 'subjectName', prop: 'subjectName', label: '评估主体', minWidth: 130 },
+  { key: 'scores', label: '四维得分', minWidth: 185 },
+  { key: 'compositeScore', prop: 'compositeScore', label: '综合分', kind: 'number', width: 90 },
+  { key: 'riskLevel', prop: 'riskLevel', label: '风险等级', kind: 'status', width: 105 },
+  { key: 'decision', prop: 'decision', label: '处置建议', minWidth: 140 },
+  { key: 'dataCompleteness', prop: 'dataCompleteness', label: '完整度', kind: 'number', width: 90 },
+  { key: 'evaluatedAt', prop: 'evaluatedAt', label: '评估时间', width: 155 },
+]
 
 const loading = ref(true)
 const assessing = ref(false)
@@ -157,6 +187,35 @@ const report = ref(null)
 const snapshots = ref([])
 const subjectId = ref('')
 const subjects = computed(() => report.value?.subjects || [])
+const snapshotDraft = reactive({ keyword: '', riskLevel: '' })
+const snapshotQuery = reactive({ keyword: '', riskLevel: '' })
+
+function applySnapshotFilter() {
+  snapshotQuery.keyword = snapshotDraft.keyword
+  snapshotQuery.riskLevel = snapshotDraft.riskLevel
+}
+
+function resetSnapshotFilter() {
+  snapshotDraft.keyword = ''
+  snapshotDraft.riskLevel = ''
+  applySnapshotFilter()
+}
+
+const filteredSnapshots = computed(() => {
+  const kw = snapshotQuery.keyword.trim().toLowerCase()
+  return snapshots.value.filter((row) => {
+    if (snapshotQuery.riskLevel && row.riskLevel !== snapshotQuery.riskLevel) return false
+    if (kw && !`${row.assessmentNo || ''}${row.subjectName || ''}${row.decision || ''}`.toLowerCase().includes(kw)) return false
+    return true
+  })
+})
+
+function riskLevelPillTone(level) {
+  if (level === '高风险' || level === 'HIGH') return 'danger'
+  if (level === '中高风险' || level === '中低风险' || level === 'MEDIUM') return 'warning'
+  if (level === '低风险' || level === 'LOW') return 'success'
+  return 'default'
+}
 
 const EVIDENCE_LABELS = {
   orderCount: '交易订单',
@@ -278,11 +337,11 @@ onMounted(load)
 <style scoped>
 .risk-actions { align-items: center; }
 .risk-error { padding: 12px 14px; border: 1px solid #efc9c4; border-radius: 10px; background: #fff4f2; color: #a94b42; font-size: var(--fin-fs-xs); }
-.risk-hero { display: grid; grid-template-columns: 150px minmax(0, 1fr) 260px; align-items: center; gap: 20px; padding: 20px; border: 1px solid #dbe8df; border-radius: 17px; background: radial-gradient(circle at 88% 0, rgba(78, 186, 124, .13), transparent 260px), #fff; }
+.risk-hero { display: grid; grid-template-columns: 150px minmax(0, 1fr) 260px; align-items: center; gap: 20px; padding: 20px; border: 1px solid #dbe8df; border-radius: 8px; background: radial-gradient(circle at 88% 0, rgba(78, 186, 124, .13), transparent 260px), #fff; }
 .risk-score-orb { display: grid; width: 132px; height: 132px; place-items: center; align-content: center; gap: 2px; border: 8px solid #e2f4e9; border-radius: 50%; background: #f8fcf9; }
 .risk-score-orb strong { color: #176d47; font-family: ui-monospace, Consolas, monospace; font-size: 39px; line-height: 1; }
 .risk-score-orb small, .risk-score-orb span { color: #789084; font-size: var(--fin-fs-xs); }
-.risk-score-orb span { font-weight: 700; }
+.risk-score-orb span { font-weight: 600; }
 .risk-score-orb.warn { border-color: #fff0d2; }.risk-score-orb.warn strong { color: #b87816; }
 .risk-score-orb.risk { border-color: #ffe2df; }.risk-score-orb.risk strong { color: #c34c42; }
 .risk-score-orb.unknown { border-color: #edf1ee; }.risk-score-orb.unknown strong { color: #74827a; }
@@ -297,7 +356,7 @@ onMounted(load)
 .risk-portfolio > div { display: grid; gap: 3px; padding: 10px; border-radius: 9px; background: #f6faf7; }
 .risk-portfolio small { color: #7d9184; font-size: var(--fin-fs-xs); }.risk-portfolio strong { color: #2f543e; font-size: var(--fin-fs-xs); }
 .risk-dimension-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 11px; }
-.risk-dimension-card { display: grid; gap: 11px; padding: 15px; border: 1px solid #dfe9e2; border-radius: 15px; background: #fff; box-shadow: 0 8px 22px rgba(22, 66, 42, .035); }
+.risk-dimension-card { display: grid; gap: 11px; padding: 15px; border: 1px solid #dfe9e2; border-radius: 8px; background: #fff; box-shadow: 0 8px 22px rgba(22, 66, 42, .035); }
 .risk-dimension-card.pass { border-top: 3px solid #1a9a61; }.risk-dimension-card.warn { border-top: 3px solid #d7972d; }.risk-dimension-card.risk { border-top: 3px solid #ca4d43; }.risk-dimension-card.unknown { border-top: 3px solid #9aa8a0; }
 .risk-dimension-head { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 9px; }
 .risk-dimension-head > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 10px; background: #eff8f2; font-size: 20px; }
@@ -311,10 +370,10 @@ onMounted(load)
 .risk-check-list, .risk-alert-list { display: grid; }
 .risk-check-list > div, .risk-alert-list > div { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 9px; padding: 10px 0; border-bottom: 1px solid #edf2ee; }
 .risk-check-list > div:last-child, .risk-alert-list > div:last-child { border-bottom: 0; }
-.risk-check-icon { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 8px; font-size: var(--fin-fs-xs); font-weight: 800; }
+.risk-check-icon { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 8px; font-size: var(--fin-fs-xs); font-weight: 600; }
 .risk-check-icon.pass { background: #e8f7ef; color: #17794c; }.risk-check-icon.warn { background: #fff4df; color: #b87617; }.risk-check-icon.risk { background: #fff0ee; color: #bd493f; }.risk-check-icon.unknown { background: #eef2ef; color: #7b8b81; }
-.risk-check-list strong, .risk-alert-list strong { display: block; color: #3a5747; font-size: var(--fin-fs-xs); }.risk-check-list small, .risk-alert-list small { display: block; margin-top: 2px; color: #82948a; font-size: var(--fin-fs-xs); line-height: 1.5; }.risk-check-list em, .risk-alert-list em { font-size: var(--fin-fs-xs); font-style: normal; font-weight: 700; }.risk-check-list em.pass { color: #197b4e; }.risk-check-list em.warn { color: #a96c16; }.risk-check-list em.risk { color: #b7473e; }.risk-check-list em.unknown { color: #7a8a80; }
-.risk-alert-list > div > span { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; background: #fff4df; color: #a96c16; font-size: var(--fin-fs-xs); font-weight: 800; }.risk-alert-list > div.risk > span { background: #fff0ee; color: #b7473e; }.risk-alert-list > div.pass > span { background: #e8f7ef; color: #197b4e; }
+.risk-check-list strong, .risk-alert-list strong { display: block; color: #3a5747; font-size: var(--fin-fs-xs); }.risk-check-list small, .risk-alert-list small { display: block; margin-top: 2px; color: #82948a; font-size: var(--fin-fs-xs); line-height: 1.5; }.risk-check-list em, .risk-alert-list em { font-size: var(--fin-fs-xs); font-style: normal; font-weight: 600; }.risk-check-list em.pass { color: #197b4e; }.risk-check-list em.warn { color: #a96c16; }.risk-check-list em.risk { color: #b7473e; }.risk-check-list em.unknown { color: #7a8a80; }
+.risk-alert-list > div > span { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 50%; background: #fff4df; color: #a96c16; font-size: var(--fin-fs-xs); font-weight: 600; }.risk-alert-list > div.risk > span { background: #fff0ee; color: #b7473e; }.risk-alert-list > div.pass > span { background: #e8f7ef; color: #197b4e; }
 .risk-rule-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }.risk-rule-strip > div { display: grid; gap: 4px; padding: 10px; border-radius: 8px; background: #f7faf8; }.risk-rule-strip span { color: #8a9a91; font-size: var(--fin-fs-xs); }.risk-rule-strip strong { color: #365443; font-size: var(--fin-fs-xs); }.risk-rule-strip small { color: #7f9187; font-size: var(--fin-fs-xs); }
 @media (max-width: 1120px) { .risk-dimension-grid { grid-template-columns: repeat(2, 1fr); }.risk-hero { grid-template-columns: 135px 1fr; }.risk-portfolio { grid-column: 1 / -1; grid-template-columns: repeat(4, 1fr); }.risk-rule-strip { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 720px) { .risk-actions { align-items: stretch; flex-direction: column; width: 100%; }.risk-actions :deep(.el-select) { width: 100% !important; }.risk-hero { grid-template-columns: 1fr; }.risk-score-orb { margin: auto; }.risk-portfolio { grid-template-columns: 1fr 1fr; }.risk-dimension-grid, .risk-two-grid { grid-template-columns: 1fr; }.risk-rule-strip { grid-template-columns: 1fr; } }

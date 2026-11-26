@@ -86,36 +86,33 @@
     </section>
 
     <div class="finance-grid-two">
-      <section class="finance-card">
-        <div class="finance-card-head">
-          <strong>当前借款</strong>
+      <AgriElementListTable
+        :columns="loanColumns"
+        :data="loans"
+        row-key="id"
+        :loading="loading"
+        client-pagination
+        :page-size="10"
+        column-settings-storage-key="agri-finance:borrower-home-loans"
+        empty-text="暂无借款记录，融资申请审批通过并放款后会显示在这里"
+        @refresh="load"
+      >
+        <template #toolbar-left>
+          <strong class="finance-table-title">当前借款</strong>
           <el-button link class="finance-link-button" @click="$router.push('/borrower/loan-management')">查看全部 →</el-button>
-        </div>
-        <el-table v-if="loans.length" :data="loans.slice(0, 4)" style="width: 100%">
-          <el-table-column prop="loanNo" label="借款编号" min-width="145" />
-          <el-table-column label="产品" min-width="95">
-            <template #default="{ row }">{{ productName(row.productType) }}</template>
-          </el-table-column>
-          <el-table-column label="借款金额" min-width="110" align="right">
-            <template #default="{ row }">{{ money(row.amount) }}</template>
-          </el-table-column>
-          <el-table-column label="剩余本金" min-width="110" align="right">
-            <template #default="{ row }">{{ money(row.remainingAmount) }}</template>
-          </el-table-column>
-          <el-table-column label="状态" min-width="90">
-            <template #default="{ row }"><FinanceStatus :value="row.status" /></template>
-          </el-table-column>
-          <el-table-column label="操作" width="82" align="right">
-            <template #default="{ row }">
-              <el-button link class="finance-link-button" @click="$router.push({ path: '/borrower/repayment', query: { loanId: row.id } })">还款</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <div v-else class="finance-empty">
-          <strong>暂无借款记录</strong>
-          <p>融资申请审批通过并放款后，借款与还款计划会显示在这里。</p>
-        </div>
-      </section>
+        </template>
+        <template #cell-productType="{ row }">{{ productName(row.productType) }}</template>
+        <template #cell-amount="{ row }">{{ money(row.amount) }}</template>
+        <template #cell-remainingAmount="{ row }">{{ money(row.remainingAmount) }}</template>
+        <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+        <template #cell-actions="{ row }">
+          <AgriVueRowActions
+            :actions="[
+              { key: 'repay', label: '还款', onClick: () => $router.push({ path: '/borrower/repayment', query: { loanId: row.id } }) },
+            ]"
+          />
+        </template>
+      </AgriElementListTable>
 
       <aside class="home-side-stack">
         <section class="finance-card">
@@ -157,9 +154,19 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { AgriElementListTable, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { financeApi, financeUser, money, productName, shortDate } from '@/api/finance'
 import { loadFinanceProducts } from '@/data/products'
+
+const loanColumns = [
+  { key: 'loanNo', prop: 'loanNo', label: '借款编号', kind: 'code', minWidth: 150, locked: true },
+  { key: 'productType', prop: 'productType', label: '产品', minWidth: 110 },
+  { key: 'amount', prop: 'amount', label: '借款金额', kind: 'number', minWidth: 110 },
+  { key: 'remainingAmount', prop: 'remainingAmount', label: '剩余本金', kind: 'number', minWidth: 110 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+  { key: 'actions', label: '操作', kind: 'action', width: 88 },
+]
 
 const router = useRouter()
 const loading = ref(true)
@@ -235,7 +242,7 @@ onMounted(load)
   border-color: #fff;
   background: #fff;
   color: var(--fin-green-800);
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .finance-hero :deep(.hero-primary:hover) {
@@ -311,7 +318,7 @@ onMounted(load)
   place-items: center;
   border-radius: 9px;
   font-size: var(--fin-fs-xs);
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .home-todo-list button > span.green { background: #e7f6ed; color: #16764a; }

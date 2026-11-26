@@ -7,8 +7,6 @@
         <p>统一跟踪资金配置、资产履约、到期回款与已实现收益，完成投资业务闭环。</p>
       </div>
       <div class="finance-page-heading-actions">
-        <el-button class="finance-ghost-button" :loading="loading" @click="load">刷新组合</el-button>
-        <el-button class="finance-ghost-button" :disabled="!filtered.length" @click="exportPortfolio">导出明细</el-button>
         <el-button class="finance-action-button" @click="router.push('/fund/asset-market')">继续配置</el-button>
       </div>
     </header>
@@ -28,7 +26,7 @@
           <strong>{{ money(summary.activeAmount) }}</strong>
           <p>{{ summary.activeCount || 0 }} 笔资产履约中 · {{ summary.pendingReturnCount || 0 }} 笔待确认回款</p>
           <div class="portfolio-command-actions">
-            <el-button class="portfolio-primary" @click="filter = 'due'">处理待回款</el-button>
+            <el-button class="portfolio-primary" @click="selectTab('due')">处理待回款</el-button>
             <el-button class="portfolio-ghost" @click="router.push('/fund/asset-market')">发现新资产</el-button>
           </div>
         </div>
@@ -52,75 +50,70 @@
       <div v-if="Number(summary.overdueCount) > 0" class="portfolio-alert">
         <span>!</span>
         <div><strong>存在 {{ summary.overdueCount }} 笔已到期待回款资产</strong><p>请核验借款人回款并确认本息到账，避免资金头寸长期占用。</p></div>
-        <el-button link @click="filter = 'overdue'">立即处理 →</el-button>
+        <el-button link @click="selectTab('overdue')">立即处理 →</el-button>
       </div>
 
       <div class="portfolio-layout">
-        <main class="finance-card portfolio-list-card">
-          <div class="portfolio-toolbar">
-            <div class="finance-tabs">
-              <button
-                v-for="item in tabs"
-                :key="item.key"
-                type="button"
-                :class="{ on: filter === item.key }"
-                @click="filter = item.key"
-              >
-                {{ item.label }}<span>{{ countFor(item.key) }}</span>
-              </button>
-            </div>
-            <el-input v-model="keyword" :prefix-icon="Search" clearable placeholder="搜索投资编号或资产" />
-          </div>
-
-          <el-table v-if="filtered.length" :data="filtered" style="width: 100%">
-            <el-table-column label="投资资产" min-width="215">
-              <template #default="{ row }">
-                <div class="portfolio-asset-cell">
-                  <span>{{ row.assetType?.slice(0, 1) || '资' }}</span>
-                  <div>
-                    <el-button link class="portfolio-asset-link" @click="openAsset(row)">{{ row.assetName }}</el-button>
-                    <small>{{ row.investmentNo }} · {{ row.assetType }}</small>
-                  </div>
+        <main class="portfolio-list-main">
+          <AgriElementListTable
+            :columns="investmentColumns"
+            :data="filtered"
+            row-key="id"
+            :loading="loading"
+            client-pagination
+            column-settings-storage-key="agri-finance:fund-investments"
+            :empty-text="keyword || filter !== 'all' ? '暂无匹配投资，请调整筛选条件后重试' : '暂无匹配投资，从资产市场完成资金配置后会形成投资组合'"
+            @refresh="load"
+          >
+            <template #filter>
+              <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+                <div class="agri-vue-filter-field">
+                  <label>关键字</label>
+                  <el-input v-model="draft.keyword" clearable placeholder="搜索投资编号或资产名称" @keyup.enter="applyFilter" />
                 </div>
-              </template>
-            </el-table-column>
-            <el-table-column label="配置金额" min-width="115" align="right">
-              <template #default="{ row }"><strong class="portfolio-money">{{ money(row.investmentAmount) }}</strong></template>
-            </el-table-column>
-            <el-table-column label="预期收益" min-width="105" align="right">
-              <template #default="{ row }"><span class="portfolio-return">{{ money(row.expectedReturn) }}</span></template>
-            </el-table-column>
-            <el-table-column label="期限/收益率" width="105">
-              <template #default="{ row }"><span>{{ row.term }} 个月</span><small class="portfolio-sub">{{ number(row.interestRate) }}%</small></template>
-            </el-table-column>
-            <el-table-column label="到期日" min-width="115">
-              <template #default="{ row }">
-                <span>{{ dateOnly(row.expectedReturnTime) }}</span>
-                <small class="portfolio-sub" :class="{ danger: row.overdue }">{{ dueText(row) }}</small>
-              </template>
-            </el-table-column>
-            <el-table-column label="状态" width="90">
-              <template #default="{ row }"><FinanceStatus :value="row.status" /></template>
-            </el-table-column>
-            <el-table-column label="操作" width="125" align="right">
-              <template #default="{ row }">
-                <el-button link class="finance-link-button" @click="openDetail(row)">详情</el-button>
-                <el-button
-                  v-if="['投资中', '待回款'].includes(row.status)"
-                  link
-                  class="finance-link-button"
-                  @click="complete(row)"
+                <div class="agri-vue-filter-field">
+                  <label>投资状态</label>
+                  <el-select v-model="draft.status" placeholder="全部状态">
+                    <el-option v-for="item in tabs" :key="item.key" :label="`${item.label}（${countFor(item.key)}）`" :value="item.key" />
+                  </el-select>
+                </div>
+              </AgriVueFilterBar>
+            </template>
+            <template #toolbar-left>
+              <div class="finance-tabs">
+                <button
+                  v-for="item in tabs"
+                  :key="item.key"
+                  type="button"
+                  :class="{ on: filter === item.key }"
+                  @click="selectTab(item.key)"
                 >
-                  确认回款
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <div v-else class="finance-empty portfolio-empty">
-            <strong>暂无匹配投资</strong>
-            <p>{{ keyword || filter !== 'all' ? '请调整筛选条件后重试。' : '从资产市场完成资金配置后，会在这里形成投资组合。' }}</p>
-          </div>
+                  {{ item.label }}<span>{{ countFor(item.key) }}</span>
+                </button>
+              </div>
+              <el-button class="finance-ghost-button" :disabled="!filtered.length" @click="exportPortfolio">导出明细</el-button>
+            </template>
+            <template #cell-asset="{ row }">
+              <div class="portfolio-asset-cell">
+                <span>{{ row.assetType?.slice(0, 1) || '资' }}</span>
+                <div>
+                  <el-button link class="portfolio-asset-link" @click="openAsset(row)">{{ row.assetName }}</el-button>
+                  <small>{{ row.investmentNo }} · {{ row.assetType }}</small>
+                </div>
+              </div>
+            </template>
+            <template #cell-investmentAmount="{ row }"><strong class="portfolio-money">{{ money(row.investmentAmount) }}</strong></template>
+            <template #cell-expectedReturn="{ row }"><span class="portfolio-return">{{ money(row.expectedReturn) }}</span></template>
+            <template #cell-term="{ row }"><span>{{ row.term }} 个月</span><small class="portfolio-sub">{{ number(row.interestRate) }}%</small></template>
+            <template #cell-expectedReturnTime="{ row }">
+              <span>{{ dateOnly(row.expectedReturnTime) }}</span>
+              <small class="portfolio-sub" :class="{ danger: row.overdue }">{{ dueText(row) }}</small>
+            </template>
+            <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+            <template #cell-actions="{ row }">
+              <AgriVueRowActions :actions="investmentRowActions(row)" />
+            </template>
+          </AgriElementListTable>
         </main>
 
         <aside class="portfolio-aside">
@@ -194,13 +187,23 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, money, shortDate } from '@/api/finance'
+
+const investmentColumns = [
+  { key: 'asset', label: '投资资产', minWidth: 220, locked: true, ellipsis: false },
+  { key: 'investmentAmount', prop: 'investmentAmount', label: '配置金额', kind: 'number', minWidth: 115 },
+  { key: 'expectedReturn', prop: 'expectedReturn', label: '预期收益', kind: 'number', minWidth: 105 },
+  { key: 'term', prop: 'term', label: '期限/收益率', kind: 'number', width: 112, ellipsis: false },
+  { key: 'expectedReturnTime', prop: 'expectedReturnTime', label: '到期日', minWidth: 120, ellipsis: false },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 96 },
+  { key: 'actions', label: '操作', kind: 'action', width: 130 },
+]
 
 const router = useRouter()
 const loading = ref(true)
@@ -208,8 +211,33 @@ const error = ref('')
 const portfolio = ref(null)
 const filter = ref('all')
 const keyword = ref('')
+const draft = reactive({ keyword: '', status: 'all' })
 const detailOpen = ref(false)
 const selected = ref(null)
+
+function applyFilter() {
+  keyword.value = draft.keyword
+  filter.value = draft.status || 'all'
+}
+
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = 'all'
+  applyFilter()
+}
+
+function selectTab(key) {
+  filter.value = key
+  draft.status = key
+}
+
+function investmentRowActions(row) {
+  const list = [{ key: 'detail', label: '详情', onClick: () => openDetail(row) }]
+  if (['投资中', '待回款'].includes(row.status)) {
+    list.push({ key: 'complete', label: '确认回款', onClick: () => complete(row) })
+  }
+  return list
+}
 
 const tabs = [
   { key: 'all', label: '全部' },
@@ -321,7 +349,7 @@ onMounted(load)
 
 <style scoped>
 .portfolio-error { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border: 1px solid #efd4ce; border-radius: 10px; background: #fff8f6; color: #a44f3f; font-size: var(--fin-fs-xs); }
-.portfolio-command { display: grid; grid-template-columns: 1.35fr 1fr repeat(2, minmax(0, 1fr)); overflow: hidden; border-radius: 16px; background: radial-gradient(circle at 78% 0%, rgba(134, 232, 173, .18), transparent 14rem), linear-gradient(135deg, #073c26, #0d6b47); color: #fff; }
+.portfolio-command { display: grid; grid-template-columns: 1.35fr 1fr repeat(2, minmax(0, 1fr)); overflow: hidden; border-radius: 8px; background: radial-gradient(circle at 78% 0%, rgba(134, 232, 173, .18), transparent 14rem), linear-gradient(135deg, #073c26, #0d6b47); color: #fff; }
 .portfolio-command > div { min-width: 0; padding: 18px 20px; border-left: 1px solid rgba(255, 255, 255, .1); }
 .portfolio-command > div:first-child { border-left: 0; }
 .portfolio-command-main small { color: #a6dfbb; font-size: var(--fin-fs-xs); letter-spacing: .11em; }
@@ -330,7 +358,7 @@ onMounted(load)
 .portfolio-command-main > p { margin: 4px 0 0; color: rgba(255, 255, 255, .46); font-size: var(--fin-fs-xs); }
 .portfolio-command-actions { display: flex; gap: 7px; margin-top: 13px; }
 .portfolio-command-actions :deep(.el-button) { height: 30px; margin: 0; border-radius: 7px; font-size: var(--fin-fs-xs); }
-.portfolio-primary { border-color: #fff; background: #fff; color: #0c603f; font-weight: 700; }
+.portfolio-primary { border-color: #fff; background: #fff; color: #0c603f; font-weight: 600; }
 .portfolio-ghost { border-color: rgba(255, 255, 255, .2); background: rgba(255, 255, 255, .07); color: #fff; }
 .portfolio-headroom, .portfolio-command-stat { display: flex; justify-content: center; flex-direction: column; }
 .portfolio-headroom > span, .portfolio-command-stat > span { color: rgba(255, 255, 255, .46); font-size: var(--fin-fs-xs); }
@@ -348,17 +376,18 @@ onMounted(load)
 .portfolio-kpis em { color: #7a8f81; font-size: var(--fin-fs-xs); font-style: normal; }
 .portfolio-kpis small { margin-top: 3px; color: #8b9991; font-size: var(--fin-fs-xs); }
 .portfolio-alert { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid #efdad4; border-radius: 10px; background: #fff9f7; }
-.portfolio-alert > span { display: grid; width: 25px; height: 25px; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #fbe8e4; color: #bb4c3c; font-size: var(--fin-fs-xs); font-weight: 800; }
+.portfolio-alert > span { display: grid; width: 25px; height: 25px; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #fbe8e4; color: #bb4c3c; font-size: var(--fin-fs-xs); font-weight: 600; }
 .portfolio-alert > div { min-width: 0; flex: 1; }
 .portfolio-alert strong { color: #875045; font-size: var(--fin-fs-xs); }
 .portfolio-alert p { margin: 2px 0 0; color: #9a7168; font-size: var(--fin-fs-xs); }
 .portfolio-layout { display: grid; grid-template-columns: minmax(0, 1fr) 285px; align-items: start; gap: 13px; }
+.portfolio-list-main { min-width: 0; }
 .portfolio-list-card { min-width: 0; overflow: hidden; }
 .portfolio-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-bottom: 1px solid #edf2ee; }
 .portfolio-toolbar :deep(.el-input) { width: 235px; }
 .finance-tabs button > span { margin-left: 4px; color: #91a097; font-size: var(--fin-fs-xs); }
 .portfolio-asset-cell { display: flex; align-items: center; gap: 8px; }
-.portfolio-asset-cell > span { display: grid; width: 32px; height: 32px; place-items: center; flex: 0 0 auto; border-radius: 8px; background: #e8f5ee; color: #26704c; font-size: var(--fin-fs-xs); font-weight: 700; }
+.portfolio-asset-cell > span { display: grid; width: 32px; height: 32px; place-items: center; flex: 0 0 auto; border-radius: 8px; background: #e8f5ee; color: #26704c; font-size: var(--fin-fs-xs); font-weight: 600; }
 .portfolio-asset-cell > div { min-width: 0; }
 .portfolio-asset-cell small { display: block; overflow: hidden; margin-top: 2px; color: #89988f; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); text-overflow: ellipsis; white-space: nowrap; }
 .portfolio-asset-link { padding: 0; color: #315f46; font-size: var(--fin-fs-xs); }
@@ -368,7 +397,7 @@ onMounted(load)
 .portfolio-sub.danger { color: #bb4b3b; }
 .portfolio-empty { min-height: 260px; }
 .portfolio-aside { display: grid; gap: 11px; }
-.portfolio-allocation { padding: 15px; border: 1px solid var(--fin-line); border-radius: 13px; background: #fff; }
+.portfolio-allocation { padding: 15px; border: 1px solid var(--fin-line); border-radius: 8px; background: #fff; }
 .portfolio-aside-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .portfolio-aside-head strong { color: #304f3c; font-size: var(--fin-fs-xs); }
 .portfolio-aside-head span { color: #8a9991; font-size: var(--fin-fs-xs); }
@@ -390,7 +419,7 @@ onMounted(load)
 .portfolio-upcoming-empty span { margin-top: 3px; color: #8c9a92; font-size: var(--fin-fs-xs); }
 .investment-detail { display: grid; gap: 12px; }
 .investment-detail-head { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; background: #f5faf7; }
-.investment-detail-mark { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; border-radius: 11px; background: #e0f1e7; color: #1d7149; font-size: 13px; font-weight: 800; }
+.investment-detail-mark { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; border-radius: 11px; background: #e0f1e7; color: #1d7149; font-size: 13px; font-weight: 600; }
 .investment-detail-head > div:nth-child(2) { min-width: 0; flex: 1; }
 .investment-detail-head small, .investment-detail-head h2, .investment-detail-head p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .investment-detail-head small { color: #8a9991; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }

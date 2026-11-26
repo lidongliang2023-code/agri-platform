@@ -5,6 +5,11 @@
       <div class="finance-page-heading-actions"><el-button class="finance-ghost-button" :loading="loading" @click="load">刷新报表</el-button></div>
     </header>
 
+    <div v-if="error" class="report-error">
+      <span>{{ error }}</span>
+      <el-button link @click="load">重新加载</el-button>
+    </div>
+
     <div class="finance-kpis">
       <article class="finance-kpi"><span>申请笔数</span><strong>{{ applications.length }}<em> 笔</em></strong><small>{{ pendingCount }} 笔待审批</small></article>
       <article class="finance-kpi"><span>融资规模</span><strong>{{ compactMoney(totalApplied) }}</strong><small>累计申请金额</small></article>
@@ -34,29 +39,85 @@
       </section>
     </div>
 
-    <section class="finance-card">
-      <div class="finance-card-head"><strong>最近业务记录</strong><small>{{ role === 'fund' ? '最新投资配置' : '最新融资申请' }}</small></div>
-      <el-table :data="role === 'fund' ? investments : applications" style="width: 100%">
-        <el-table-column :label="role === 'fund' ? '投资编号' : '申请编号'" min-width="150"><template #default="{ row }">{{ row.investmentNo || row.applicationNo }}</template></el-table-column>
-        <el-table-column :prop="role === 'fund' ? 'assetName' : 'userName'" :label="role === 'fund' ? '资产' : '融资主体'" min-width="180" />
-        <el-table-column :label="role === 'fund' ? '投资金额' : '申请金额'" min-width="120" align="right"><template #default="{ row }">{{ compactMoney(row.investmentAmount || row.applyAmount) }}</template></el-table-column>
-        <el-table-column label="状态" width="100"><template #default="{ row }"><FinanceStatus :value="row.status" /></template></el-table-column>
-        <el-table-column label="时间" min-width="130"><template #default="{ row }">{{ shortDate(row.investmentTime || row.applyTime) }}</template></el-table-column>
-      </el-table>
-    </section>
+    <AgriElementListTable
+      :columns="reportColumns"
+      :data="filteredRecords"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      :column-settings-storage-key="role === 'fund' ? 'agri-finance:fund-report-records' : 'agri-finance:admin-report-records'"
+      empty-text="暂无匹配的业务记录"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyFilter" @reset="resetFilter">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="draft.keyword" clearable :placeholder="role === 'fund' ? '投资编号 / 资产名称' : '申请编号 / 融资主体'" @keyup.enter="applyFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>业务状态</label>
+            <el-select v-model="draft.status" clearable placeholder="全部状态">
+              <el-option label="全部" value="" />
+              <el-option v-for="s in statusOptions" :key="s" :label="s" :value="s" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #toolbar-left>
+        <strong class="finance-table-title">最近业务记录</strong>
+        <small class="finance-table-hint">{{ role === 'fund' ? '最新投资配置' : '最新融资申请' }}</small>
+      </template>
+      <template #cell-recordNo="{ row }">{{ row.investmentNo || row.applicationNo }}</template>
+      <template #cell-target="{ row }">{{ role === 'fund' ? row.assetName : row.userName }}</template>
+      <template #cell-amount="{ row }">{{ compactMoney(row.investmentAmount || row.applyAmount) }}</template>
+      <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      <template #cell-recordTime="{ row }">{{ shortDate(row.investmentTime || row.applyTime) }}</template>
+    </AgriElementListTable>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { AgriElementListTable, AgriVueFilterBar } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, shortDate } from '@/api/finance'
 
 const route = useRoute()
 const role = computed(() => route.path.startsWith('/fund') ? 'fund' : 'admin')
+const reportColumns = computed(() => [
+  { key: 'recordNo', label: role.value === 'fund' ? '投资编号' : '申请编号', kind: 'code', minWidth: 155, locked: true },
+  { key: 'target', label: role.value === 'fund' ? '资产' : '融资主体', minWidth: 185 },
+  { key: 'amount', label: role.value === 'fund' ? '投资金额' : '申请金额', kind: 'number', minWidth: 120 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 100 },
+  { key: 'recordTime', label: '时间', minWidth: 140 },
+])
+const draft = reactive({ keyword: '', status: '' })
+const query = reactive({ keyword: '', status: '' })
+function applyFilter() {
+  query.keyword = draft.keyword
+  query.status = draft.status
+}
+function resetFilter() {
+  draft.keyword = ''
+  draft.status = ''
+  applyFilter()
+}
+const rawRecords = computed(() => (role.value === 'fund' ? investments.value : applications.value))
+const statusOptions = computed(() => [...new Set(rawRecords.value.map((item) => item.status).filter(Boolean))])
+const filteredRecords = computed(() => {
+  const kw = query.keyword.trim().toLowerCase()
+  return rawRecords.value.filter((row) => {
+    if (query.status && row.status !== query.status) return false
+    const text = `${row.investmentNo || ''}${row.applicationNo || ''}${row.assetName || ''}${row.userName || ''}`.toLowerCase()
+    if (kw && !text.includes(kw)) return false
+    return true
+  })
+})
 const loading = ref(true)
+const error = ref('')
 const applications = ref([])
 const loans = ref([])
 const investments = ref([])
@@ -82,21 +143,33 @@ const trends = computed(() => {
 
 async function load() {
   loading.value = true
+  error.value = ''
   try {
+    const isFund = role.value === 'fund'
     const [applicationData, loanData, investmentData, overdueData] = await Promise.all([
-      operationsApi.applications(), operationsApi.loans(), operationsApi.investments(), operationsApi.overdue(),
+      operationsApi.applications(),
+      operationsApi.loans(),
+      isFund ? operationsApi.investments() : Promise.resolve([]),
+      operationsApi.overdue(),
     ])
     applications.value = applicationData || []
     loans.value = loanData || []
     investments.value = investmentData || []
     overdue.value = overdueData || []
+  } catch (err) {
+    error.value = err?.message || '报表数据加载失败'
   } finally { loading.value = false }
 }
 
 onMounted(load)
+watch(role, () => {
+  resetFilter()
+  load()
+})
 </script>
 
 <style scoped>
+.report-error { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border: 1px solid #efd4ce; border-radius: 8px; background: #fff8f6; color: #a44f3f; font-size: var(--fin-fs-xs); }
 .finance-kpi em { color: #60776a; font-size: var(--fin-fs-xs); font-style: normal; }
 .report-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(270px, .7fr); gap: 14px; }
 .report-bars { display: grid; gap: 17px; padding: 19px; }

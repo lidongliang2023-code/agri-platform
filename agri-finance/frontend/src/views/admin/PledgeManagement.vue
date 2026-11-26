@@ -2,7 +2,7 @@
   <section class="finance-page">
     <header class="finance-page-heading">
       <div><small>PLEDGE OPERATIONS</small><h1>质押与仓单</h1><p>核验仓单来源（批次、库存、链上存证），审核质押并在结清或换货时释放仓单。</p></div>
-      <div class="finance-page-heading-actions"><el-button class="finance-ghost-button" :loading="loading" @click="load">刷新</el-button></div>
+      <div class="finance-page-heading-actions" />
     </header>
     <div class="finance-kpis">
       <article class="finance-kpi"><span>仓单</span><strong>{{ receipts.length }}<em> 张</em></strong><small>{{ receiptActive.length }} 张在押</small></article>
@@ -11,40 +11,88 @@
       <article class="finance-kpi"><span>待审核</span><strong>{{ pending.length }}<em> 笔</em></strong><small>需完成仓单核验</small></article>
     </div>
 
-    <section class="finance-card">
-      <div class="finance-card-head"><strong>仓单台账</strong><div class="finance-tabs"><button v-for="item in receiptFilters" :key="item.key" type="button" :class="{ on: receiptFilter === item.key }" @click="receiptFilter = item.key">{{ item.label }}</button></div></div>
-      <el-table :data="filteredReceipts" style="width: 100%">
-        <el-table-column prop="receiptNo" label="仓单号" min-width="150" />
-        <el-table-column label="融资主体" min-width="130"><template #default="{ row }">{{ subjectName(row.userId) }}</template></el-table-column>
-        <el-table-column label="来源批次" min-width="150"><template #default="{ row }">{{ row.batchNo || '—' }}<em v-if="row.traceCode" class="trace"> / {{ row.traceCode }}</em></template></el-table-column>
-        <el-table-column prop="commodityType" label="品种" min-width="90" />
-        <el-table-column label="数量" min-width="100"><template #default="{ row }">{{ num(row.quantity) }} {{ row.unit || '' }}</template></el-table-column>
-        <el-table-column label="货值" min-width="100" align="right"><template #default="{ row }">{{ compactMoney(row.totalValue) }}</template></el-table-column>
-        <el-table-column label="链上存证" min-width="120"><template #default="{ row }"><span v-if="row.blockchainHash" class="proof">{{ shortHash(row.blockchainHash) }}</span><span v-else class="cell-missing">未存证</span></template></el-table-column>
-        <el-table-column prop="warehouseName" label="仓库" min-width="120" />
-        <el-table-column label="状态" width="85"><template #default="{ row }"><FinanceStatus :value="row.status" /></template></el-table-column>
-        <el-table-column label="操作" width="120" align="right"><template #default="{ row }"><el-button link class="finance-link-button" @click="openMonitor(row)">仓储读数</el-button></template></el-table-column>
-      </el-table>
-      <div v-if="!filteredReceipts.length" class="finance-empty"><strong>暂无仓单</strong><p>融资方从已入库的采收批次开出的仓单会进入这张台账；仓单与批次、库存、存证一一可核。</p></div>
-    </section>
+    <AgriElementListTable
+      :columns="receiptColumns"
+      :data="filteredReceipts"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-finance:admin-receipts"
+      empty-text="暂无仓单，融资方从已入库采收批次开出的仓单会进入这张台账"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyReceiptFilter" @reset="resetReceiptFilter">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="receiptDraft.keyword" clearable placeholder="仓单号 / 批次号 / 品种 / 仓库" @keyup.enter="applyReceiptFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>仓单状态</label>
+            <el-select v-model="receiptDraft.status" placeholder="全部状态">
+              <el-option v-for="item in receiptFilters" :key="item.key" :label="item.label" :value="item.key" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #toolbar-left>
+        <strong class="finance-table-title">仓单台账</strong>
+        <div class="finance-tabs">
+          <button v-for="item in receiptFilters" :key="item.key" type="button" :class="{ on: receiptFilter === item.key }" @click="selectReceiptTab(item.key)">{{ item.label }}</button>
+        </div>
+      </template>
+      <template #cell-userId="{ row }">{{ subjectName(row.userId) }}</template>
+      <template #cell-batchNo="{ row }">{{ row.batchNo || '—' }}<em v-if="row.traceCode" class="trace"> / {{ row.traceCode }}</em></template>
+      <template #cell-quantity="{ row }">{{ num(row.quantity) }} {{ row.unit || '' }}</template>
+      <template #cell-totalValue="{ row }">{{ compactMoney(row.totalValue) }}</template>
+      <template #cell-blockchainHash="{ row }"><span v-if="row.blockchainHash" class="proof">{{ shortHash(row.blockchainHash) }}</span><span v-else class="cell-missing">未存证</span></template>
+      <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="[{ key: 'monitor', label: '仓储读数', onClick: () => openMonitor(row) }]" />
+      </template>
+    </AgriElementListTable>
 
-    <section class="finance-card">
-      <div class="finance-card-head"><strong>仓单质押列表</strong><div class="finance-tabs"><button v-for="item in filters" :key="item.key" type="button" :class="{ on: filter === item.key }" @click="filter = item.key">{{ item.label }}</button></div></div>
-      <el-table :data="filtered" style="width: 100%">
-        <el-table-column prop="pledgeNo" label="质押编号" min-width="130" />
-        <el-table-column label="来源仓单" min-width="150"><template #default="{ row }"><span v-if="row.receiptNo">{{ row.receiptNo }}<em v-if="row.batchNo" class="trace"> / {{ row.batchNo }}</em></span><span v-else class="cell-missing">历史数据，未关联仓单</span></template></el-table-column>
-        <el-table-column prop="commodityType" label="质押物" min-width="100" />
-        <el-table-column label="数量" min-width="90"><template #default="{ row }">{{ num(row.quantity) }}</template></el-table-column>
-        <el-table-column label="质押价值" min-width="105" align="right"><template #default="{ row }">{{ compactMoney(row.totalValue) }}</template></el-table-column>
-        <el-table-column label="质押率" width="75" align="right"><template #default="{ row }">{{ row.pledgeRate }}%</template></el-table-column>
-        <el-table-column label="融资金额" min-width="105" align="right"><template #default="{ row }">{{ compactMoney(row.loanAmount) }}</template></el-table-column>
-        <el-table-column label="担保的融资" min-width="120"><template #default="{ row }">{{ row.loanId ? `借款 ${row.loanId}` : row.applicationId ? `申请 ${row.applicationId}` : '未绑定' }}</template></el-table-column>
-        <el-table-column prop="warehouseName" label="仓库" min-width="120" />
-        <el-table-column label="状态" width="85"><template #default="{ row }"><FinanceStatus :value="row.status" /></template></el-table-column>
-        <el-table-column label="操作" width="150" align="right"><template #default="{ row }"><el-button v-if="row.status === '待审核'" link class="finance-link-button" @click="approve(row)">审核通过</el-button><el-button v-if="row.status === '已生效'" link class="finance-link-button" @click="release(row)">释放质押</el-button></template></el-table-column>
-      </el-table>
-      <div v-if="!filtered.length" class="finance-empty"><strong>暂无匹配质押记录</strong><p>新的仓单质押申请会进入运营审核列表。</p></div>
-    </section>
+    <AgriElementListTable
+      :columns="pledgeColumns"
+      :data="filtered"
+      row-key="id"
+      :loading="loading"
+      client-pagination
+      column-settings-storage-key="agri-finance:admin-pledges"
+      empty-text="暂无匹配质押记录，新的仓单质押申请会进入运营审核列表"
+      @refresh="load"
+    >
+      <template #filter>
+        <AgriVueFilterBar :field-count="2" :loading="loading" @search="applyPledgeFilter" @reset="resetPledgeFilter">
+          <div class="agri-vue-filter-field">
+            <label>关键字</label>
+            <el-input v-model="pledgeDraft.keyword" clearable placeholder="质押编号 / 仓单号 / 质押物 / 仓库" @keyup.enter="applyPledgeFilter" />
+          </div>
+          <div class="agri-vue-filter-field">
+            <label>质押状态</label>
+            <el-select v-model="pledgeDraft.status" placeholder="全部状态">
+              <el-option v-for="item in filters" :key="item.key" :label="item.label" :value="item.key" />
+            </el-select>
+          </div>
+        </AgriVueFilterBar>
+      </template>
+      <template #toolbar-left>
+        <strong class="finance-table-title">仓单质押列表</strong>
+        <div class="finance-tabs">
+          <button v-for="item in filters" :key="item.key" type="button" :class="{ on: filter === item.key }" @click="selectPledgeTab(item.key)">{{ item.label }}</button>
+        </div>
+      </template>
+      <template #cell-receiptNo="{ row }"><span v-if="row.receiptNo">{{ row.receiptNo }}<em v-if="row.batchNo" class="trace"> / {{ row.batchNo }}</em></span><span v-else class="cell-missing">历史数据，未关联仓单</span></template>
+      <template #cell-quantity="{ row }">{{ num(row.quantity) }}</template>
+      <template #cell-totalValue="{ row }">{{ compactMoney(row.totalValue) }}</template>
+      <template #cell-pledgeRate="{ row }">{{ row.pledgeRate }}%</template>
+      <template #cell-loanAmount="{ row }">{{ compactMoney(row.loanAmount) }}</template>
+      <template #cell-loanRef="{ row }">{{ row.loanId ? `借款 ${row.loanId}` : row.applicationId ? `申请 ${row.applicationId}` : '未绑定' }}</template>
+      <template #cell-status="{ row }"><FinanceStatus :value="row.status" /></template>
+      <template #cell-actions="{ row }">
+        <AgriVueRowActions :actions="pledgeRowActions(row)" />
+      </template>
+    </AgriElementListTable>
 
     <el-drawer v-model="monitorOpen" :title="monitorTarget ? `仓储读数 · ${monitorTarget.receiptNo}` : '仓储读数'" size="min(460px, 92vw)">
       <div v-loading="monitorLoading" class="monitor-body">
@@ -68,11 +116,39 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
 import FinanceStatus from '@/components/FinanceStatus.vue'
 import { operationsApi } from '@/api/operations'
 import { compactMoney, num, shortDate } from '@/api/finance'
+
+const receiptColumns = [
+  { key: 'receiptNo', prop: 'receiptNo', label: '仓单号', kind: 'code', minWidth: 150, locked: true },
+  { key: 'userId', prop: 'userId', label: '融资主体', minWidth: 130 },
+  { key: 'batchNo', prop: 'batchNo', label: '来源批次', minWidth: 155 },
+  { key: 'commodityType', prop: 'commodityType', label: '品种', minWidth: 96 },
+  { key: 'quantity', prop: 'quantity', label: '数量', kind: 'number', minWidth: 105 },
+  { key: 'totalValue', prop: 'totalValue', label: '货值', kind: 'number', minWidth: 105 },
+  { key: 'blockchainHash', prop: 'blockchainHash', label: '链上存证', minWidth: 130 },
+  { key: 'warehouseName', prop: 'warehouseName', label: '仓库', minWidth: 120 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 92 },
+  { key: 'actions', label: '操作', kind: 'action', width: 105 },
+]
+
+const pledgeColumns = [
+  { key: 'pledgeNo', prop: 'pledgeNo', label: '质押编号', kind: 'code', minWidth: 135, locked: true },
+  { key: 'receiptNo', prop: 'receiptNo', label: '来源仓单', minWidth: 155 },
+  { key: 'commodityType', prop: 'commodityType', label: '质押物', minWidth: 105 },
+  { key: 'quantity', prop: 'quantity', label: '数量', kind: 'number', minWidth: 96 },
+  { key: 'totalValue', prop: 'totalValue', label: '质押价值', kind: 'number', minWidth: 110 },
+  { key: 'pledgeRate', prop: 'pledgeRate', label: '质押率', kind: 'number', width: 85 },
+  { key: 'loanAmount', prop: 'loanAmount', label: '融资金额', kind: 'number', minWidth: 110 },
+  { key: 'loanRef', label: '担保的融资', minWidth: 120 },
+  { key: 'warehouseName', prop: 'warehouseName', label: '仓库', minWidth: 120 },
+  { key: 'status', prop: 'status', label: '状态', kind: 'status', width: 92 },
+  { key: 'actions', label: '操作', kind: 'action', width: 120 },
+]
 
 const loading = ref(true)
 const pledges = ref([])
@@ -80,24 +156,75 @@ const receipts = ref([])
 const subjects = ref([])
 const filter = ref('all')
 const receiptFilter = ref('all')
+const receiptDraft = reactive({ keyword: '', status: 'all' })
+const receiptQuery = reactive({ keyword: '' })
+const pledgeDraft = reactive({ keyword: '', status: 'all' })
+const pledgeQuery = reactive({ keyword: '' })
 const monitorOpen = ref(false)
 const monitorLoading = ref(false)
 const monitor = ref({})
 const monitorTarget = ref(null)
 const filters = [{ key: 'all', label: '全部' }, { key: 'pending', label: '待审核' }, { key: 'active', label: '已生效' }, { key: 'released', label: '已释放' }]
 const receiptFilters = [{ key: 'all', label: '全部' }, { key: '待质押', label: '待质押' }, { key: '已质押', label: '已质押' }, { key: '已释放', label: '已释放' }]
+
+function applyReceiptFilter() {
+  receiptQuery.keyword = receiptDraft.keyword
+  receiptFilter.value = receiptDraft.status || 'all'
+}
+
+function resetReceiptFilter() {
+  receiptDraft.keyword = ''
+  receiptDraft.status = 'all'
+  applyReceiptFilter()
+}
+
+function selectReceiptTab(key) {
+  receiptFilter.value = key
+  receiptDraft.status = key
+}
+
+function applyPledgeFilter() {
+  pledgeQuery.keyword = pledgeDraft.keyword
+  filter.value = pledgeDraft.status || 'all'
+}
+
+function resetPledgeFilter() {
+  pledgeDraft.keyword = ''
+  pledgeDraft.status = 'all'
+  applyPledgeFilter()
+}
+
+function selectPledgeTab(key) {
+  filter.value = key
+  pledgeDraft.status = key
+}
+
 const active = computed(() => pledges.value.filter((item) => item.status === '已生效'))
 const pending = computed(() => pledges.value.filter((item) => item.status === '待审核'))
 const filtered = computed(() => {
-  if (filter.value === 'pending') return pending.value
-  if (filter.value === 'active') return active.value
-  if (filter.value === 'released') return pledges.value.filter((item) => item.status === '已释放')
-  return pledges.value
+  let rows = pledges.value
+  if (filter.value === 'pending') rows = pending.value
+  else if (filter.value === 'active') rows = active.value
+  else if (filter.value === 'released') rows = pledges.value.filter((item) => item.status === '已释放')
+  const kw = pledgeQuery.keyword.trim().toLowerCase()
+  if (kw) rows = rows.filter((item) => `${item.pledgeNo || ''}${item.receiptNo || ''}${item.commodityType || ''}${item.warehouseName || ''}`.toLowerCase().includes(kw))
+  return rows
 })
 const receiptActive = computed(() => receipts.value.filter((item) => item.status === '已质押'))
 const receiptPledgedValue = computed(() => receiptActive.value.reduce((total, item) => total + Number(item.totalValue || 0), 0))
-const filteredReceipts = computed(() => (receiptFilter.value === 'all'
-  ? receipts.value : receipts.value.filter((item) => item.status === receiptFilter.value)))
+const filteredReceipts = computed(() => {
+  const base = receiptFilter.value === 'all' ? receipts.value : receipts.value.filter((item) => item.status === receiptFilter.value)
+  const kw = receiptQuery.keyword.trim().toLowerCase()
+  if (!kw) return base
+  return base.filter((item) => `${item.receiptNo || ''}${item.batchNo || ''}${item.commodityType || ''}${item.warehouseName || ''}${subjectName(item.userId)}`.toLowerCase().includes(kw))
+})
+
+function pledgeRowActions(row) {
+  const list = []
+  if (row.status === '待审核') list.push({ key: 'approve', label: '审核通过', onClick: () => approve(row) })
+  if (row.status === '已生效') list.push({ key: 'release', label: '释放质押', danger: true, onClick: () => release(row) })
+  return list
+}
 
 function subjectName(userId) {
   const hit = subjects.value.find((item) => item.subjectId === userId)
