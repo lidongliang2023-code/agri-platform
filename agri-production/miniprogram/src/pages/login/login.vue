@@ -408,7 +408,7 @@ function mpQuickLogin() {
 .pl-third-icon { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; background: #fff; border: 1px solid #e6ebe7; }
 .pl-third-icon image { width: 30px; height: 30px; }
 .pl-third-label { font-size: 12px; white-space: nowrap; }
-.pl-third-status { color: #666; font-size: 11px; line-height: 16px; }
+.pl-third-status { color: #666; font-size: 12px; line-height: 16px; }
 .pl-third-notice { display: block; margin-top: 12px; padding: 12px; border-radius: 10px; background: #edf3ef; color: #42554a; font-size: 12px; line-height: 20px; }
 .pl-consent { display: flex; align-items: flex-start; justify-content: center; color: #666; font-size: 12px; line-height: 20px; }
 .prod-login .pl-consent-toggle { display: flex; align-items: center; justify-content: center; flex: none; width: 48px; height: 48px; }
@@ -424,7 +424,7 @@ function mpQuickLogin() {
 .pl-consent.is-error, .prod-login .pl-consent.is-error .pl-policy { color: #b71c1c; }
 .pl-consent.is-error .pl-dot { border-color: #b71c1c; }
 .pl-consent-error { display: block; color: #b71c1c; font-size: 12px; line-height: 20px; text-align: center; }
-.pl-foot { display: block; margin-top: 8px; color: #666; text-align: center; font-size: 11px; line-height: 18px; }
+.pl-foot { display: block; margin-top: 8px; color: #666; text-align: center; font-size: 12px; line-height: 18px; }
 .prod-login .pl-connection { display: flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; margin: 0 auto; color: #666; font-size: 12px; }
 .pl-home .pl-brand { padding-top: 64px; }
 .pl-home .pl-auth-card { margin-top: auto; }

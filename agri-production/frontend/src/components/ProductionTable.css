@@ -240,7 +240,7 @@ html.pc-ui-v1 .production-record-table .ant-pro-query-filter .ant-form-item,
 }
 .production-record-table .ant-pro-query-filter .ant-pro-query-filter-collapse-button .anticon {
   margin-inline-start: 2px !important;
-  font-size: 11px;
+  font-size: 12px;
 }
 /* 按钮列默认按内容自适应并贴右，不占用多余列宽 */
 .production-record-table .ant-pro-query-filter .ant-pro-query-filter-row > .ant-col:has(.ant-pro-query-filter-actions) {
@@ -304,7 +304,7 @@ html.pc-ui-v1 .production-record-table .ant-pro-query-filter .ant-form-item,
 }
 .production-filter-grid .production-filter-actions .production-filter-collapse-btn .anticon {
   margin-inline-start: 2px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .production-filter-grid:not(.ant-form) > .production-filter-actions {
   align-items: center;

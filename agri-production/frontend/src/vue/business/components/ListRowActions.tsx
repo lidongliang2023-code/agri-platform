@@ -97,7 +97,7 @@ export default defineComponent({
           }
         }, () => ['更多 ', h(DownOutlined, {
           style: {
-            fontSize: '11px'
+            fontSize: '12px'
           }
         })]),
         overlay: () => h(Menu, {
