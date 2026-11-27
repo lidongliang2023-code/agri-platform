@@ -54,6 +54,7 @@
       </template>
       <template #cell-totalAmount="{ row }">¥{{ money(row.totalAmount) }}</template>
       <template #cell-avgAmount="{ row }">¥{{ money(row.avgAmount) }}</template>
+      <template #cell-memberLevel="{ row }">{{ resolveMemberLevel(row.memberLevel).label }}</template>
       <template #cell-actions="{ row }">
         <AgriVueRowActions :actions="[{ key: 'profile', label: '画像', onClick: () => $router.push(`/customers/${row.consumerId}`) }]" />
       </template>
@@ -66,6 +67,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { AgriElementListTable, AgriVueFilterBar, AgriVueRowActions } from '@agri/shared/vue/element'
+import { resolveMemberLevel } from '../../../frontend-shared/detail/s2b2cDetailHelper'
 import { channelApi } from '../api'
 
 const route = useRoute()

@@ -1,8 +1,9 @@
 import { defineComponent, ref, shallowRef, computed, watch, watchEffect, onMounted, onBeforeUnmount, useId, type PropType, type VNodeChild, type CSSProperties } from 'vue';
 type PortalEvent<T = HTMLElement> = Event;
-import { Button, Card, Descriptions, Drawer, Input, Select, Space, Table, Tag, message } from "@/vue/ui";
+import { Button, Input, Select, Tag, message } from "@/vue/ui";
+import { useNavigate } from "@/vue/router";
 import { ListRowActions } from "@/vue/shared";
-import { getAdminOrderDetail, getAdminOrderPage } from '@/api/admin';
+import { getAdminOrderPage } from '@/api/admin';
 import { TradeFilters, TradeList } from '@/components/TradeList';
 interface OrderRow {
   id: number;
@@ -78,6 +79,7 @@ const AdminOrderOversight = defineComponent({
   setup(__props: {}, {
     slots: __slots
   }) {
+    const navigate = useNavigate();
     const rows = shallowRef<OrderRow[]>([]);
     const setRows = (next: typeof rows.value | ((previous: typeof rows.value) => typeof rows.value)) => {
       rows.value = typeof next === 'function' ? (next as (previous: typeof rows.value) => typeof rows.value)(rows.value) : next;
@@ -113,13 +115,6 @@ const AdminOrderOversight = defineComponent({
     const draftKeyword = shallowRef('');
     const setDraftKeyword = (next: typeof draftKeyword.value | ((previous: typeof draftKeyword.value) => typeof draftKeyword.value)) => {
       draftKeyword.value = typeof next === 'function' ? (next as (previous: typeof draftKeyword.value) => typeof draftKeyword.value)(draftKeyword.value) : next;
-    };
-    const detail = shallowRef<{
-      order: OrderRow;
-      items: OrderItemRow[];
-    } | null>(null);
-    const setDetail = (next: typeof detail.value | ((previous: typeof detail.value) => typeof detail.value)) => {
-      detail.value = typeof next === 'function' ? (next as (previous: typeof detail.value) => typeof detail.value)(detail.value) : next;
     };
     const load = () => {
       setLoading(true);
@@ -167,16 +162,10 @@ const AdminOrderOversight = defineComponent({
       setOrderStatus(undefined);
       setKeyword('');
     };
-    const openDetail = async (id: number) => {
-      const res = await getAdminOrderDetail(id);
-      if (res?.code === 200) {
-        setDetail(res.data);
-      } else {
-        message.error(res?.message ?? '加载订单详情失败');
-      }
+    const openDetail = (row: OrderRow) => {
+      navigate(`/admin/trade/order/${row.id}`);
     };
     return () => {
-      const view_detail = detail.value;
       return <div style={{
         padding: 20
       }}>
@@ -258,66 +247,11 @@ const AdminOrderOversight = defineComponent({
           key: 'action',
           width: 96,
           render: (_: unknown, row: OrderRow) => <ListRowActions>
-                <Button type="link" size="small" onClick={() => openDetail(row.id)}>详情</Button>
+                <Button type="link" size="small" onClick={() => openDetail(row)}>详情</Button>
               </ListRowActions>
         }]} />
 
-      <Drawer width={720} open={Boolean(view_detail)} onClose={() => setDetail(null)} title="订单监管详情">
-        {view_detail && <>
-            <Descriptions column={2} size="small" bordered>
-              <Descriptions.Item label="订单号" span={2}>
-                {view_detail.order.orderNo}
-              </Descriptions.Item>
-              <Descriptions.Item label="采购方">{view_detail.order.buyerName ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="供货方">{view_detail.order.sellerName ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="订单金额">¥{view_detail.order.totalAmount}</Descriptions.Item>
-              <Descriptions.Item label="已付金额">
-                {view_detail.order.paidAmount ? `¥${view_detail.order.paidAmount}` : '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label="订单状态">{view_detail.order.orderStatus}</Descriptions.Item>
-              <Descriptions.Item label="支付状态">{view_detail.order.paymentStatus}</Descriptions.Item>
-              <Descriptions.Item label="物流单号">{view_detail.order.logisticsNo ?? '—'}</Descriptions.Item>
-              <Descriptions.Item label="来源">
-                {view_detail.order.source === 'quote' ? '报价转单' : view_detail.order.source === 'product' ? '货源直下单' : view_detail.order.source ?? '—'}
-              </Descriptions.Item>
-              <Descriptions.Item label="下单时间" span={2}>
-                {view_detail.order.createTime}
-              </Descriptions.Item>
-            </Descriptions>
-            <Card title="订单明细" size="small" style={{
-              marginTop: 16
-            }}>
-              <Table rowKey="id" size="small" pagination={false} dataSource={view_detail.items} columns={[{
-                title: '商品',
-                dataIndex: 'productName'
-              }, {
-                title: '等级',
-                dataIndex: 'specLevel',
-                render: (val: string) => val || '—'
-              }, {
-                title: '数量',
-                dataIndex: 'quantity',
-                align: 'right',
-                render: (val: number, row: OrderItemRow) => `${val} ${row.unit ?? ''}`
-              }, {
-                title: '单价',
-                dataIndex: 'unitPrice',
-                align: 'right',
-                render: (val: number) => `¥${val}`
-              }, {
-                title: '金额',
-                dataIndex: 'totalPrice',
-                align: 'right',
-                render: (val: number) => `¥${val}`
-              }]} />
-            </Card>
-            <Space style={{
-              marginTop: 16
-            }}>
-              <Button onClick={() => setDetail(null)}>关闭</Button>
-            </Space>
-          </>}
-      </Drawer>
+      
     </div>;
     };
   }

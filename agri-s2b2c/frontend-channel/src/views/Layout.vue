@@ -117,7 +117,7 @@
         :collapsed="collapsed"
         :mobile="isMobile"
         :mobile-open="mobileOpen"
-        :breadcrumbs="['S2B2C 商家工作台', pageTitle]"
+        :breadcrumbs="headerBreadcrumbs"
         @toggle-collapse="toggleSidebar"
       >
         <template #right>
@@ -225,8 +225,18 @@ const onboardingHint = computed(() => {
 const channel = computed(() => unifiedSession.user)
 const userDisplayName = computed(() => channel.value?.nickname || channel.value?.username || '平台用户')
 
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => {
+  if (route.path.startsWith('/orders/')) return '/orders'
+  if (route.path.startsWith('/customers/')) return '/customers'
+  return route.path
+})
 const userInitial = computed(() => userDisplayName.value.slice(0, 1) || '渠')
+
+const headerBreadcrumbs = computed(() => {
+  if (route.path.startsWith('/orders/')) return ['S2B2C 商家工作台', '订单列表', pageTitle.value]
+  if (route.path.startsWith('/customers/')) return ['S2B2C 商家工作台', '客户列表', pageTitle.value]
+  return ['S2B2C 商家工作台', pageTitle.value]
+})
 
 const pageTitle = computed(() => {
   const titles = {

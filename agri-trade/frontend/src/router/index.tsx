@@ -166,6 +166,9 @@ const router = createRouter({
       path: "order",
       component: () => import("@/pages/admin/order")
     }, {
+      path: "order/:id",
+      component: () => import("@/pages/admin/order/detail")
+    }, {
       path: "dispute",
       component: () => import("@/pages/admin/dispute")
     }, {

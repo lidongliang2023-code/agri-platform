@@ -338,12 +338,17 @@ const AdminLayout = defineComponent({
         }
         navigate(String(key));
       };
+      const isOrderDetail = /^\/admin\/trade\/order\/[^/]+$/.test(location.value.pathname);
+      const selectedMenuKey = isOrderDetail ? '/admin/trade/order' : location.value.pathname;
+      const headerBreadcrumbs = isOrderDetail
+        ? ['平台运营中心', '订单监管', '订单监管详情']
+        : ['平台运营中心', MENU_LABELS[location.value.pathname] ?? '运营中心'];
       const renderSidebarBody = (collapsedMode: boolean) => <>
       <div class={`admin-brand${collapsedMode ? ' is-collapsed' : ''}`}>
         <span class="admin-brand-logo"><BrandMark size={34} /></span>
         {!collapsedMode && <span class="admin-brand-text">丰链云<small>FENGCHAIN · AGRI</small></span>}
       </div>
-      <Menu theme="dark" mode="inline" inlineCollapsed={collapsedMode} selectedKeys={[location.value.pathname]} openKeys={collapsedMode ? [] : openKeys.value} onOpenChange={keys => { openKeys.value=keys.map(String) }} class="admin-menu" onClick={handleMenuClick} items={flatMenuItems} />
+      <Menu theme="dark" mode="inline" inlineCollapsed={collapsedMode} selectedKeys={[selectedMenuKey]} openKeys={collapsedMode ? [] : openKeys.value} onOpenChange={keys => { openKeys.value=keys.map(String) }} class="admin-menu" onClick={handleMenuClick} items={flatMenuItems} />
       <div class="pc-side-user">
         <Dropdown menu={sideUserMenu} trigger={['click']} placement={collapsedMode ? 'topRight' : 'topLeft'}>
           <button type="button" class="pc-side-user-trigger" title={`${displayName} · 平台运营`} style={collapsedMode ? {
@@ -380,7 +385,7 @@ const AdminLayout = defineComponent({
           {renderSidebarBody(false)}
         </Drawer>}
       <Layout class="admin-main">
-        <WorkspaceHeader class="admin-header" leftClassName="admin-header-left" rightClassName="admin-header-right" collapsed={collapsed.value} mobile={isMobile.value} mobileOpen={drawerOpen.value} onToggleCollapse={() => isMobile.value ? setDrawerOpen(prev => !prev) : setCollapsed(prev => !prev)} breadcrumbs={['平台运营中心', MENU_LABELS[location.value.pathname] ?? '运营中心']} right={<>
+        <WorkspaceHeader class="admin-header" leftClassName="admin-header-left" rightClassName="admin-header-right" collapsed={collapsed.value} mobile={isMobile.value} mobileOpen={drawerOpen.value} onToggleCollapse={() => isMobile.value ? setDrawerOpen(prev => !prev) : setCollapsed(prev => !prev)} breadcrumbs={headerBreadcrumbs} right={<>
               <div class="admin-role-switch">
                 <span class="on">运营中心</span>
                 <a onClick={() => navigate('/')}><SwapOutlined /> 用户端</a>

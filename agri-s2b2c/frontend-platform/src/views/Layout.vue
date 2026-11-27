@@ -126,7 +126,7 @@
         :collapsed="collapsed"
         :mobile="isMobile"
         :mobile-open="mobileOpen"
-        :breadcrumbs="['S2B2C 平台运营', pageTitle]"
+        :breadcrumbs="headerBreadcrumbs"
         @toggle-collapse="toggleSidebar"
       >
         <template #right>
@@ -211,8 +211,27 @@ onBeforeUnmount(() => {
 const admin = computed(() => unifiedSession.user)
 const userDisplayName = computed(() => admin.value?.nickname || admin.value?.username || '平台运营')
 
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => {
+  if (route.path.startsWith('/order-detail/')) return '/orders'
+  if (route.path.startsWith('/supplier-detail/')) return '/suppliers'
+  if (route.path.startsWith('/channel-partner-detail/')) return '/channel-partners'
+  if (route.path.startsWith('/product-detail/')) return '/products'
+  if (route.path.startsWith('/supply/order-detail/')) return '/supply/orders'
+  if (route.path.startsWith('/supply/distributor-detail/')) return '/supply/distributors'
+  if (route.path.startsWith('/supply/product-edit/')) return '/supply/products'
+  return route.path
+})
 const userInitial = computed(() => userDisplayName.value.slice(0, 1) || '运')
+
+const headerBreadcrumbs = computed(() => {
+  if (route.path.startsWith('/order-detail/')) return ['S2B2C 平台运营', '订单监控', pageTitle.value]
+  if (route.path.startsWith('/supplier-detail/')) return ['S2B2C 平台运营', '货源档案管理', pageTitle.value]
+  if (route.path.startsWith('/channel-partner-detail/')) return ['S2B2C 平台运营', '商家列表', pageTitle.value]
+  if (route.path.startsWith('/product-detail/')) return ['S2B2C 平台运营', '商品审核', pageTitle.value]
+  if (route.path.startsWith('/supply/order-detail/')) return ['S2B2C 平台运营', '供货履约', pageTitle.value]
+  if (route.path.startsWith('/supply/distributor-detail/')) return ['S2B2C 平台运营', '渠道授权网络', pageTitle.value]
+  return ['S2B2C 平台运营', pageTitle.value]
+})
 
 const pageTitle = computed(() => {
   const titles = {

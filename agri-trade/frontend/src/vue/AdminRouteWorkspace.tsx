@@ -21,7 +21,12 @@ export const AdminRouteWorkspace = defineComponent({
       cache.set(route.fullPath, { route: snapshot, component: markRaw(component as Component) })
     }
     watch(() => route.fullPath, remember, { immediate: true })
-    const title = computed(() => props.labels[route.path] || '运营中心')
+    const title = computed(() => {
+      if (props.labels[route.path]) return props.labels[route.path]
+      const orderDetailMatch = route.path.match(/^\/admin\/trade\/order\/([^/]+)$/)
+      if (orderDetailMatch) return `订单详情 #${orderDetailMatch[1]}`
+      return '运营中心'
+    })
     return () => h(WorkspacePanels, {
       class: 'trade-admin-workspace',
       activeKey: route.fullPath,

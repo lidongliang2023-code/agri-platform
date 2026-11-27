@@ -191,31 +191,40 @@
   flex: none;
 }
 
-.agri-detail-header-actions .ant-btn {
+.agri-detail-header-actions .ant-btn,
+.agri-detail-header-actions .el-button {
   height: 34px;
-  padding-inline: 14px;
+  min-height: 34px;
+  padding: 0 14px;
+  margin-left: 0 !important;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
 }
 
-.agri-detail-header-actions .ant-btn-primary:not(:disabled) {
+.agri-detail-header-actions .ant-btn-primary:not(:disabled),
+.agri-detail-header-actions .el-button--primary:not(:disabled) {
   background: var(--detail-brand);
   border-color: var(--detail-brand);
+  color: #fff;
 }
 
-.agri-detail-header-actions .ant-btn-primary:not(:disabled):hover {
+.agri-detail-header-actions .ant-btn-primary:not(:disabled):hover,
+.agri-detail-header-actions .el-button--primary:not(:disabled):hover {
   background: var(--detail-brand-hover);
   border-color: var(--detail-brand-hover);
+  color: #fff;
 }
 
-.agri-detail-header-actions .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled) {
+.agri-detail-header-actions .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled),
+.agri-detail-header-actions .el-button--danger.is-plain:not(:disabled) {
   color: #cf1322;
   border-color: #ffa39e;
   background: #fff;
 }
 
-.agri-detail-header-actions .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled):hover {
+.agri-detail-header-actions .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled):hover,
+.agri-detail-header-actions .el-button--danger.is-plain:not(:disabled):hover {
   color: #a8071a;
   border-color: #ff4d4f;
   background: #fff1f0;
@@ -389,6 +398,10 @@
   min-width: 0;
 }
 
+.agri-detail-page .detail-info-item-full {
+  grid-column: 1 / -1;
+}
+
 .agri-detail-page .detail-info-label {
   flex: 0 0 96px;
   color: var(--detail-text-secondary);
@@ -418,19 +431,34 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 详情页内子表样式统一 */
-.agri-detail-page .ant-table-thead > tr > th {
-  background: #fafafa;
+/* 详情页内子表样式统一（同时适配 Ant Design Vue 与 Element Plus） */
+.agri-detail-page .ant-table-thead > tr > th,
+.agri-detail-page .el-table th.el-table__cell {
+  background: #fafafa !important;
   color: #5a6860;
   font-size: 13px;
   font-weight: 600;
+  height: 42px;
   padding: 10px 14px !important;
 }
 
-.agri-detail-page .ant-table-tbody > tr > td {
+.agri-detail-page .ant-table-tbody > tr > td,
+.agri-detail-page .el-table td.el-table__cell {
   font-size: 13px;
+  height: 44px;
   padding: 10px 14px !important;
   color: var(--detail-text);
+}
+
+.agri-detail-page .agri-detail-section-body.is-flush .el-table {
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+
+.agri-detail-page .agri-detail-section-body.is-flush .el-table--border::before,
+.agri-detail-page .agri-detail-section-body.is-flush .el-table--border::after,
+.agri-detail-page .agri-detail-section-body.is-flush .el-table__border-left-patch {
+  display: none;
 }
 
 /* 右侧 340px 栏：进度时间线 */

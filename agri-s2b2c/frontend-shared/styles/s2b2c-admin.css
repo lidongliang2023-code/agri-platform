@@ -49,7 +49,7 @@ body,
 html,
 body {
   margin: 0;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body {
@@ -828,6 +828,136 @@ html body .s2b2c-layout .growth-page .metrics b {
 .s2b2c-layout .agri-vue-toolbar .el-button {
   height: 32px;
   padding: 0 12px;
+}
+
+/* 接入跨端统一详情页组件（@agri/shared/vue/detail）时的滚动吸顶与样式适配 */
+.s2b2c-layout .agri-detail-header-sticky {
+  top: 104px;
+  margin-top: -16px;
+  padding-top: 16px;
+  background: var(--s2-bg);
+}
+
+.s2b2c-layout .agri-detail-page {
+  --detail-bg: var(--s2-bg);
+}
+
+.s2b2c-layout .agri-detail-page .detail-section-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--s2-green-600);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.s2b2c-layout .agri-detail-page .detail-section-link:hover {
+  color: var(--s2-green-500);
+  text-decoration: underline;
+}
+
+.s2b2c-layout .agri-detail-page .detail-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.s2b2c-layout .agri-detail-page .detail-total-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  width: 100%;
+}
+
+.s2b2c-layout .agri-detail-page .detail-total-breakdown {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: #68776e;
+  font-size: 13px;
+}
+
+.s2b2c-layout .agri-detail-page .detail-total-breakdown strong {
+  color: #141c17;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.s2b2c-layout .agri-detail-page .detail-total-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #5a6860;
+  font-size: 13px;
+}
+
+.s2b2c-layout .agri-detail-page .detail-total-main strong {
+  color: #141c17;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.s2b2c-layout .agri-detail-page .detail-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.s2b2c-layout .agri-detail-page .detail-kpi-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #ecefed;
+  border-radius: 8px;
+  background: #fafcfb;
+}
+
+.s2b2c-layout .agri-detail-page .detail-kpi-cell span {
+  color: #68776e;
+  font-size: 12px;
+}
+
+.s2b2c-layout .agri-detail-page .detail-kpi-cell strong {
+  color: #141c17;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.s2b2c-layout .agri-detail-page .detail-kpi-cell small {
+  color: #8c9a92;
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .s2b2c-layout .agri-detail-header-sticky {
+    top: 64px;
+  }
+}
+
+@media print {
+  .s2b2c-layout .sidebar,
+  .s2b2c-layout .header,
+  .s2b2c-layout .agri-route-workspace,
+  .s2b2c-layout .agri-detail-header-actions,
+  .s2b2c-layout .agri-detail-back-btn,
+  .s2b2c-layout .agri-detail-tabs-bar {
+    display: none !important;
+  }
+
+  .s2b2c-layout .agri-detail-header-sticky {
+    position: static !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
 }
 
 @media (max-width: 1200px) {

@@ -1,585 +1,273 @@
-.order-detail-page {
-  --mc-green-700: #0e5233;
-  --mc-green-600: #2d8f4e;
-  --mc-green-500: #159a5e;
-  --mc-green-100: #e4f6ec;
-  --mc-green-050: #f1fbf5;
-  --mc-tech-700: #0b5e86;
-  --mc-tech-100: #e0f2fe;
-  --mc-amber-100: #fef3c7;
-  --mc-red-100: #fee2e2;
-  --mc-ink-900: #0b1a12;
-  --mc-ink-600: #4b5d53;
-  --mc-ink-500: #6b7c72;
-  --mc-line: #e3eae5;
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 9% 8%, rgba(29, 146, 89, .07), transparent 24rem),
-    #f4f7f5;
-  color: #17382a;
+.trade-order-scroll-host {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: #f5f6fa;
 }
 
-.order-detail-center {
-  display: grid;
-  min-height: 70vh;
-  place-content: center;
-  justify-items: center;
-  gap: 10px;
+.trade-order-detail-container {
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px 24px 36px;
+  box-sizing: border-box;
 }
 
-.order-detail-center > span {
-  color: #7d8f84;
-  font-size: 12px;
+.trade-admin-order-detail-wrap {
+  padding: 16px 24px 36px;
 }
 
-.order-detail-topbar {
-  display: flex;
-  min-height: 64px;
-  align-items: center;
-  gap: 22px;
-  padding: 0 max(22px, calc((100vw - 1180px) / 2));
-  border-bottom: 1px solid #dde8e1;
-  background: rgba(255, 255, 255, .94);
-  backdrop-filter: blur(12px);
+.trade-crumb-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 }
 
-.order-detail-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: #103a27;
-}
-
-.order-detail-brand > span {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-}
-
-.order-detail-brand strong {
-  display: flex;
-  flex-direction: column;
-  font-size: 17px;
-  line-height: 1.05;
-}
-
-.order-detail-brand small {
-  margin-top: 4px;
-  color: #84958b;
-  font-size: var(--agri-font-size-micro);
+.trade-detail-section-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2d8f4e;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 1.7px;
+  cursor: pointer;
 }
 
-.order-detail-topbar nav {
+.trade-detail-section-link:hover {
+  color: #247840;
+  text-decoration: underline;
+}
+
+.trade-order-total-bar {
   display: flex;
-  align-items: center;
-  gap: 7px;
-  color: #8a9a91;
-  font-size: var(--agri-font-size-micro);
+  align-items: baseline;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  width: 100%;
 }
 
-.order-detail-topbar nav a {
-  color: #5d7466;
-}
-
-.order-detail-topbar nav strong {
-  color: #294b37;
-}
-
-.order-detail-back {
+.trade-order-total-breakdown {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin-left: auto;
-  color: #3e6650;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-main {
-  width: min(1180px, calc(100% - 32px));
-  margin: 0 auto;
-  padding: 22px 0 46px;
-}
-
-.order-detail-hero {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  padding: 21px 23px;
-  border: 1px solid #dce9e0;
-  border-radius: 14px;
-  background:
-    radial-gradient(circle at 90% 15%, rgba(35, 155, 96, .11), transparent 17rem),
-    linear-gradient(135deg, #fbfefc, #f2faf5);
-}
-
-.order-detail-hero-icon {
-  display: grid;
-  width: 52px;
-  height: 52px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #2d8f4e, #1b965c);
-  color: #fff;
-  font-size: 22px;
-  box-shadow: 0 9px 21px rgba(18, 118, 74, .18);
-}
-
-.order-detail-hero-title {
-  min-width: 0;
-  flex: 1;
-}
-
-.order-detail-hero-title small {
-  color: #188454;
-  font-size: var(--agri-font-size-micro);
-  font-weight: 600;
-  letter-spacing: .06em;
-}
-
-.order-detail-hero-title h1 {
-  margin: 3px 0 0;
-  overflow: hidden;
-  color: #113e29;
-  font-size: 21px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.order-detail-hero-title p {
-  margin: 5px 0 0;
-  color: #7f9186;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 16px;
+  color: #68776e;
+  font-size: 13px;
 }
 
-.order-detail-danger {
-  border-color: #edc4c1 !important;
-  color: #b6453d !important;
+.trade-order-total-breakdown strong {
+  color: #141c17;
+  font-weight: 500;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-.order-detail-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 292px;
-  align-items: start;
-  gap: 15px;
-  margin-top: 16px;
+.trade-order-total-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #5a6860;
+  font-size: 13px;
 }
 
-.order-detail-content,
-.order-detail-aside {
-  display: grid;
-  min-width: 0;
-  gap: 14px;
-}
-
-.order-detail-muted {
-  color: #8b9c91;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-products {
-  display: grid;
-}
-
-.order-detail-product {
-  display: grid;
-  grid-template-columns: 42px minmax(180px, 1fr) 90px 110px 100px;
-  align-items: center;
-  gap: 12px;
-  padding: 15px 17px;
-}
-
-.order-detail-product + .order-detail-product {
-  border-top: 1px solid #edf2ee;
-}
-
-.order-detail-product-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 11px;
-  background: #e8f5ed;
-  color: var(--mc-green-700);
+.trade-order-total-main strong {
+  color: #141c17;
   font-size: 18px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
-.order-detail-product > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.order-detail-product > div strong {
-  overflow: hidden;
-  color: #2c4c39;
-  font-size: var(--agri-font-size-micro);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.order-detail-product > div small,
-.order-detail-product > span {
-  color: #83948a;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-product .order-detail-price {
-  color: #d75229;
-  font-family: "DIN Alternate", "Roboto Mono", ui-monospace, monospace;
-  font-size: 15px;
-  text-align: right;
-}
-
-.order-detail-info-grid {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr 1fr;
-  gap: 1px;
-  background: #e8efea;
-}
-
-.order-detail-info-grid > div {
-  display: flex;
-  min-height: 88px;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  padding: 14px 16px;
-  background: #fff;
-}
-
-.order-detail-info-grid span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  color: #87988e;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-info-grid strong {
-  color: #385542;
-  font-size: var(--agri-font-size-micro);
-  line-height: 1.6;
-  word-break: break-word;
-}
-
-.order-detail-reviews {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 13px;
-  padding: 16px;
-}
-
-.order-review-card {
-  min-height: 128px;
-  padding: 14px;
-  border: 1px solid #e1ebe5;
-  border-radius: 10px;
-  background: #fbfdfc;
-}
-
-.order-review-card > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.order-review-card strong {
-  color: #3d5c49;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-review-card p {
-  margin: 10px 0 5px;
-  color: #5e7567;
-  font-size: var(--agri-font-size-micro);
-  line-height: 1.7;
-}
-
-.order-review-card small {
-  color: #8c9c92;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-review-card em {
-  display: block;
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px dashed #e1ebe5;
-  color: #758a7d;
-  font-size: var(--agri-font-size-micro);
-  font-style: normal;
-}
-
-.order-amount-list {
-  display: grid;
-  gap: 11px;
-  padding: 16px;
-}
-
-.order-amount-list > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  color: #7c8e83;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-amount-list strong {
-  color: #405f4b;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-amount-list .total {
-  margin: 2px -16px 0;
-  padding: 13px 16px;
-  border-top: 1px solid #e7efea;
-  border-bottom: 1px solid #e7efea;
-  background: #f5fbf7;
-}
-
-.order-amount-list .total strong {
-  color: #d65229;
-  font-family: "DIN Alternate", ui-monospace, monospace;
-  font-size: 20px;
-}
-
-.order-flow {
-  display: grid;
-  gap: 9px;
-  padding: 15px;
-}
-
-.order-flow > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #899a90;
-}
-
-.order-flow span {
-  display: grid;
-  width: 23px;
-  height: 23px;
-  place-items: center;
-  border: 1px solid #dce7e0;
-  border-radius: 50%;
-  background: #fff;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-flow strong {
-  font-size: var(--agri-font-size-micro);
+.trade-order-money {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
 
-.order-flow > div.on {
-  color: var(--mc-green-700);
-}
-
-.order-flow > div.on span {
-  border-color: #bce0ca;
-  background: #e8f6ee;
-}
-
-.order-parties {
-  display: grid;
-  gap: 9px;
-  padding: 15px;
-}
-
-.order-parties > div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.order-parties > div > span {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 8px;
-  font-size: var(--agri-font-size-micro);
+.trade-order-money.is-strong {
   font-weight: 600;
+  color: #141c17;
 }
 
-.order-parties .buyer {
-  background: #e4f3ea;
-  color: #17794f;
+.trade-order-money.is-danger {
+  color: #cf1322;
 }
 
-.order-parties .seller {
-  background: #e5eff8;
-  color: #286f96;
-}
-
-.order-parties > div > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.order-parties small {
-  color: #8a9b91;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-parties strong {
-  overflow: hidden;
-  color: #3e5b48;
-  font-size: var(--agri-font-size-micro);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.order-side-info {
-  display: grid;
-  gap: 11px;
-  padding: 15px;
-}
-
-.order-side-info > div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.order-side-info span {
-  color: #8b9c92;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-side-info strong {
-  overflow-wrap: anywhere;
-  color: #486452;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-trust {
-  display: flex;
-  gap: 9px;
-  padding: 14px;
-  border: 1px solid #d5e9dd;
-  border-radius: 11px;
-  background: #f2faf5;
-  color: var(--mc-green-700);
-}
-
-.order-detail-trust > div {
+.trade-order-product-cell {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-
-.order-detail-trust strong {
-  color: #3d5e49;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-trust span {
-  color: #82968a;
-  font-size: var(--agri-font-size-micro);
-  line-height: 1.5;
-}
-
-.order-detail-page .ant-empty-description {
-  color: #889a8f;
-  font-size: var(--agri-font-size-micro);
-}
-
-.order-detail-page .mc-panel {
   min-width: 0;
 }
 
-.order-detail-modal .ant-modal-content {
-  border-radius: 14px;
+.trade-order-product-cell strong {
+  color: #141c17;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
 }
 
-@media (max-width: 980px) {
-  .order-detail-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .order-detail-aside {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .order-detail-hero {
-    flex-wrap: wrap;
-  }
-
-  .order-detail-actions {
-    width: 100%;
-    justify-content: flex-start;
-  }
+.trade-order-product-cell small {
+  color: #8c9a92;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 }
 
-@media (max-width: 700px) {
-  .order-detail-topbar {
-    padding: 0 14px;
+.trade-order-reviews-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.trade-order-review-card {
+  padding: 14px 16px;
+  border: 1px solid #ecefed;
+  border-radius: 8px;
+  background: #fafcfb;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trade-order-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trade-order-review-head strong {
+  color: #141c17;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trade-order-review-card p {
+  margin: 0;
+  color: #36453d;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.trade-order-review-card small {
+  color: #7c8c82;
+  font-size: 12px;
+}
+
+.trade-order-review-reply {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #eef6f0;
+  color: #1d5a34;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.trade-order-trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.trade-order-trace-item {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f0f2f1;
+}
+
+.trade-order-trace-item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.trade-order-trace-time {
+  flex: 0 0 144px;
+  color: #68776e;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+
+.trade-order-trace-body {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trade-order-trace-body strong {
+  color: #141c17;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trade-order-trace-body span {
+  color: #5a6860;
+  font-size: 13px;
+}
+
+.trade-order-log-table .ant-table-thead > tr > th,
+.trade-order-items-table .ant-table-thead > tr > th {
+  background: #fafafa !important;
+  color: #5a6860 !important;
+  font-weight: 600;
+}
+
+.trade-order-detail-modal .ant-modal-content {
+  border-radius: 12px;
+}
+
+.trade-order-detail-modal .ant-btn-primary {
+  background: #2d8f4e;
+  border-color: #2d8f4e;
+}
+
+@media (max-width: 900px) {
+  .trade-order-detail-container,
+  .trade-admin-order-detail-wrap {
+    padding: 12px 14px 28px;
   }
 
-  .order-detail-topbar nav {
-    display: none;
-  }
-
-  .order-detail-main {
-    width: calc(100% - 24px);
-    padding-top: 14px;
-  }
-
-  .order-detail-aside {
+  .trade-order-reviews-grid {
     grid-template-columns: 1fr;
   }
 
-  .order-detail-product {
-    grid-template-columns: 38px minmax(0, 1fr) auto;
-    gap: 8px;
-  }
-
-  .order-detail-product > span:nth-of-type(1),
-  .order-detail-product > span:nth-of-type(2) {
-    display: none;
-  }
-
-  .order-detail-product .order-detail-price {
-    grid-column: 2 / -1;
-    text-align: left;
-  }
-
-  .order-detail-product > div strong {
-    display: -webkit-box;
-    overflow: hidden;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-  }
-
-  .order-detail-info-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .order-detail-reviews {
-    grid-template-columns: 1fr;
-  }
-
-  .order-detail-actions {
-    align-items: stretch;
+  .trade-order-trace-item {
     flex-direction: column;
+    gap: 4px;
+  }
+
+  .trade-order-trace-time {
+    flex: auto;
+  }
+}
+
+@media print {
+  .mc-side,
+  .mc-top,
+  .admin-side,
+  .admin-header,
+  .agri-workspace-tabbar,
+  .agri-detail-header-actions,
+  .agri-detail-back-btn,
+  .agri-detail-tabs-bar {
+    display: none !important;
+  }
+
+  .mc-shell,
+  .mc-main,
+  .trade-order-scroll-host,
+  .admin-shell,
+  .admin-main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .agri-detail-header-sticky {
+    position: static !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
   }
 }
