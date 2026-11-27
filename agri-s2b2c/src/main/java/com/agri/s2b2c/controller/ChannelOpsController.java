@@ -782,9 +782,15 @@ public class ChannelOpsController {
                         + "ORDER BY t DESC",
                 mine.getId(), start, end, mine.getId(), start, end);
         List<Map<String, Object>> batches = jdbc.queryForList(
-                "SELECT batch_no, commission_count, amount, operator, created_at FROM s2b2c_commission_settlement "
-                        + "WHERE channel_id = ? AND created_at >= ? AND created_at < ? ORDER BY created_at DESC",
-                mine.getId(), start, end);
+                "SELECT s.batch_no, CASE WHEN s.channel_id IS NULL THEN c.own_count ELSE s.commission_count END commission_count, "
+                        + "CASE WHEN s.channel_id IS NULL THEN c.own_amount ELSE s.amount END amount, s.operator, s.created_at "
+                        + "FROM s2b2c_commission_settlement s LEFT JOIN "
+                        + "(SELECT settle_batch_no, COUNT(*) own_count, COALESCE(SUM(amount),0) own_amount "
+                        + "FROM s2b2c_commission WHERE channel_id = ? AND settle_batch_no IS NOT NULL GROUP BY settle_batch_no) c "
+                        + "ON c.settle_batch_no = s.batch_no "
+                        + "WHERE (s.channel_id = ? OR (s.channel_id IS NULL AND c.own_count > 0)) "
+                        + "AND s.created_at >= ? AND s.created_at < ? ORDER BY s.created_at DESC",
+                mine.getId(), mine.getId(), start, end);
 
         Map<String, Object> summary = new HashMap<>();
         summary.put("gmv", gmv.get("amount"));

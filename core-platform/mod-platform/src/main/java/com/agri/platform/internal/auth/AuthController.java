@@ -48,10 +48,19 @@ public class AuthController {
         return ApiResponse.ok(outcome.body());
     }
 
+    /** 公开页面静默续签时携带：请求里完全没有刷新凭证时按“未登录”返回空数据，而不是 5003。 */
+    static final String AUTH_OPTIONAL_HEADER = "X-Auth-Optional";
+
     @PostMapping("/refresh")
     public ApiResponse<LoginVO> refresh(@RequestBody(required = false) RefreshRequest request,
                                        HttpServletRequest httpRequest, HttpServletResponse response) {
         String clientId = clientIdOf(httpRequest);
+        if ("1".equals(httpRequest.getHeader(AUTH_OPTIONAL_HEADER))
+                && !hasRefreshCredential(httpRequest, request, clientId)) {
+            // 匿名访客：没有任何刷新凭证，属于正常的“未登录”，不是令牌失效。
+            // 携带了凭证但已过期 / 被吊销时仍走下方逻辑返回 5003，不掩盖真实失效。
+            return ApiResponse.ok(null);
+        }
         AuthOutcome outcome = authService.refresh(resolveRefreshToken(httpRequest, request, clientId));
         cookieSupport.write(response, outcome.refreshToken());
         cookieSupport.writeForClient(response, outcome.refreshToken(), clientId);
@@ -70,6 +79,20 @@ public class AuthController {
     @GetMapping("/me")
     public ApiResponse<UserVO> me() {
         return ApiResponse.ok(authService.me());
+    }
+
+    /** 请求中是否带有可用于续签的刷新凭证（子系统 Cookie / 全局 Cookie / 请求体）。 */
+    private boolean hasRefreshCredential(HttpServletRequest httpRequest, RefreshRequest request, String clientId) {
+        String fromCookie = clientId == null ? cookieSupport.read(httpRequest)
+                : cookieSupport.readForClient(httpRequest, clientId);
+        if (fromCookie != null && !fromCookie.isBlank()) {
+            return true;
+        }
+        if (clientId != null) {
+            return false;
+        }
+        String fromBody = request == null ? null : request.refreshToken();
+        return fromBody != null && !fromBody.isBlank();
     }
 
     /**

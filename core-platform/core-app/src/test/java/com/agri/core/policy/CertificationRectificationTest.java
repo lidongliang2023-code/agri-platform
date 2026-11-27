@@ -1,5 +1,7 @@
 package com.agri.core.policy;
 
+import com.agri.platform.internal.identity.UserIdentityEntity;
+import com.agri.platform.internal.identity.UserIdentityMapper;
 import com.agri.platform.internal.sso.SmsAuthService;
 import com.agri.platform.internal.merchant.*;
 import com.agri.platform.internal.user.UserEntity;
@@ -14,8 +16,9 @@ class CertificationRectificationTest {
     private final MerchantCertificationMapper certifications = mock(MerchantCertificationMapper.class);
     private final ActiveMerchantService active = mock(ActiveMerchantService.class);
     private final UserMapper users = mock(UserMapper.class);
+    private final UserIdentityMapper identities = mock(UserIdentityMapper.class);
     private final SmsAuthService service = new SmsAuthService(null, users, null, null, merchants,
-            null, certifications, active, null, null, "none");
+            null, certifications, active, identities, null, "none");
 
     private MerchantEntity subject(String status) {
         MerchantEntity m = new MerchantEntity();
@@ -96,5 +99,23 @@ class CertificationRectificationTest {
     @Test void missingRegisteredAddressBlocksSubmission() {
         MerchantEntity m = subject("draft"); m.setAddress(null);
         assertThatThrownBy(() -> MerchantCertificationController.requireProfile(m)).hasMessageContaining("注册地址");
+    }
+
+    @Test void personalVerifiedIdentityReachesDoneStage() {
+        MerchantEntity m = subject("approved");
+        m.setMemberType("personal");
+        UserIdentityEntity ui = new UserIdentityEntity();
+        ui.setUserId(1L);
+        ui.setIdentityNo("ID_TEST_VERIFIED");
+        ui.setRealName("测试个人");
+        ui.setStatus("verified");
+        when(identities.selectOne(any())).thenReturn(ui);
+        assertThat(service.onboardingStatus(1L, 1L).stage()).isEqualTo("done");
+
+        ui.setStatus("pending");
+        assertThat(service.onboardingStatus(1L, 1L).stage()).isEqualTo("pending");
+
+        ui.setStatus("draft");
+        assertThat(service.onboardingStatus(1L, 1L).stage()).isEqualTo("certification");
     }
 }

@@ -11,6 +11,7 @@ import com.agri.production.vo.AiSessionVO;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -69,7 +70,7 @@ public class AiChatController {
     }
 
     /** 重命名会话（页面按返回值提示成功与否）。 */
-    @PatchMapping("/assistant/sessions/{sessionId}")
+    @RequestMapping(value = "/assistant/sessions/{sessionId}", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ApiResponse<Boolean> renameSession(@PathVariable String sessionId,
                                              @RequestBody(required = false) Map<String, Object> body) {
         String title = body == null ? null : str(body.get("title"));

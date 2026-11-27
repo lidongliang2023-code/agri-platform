@@ -96,6 +96,7 @@ public class OrderShipmentService {
     public Map<String, Object> confirm(Long orderId, String actorType, Long actorId) {
         Order order = orderMapper.selectById(orderId);
         if (order == null) return fail("订单不存在");
+        if (!"PENDING_SHIP".equals(order.getStatus())) return fail("当前状态不可确认发货：" + order.getStatus());
         Map<String, Object> pending = pendingProposal(orderId);
         if (pending == null) return fail("没有待确认的发货信息");
         if (actorType.equals(String.valueOf(pending.get("proposer_type")))) {

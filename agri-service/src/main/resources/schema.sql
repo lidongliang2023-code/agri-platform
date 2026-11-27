@@ -364,3 +364,23 @@ CREATE TABLE IF NOT EXISTS service_daily_metric (
     provider_count INT DEFAULT 0,
     complaint_count INT DEFAULT 0
 );
+
+-- 专家身份独立于经营主体；一账号只能绑定一位专家。
+CREATE TABLE IF NOT EXISTS service_expert_account (
+    expert_id BIGINT PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE,
+    account_name VARCHAR(160) NOT NULL,
+    bound_by BIGINT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (expert_id) REFERENCES service_expert(id)
+);
+CREATE TABLE IF NOT EXISTS service_consultation_reply (
+    consultation_id BIGINT PRIMARY KEY,
+    expert_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    expert_name VARCHAR(80) NOT NULL,
+    content VARCHAR(1200) NOT NULL,
+    replied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (consultation_id) REFERENCES service_consultation(id),
+    FOREIGN KEY (expert_id) REFERENCES service_expert(id)
+);

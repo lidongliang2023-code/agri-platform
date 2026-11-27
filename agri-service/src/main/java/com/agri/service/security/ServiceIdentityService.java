@@ -64,6 +64,11 @@ public class ServiceIdentityService {
         this.jdbc = jdbc;
         this.permissionResolver = permissionResolver;
         this.platformUrl = platformUrl;
+        org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(3000);
+        factory.setReadTimeout(5000);
+        restTemplate.setRequestFactory(factory);
         instance = this;
     }
 
@@ -170,6 +175,12 @@ public class ServiceIdentityService {
         return name;
     }
 
+    public java.util.Set<String> explicitPermissions() {
+        var permissions = permissionResolver.currentPermissions();
+        if (permissions == null) throw BusinessException.forbidden("无法确认当前账号的岗位权限，请重新登录");
+        return permissions;
+    }
+
     public boolean hasPermission(String code) {
         try {
             // 用平台的判定口径而不是 Set#contains：超管拿的是通配 "*"，逐码 contains 永远为 false
@@ -263,6 +274,8 @@ public class ServiceIdentityService {
         String[] merchant;
         try {
             merchant = resolveMerchant(token);
+        } catch (BusinessException e) {
+            throw e;
         } catch (HttpClientErrorException e) {
             int status = e.getStatusCode().value();
             if (status == 401 || status == 403) {
@@ -305,6 +318,53 @@ public class ServiceIdentityService {
         } catch (Exception e) {
             log.warn("校验经营主体 {} 失败：{}", merchantId, e.getMessage());
             throw BusinessException.forbidden("平台认证中心不可达，无法校验经营主体，请稍后重试");
+        }
+    }
+
+    /** 通过统一认证中心校验本人身份，不把未验签的 JWT 声明作为专家权限依据。 */
+    public long verifiedUserId() {
+        HttpServletRequest request = currentRequest();
+        String key = ServiceIdentityService.class.getName() + ".verifiedUser";
+        if (request != null && request.getAttribute(key) instanceof Long id) return id;
+        Map<?, ?> user = platformAccount("/api/v1/auth/me");
+        long id;
+        try { id = Long.parseLong(String.valueOf(user.get("id"))); }
+        catch (Exception e) { throw BusinessException.unauthorized("统一账号身份无效，请重新登录"); }
+        if (id <= 0) throw BusinessException.unauthorized("统一账号身份无效");
+        if (request != null) request.setAttribute(key, id);
+        return id;
+    }
+
+    /** 使用运营本人权限确认目标账号存在且启用，不跨库读取平台用户表。 */
+    public String activeAccountName(long userId) {
+        Map<?, ?> data = platformAccount("/api/v1/admin/uc/users/" + userId);
+        if (!(data.get("user") instanceof Map<?, ?> user)
+                || !String.valueOf(userId).equals(String.valueOf(user.get("id"))))
+            throw BusinessException.notFound("统一账号不存在");
+        if (!"1".equals(String.valueOf(user.get("status"))))
+            throw BusinessException.validationError("只能绑定启用的统一账号");
+        Object nickname = user.get("nickname");
+        return String.valueOf(nickname == null ? user.get("username") : nickname);
+    }
+
+    private Map<?, ?> platformAccount(String path) {
+        if (platformUrl == null || platformUrl.isBlank())
+            throw BusinessException.forbidden("认证中心未配置，无法校验统一账号");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(currentToken());
+        try {
+            Map<?, ?> body = restTemplate.exchange(platformUrl + path, HttpMethod.GET,
+                    new HttpEntity<>(headers), Map.class).getBody();
+            if (body == null || !"0".equals(String.valueOf(body.get("code")))
+                    || !(body.get("data") instanceof Map<?, ?> data))
+                throw BusinessException.forbidden("统一账号校验失败");
+            return data;
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 401) throw BusinessException.unauthorized("统一登录已失效");
+            if (e.getStatusCode().value() == 404) throw BusinessException.notFound("统一账号不存在");
+            throw BusinessException.forbidden("当前账号没有统一用户查询权限，请由平台用户管理员绑定专家");
+        } catch (org.springframework.web.client.RestClientException e) {
+            throw BusinessException.forbidden("统一账号服务暂不可用，请稍后重试");
         }
     }
 

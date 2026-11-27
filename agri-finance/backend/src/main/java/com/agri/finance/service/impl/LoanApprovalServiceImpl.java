@@ -49,17 +49,26 @@ public class LoanApprovalServiceImpl {
     }
 
     public Map<String, Object> overview(String providerId) {
+        boolean allProviders = providerId == null || providerId.isBlank();
         List<LoanApplication> applications = applicationService.list(
                 new LambdaQueryWrapper<LoanApplication>()
                         .eq(LoanApplication::getDelFlag, 0)
                         .orderByDesc(LoanApplication::getApplyTime)
         );
-        Map<String, FinanceApprovalRecord> records = recordService.listByProvider(providerId).stream()
+        List<FinanceApprovalRecord> rawRecords = allProviders
+                ? recordService.listAllRecent()
+                : recordService.listByProvider(providerId);
+        Map<String, FinanceApprovalRecord> records = rawRecords.stream()
                 .collect(Collectors.toMap(
                         FinanceApprovalRecord::getApplicationId,
                         Function.identity(),
                         (left, right) -> left
                 ));
+
+        FundProvider provider = allProviders ? null : providerService.getById(providerId);
+        boolean providerReady = provider != null
+                && "已通过".equals(provider.getReviewStatus())
+                && Set.of("正常", "ACTIVE").contains(provider.getStatus());
 
         List<Map<String, Object>> items = new ArrayList<>();
         for (LoanApplication application : applications) {
@@ -70,6 +79,7 @@ public class LoanApprovalServiceImpl {
             item.put("approvalRecord", record);
             item.put("generatedAsset", generatedAsset == null ? null : assetService.assetView(generatedAsset));
             item.put("canReview", "待审批".equals(application.getStatus()));
+            item.put("canSubmitReview", "待审批".equals(application.getStatus()) && providerReady);
             item.put("providerDecision", record == null ? null : record.getDecision());
             items.add(item);
         }
@@ -102,7 +112,9 @@ public class LoanApprovalServiceImpl {
                 .count());
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("provider", providerService.getById(providerId));
+        result.put("scope", allProviders ? "admin" : "provider");
+        result.put("provider", provider);
+        result.put("canSubmitReview", providerReady);
         result.put("summary", summary);
         result.put("items", items);
         result.put("generatedAt", LocalDateTime.now());

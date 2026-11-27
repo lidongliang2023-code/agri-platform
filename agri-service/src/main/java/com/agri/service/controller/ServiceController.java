@@ -135,7 +135,7 @@ public class ServiceController {
 
     @PostMapping("/demands")
     public ApiResponse<Map<String, Object>> createDemand(@RequestBody Map<String, Object> body) {
-        return ApiResponse.success("需求已发布，AI 正在匹配服务商", repository.createDemand(body));
+        return ApiResponse.success("需求已发布，等待同类目服务商接单", repository.createDemand(body));
     }
 
     @GetMapping("/policies")

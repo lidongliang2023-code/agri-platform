@@ -7,6 +7,7 @@ import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.UserAlertVO;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,17 +25,23 @@ import java.util.Map;
  * 且切流时会被网关单独留在平台侧。两处都声明 {@code /rules} 会直接导致 Spring 启动时
  * 报"存在重复映射"，所以这里刻意不写。</p>
  *
- * <p>不实现 {@code GET /alerts/{alertId}}：页面没有详情调用，多一个端点就多一处要维护的租户校验，
- * 而且 {@code /alerts/{id}} 这种吃任意段的路径最容易把 {@code /alerts/stats} 之类的字面量接走。</p>
+ * <p>详情按业务编号读取并复用主体校验；stats、reviews 等固定路径优先匹配。</p>
  */
 @RestController
 @RequestMapping("/api/v1/production/alerts")
 public class UserAlertController {
 
     private final IUserAlertService alertService;
+    private final com.agri.production.service.AlertReviewService reviewService;
 
-    public UserAlertController(IUserAlertService alertService) {
+    public UserAlertController(IUserAlertService alertService, com.agri.production.service.AlertReviewService reviewService) {
         this.alertService = alertService;
+        this.reviewService = reviewService;
+    }
+
+    @GetMapping("/{alertId}")
+    public ApiResponse<UserAlertVO> detail(@PathVariable String alertId) {
+        return ApiResponse.success(reviewService.alert(TenantContextService.currentTenantId(), alertId));
     }
 
     /** 告警分页（farmId / alertLevel / alertSource / status / keyword / startDate / endDate 均可选）。 */
@@ -70,7 +77,7 @@ public class UserAlertController {
     }
 
     /** 处置告警（body {status, handleRemark}；status 1~4）。 */
-    @PatchMapping("/{alertId}/handle")
+    @RequestMapping(value = "/{alertId}/handle", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ApiResponse<UserAlertVO> handle(@PathVariable String alertId,
                                           @RequestBody(required = false) Map<String, Object> body) {
         return ApiResponse.success(alertService.handle(
@@ -80,7 +87,7 @@ public class UserAlertController {
     }
 
     /** 批量忽略（body {alertIds: [...]}）。 */
-    @PatchMapping("/ignore")
+    @RequestMapping(value = "/ignore", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ApiResponse<Map<String, Object>> ignore(@RequestBody(required = false) Map<String, Object> body) {
         Object raw = body == null ? null : body.get("alertIds");
         List<String> ids = raw instanceof List<?> list

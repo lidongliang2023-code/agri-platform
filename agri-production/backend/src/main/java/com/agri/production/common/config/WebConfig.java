@@ -18,7 +18,7 @@ public class WebConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(productionApiCapabilityInterceptor)
                 .addPathPatterns("/api/v1/production/**")
-                .excludePathPatterns("/api/v1/production/admin/**");
+                .excludePathPatterns("/api/v1/production/admin/**", "/api/v1/production/mobile-session/ticket", "/api/v1/production/mobile-session/exchange");
     }
 
     @Override

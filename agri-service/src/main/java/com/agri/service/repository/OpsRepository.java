@@ -42,6 +42,15 @@ public class OpsRepository {
             "county_review", List.of("paid", "rejected"),
             "paid", List.of(),
             "rejected", List.of());
+    private static final Map<String, String> POLICY_JOB = Map.of(
+            "submitted", "service:policy:town", "town_review", "service:policy:county",
+            "county_review", "service:policy:payment");
+
+    static List<String> policyActions(String status, java.util.Set<String> permissions) {
+        String job = status == null ? null : POLICY_JOB.get(status);
+        return job != null && permissions.contains(job) ? POLICY_FLOW.get(status) : List.of();
+    }
+
     private static final Map<String, List<String>> CLAIM_FLOW = Map.of(
             "submitted", List.of("surveying", "rejected"),
             "surveying", List.of("assessing", "rejected"),
@@ -363,11 +372,12 @@ public class OpsRepository {
         if (!List.of("matching", "quoted").contains(String.valueOf(demand.get("status")))) {
             throw new BusinessException(409, "需求当前是「" + demand.get("status") + "」，不能指派");
         }
-        jdbc.update("""
+        int assigned = jdbc.update("""
                 UPDATE service_demand
                 SET status='assigned', accepted_provider_id=?, accepted_provider_name=?
                 WHERE id=? AND status IN ('matching','quoted')
                 """, providerId, provider.get("name"), demandId);
+        if (assigned != 1) throw new BusinessException(409, "需求已被接单或指派，请刷新后重试");
         BigDecimal quantity = parseQuantity(String.valueOf(demand.get("area")));
         BigDecimal unitPrice = (BigDecimal) provider.get("price");
         BigDecimal total = unitPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
@@ -386,11 +396,12 @@ public class OpsRepository {
     }
 
     private BigDecimal parseQuantity(String value) {
-        try {
-            return new BigDecimal(value.replaceAll("[^0-9.]", ""));
-        } catch (Exception ignored) {
-            return BigDecimal.ONE;
+        if (value == null || !value.matches("[0-9]+(?:\\.[0-9]{1,2})?\\s*(亩|次|吨|公斤|人|天|小时|份|台|人/天)")) {
+            throw BusinessException.validationError("需求数量或单位不明确，请先补充准确数量后再接单");
         }
+        BigDecimal quantity = new BigDecimal(value.replaceFirst("[^0-9.].*$", ""));
+        if (quantity.signum() <= 0) throw BusinessException.validationError("需求数量必须大于0");
+        return quantity;
     }
 
     /* ==================== 投诉、申报、理赔、结算 ==================== */
@@ -436,11 +447,17 @@ public class OpsRepository {
                         applicationMapper(), id).stream().findFirst()
                 .orElseThrow(() -> BusinessException.notFound("政策申报不存在：" + id));
         String from = String.valueOf(application.get("status"));
-        String status = text(body, "status", "town_review");
+        String status = required(body, "status", "请选择审核节点");
+        if (body.containsKey("expectedStatus") && !from.equals(body.get("expectedStatus"))) {
+            throw new BusinessException(409, "申报状态已变化，请刷新后重新审核");
+        }
+        if (POLICY_JOB.containsKey(from) && ((List<?>) application.get("allowedStatuses")).isEmpty()) {
+            throw BusinessException.forbidden("当前账号未获该节点的办理岗位授权");
+        }
         List<String> allowed = POLICY_FLOW.getOrDefault(from, List.of());
         if (!allowed.contains(status)) {
-            throw new BusinessException(409, "申报当前是「" + from + "」，只能推进到："
-                    + (allowed.isEmpty() ? "无（已终态）" : String.join("、", allowed)));
+            throw new BusinessException(409, "申报当前是「" + PolicyReviewText.label(from) + "」，"
+                    + (allowed.isEmpty() ? "审核已结束" : "可选节点：" + String.join("、", allowed.stream().map(PolicyReviewText::label).toList())));
         }
         String note = required(body, "note", "请填写审核意见");
         int progress = switch (status) {
@@ -450,12 +467,18 @@ public class OpsRepository {
             case "paid", "rejected" -> 100;
             default -> 45;
         };
-        jdbc.update("UPDATE service_policy_application SET status=?, progress=? WHERE id=?", status, progress, id);
+        int changed = jdbc.update("UPDATE service_policy_application SET status=?, progress=? WHERE id=? AND status=?",
+                status, progress, id, from);
+        if (changed != 1) throw new BusinessException(409, "申报状态已变化，请刷新后重新审核");
         log("政策审核", String.valueOf(application.get("applicationNo")),
-                "由「" + from + "」更新为「" + status + "」；" + note);
-        notifyMerchant(application, "政策申报进度更新",
-                "《" + application.get("policyTitle") + "》申报 " + application.get("applicationNo")
-                        + " 当前状态：" + status + "。" + note);
+                "由「" + PolicyReviewText.label(from) + "」更新为「" + PolicyReviewText.label(status) + "」；" + note);
+        if (application.get("merchantId") != null) {
+            serviceRepository.notify(Long.parseLong(String.valueOf(application.get("merchantId"))),
+                    String.valueOf(application.get("merchantName")), "policy", "政策申报进度更新",
+                    "《" + application.get("policyTitle") + "》申报 " + application.get("applicationNo")
+                            + " 当前状态：" + PolicyReviewText.label(status) + "。" + note,
+                    "POLICY", String.valueOf(application.get("applicationNo")));
+        }
         return policyApplications().stream()
                 .filter(item -> String.valueOf(item.get("id")).equals(String.valueOf(id)))
                 .findFirst().orElseThrow();
@@ -739,6 +762,14 @@ public class OpsRepository {
     /** 抢单与指派共用：工单的归属主体取需求发布方，不再落到某个固定服务商默认账号上。 */
     private String createWorkOrder(long providerId, Map<String, Object> provider, Map<String, Object> demand,
                                    BigDecimal quantity, BigDecimal unitPrice, BigDecimal total, String dispatchStatus) {
+        String demandUnit = String.valueOf(demand.get("area")).replaceFirst("^[0-9.]+\\s*", "");
+        String providerUnit = String.valueOf(provider.get("unit")).replaceFirst("^元/", "").trim();
+        if (!demandUnit.equals(providerUnit) || unitPrice == null || unitPrice.signum() <= 0) {
+            throw new BusinessException(409, "需求单位与服务商有效报价不一致，请先核实数量及报价");
+        }
+        if (!String.valueOf(provider.get("category")).equals(String.valueOf(demand.get("category")))) {
+            throw new BusinessException(409, "服务商类目与需求不一致");
+        }
         String orderNo = serial("FW");
         BigDecimal deposit = total.multiply(new BigDecimal("0.2")).setScale(0, RoundingMode.HALF_UP);
         KeyHolder keyHolder = new GeneratedKeyHolder();
@@ -749,14 +780,14 @@ public class OpsRepository {
                      deposit_amount,appointment_date,location,contact_name,contact_phone,notes,status,progress,
                      dispatch_status,merchant_id,merchant_name)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'confirmed',35,?,?,?)
-                    """, Statement.RETURN_GENERATED_KEYS);
+                    """, new String[] { "id" });
             statement.setObject(1, orderNo);
             statement.setObject(2, providerId);
             statement.setObject(3, provider.get("name"));
             statement.setObject(4, demand.get("serviceName"));
             statement.setObject(5, demand.get("category"));
             statement.setObject(6, quantity);
-            statement.setObject(7, "亩");
+            statement.setObject(7, String.valueOf(provider.get("unit")).replaceFirst("^元/", "").trim());
             statement.setObject(8, unitPrice);
             statement.setObject(9, total);
             statement.setObject(10, deposit);
@@ -771,7 +802,8 @@ public class OpsRepository {
             return statement;
         }, keyHolder);
         Number generated = keyHolder.getKey();
-        long orderId = generated == null ? 0L : generated.longValue();
+        if (generated == null) throw new IllegalStateException("生成工单后未取得订单主键");
+        long orderId = generated.longValue();
         jdbc.update("""
                 INSERT INTO service_order_event (order_id,title,note,event_time,completed)
                 VALUES (?, ?, ?, ?, TRUE)
@@ -792,24 +824,27 @@ public class OpsRepository {
             throw BusinessException.validationError("进度必须在 0-100 之间");
         }
         String status = String.valueOf(order.get("status"));
-        if (List.of("completed", "cancelled").contains(status)) {
-            throw new BusinessException(409, "工单已" + ("completed".equals(status) ? "完成" : "取消") + "，不能再上报进度");
+        if (!List.of("confirmed", "in_progress").contains(status)) {
+            throw new BusinessException(409, "只有已确认或履约中的工单可上报进度");
         }
         int previous = intValue(order.get("progress"));
         if (progress < previous) {
             throw new BusinessException(409, "进度不能回退（当前 " + previous + "%）");
         }
-        String next = progress >= 100 ? "completed" : "in_progress";
-        jdbc.update("UPDATE service_order SET progress=?,status=? WHERE id=?", progress, next, orderId);
+        if (progress == previous && "in_progress".equals(status)) return mobileWorkbench();
+        String next = "in_progress";
+        int changed = jdbc.update("UPDATE service_order SET progress=?,status=? WHERE id=? AND provider_id=? AND status=? AND progress=?",
+                progress, next, orderId, providerId, status, previous);
+        if (changed != 1) throw new BusinessException(409, "工单已更新，请刷新后重试");
         String note = text(body, "note", "已完成 " + progress + "%");
         jdbc.update("""
                 INSERT INTO service_order_event (order_id,title,note,event_time,completed)
                 VALUES (?, ?, ?, ?, TRUE)
                 """, orderId, "服务商上报进度", note, LocalDateTime.now().format(DATE_TIME));
         log("服务进度上报", String.valueOf(order.get("orderNo")), "进度 " + progress + "%；" + note);
-        notifyMerchant(order, "completed".equals(next) ? "服务已完成，待你验收" : "服务进度更新",
+        notifyMerchant(order, progress >= 100 ? "服务已完成，待你验收" : "服务进度更新",
                 "工单 " + order.get("orderNo") + "：" + note
-                        + ("completed".equals(next) ? "。请确认验收，验收后可评价。" : ""));
+                        + (progress >= 100 ? "。请确认验收，验收后可评价。" : ""));
         return mobileWorkbench();
     }
 
@@ -946,6 +981,7 @@ public class OpsRepository {
     }
 
     private RowMapper<Map<String, Object>> applicationMapper() {
+        var permissions = identity.explicitPermissions();
         return (rs, rowNum) -> {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", String.valueOf(rs.getLong("id")));
@@ -954,7 +990,9 @@ public class OpsRepository {
             item.put("applicant", rs.getString("applicant"));
             item.put("contactPhone", rs.getString("contact_phone"));
             item.put("amountText", rs.getString("amount_text"));
-            item.put("status", rs.getString("status"));
+            String status = rs.getString("status");
+            item.put("status", status);
+            item.put("allowedStatuses", policyActions(status, permissions));
             item.put("progress", rs.getInt("progress"));
             item.put("merchantId", rs.getObject("merchant_id") == null ? null : String.valueOf(rs.getLong("merchant_id")));
             item.put("merchantName", rs.getString("merchant_name"));

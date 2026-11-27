@@ -275,10 +275,17 @@ public class PlatformController {
         } catch (NumberFormatException invalid) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "渠道 id 不合法"));
         }
-        java.time.LocalDate start = body == null || body.get("periodStart") == null
-                ? null : java.time.LocalDate.parse(String.valueOf(body.get("periodStart")));
-        java.time.LocalDate end = body == null || body.get("periodEnd") == null
-                ? null : java.time.LocalDate.parse(String.valueOf(body.get("periodEnd")));
+        java.time.LocalDate start;
+        java.time.LocalDate end;
+        try {
+            start = body == null || body.get("periodStart") == null
+                    ? null : java.time.LocalDate.parse(String.valueOf(body.get("periodStart")));
+            end = body == null || body.get("periodEnd") == null
+                    ? null : java.time.LocalDate.parse(String.valueOf(body.get("periodEnd")));
+            if (start != null && end != null && start.isAfter(end)) throw new IllegalArgumentException();
+        } catch (RuntimeException invalid) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "结算日期须为 YYYY-MM-DD，开始日期不能晚于结束日期"));
+        }
         CommissionSettlementService.SettlementResult result =
                 commissionSettlementService.settle(channelId, start, end, currentOperator());
         // 出参三件套：blockedCount / blockedAmount / blocked 明细。

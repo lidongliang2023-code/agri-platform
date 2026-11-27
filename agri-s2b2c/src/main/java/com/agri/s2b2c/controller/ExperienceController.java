@@ -197,14 +197,18 @@ public class ExperienceController {
      */
     @PostMapping("/api/consumer/after-sales")
     @OperatorOnly("s2b2c:consumer")
+    @Transactional
     public ResponseEntity<Map<String, Object>> createAfterSale(@RequestBody Map<String, Object> body) {
         Long consumerId = consumerIdentityService.current().getId();
         Long orderId = longValue(body.get("orderId"));
         String type = text(body.get("type"), "REFUND");
+        if (!List.of("REFUND", "RETURN").contains(type)) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "售后类型只能是 REFUND / RETURN"));
+        }
         String reason = text(body.get("reason"), "售后申请");
         BigDecimal amount = decimal(body.get("amount"), BigDecimal.ZERO);
         List<Map<String, Object>> orders = jdbc.queryForList(
-                "SELECT status, pay_amount AS payAmount FROM s2b2c_order WHERE id = ? AND consumer_id = ?",
+                "SELECT status, pay_amount AS payAmount FROM s2b2c_order WHERE id = ? AND consumer_id = ? FOR UPDATE",
                 orderId, consumerId);
         if (orders.isEmpty() || amount.signum() <= 0) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "订单不存在或售后金额无效"));
@@ -218,12 +222,12 @@ public class ExperienceController {
             return ResponseEntity.ok(Map.of("success", false, "message", "售后金额不能超过订单实付金额"));
         }
         Integer existing = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM s2b2c_after_sale WHERE order_id = ? AND status IN ('PENDING','APPROVED')",
+                "SELECT COUNT(*) FROM s2b2c_after_sale WHERE order_id = ? AND status IN ('PENDING','APPROVED','RETURNING','COMPLETED')",
                 Integer.class, orderId);
         if (existing != null && existing > 0) {
             return ResponseEntity.ok(Map.of("success", false, "message", "该订单已有处理中或已通过的售后"));
         }
-        long afterSaleId = System.currentTimeMillis();
+        long afterSaleId = com.baomidou.mybatisplus.core.toolkit.IdWorker.getId();
         jdbc.update("""
                 INSERT INTO s2b2c_after_sale
                 (id,order_id,consumer_id,type,reason,amount,status,create_time)

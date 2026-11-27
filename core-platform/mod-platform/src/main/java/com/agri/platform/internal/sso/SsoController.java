@@ -89,11 +89,16 @@ public class SsoController {
             String location = properties.getLoginPath() + (query == null || query.isBlank() ? "" : "?" + query);
             return redirect(location);
         }
+        String onboardingStage = pendingOnboardingStage(session[0], session[1], clientId);
+        if (onboardingStage != null) {
+            // 尚未完成主体认证：不允许直接签发子系统授权码，继续携带原授权上下文引导去补齐认证。
+            return redirect(onboardingRegisterPath(onboardingStage, request.getQueryString()));
+        }
         String code = codeService.issue(session[0], session[1], clientId, redirectUri, codeChallenge, codeChallengeMethod);
         return redirect(callback(redirectUri, code, state));
     }
 
-    /** 登录端点：校验凭据 → 建全局会话 → 签码 → 返回回跳地址 */
+    /** 登录端点：校验凭据 → 按准入阶段建会话 → 签码 → 返回回跳地址 */
     @PostMapping("/login")
     public ApiResponse<SsoLoginResult> login(@Valid @RequestBody SsoLoginRequest request, HttpServletResponse response) {
         assertClient(request.clientId(), request.redirectUri());
@@ -101,16 +106,9 @@ public class SsoController {
                 authService.authenticate(new LoginRequest(request.username(), request.password(), request.marketId(),
                         request.phone()));
         assertIdentity(user.userId(), request.identity());
-        sessionService.createForClient(user.userId(), user.marketId(), Boolean.TRUE.equals(request.remember()),
-                request.clientId(), response);
-        SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(user.userId(), user.marketId());
-        if (!canEnterUserCenterOperations(user.userId(), user.marketId(), request.clientId())
-                && !"done".equals(onboarding.stage())) {
-            return ApiResponse.ok(new SsoLoginResult(null, onboarding.stage()));
-        }
-        String code = codeService.issue(user.userId(), user.marketId(), request.clientId(), request.redirectUri(),
-                request.codeChallenge(), request.codeChallengeMethod());
-        return ApiResponse.ok(new SsoLoginResult(callback(request.redirectUri(), code, request.state())));
+        return ApiResponse.ok(signIn(user.userId(), user.marketId(), request.clientId(), request.redirectUri(),
+                request.state(), request.codeChallenge(), request.codeChallengeMethod(),
+                Boolean.TRUE.equals(request.remember()), response));
     }
 
     /**
@@ -316,9 +314,24 @@ public class SsoController {
         return ApiResponse.ok(smsAuthService.onboardingStatus(user.getId(), marketId));
     }
 
-    /** 当前账号的开通阶段（注册页刷新后恢复步骤）。 */
+    /**
+     * 当前账号的开通阶段（注册页刷新后恢复步骤）。
+     *
+     * <p>{@code optional=true} 供公开页面（官网门户等）静默探测登录态：没有任何认证中心会话时
+     * 返回 {@code code=0, data=null} 表示“未登录”，不再按业务 401 报错；注册页等必须登录的调用方
+     * 不传该参数，行为保持不变。</p>
+     */
     @GetMapping("/onboarding/status")
-    public ApiResponse<SmsAuthService.OnboardingStatus> onboardingStatus(HttpServletRequest request) {
+    public ApiResponse<SmsAuthService.OnboardingStatus> onboardingStatus(
+            HttpServletRequest request,
+            @RequestParam(value = "optional", required = false, defaultValue = "false") boolean optional) {
+        if (optional) {
+            long[] session = sessionService.resolve(request);
+            if (session == null) {
+                return ApiResponse.ok(null);
+            }
+            return ApiResponse.ok(smsAuthService.onboardingStatus(session[0], session[1]));
+        }
         long[] session = requireSession(request);
         return ApiResponse.ok(smsAuthService.onboardingStatus(session[0], session[1]));
     }
@@ -341,11 +354,15 @@ public class SsoController {
         String redirect = null;
         if (request != null && trimToNull(request.clientId()) != null && trimToNull(request.redirectUri()) != null) {
             assertClient(request.clientId(), request.redirectUri());
-            // 分步注册只建了全局会话；这里补写子系统专属会话，注册完成后回跳即可直接进入
-            sessionService.createForClient(session[0], session[1], true, request.clientId(), response);
-            String code = codeService.issue(session[0], session[1], request.clientId(), request.redirectUri(),
-                    request.codeChallenge(), request.codeChallengeMethod());
-            redirect = callback(request.redirectUri(), code, request.state());
+            // 仅当认证已达到可进入子系统的状态（done 或运营特例）时，才写子系统专属会话并签发授权码；
+            // pending 审核中仍留在认证中心，避免未审核通过就进入业务子系统。
+            if ("done".equals(status.stage())
+                    || canEnterUserCenterOperations(session[0], session[1], request.clientId())) {
+                sessionService.createForClient(session[0], session[1], true, request.clientId(), response);
+                String code = codeService.issue(session[0], session[1], request.clientId(), request.redirectUri(),
+                        request.codeChallenge(), request.codeChallengeMethod());
+                redirect = callback(request.redirectUri(), code, request.state());
+            }
         }
         return ApiResponse.ok(new ActivateCertificationResult(status.stage(), redirect));
     }
@@ -390,22 +407,61 @@ public class SsoController {
     public record ActivateCertificationResult(String stage, String redirect) {
     }
 
-    /** 建全局会话 → 签授权码 → 拼回跳地址（密码登录 / 验证码登录 / 注册共用这一段）。 */
+    /** 按准入阶段建会话 → 签授权码 → 拼回跳地址（密码登录 / 验证码登录 / 注册共用这一段）。 */
     private SsoLoginResult signIn(Long userId, Long marketId, String clientId, String redirectUri, String state,
                                   String codeChallenge, String codeChallengeMethod, boolean remember,
                                   HttpServletResponse response) {
+        String onboardingStage = pendingOnboardingStage(userId, marketId, clientId);
+        if (onboardingStage != null) {
+            // 未通过主体准入时只写认证中心全局会话（供 /register 的 /onboarding/* 接口使用），
+            // 绝不写子系统专属会话，也不签发子系统授权码。
+            sessionService.create(userId, marketId, remember, response);
+            return new SsoLoginResult(null, onboardingStage);
+        }
         if (clientId == null || clientId.isBlank()) {
             sessionService.create(userId, marketId, remember, response);
         } else {
             sessionService.createForClient(userId, marketId, remember, clientId, response);
         }
-        SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(userId, marketId);
-        if (!canEnterUserCenterOperations(userId, marketId, clientId)
-                && !"done".equals(onboarding.stage())) {
-            return new SsoLoginResult(null, onboarding.stage());
-        }
         String code = codeService.issue(userId, marketId, clientId, redirectUri, codeChallenge, codeChallengeMethod);
         return new SsoLoginResult(callback(redirectUri, code, state));
+    }
+
+    /** 未通过主体准入校验时返回当前所处阶段（subject/certification/pending），已通过返回 null。 */
+    private String pendingOnboardingStage(Long userId, Long marketId, String clientId) {
+        if (canEnterUserCenterOperations(userId, marketId, clientId)) {
+            return null;
+        }
+        SmsAuthService.OnboardingStatus onboarding = smsAuthService.onboardingStatus(userId, marketId);
+        return "done".equals(onboarding.stage()) ? null : onboarding.stage();
+    }
+
+    /** 构造未完成主体认证时的分步注册页跳转地址，保留原始 OAuth 授权查询参数。 */
+    private String onboardingRegisterPath(String stage, String originalQuery) {
+        String step = "subject".equals(stage) ? "2" : "3";
+        if (originalQuery == null || originalQuery.isBlank()) {
+            return "/register?step=" + step;
+        }
+        StringBuilder filtered = new StringBuilder();
+        for (String pair : originalQuery.split("&")) {
+            if (pair.isBlank()) {
+                continue;
+            }
+            int eq = pair.indexOf('=');
+            String key = eq >= 0 ? pair.substring(0, eq) : pair;
+            if ("mode".equals(key) || "step".equals(key) || "newAccount".equals(key) || "phone".equals(key)) {
+                continue;
+            }
+            if (filtered.length() > 0) {
+                filtered.append('&');
+            }
+            filtered.append(pair);
+        }
+        if (filtered.length() > 0) {
+            filtered.append('&');
+        }
+        filtered.append("step=").append(step);
+        return "/register?" + filtered;
     }
 
     /** 运营履职不依赖经营主体认证；权限仍按当前市场实时解析。 */

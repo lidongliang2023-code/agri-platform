@@ -76,8 +76,8 @@ public class ChannelPartnerController {
         Map<String, Object> data = new HashMap<>();
         data.put("settledTotal", settled);
         data.put("pendingTotal", pending);
-        data.put("withdrawnTotal", sumWithdrawals(mine.getId(), List.of("APPROVED", "PAID")));
-        data.put("frozenTotal", sumWithdrawals(mine.getId(), List.of("PENDING")));
+        data.put("withdrawnTotal", sumWithdrawals(mine.getId(), List.of("PAID")));
+        data.put("frozenTotal", sumWithdrawals(mine.getId(), List.of("PENDING", "APPROVED")));
         data.put("available", settled.subtract(frozen).max(BigDecimal.ZERO));
         return ResponseEntity.ok(data);
     }
@@ -104,6 +104,7 @@ public class ChannelPartnerController {
 
     /** 申请提现：金额不能超过可提现余额，且同一渠道同时只能有一笔待审申请。 */
     @PostMapping("/withdrawal")
+    @org.springframework.transaction.annotation.Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public ResponseEntity<Map<String, Object>> applyWithdrawal(@RequestBody Map<String, Object> body) {
         ChannelPartner mine = channelIdentityService.requireApprovedChannel(null);
         BigDecimal amount;
@@ -114,6 +115,13 @@ public class ChannelPartnerController {
         }
         if (amount.signum() <= 0) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", "提现金额必须大于 0"));
+        }
+        if (amount.stripTrailingZeros().scale() > 2) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "提现金额最多保留两位小数"));
+        }
+        // 使用渠道行锁串行化申请；READ_COMMITTED 保证等待锁后读取最新占款。
+        if (withdrawalMapper.lockChannel(mine.getId()) == null) {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "message", "渠道不存在"));
         }
         Long pending = withdrawalMapper.selectCount(new LambdaQueryWrapper<CommissionWithdrawal>()
                 .eq(CommissionWithdrawal::getChannelId, mine.getId())
@@ -149,10 +157,27 @@ public class ChannelPartnerController {
     @GetMapping("/settlements")
     public ResponseEntity<List<CommissionSettlement>> settlements() {
         ChannelPartner mine = channelIdentityService.requireCurrent();
-        return ResponseEntity.ok(settlementMapper.selectList(new LambdaQueryWrapper<CommissionSettlement>()
+        // 全平台批次只展示当前渠道参与的部分，不能暴露全平台金额和笔数。
+        Map<String, List<Commission>> byBatch = commissionMapper.selectList(new LambdaQueryWrapper<Commission>()
+                        .eq(Commission::getChannelId, mine.getId())
+                        .isNotNull(Commission::getSettleBatchNo))
+                .stream().collect(java.util.stream.Collectors.groupingBy(Commission::getSettleBatchNo));
+        List<CommissionSettlement> batches = settlementMapper.selectList(new LambdaQueryWrapper<CommissionSettlement>()
                 .and(w -> w.eq(CommissionSettlement::getChannelId, mine.getId())
-                        .or().isNull(CommissionSettlement::getChannelId))
-                .orderByDesc(CommissionSettlement::getCreatedAt)));
+                        .or(!byBatch.isEmpty(), global -> global.isNull(CommissionSettlement::getChannelId)
+                                .in(CommissionSettlement::getBatchNo, byBatch.keySet())))
+                .orderByDesc(CommissionSettlement::getCreatedAt));
+        return ResponseEntity.ok(batches.stream().map(batch -> {
+            if (batch.getChannelId() != null) return batch;
+            List<Commission> own = byBatch.getOrDefault(batch.getBatchNo(), List.of());
+            CommissionSettlement view = new CommissionSettlement();
+            org.springframework.beans.BeanUtils.copyProperties(batch, view);
+            view.setChannelId(mine.getId());
+            view.setCommissionCount(own.size());
+            view.setAmount(own.stream().map(Commission::getAmount).filter(java.util.Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            return view;
+        }).toList());
     }
 
     private BigDecimal sumCommission(Long channelId) {

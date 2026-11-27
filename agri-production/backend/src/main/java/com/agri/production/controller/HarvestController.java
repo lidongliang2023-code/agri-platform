@@ -160,6 +160,17 @@ public class HarvestController {
                 TenantContextService.currentTenantId()));
     }
 
+    /** 当前主体的处置权限提示；实际写入仍由业务服务重新校验。 */
+    @GetMapping("/inventory/disposal-permission")
+    public ApiResponse<Map<String, Object>> disposalPermission() {
+        String tenantId = TenantContextService.currentTenantId();
+        boolean allowed = "owner".equalsIgnoreCase(TenantContextService.currentMerchantRole())
+                && TenantContextService.currentUserId() != null;
+        return ApiResponse.success(Map.of("tenantId", tenantId, "allowed", allowed,
+                "reason", allowed ? "可登记已完成的实物处置，请核实数量及凭据"
+                        : "仅当前经营主体负责人可登记过期处置。你仍可查看库存和流水，请将批次、仓库、处置数量及凭据交给负责人确认。"));
+    }
+
     /** 新增库存记录。 */
     @PostMapping("/inventory")
     public ApiResponse<Inventory> createInventory(@RequestBody Map<String, Object> body) {

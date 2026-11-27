@@ -168,14 +168,28 @@ public class ConsumerServiceImpl extends ServiceImpl<ConsumerMapper, Consumer> i
         Product product = productMapper.selectById(cart.getProductId());
         if (product != null) {
             vo.setName(product.getName());
-            vo.setPrice(product.getPrice());
-            vo.setOriginalPrice(product.getPrice());
-            // 秒杀进行中：购物车小计按活动价，页面会打「秒杀价」标；下单时后端按同一规则重算
+            java.math.BigDecimal basePrice = product.getPrice();
+            if (cart.getChannelId() != null) {
+                ChannelProduct relation = channelProductMapper.selectOne(new LambdaQueryWrapper<ChannelProduct>()
+                        .eq(ChannelProduct::getChannelId, cart.getChannelId())
+                        .eq(ChannelProduct::getProductId, product.getId())
+                        .last("LIMIT 1"));
+                if (relation != null && relation.getRetailPrice() != null && relation.getRetailPrice().signum() > 0) {
+                    basePrice = relation.getRetailPrice();
+                }
+            }
+            vo.setPrice(basePrice);
+            vo.setOriginalPrice(basePrice);
             ActivityPriceService.Flash flash = activityPriceService.activeFlash(product.getId());
-            if (flash != null) {
-                vo.setActivityPrice(flash.price());
-                vo.setActivityType("FLASH");
-                vo.setActivityEndTime(flash.endTime());
+            int quantity = cart.getQuantity() == null ? 0 : cart.getQuantity();
+            if (flash != null && quantity > 0 && flash.remainStock() >= quantity) {
+                int bought = activityPriceService.purchasedQuantity(product.getId(), cart.getConsumerId(), flash.startTime());
+                if (flash.perUserLimit() <= 0 || bought + quantity <= flash.perUserLimit()) {
+                    vo.setPrice(flash.price());
+                    vo.setActivityPrice(flash.price());
+                    vo.setActivityType("FLASH");
+                    vo.setActivityEndTime(flash.endTime());
+                }
             }
             vo.setStock(product.getStock());
             vo.setSpec(product.getSpec());

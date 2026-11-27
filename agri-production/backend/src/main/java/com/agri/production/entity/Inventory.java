@@ -87,7 +87,7 @@ public class Inventory {
     @TableField("update_time")
     private LocalDateTime updateTime;
 
-    /** 库存健康状态（派生，不落库）：normal / warning / shortage / expiring */
+    /** 库存健康状态（派生，不落库）：normal / shortage / expiring / expired */
     @TableField(exist = false)
     private String healthStatus;
 

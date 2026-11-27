@@ -34,13 +34,15 @@ public class AfterSaleRefundService {
     @Transactional
     public Result approve(Long afterSaleId, String opinion) {
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT order_id AS orderId, amount, type, status FROM s2b2c_after_sale WHERE id = ?", afterSaleId);
+                "SELECT order_id AS orderId, amount, type, status FROM s2b2c_after_sale WHERE id = ? FOR UPDATE", afterSaleId);
         if (rows.isEmpty()) return new Result(false, "售后单不存在", false);
         Map<String, Object> afterSale = rows.get(0);
         if (!"PENDING".equalsIgnoreCase(String.valueOf(afterSale.get("status")))) {
             return new Result(false, "该售后单已处理（" + afterSale.get("status") + "）", false);
         }
         Long orderId = ((Number) afterSale.get("orderId")).longValue();
+        String validationError = validateRefund(afterSale);
+        if (validationError != null) return new Result(false, validationError, false);
         if ("RETURN".equalsIgnoreCase(String.valueOf(afterSale.get("type")))) {
             int updated = jdbc.update("UPDATE s2b2c_after_sale SET status = 'RETURNING', handle_opinion = ?, "
                     + "handle_time = NOW() WHERE id = ? AND status = 'PENDING'", opinion, afterSaleId);
@@ -61,10 +63,11 @@ public class AfterSaleRefundService {
     /** 买家填写退货物流。 */
     @Transactional
     public boolean submitReturn(Long afterSaleId, Long consumerId, String company, String logisticsNo) {
+        if (company == null || company.isBlank() || logisticsNo == null || logisticsNo.isBlank()) return false;
         boolean success = jdbc.update("UPDATE s2b2c_after_sale SET return_company = ?, return_logistics_no = ?, "
                         + "return_shipped_at = NOW() WHERE id = ? AND consumer_id = ? AND type = 'RETURN' "
                         + "AND status = 'RETURNING' AND return_shipped_at IS NULL",
-                company, logisticsNo, afterSaleId, consumerId) > 0;
+                company.trim(), logisticsNo.trim(), afterSaleId, consumerId) > 0;
         if (success) afterSaleNoticeService.returnShipped(afterSaleId);
         return success;
     }
@@ -74,7 +77,7 @@ public class AfterSaleRefundService {
     public Result confirmReturn(Long afterSaleId, String opinion) {
         List<Map<String, Object>> rows = jdbc.queryForList(
                 "SELECT order_id AS orderId, amount, type, status, return_shipped_at AS returnShippedAt "
-                        + "FROM s2b2c_after_sale WHERE id = ?", afterSaleId);
+                        + "FROM s2b2c_after_sale WHERE id = ? FOR UPDATE", afterSaleId);
         if (rows.isEmpty()) return new Result(false, "售后单不存在", false);
         Map<String, Object> afterSale = rows.get(0);
         if (!"RETURN".equalsIgnoreCase(String.valueOf(afterSale.get("type")))) {
@@ -86,6 +89,8 @@ public class AfterSaleRefundService {
         if (afterSale.get("returnShippedAt") == null) {
             return new Result(false, "买家尚未填写退货物流，不能确认收货", false);
         }
+        String validationError = validateRefund(afterSale);
+        if (validationError != null) return new Result(false, validationError, false);
         int updated = jdbc.update("UPDATE s2b2c_after_sale SET status = 'COMPLETED', handle_opinion = ?, "
                         + "handle_time = NOW(), return_received_at = NOW() "
                         + "WHERE id = ? AND status = 'RETURNING' AND return_shipped_at IS NOT NULL",
@@ -101,6 +106,7 @@ public class AfterSaleRefundService {
 
     @Transactional
     public Result reject(Long afterSaleId, String opinion) {
+        if (opinion == null || opinion.isBlank()) return new Result(false, "请填写拒绝原因", false);
         int updated = jdbc.update("UPDATE s2b2c_after_sale SET status = 'REJECTED', handle_opinion = ?, "
                 + "handle_time = NOW() WHERE id = ? AND status = 'PENDING'", opinion, afterSaleId);
         if (updated > 0) {
@@ -110,20 +116,40 @@ public class AfterSaleRefundService {
         return new Result(false, "售后单不存在或已处理", false);
     }
 
+    /** 在同一事务内锁定订单，审核与收货均先验证，失败时不修改售后状态或发出通知。 */
+    private String validateRefund(Map<String, Object> afterSale) {
+        String type = String.valueOf(afterSale.get("type"));
+        if (!List.of("REFUND", "RETURN").contains(type)) return "售后类型无效";
+        List<Map<String, Object>> orders = jdbc.queryForList(
+                "SELECT status, pay_amount AS payAmount FROM s2b2c_order WHERE id = ? FOR UPDATE",
+                afterSale.get("orderId"));
+        if (orders.isEmpty()) return "订单不存在";
+        Map<String, Object> order = orders.get(0);
+        if (!OrderStatus.AFTER_SALE_ALLOWED.contains(String.valueOf(order.get("status")))) {
+            return "当前订单状态不能处理退款";
+        }
+        BigDecimal amount = decimal(afterSale.get("amount"));
+        if (amount.signum() <= 0 || amount.compareTo(decimal(order.get("payAmount"))) > 0) {
+            return "售后金额必须大于零且不能超过订单实付金额";
+        }
+        return null;
+    }
+
     private boolean refundOrder(Long orderId, BigDecimal amount) {
         List<Map<String, Object>> orderRows = jdbc.queryForList(
-                "SELECT status, pay_amount AS payAmount FROM s2b2c_order WHERE id = ?", orderId);
-        if (orderRows.isEmpty()) return false;
+                "SELECT status, pay_amount AS payAmount FROM s2b2c_order WHERE id = ? FOR UPDATE", orderId);
+        if (orderRows.isEmpty()) throw new IllegalStateException("订单不存在，退款已回滚");
         Map<String, Object> order = orderRows.get(0);
         String orderStatus = String.valueOf(order.get("status"));
-        if ("CANCELLED".equalsIgnoreCase(orderStatus) || "REFUNDED".equalsIgnoreCase(orderStatus)) {
-            return false;
+        if (!OrderStatus.AFTER_SALE_ALLOWED.contains(orderStatus)) {
+            throw new IllegalStateException("订单状态已变化，退款已回滚");
         }
         BigDecimal payAmount = decimal(order.get("payAmount"));
         boolean fullRefund = amount.compareTo(payAmount.subtract(new BigDecimal("0.01"))) >= 0;
         if (fullRefund) {
-            jdbc.update("UPDATE s2b2c_order SET status = 'REFUNDED', update_time = NOW() "
-                    + "WHERE id = ? AND status NOT IN ('CANCELLED','REFUNDED')", orderId);
+            int updated = jdbc.update("UPDATE s2b2c_order SET status = 'REFUNDED', update_time = NOW() "
+                    + "WHERE id = ? AND status = ?", orderId, orderStatus);
+            if (updated != 1) throw new IllegalStateException("订单状态已变化，退款已回滚");
             orderReversalService.restoreBenefits(orderId, false);
         }
         return fullRefund;

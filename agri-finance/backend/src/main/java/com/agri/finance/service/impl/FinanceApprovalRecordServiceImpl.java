@@ -25,6 +25,12 @@ public class FinanceApprovalRecordServiceImpl
                 .list();
     }
 
+    public List<FinanceApprovalRecord> listAllRecent() {
+        return lambdaQuery()
+                .orderByDesc(FinanceApprovalRecord::getCreatedAt)
+                .list();
+    }
+
     public FinanceApprovalRecord findByApplication(String applicationId, String providerId) {
         return lambdaQuery()
                 .eq(FinanceApprovalRecord::getApplicationId, applicationId)

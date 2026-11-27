@@ -508,7 +508,7 @@ public class SmsAuthService {
         }
         UserIdentityEntity identityRecord = latestIdentity(userId);
         String identityStatus = identityRecord == null ? null : identityRecord.getStatus();
-        String stage = "approved".equals(identityStatus) ? "done"
+        String stage = ("verified".equals(identityStatus) || "approved".equals(identityStatus)) ? "done"
                 : "pending".equals(identityStatus) ? "pending" : "certification";
         return new OnboardingStatus(stage, user.getPhone(), user.getNickname(), identity,
                 merchantId, merchant == null ? null : merchant.getName(), identityStatus,

@@ -359,6 +359,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 throw new IllegalArgumentException("优惠券已被使用，请重新选择");
             }
         }
+        // 只删除本事务读取并结算的行，避免清空未选商品或误删之后新增的行。
+        cartMapper.delete(new LambdaQueryWrapper<Cart>()
+                .eq(Cart::getConsumerId, order.getConsumerId())
+                .in(Cart::getId, carts.stream().map(Cart::getId).toList()));
         return orderIds;
     }
 

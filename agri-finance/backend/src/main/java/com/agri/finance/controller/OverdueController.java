@@ -10,9 +10,15 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
+/**
+ * 逾期台账。
+ *
+ * <p>查询接口（{@code GET /list}、{@code GET /{id}}）对具备 {@code finance:review} 的资金方与运营角色开放，
+ * 供资金端「数据报表」和运营端「逾期管理」读取逾期风险口径；融资方无 {@code finance:review} 权限仍被拦成 403。
+ * 扫描、分配催收和核销结清等写操作仍严格限定为 {@code finance:admin}。</p>
+ */
 @RestController
 @RequestMapping("/api/v1/overdue")
-@OperatorOnly("finance:admin")
 public class OverdueController {
 
     private final OverdueRecordServiceImpl overdueRecordService;
@@ -28,6 +34,7 @@ public class OverdueController {
     }
 
     @GetMapping("/list")
+    @OperatorOnly("finance:review")
     public Map<String, Object> getOverdueRecords(@RequestParam(defaultValue = "") String status,
                                                  @RequestParam(defaultValue = "") String stage,
                                                  @RequestParam(defaultValue = "") String userId) {
@@ -49,12 +56,14 @@ public class OverdueController {
 
     /** 手动触发到期扫描（与每日 03:10 的定时任务同一份逻辑）。 */
     @PostMapping("/scan")
+    @OperatorOnly("finance:admin")
     public Map<String, Object> scan() {
         return Map.of("code", 200, "message", "扫描完成",
                 "data", Map.of("registered", overdueScanner.scan()));
     }
 
     @GetMapping("/{id}")
+    @OperatorOnly("finance:review")
     public Map<String, Object> getOverdueRecord(@PathVariable String id) {
         OverdueRecord record = overdueRecordService.getById(id);
         if (record == null) {
@@ -64,6 +73,7 @@ public class OverdueController {
     }
 
     @PostMapping("/assign")
+    @OperatorOnly("finance:admin")
     public Map<String, Object> assignCollector(@RequestBody Map<String, String> request) {
         OverdueRecord record = overdueRecordService.assignCollector(
                 request.get("id"), request.get("collectorId"), request.get("collectorName"));
@@ -72,6 +82,7 @@ public class OverdueController {
 
     /** 台账关闭后必须重算授信，否则扣掉的分不会回来。 */
     @PostMapping("/paid")
+    @OperatorOnly("finance:admin")
     public Map<String, Object> markPaid(@RequestBody Map<String, String> request) {
         OverdueRecord record = overdueRecordService.markPaid(request.get("id"));
         creditScoreService.generateCreditReport(record.getUserId());

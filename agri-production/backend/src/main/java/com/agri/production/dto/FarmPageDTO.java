@@ -12,6 +12,9 @@ public class FarmPageDTO {
 
     private String farmType;
 
+    /** 用户端业务类型标签，与列表从 remark 解析的展示口径一致。 */
+    private String typeLabel;
+
     private String province;
 
     private String city;

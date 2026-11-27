@@ -93,10 +93,12 @@ class CoreAppStartupSmokeTest {
             "/api/v1/sso/login",
             "/api/v1/sso/token",
             "/api/v1/sso/logout",
+            "/api/v1/sso/logout/complete",
             "/api/v1/sso/sms/code",
             "/api/v1/sso/login-by-sms",
             "/api/v1/sso/login-standalone",
             "/api/v1/sso/login-standalone-by-sms",
+            "/api/v1/sso/login-standalone-mfa",
             "/api/v1/sso/register-by-sms",
             "/api/v1/sso/password-reset",
             "/api/v1/sso/register-account",
@@ -105,6 +107,7 @@ class CoreAppStartupSmokeTest {
             "/api/v1/sso/onboarding/certification",
             "/api/v1/sso/onboarding/verification/**",
             "/api/v1/sso/account/**",
+            "/api/v1/sso/freeze-appeal",
             "/api/v1/public/logistics-inquiries",
             "/api/v1/public/news",
             "/api/v1/quotes/**",
@@ -113,6 +116,7 @@ class CoreAppStartupSmokeTest {
             "/swagger-ui.html",
             "/actuator/**",
             "/internal/**",
+            "/api/v1/internal/supplier-onboarding/**",
             "/error");
 
     private static final AntPathMatcher PATH_MATCHER = new AntPathMatcher();

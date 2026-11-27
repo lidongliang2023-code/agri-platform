@@ -25,6 +25,24 @@
         <if test="dto.farmType != null and dto.farmType != ''">
             AND farm_type = #{dto.farmType}
         </if>
+        <!-- 类型须在分页前过滤。兼容新建/导入写入的 remark，并保持旧记录的展示回退口径。 -->
+        <if test="dto.typeLabel != null and dto.typeLabel != ''">
+            AND COALESCE(
+                NULLIF(TRIM(CASE
+                    WHEN LOCATE('产业类型:', REPLACE(COALESCE(remark, ''), '：', ':')) > 0
+                    THEN SUBSTRING_INDEX(REPLACE(SUBSTRING(
+                        REPLACE(remark, '：', ':'),
+                        LOCATE('产业类型:', REPLACE(remark, '：', ':')) + CHAR_LENGTH('产业类型:')
+                    ), ';', '；'), '；', 1)
+                END), ''),
+                CASE farm_type
+                    WHEN '1' THEN '种植类'
+                    WHEN '2' THEN '养殖类'
+                    WHEN '3' THEN '综合种养'
+                    ELSE '未分类'
+                END
+            ) = #{dto.typeLabel}
+        </if>
         <if test="dto.province != null and dto.province != ''">
             AND province = #{dto.province}
         </if>

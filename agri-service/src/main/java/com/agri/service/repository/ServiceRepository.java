@@ -12,6 +12,8 @@ import java.math.RoundingMode;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,7 +40,7 @@ public class ServiceRepository {
     /** 订单状态机：谁能推进到哪儿，写死在这里而不是靠前端传什么就改什么。 */
     private static final Map<String, List<String>> ORDER_FLOW = Map.of(
             "pending_payment", List.of("confirmed", "cancelled"),
-            "confirmed", List.of("in_progress", "cancelled"),
+            "confirmed", List.of("cancelled"),
             "in_progress", List.of("completed", "cancelled"),
             "completed", List.of(),
             "cancelled", List.of());
@@ -103,7 +105,7 @@ public class ServiceRepository {
                   AND status NOT IN ('paid','rejected') ORDER BY submitted_at DESC LIMIT 2
                 """, applicationMapper(), merchantId)) {
             todos.add(todo("政策申报", application.get("policyTitle") + " 当前处于「"
-                    + application.get("status") + "」", String.valueOf(application.get("status")),
+                    + PolicyReviewText.label(String.valueOf(application.get("status"))) + "」", String.valueOf(application.get("status")),
                     application.get("progress") + "%", "policy"));
         }
         for (Map<String, Object> claim : jdbc.query("""
@@ -305,8 +307,11 @@ public class ServiceRepository {
         if (!"available".equals(provider.get("status"))) {
             throw BusinessException.forbidden("该服务商当前不可接单：" + provider.get("name"));
         }
-        String appointmentDate = required(body, "appointmentDate", "请选择预约日期");
+        String appointmentDate = futureDate(required(body, "appointmentDate", "请选择预约日期"));
         String appointmentSlot = required(body, "appointmentSlot", "请选择上门时段");
+        if (!(provider.get("availableSlots") instanceof List<?> slots) || !slots.contains(appointmentSlot)) {
+            throw new BusinessException(409, "服务时段已变化，请刷新服务商档案后重新选择");
+        }
         String location = required(body, "location", "请填写服务地址");
         BigDecimal quantity = decimal(body.get("quantity"), null);
         if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
@@ -314,7 +319,7 @@ public class ServiceRepository {
         }
         long merchantId = Long.parseLong(identity.currentMerchantId());
         // 单价只认服务商目录价：原先取请求里的 unitPrice，买家自己传 0.01 就能把价打下来
-        Map<String, Object> catalogItem = findCatalogItem(providerId, text(body, "serviceName", ""));
+        Map<String, Object> catalogItem = findCatalogItem(providerId, body);
         String unit = catalogItem != null
                 ? measure(String.valueOf(catalogItem.get("unit")))
                 : measure(String.valueOf(provider.get("unit")));
@@ -337,42 +342,51 @@ public class ServiceRepository {
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'pending_payment',10,?,?)
                 """,
                 orderNo, providerId, provider.get("name"), serviceName,
-                text(body, "category", String.valueOf(provider.get("category"))),
+                String.valueOf(provider.get("category")),
                 quantity, unit, unitPrice, total, deposit,
                 appointmentDate, appointmentSlot, location,
                 text(body, "contactName", identity.currentMerchantName()),
                 required(body, "contactPhone", "请输入联系电话"),
                 text(body, "notes", ""), merchantId, identity.currentMerchantName());
         Long orderId = jdbc.queryForObject("SELECT id FROM service_order WHERE order_no=?", Long.class, orderNo);
-        addOrderEvent(orderId, "预约已提交", "等待支付定金并锁定档期", LocalDateTime.now().format(DATE_TIME), true);
-        addOrderEvent(orderId, "服务商确认", "支付定金后服务商确认机手与设备", "待支付", false);
+        addOrderEvent(orderId, "预约已提交", "请确认预约信息；本系统不执行支付或自动锁档", LocalDateTime.now().format(DATE_TIME), true);
+        addOrderEvent(orderId, "服务商确认", "预约确认后等待服务商安排作业", "待确认", false);
         addOrderEvent(orderId, "现场服务", "按约定时间和地块完成作业", "待安排", false);
-        addOrderEvent(orderId, "验收结算", "验收通过后释放尾款", "待完成", false);
+        addOrderEvent(orderId, "验收结算", "服务商上报完成后由需求方验收", "待完成", false);
         notifyMe("order", "服务预约已创建",
                 "订单 " + orderNo + "（" + serviceName + " · " + provider.get("name") + "）已创建，"
-                        + "定金 ¥" + deposit + " 支付后服务商才会确认档期。", "ORDER", orderNo);
+                        + "请确认预约信息并与服务商约定档期；此操作不涉及扣款。", "ORDER", orderNo);
         return order(orderId);
     }
 
-    /** 已上架的服务目录价；请求里的 serviceName 命中目录就用目录价，命不中回落到服务商起价。 */
-    private Map<String, Object> findCatalogItem(long providerId, String serviceName) {
+    /** 移动端按项目 ID 精确取价；兼容桌面旧请求时仅允许唯一的完整项目名称。 */
+    private Map<String, Object> findCatalogItem(long providerId, Map<String, Object> body) {
         List<Map<String, Object>> items = jdbc.query("""
-                SELECT name, price, unit FROM service_item
+                SELECT id, name, price, unit FROM service_item
                 WHERE provider_id=? AND audit_status='approved' AND status='enabled' ORDER BY id
                 """, (rs, rowNum) -> Map.of(
-                "name", rs.getString("name"),
-                "price", rs.getBigDecimal("price"),
-                "unit", rs.getString("unit")
+                "id", String.valueOf(rs.getLong("id")), "name", rs.getString("name"),
+                "price", rs.getBigDecimal("price"), "unit", rs.getString("unit")
         ), providerId);
-        if (serviceName == null || serviceName.isBlank()) {
-            return null;
+        String itemId = text(body, "serviceItemId", "");
+        String name = text(body, "serviceName", "");
+        List<Map<String, Object>> matches = items.stream()
+                .filter(item -> itemId.isBlank() ? name.equals(item.get("name")) : itemId.equals(item.get("id")))
+                .toList();
+        if (matches.size() != 1) {
+            throw new BusinessException(409, "服务项目已下架、报价已变更或未选择，请刷新后重新预约");
         }
-        return items.stream()
-                .filter(item -> serviceName.equals(item.get("name"))
-                        || serviceName.contains(String.valueOf(item.get("name")))
-                        || String.valueOf(item.get("name")).contains(serviceName))
-                .findFirst()
-                .orElse(null);
+        return matches.get(0);
+    }
+
+    private String futureDate(String value) {
+        try {
+            LocalDate date = LocalDate.parse(value);
+            if (date.isBefore(LocalDate.now())) throw BusinessException.validationError("预约日期不能早于今天");
+            return date.toString();
+        } catch (DateTimeParseException ex) {
+            throw BusinessException.validationError("日期格式应为 yyyy-MM-dd");
+        }
     }
 
     /** 服务商报价单位形如「元/亩」，落到订单数量列时只要量纲。 */
@@ -421,6 +435,10 @@ public class ServiceRepository {
         Map<String, Object> existing = order(id);
         String from = String.valueOf(existing.get("status"));
         String status = text(body, "status", from);
+        if (status.equals(from)) return existing;
+        if ("completed".equals(status) && intValue(existing.get("progress")) < 100) {
+            throw new BusinessException(409, "服务商尚未上报完工，暂不能验收");
+        }
         if (!status.equals(from)) {
             List<String> allowed = ORDER_FLOW.getOrDefault(from, List.of());
             if (!allowed.contains(status)) {
@@ -434,11 +452,13 @@ public class ServiceRepository {
             case "completed", "cancelled" -> 100;
             default -> intValue(existing.get("progress"));
         };
-        jdbc.update("UPDATE service_order SET status=?, progress=? WHERE id=?", status, progress, id);
+        int changed = jdbc.update("UPDATE service_order SET status=?, progress=? WHERE id=? AND merchant_id=? AND status=? AND progress=?",
+                status, progress, id, Long.parseLong(identity.currentMerchantId()), from, intValue(existing.get("progress")));
+        if (changed != 1) throw new BusinessException(409, "订单已更新，请刷新后重试");
         String title = switch (status) {
-            case "confirmed" -> "服务商已确认";
+            case "confirmed" -> "需求方已确认预约";
             case "in_progress" -> "服务已开始";
-            case "completed" -> "作业已完成";
+            case "completed" -> "需求方已验收";
             case "cancelled" -> "订单已取消";
             default -> "订单状态已更新";
         };
@@ -465,7 +485,9 @@ public class ServiceRepository {
             throw BusinessException.validationError("评分必须在 1-5 之间");
         }
         String review = required(body, "review", "请填写评价内容");
-        jdbc.update("UPDATE service_order SET rating=?, review=? WHERE id=?", rating, review, id);
+        int changed = jdbc.update("UPDATE service_order SET rating=?, review=? WHERE id=? AND merchant_id=? AND status='completed' AND (rating IS NULL OR rating=0)",
+                rating, review, id, Long.parseLong(identity.currentMerchantId()));
+        if (changed != 1) throw new BusinessException(409, "该订单已评价或状态变化，请刷新后查看");
         jdbc.update("UPDATE service_provider SET order_count=order_count+1 WHERE id=?",
                 longValue(existing.get("providerId")));
         addOrderEvent(id, "服务已评价", "评分 " + rating + " 分：" + review,
@@ -508,7 +530,17 @@ public class ServiceRepository {
         String serviceName = required(body, "serviceName", "请填写需求标题");
         String location = required(body, "location", "请填写服务地点");
         String area = required(body, "area", "请填写服务面积或数量");
-        String preferredDate = required(body, "preferredDate", "请选择期望作业日期");
+        if (!area.matches("[0-9]+(?:\\.[0-9]{1,2})?\\s*(亩|次|吨|公斤|人|天|小时|份|台|人/天)")) {
+            throw BusinessException.validationError("数量需明确，例如 50亩、2吨或1次，不支持区间");
+        }
+        BigDecimal amount = new BigDecimal(area.replaceFirst("[^0-9.].*$", ""));
+        if (amount.signum() <= 0) throw BusinessException.validationError("服务数量必须大于0");
+        String preferredDate = futureDate(required(body, "preferredDate", "请选择期望作业日期"));
+        BigDecimal budgetMin = decimal(body.get("budgetMin"), BigDecimal.ZERO);
+        BigDecimal budgetMax = decimal(body.get("budgetMax"), BigDecimal.ZERO);
+        if (budgetMin.signum() < 0 || budgetMax.compareTo(budgetMin) < 0) {
+            throw BusinessException.validationError("预算应为非负数，且最高预算不能小于最低预算");
+        }
         long merchantId = Long.parseLong(identity.currentMerchantId());
         // 撮合数按同类目在营服务商实算：原先是 2 + |标题.hashCode()| % 5，
         // 同一条标题永远显示同一个数，页面看着像算法产物，其实是字符串哈希。
@@ -523,7 +555,7 @@ public class ServiceRepository {
                 """,
                 demandNo, category, serviceName,
                 text(body, "description", ""), location, area, preferredDate,
-                decimal(body.get("budgetMin"), BigDecimal.ZERO), decimal(body.get("budgetMax"), BigDecimal.ZERO),
+                budgetMin, budgetMax,
                 text(body, "contactName", identity.currentMerchantName()),
                 required(body, "contactPhone", "请输入联系电话"),
                 matches, merchantId, identity.currentMerchantName());
@@ -558,7 +590,7 @@ public class ServiceRepository {
     @Transactional
     public Map<String, Object> applyPolicy(Map<String, Object> body) {
         long policyId = requiredLong(body, "policyId", "请选择要申报的政策");
-        Map<String, Object> policy = jdbc.query("SELECT * FROM service_policy WHERE id=?", policyMapper(), policyId)
+        Map<String, Object> policy = jdbc.query("SELECT * FROM service_policy WHERE id=? FOR UPDATE", policyMapper(), policyId)
                 .stream().findFirst().orElseThrow(() -> BusinessException.notFound("政策不存在，无法申报：" + policyId));
         // 申报期闸门：已结束的政策不能再收材料，原先任何 id 都能提交成功
         String status = String.valueOf(policy.get("status"));
@@ -567,6 +599,17 @@ public class ServiceRepository {
                     + "」，不在申报期内");
         }
         long merchantId = Long.parseLong(identity.currentMerchantId());
+        String deadline = String.valueOf(policy.get("deadline"));
+        try {
+            if (LocalDate.parse(deadline).isBefore(LocalDate.now())) {
+                throw new BusinessException(409, "政策已超过申报截止日期");
+            }
+        } catch (DateTimeParseException ex) {
+            throw new BusinessException(409, "政策截止日期尚未配置有效，请联系运营核实");
+        }
+        Integer active = jdbc.queryForObject("SELECT COUNT(*) FROM service_policy_application WHERE policy_id=? AND merchant_id=? AND status<>'rejected'",
+                Integer.class, policyId, merchantId);
+        if (active != null && active > 0) throw new BusinessException(409, "该主体已申报此政策，请在我的申报查看进度");
         String applicationNo = serial("SQ");
         jdbc.update("""
                 INSERT INTO service_policy_application
@@ -638,7 +681,7 @@ public class ServiceRepository {
                 premium, coverage, java.time.LocalDate.now().plusDays(1).toString(),
                 merchantId, identity.currentMerchantName());
         notifyMe("insurance", "投保成功",
-                "保单 " + policyNo + "（" + product.get("name") + "）已生效，保费 ¥" + premium
+                "保单 " + policyNo + "（" + product.get("name") + "）已登记，保费 ¥" + premium
                         + "，保额 ¥" + coverage + "，自次日起保障。", "POLICY_INSURANCE", policyNo);
         return jdbc.queryForObject("SELECT * FROM insurance_policy WHERE policy_no=?",
                 insurancePolicyMapper(), policyNo);
@@ -655,8 +698,15 @@ public class ServiceRepository {
         if (!String.valueOf(merchantId).equals(String.valueOf(policy.get("merchantId")))) {
             throw BusinessException.forbidden("该保单不属于当前经营主体，不能替别人报案");
         }
-        if ("expired".equals(String.valueOf(policy.get("status")))) {
+        if (!List.of("effective", "claiming").contains(String.valueOf(policy.get("status")))) {
             throw new BusinessException(409, "保单 " + policy.get("policyNo") + " 已失效，不能报案");
+        }
+        try {
+            if (LocalDate.parse(String.valueOf(policy.get("effectiveDate"))).isAfter(LocalDate.now())) {
+                throw new BusinessException(409, "保单尚未到生效日期，暂不能报案");
+            }
+        } catch (DateTimeParseException ex) {
+            throw new BusinessException(409, "保单生效日期无效，请联系平台核实");
         }
         String claimNo = serial("LP");
         jdbc.update("""
@@ -669,7 +719,7 @@ public class ServiceRepository {
                 required(body, "description", "请描述受灾情况"),
                 text(body, "lossArea", "待查勘"), merchantId, identity.currentMerchantName());
         notifyMe("insurance", "报案已受理",
-                "案件 " + claimNo + " 已受理，查勘员将在 24 小时内联系您；进度会在此更新。", "CLAIM", claimNo);
+                "案件 " + claimNo + " 已受理，等待安排查勘；进度会在此更新。", "CLAIM", claimNo);
         return jdbc.queryForObject("SELECT * FROM insurance_claim WHERE claim_no=?", claimMapper(), claimNo);
     }
 
@@ -864,7 +914,7 @@ public class ServiceRepository {
                 .findFirst().orElseThrow(() -> BusinessException.notFound("专家不存在或当前不接诊：" + expertId));
         long merchantId = Long.parseLong(identity.currentMerchantId());
         String consultNo = serial("WZ");
-        String suggestion = "专家已接诊，会在工作时间 2 小时内给出复核意见。请保持电话畅通。";
+        String suggestion = "问诊已提交给接诊专家，回复后将在问诊记录和消息中心通知。";
         jdbc.update("""
                 INSERT INTO service_consultation
                 (consult_no,type,expert_id,expert_name,subject,content,ai_level,suggestion,status,merchant_id,merchant_name)
@@ -924,7 +974,7 @@ public class ServiceRepository {
                 text(body, "demand", "希望平台协调处理"),
                 merchantId, identity.currentMerchantName());
         notifyMe("complaint", "投诉工单已创建",
-                "工单 " + complaintNo + " 已进入处理队列，平台会按保障金规则复核；结论在此通知。",
+                "工单 " + complaintNo + " 已进入处理队列，平台将核实处理；结论在此通知。",
                 "COMPLAINT", complaintNo);
         return jdbc.queryForObject("SELECT * FROM service_complaint WHERE complaint_no=?",
                 complaintMapper(), complaintNo);
@@ -956,7 +1006,7 @@ public class ServiceRepository {
         Map<String, Object> dict = new LinkedHashMap<>();
         dict.put("orderStatus", List.of("pending_payment", "confirmed", "in_progress", "completed", "cancelled"));
         dict.put("orderStatusText", Map.of(
-                "pending_payment", "待支付定金", "confirmed", "已确认", "in_progress", "作业中",
+                "pending_payment", "待确认预约", "confirmed", "已确认", "in_progress", "作业中",
                 "completed", "已完成", "cancelled", "已取消"));
         dict.put("policyStatus", POLICY_FLOW);
         dict.put("claimStatus", List.of("submitted", "surveying", "assessing", "publicity", "paid", "closed", "rejected"));
@@ -990,7 +1040,7 @@ public class ServiceRepository {
             item.put("status", rs.getString("status"));
             if (details) {
                 item.put("items", jdbc.query(
-                        "SELECT * FROM service_item WHERE provider_id=? AND audit_status='approved' ORDER BY id",
+                        "SELECT * FROM service_item WHERE provider_id=? AND audit_status='approved' AND status='enabled' ORDER BY id",
                         serviceItemMapper(), rs.getLong("id")));
                 item.put("reviews", jdbc.query("""
                         SELECT order_no AS orderNo, service_name AS serviceName, rating, review,
@@ -1287,6 +1337,7 @@ public class ServiceRepository {
             item.put("read", rs.getBoolean("is_read"));
             item.put("bizType", rs.getString("biz_type"));
             item.put("bizNo", rs.getString("biz_no"));
+            PolicyReviewText.normalizeLegacyMessage(item);
             item.put("createdAt", rs.getString("created_at"));
             return item;
         };

@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -26,7 +28,7 @@ import java.util.Map;
 @Service
 public class CalendarWeatherService {
     private static final String PROVIDER = "Open-Meteo";
-    private static final String URL = "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&daily=temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,weather_code&timezone=Asia%%2FShanghai&forecast_days=16";
+    private static final String URL = "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&daily=temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,weather_code&hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_gusts_10m&timezone=Asia%%2FShanghai&forecast_days=16&past_days=1&wind_speed_unit=ms";
     private static final double WIND_LIMIT = 10.8d;
     private static final double RAIN_LIMIT = 40d;
     private final JdbcTemplate db;
@@ -35,6 +37,7 @@ public class CalendarWeatherService {
 
     public CalendarWeatherService(JdbcTemplate db, ObjectMapper json) { this.db = db; this.json = json; }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Map<String, Object> refresh(String tenant, Farm farm, LocalDate weekStart) {
         if (weekStart == null) throw new BusinessException(400, "天气刷新日期不能为空");
         Fetch fetch = fetch(farm);
@@ -68,15 +71,18 @@ public class CalendarWeatherService {
             HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
             String raw = response.body() == null ? "" : response.body();
             if (response.statusCode() < 200 || response.statusCode() >= 300) return Fetch.failed("天气服务返回 HTTP " + response.statusCode(), source, raw);
-            JsonNode daily = json.readTree(raw).path("daily");
+            JsonNode responseData = json.readTree(raw);
+            JsonNode daily = responseData.path("daily");
+            List<Map<String,Object>> hours = HarvestHourlyWeatherRules.normalize(responseData.path("hourly"));
             if (!daily.isObject() || !daily.path("time").isArray()) return Fetch.failed("天气响应缺少逐日预报", source, raw);
             List<Map<String, Object>> days = new ArrayList<>();
             for (int i = 0; i < daily.path("time").size(); i++) {
                 Map<String, Object> day = new LinkedHashMap<>();
                 day.put("date", daily.path("time").get(i).asText());
+                day.put("hours", hours.stream().filter(h -> String.valueOf(h.get("periodStart")).startsWith(String.valueOf(day.get("date")))).toList());
                 Double min = numberAt(daily.path("temperature_2m_min"), i), prob = numberAt(daily.path("precipitation_probability_max"), i), rain = numberAt(daily.path("precipitation_sum"), i), wind = numberAt(daily.path("wind_speed_10m_max"), i);
                 day.put("minTemperature", min); day.put("precipitationProbability", prob); day.put("precipitationMillimeters", rain); day.put("maxWindSpeedMs", wind); day.put("weatherCode", intAt(daily.path("weather_code"), i));
-                day.put("rain", prob != null && prob >= RAIN_LIMIT || rain != null && rain > 0.1d); day.put("strongWind", wind != null && wind >= WIND_LIMIT); day.put("weatherVerified", true);
+                day.put("rain", prob != null && prob >= RAIN_LIMIT || rain != null && rain > 0.1d); day.put("strongWind", wind != null && wind >= WIND_LIMIT); day.put("weatherVerified", min != null && prob != null && rain != null && wind != null && intAt(daily.path("weather_code"), i) != null);
                 day.put("note", "Open-Meteo逐日预报；降雨阈值" + RAIN_LIMIT + "%，大风阈值" + WIND_LIMIT + "m/s"); days.add(day);
             }
             return days.isEmpty() ? Fetch.failed("天气服务未返回逐日预报", source, raw) : Fetch.success(source, raw, days);
@@ -88,7 +94,7 @@ public class CalendarWeatherService {
     }
 
     private Map<String, Object> view(Farm farm, LocalDate weekStart, Fetch fetch) {
-        Map<String, Object> result = new LinkedHashMap<>(); result.put("status", fetch.ok ? "SUCCESS" : "FAILED"); result.put("provider", PROVIDER); result.put("sourceUrl", fetch.sourceUrl); result.put("issuedAt", fetch.ok ? LocalDateTime.now() : null); result.put("weekStart", weekStart); result.put("latitude", farm.getLatitude()); result.put("longitude", farm.getLongitude()); result.put("days", fetch.days); result.put("error", fetch.error); return result;
+        Map<String, Object> result = new LinkedHashMap<>(); result.put("status", fetch.ok ? "SUCCESS" : "FAILED"); result.put("provider", PROVIDER); result.put("sourceUrl", fetch.sourceUrl); result.put("issuedAt", fetch.ok ? LocalDateTime.now() : null); result.put("weekStart", weekStart); result.put("latitude", farm.getLatitude()); result.put("longitude", farm.getLongitude()); result.put("days", fetch.days); result.put("timezone", "Asia/Shanghai"); result.put("resolution", "HOURLY"); result.put("error", fetch.error); return result;
     }
 
     private String encode(Object value) { try { return json.writeValueAsString(value); } catch (Exception e) { throw new IllegalStateException(e); } }

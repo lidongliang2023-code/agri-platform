@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -285,18 +286,33 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         if (batchNo != null && !batchNo.isBlank()) w.like(Inventory::getBatchNo, batchNo.trim());
         if (warehouseName != null && !warehouseName.isBlank()) w.eq(Inventory::getWarehouseName, warehouseName.trim());
         if (category != null && !category.isBlank()) w.eq(Inventory::getCategory, category.trim());
-        if (keyword != null && !keyword.isBlank()) w.like(Inventory::getProductName, keyword.trim());
+        if (keyword != null && !keyword.isBlank()) {
+            String search = keyword.trim();
+            w.and(q -> q.like(Inventory::getProductName, search)
+                    .or().like(Inventory::getBatchNo, search));
+        }
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Shanghai"));
+        if (healthStatus != null && !healthStatus.isBlank()) {
+            // 与 fillHealth 同优先级：过期 > 不足 > 临期 > 正常；必须在分页前筛选。
+            String notShortage = "(safe_qty IS NULL OR current_qty IS NULL OR current_qty > safe_qty)";
+            switch (healthStatus.trim()) {
+                case "expired" -> w.lt(Inventory::getExpireDate, today);
+                case "shortage" -> w.and(q -> q.isNull(Inventory::getExpireDate).or().ge(Inventory::getExpireDate, today))
+                        .apply("safe_qty IS NOT NULL AND current_qty IS NOT NULL AND current_qty <= safe_qty");
+                case "expiring" -> w.ge(Inventory::getExpireDate, today)
+                        .le(Inventory::getExpireDate, today.plusDays(EXPIRING_DAYS)).apply(notShortage);
+                case "normal" -> w.and(q -> q.isNull(Inventory::getExpireDate).or().gt(Inventory::getExpireDate, today.plusDays(EXPIRING_DAYS)))
+                        .apply(notShortage);
+                case "warning" -> w.apply("1 = 0"); // 兼容历史筛选值，当前库存域不产生此状态。
+                default -> throw new BusinessException(400, "库存健康状态无效");
+            }
+        }
         w.orderByAsc(Inventory::getExpireDate).orderByAsc(Inventory::getInventoryId);
         int p = pageNum > 0 ? pageNum : 1;
         int s = pageSize > 0 ? pageSize : 10;
         IPage<Inventory> r = inventoryMapper.selectPage(new Page<>(p, s), w);
         List<Inventory> list = new ArrayList<>(r.getRecords());
-        list.forEach(this::fillHealth);
-        if (healthStatus != null && !healthStatus.isBlank()) {
-            // 健康状态是派生量（库里没有这一列），过滤只能在这里做
-            List<Inventory> filtered = list.stream().filter(i -> healthStatus.equals(i.getHealthStatus())).toList();
-            return PageResult.of(filtered, (long) filtered.size(), p, s);
-        }
+        list.forEach(item -> fillHealth(item, today));
         return PageResult.of(list, r.getTotal(), p, s);
     }
 
@@ -435,6 +451,10 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         lockBatch(batchId, tenantId);
         Inventory inv = sourceInventory(batchId, inventoryId, tenantId);
         if (inv == null) throw new BusinessException(400, "该批次还没有入库记录，无法出库");
+        // 使用锁定后读取的分仓效期，禁止客户端绕过；有效期当天仍允许出库。
+        if (inv.getExpireDate() != null && inv.getExpireDate().isBefore(LocalDate.now(ZoneId.of("Asia/Shanghai")))) {
+            throw new BusinessException(400, "该分仓库存已过期，禁止出库，请先核查并按损耗流程处置");
+        }
         if (Integer.valueOf(1).equals(inv.getFrozen()) ||
                 inv.getCurrentQty().subtract(inv.getFrozenQty() == null ? BigDecimal.ZERO : inv.getFrozenQty()).compareTo(qty) < 0) {
             throw new BusinessException(400, "可用库存不足或库存已冻结");
@@ -485,6 +505,52 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
         if (reason == null) throw new BusinessException(400, "损耗原因不能为空");
         Inventory inv = sourceInventory(batchId, idOf(body.get("inventoryId")), tenantId);
         if (inv == null) throw new BusinessException(400, "该批次还没有入库记录，无法登记损耗");
+        if (Boolean.TRUE.equals(body.get("expiredDisposal"))) {
+            if (!"owner".equalsIgnoreCase(com.agri.production.service.TenantContextService.currentMerchantRole()))
+                throw new BusinessException(403, "仅当前经营主体负责人可确认过期处置");
+            if (com.agri.production.service.TenantContextService.currentUserId() == null)
+                throw new BusinessException(401, "未获取可信用户身份，请重新登录");
+            if (body.get("inventoryId") == null) throw new BusinessException(400, "过期处置必须指定分仓库存");
+            if (inv.getExpireDate() == null || !inv.getExpireDate().isBefore(LocalDate.now(ZoneId.of("Asia/Shanghai"))))
+                throw new BusinessException(400, "仅可处置已过期库存，有效期当天仍有效");
+            String method = str(body.get("disposalMethod"));
+            if (!List.of("DESTROY", "HARMLESS").contains(method == null ? "" : method))
+                throw new BusinessException(400, "请选择销毁或无害化处理");
+            String evidence = str(body.get("evidenceNo"));
+            if (evidence == null || evidence.length() > 80 || reason.length() > 1000)
+                throw new BusinessException(400, "凭据编号必填且不超过80字，处置说明不超过1000字");
+            BigDecimal expected = dec(body.get("expectedQty"));
+            if (expected == null || expected.compareTo(inv.getCurrentQty()) != 0)
+                throw new BusinessException(409, "库存余额已变化，请刷新后重新确认");
+            if (qty.scale() > 4 || qty.compareTo(inv.getCurrentQty()) > 0)
+                throw new BusinessException(400, "处置数量不能超过当前库存，最多4位小数");
+            String receipt = "EXP:" + evidence;
+            if (flowMapper.selectCount(new LambdaQueryWrapper<InventoryFlow>()
+                    .eq(InventoryFlow::getTenantId, tenantId).eq(InventoryFlow::getBatchId, batchId)
+                    .eq(InventoryFlow::getFlowType, 4).eq(InventoryFlow::getOrderNo, receipt)) > 0)
+                throw new BusinessException(409, "该处置凭据已登记，请查阅流水，勿重复提交");
+            BigDecimal before = inv.getCurrentQty();
+            inv.setCurrentQty(before.subtract(qty));
+            inv.setLossQty((inv.getLossQty() == null ? BigDecimal.ZERO : inv.getLossQty()).add(qty));
+            inv.setLossReason("过期处置：" + reason.substring(0, Math.min(reason.length(), 150)));
+            inv.setFrozen(1);
+            inv.setFrozenQty(inv.getCurrentQty());
+            inv.setUpdateTime(LocalDateTime.now());
+            inventoryMapper.updateById(inv);
+            String operator = com.agri.production.service.TenantContextService.currentOperator();
+            String audit = "过期处置｜" + ("DESTROY".equals(method) ? "销毁" : "无害化处理")
+                    + "｜库存编号:" + inv.getInventoryId() + "｜有效期:" + inv.getExpireDate()
+                    + "｜处置前:" + before.toPlainString() + "｜处置后:" + inv.getCurrentQty().toPlainString()
+                    + "｜凭据:" + evidence + "｜确认人ID:" + com.agri.production.service.TenantContextService.currentUserId()
+                    + "｜说明:" + reason;
+            writeFlow(batchId, 4, qty.negate(), inv.getUnit(), inv.getWarehouseName(), operator, receipt, audit, tenantId);
+            HarvestBatch batch = getOwnedBatch(batchId, tenantId);
+            refreshBatchStock(batch);
+            batchMapper.updateById(batch);
+            return true;
+        }
+        if (inv.getExpireDate() != null && inv.getExpireDate().isBefore(LocalDate.now(ZoneId.of("Asia/Shanghai"))))
+            throw new BusinessException(400, "已过期库存请使用过期处置，填写处置方式及凭据");
         if (Integer.valueOf(1).equals(inv.getFrozen()) ||
                 inv.getCurrentQty().subtract(inv.getFrozenQty() == null ? BigDecimal.ZERO : inv.getFrozenQty()).compareTo(qty) < 0) {
             throw new BusinessException(400, "可用库存不足或库存已冻结");
@@ -672,14 +738,22 @@ public class HarvestInventoryServiceImpl implements IHarvestInventoryService {
 
     /** 健康状态：先看是否低于安全库存（shortage），再看是否临期（expiring），否则 normal。 */
     private void fillHealth(Inventory inv) {
+        fillHealth(inv, LocalDate.now(ZoneId.of("Asia/Shanghai")));
+    }
+
+    private void fillHealth(Inventory inv, LocalDate today) {
         inv.setFrozenFlag(inv.getFrozen() != null && inv.getFrozen() == 1);
+        if (inv.getExpireDate() != null && inv.getExpireDate().isBefore(today)) {
+            inv.setHealthStatus("expired");
+            return;
+        }
         if (inv.getSafeQty() != null && inv.getCurrentQty() != null
                 && inv.getCurrentQty().compareTo(inv.getSafeQty()) <= 0) {
             inv.setHealthStatus("shortage");
             return;
         }
         if (inv.getExpireDate() != null
-                && !inv.getExpireDate().isAfter(LocalDate.now().plusDays(EXPIRING_DAYS))) {
+                && !inv.getExpireDate().isAfter(today.plusDays(EXPIRING_DAYS))) {
             inv.setHealthStatus("expiring");
             return;
         }

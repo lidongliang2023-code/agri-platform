@@ -347,9 +347,7 @@ public class ConsumerController {
         result.put("message", success
                 ? (orderIds.size() > 1 ? "下单成功，已按供应商/渠道拆分为 " + orderIds.size() + " 个订单" : "下单成功")
                 : "下单失败");
-        if (success) {
-            consumerService.clearCart(order.getConsumerId());
-        }
+        // 购物车行由下单事务按实际结算 ID 清理；未勾选商品继续保留。
         return ResponseEntity.ok(result);
     }
 
@@ -425,8 +423,10 @@ public class ConsumerController {
 
     @PostMapping("/address/add")
     public ResponseEntity<Map<String, Object>> addAddress(@RequestBody Address address) {
-        // 地址归属以登录账号为准，不信任请求体里的 consumerId
+        // 新地址主键由服务端生成，归属以登录账号为准。
+        address.setId(null);
         address.setConsumerId(consumerIdentityService.current().getId());
+        address.setStatus("ACTIVE");
         Map<String, Object> result = new HashMap<>();
         // isDefault 是 Boolean（请求体不传就是 null），直接 unbox 会 NPE 成 500；按"没勾默认地址"处理
         if (Boolean.TRUE.equals(address.getIsDefault())) {

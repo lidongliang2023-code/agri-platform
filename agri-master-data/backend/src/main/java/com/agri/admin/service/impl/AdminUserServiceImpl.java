@@ -102,21 +102,12 @@ public class AdminUserServiceImpl implements IAdminUserService {
 
     @Override
     public void deleteUser(Long id) {
-        throw new BusinessException("统一用户不允许删除；可停用账号或解除主体绑定");
+        throw new BusinessException("统一用户不允许删除；账号启停与解除主体绑定请前往用户中心办理");
     }
 
     @Override
     public void updateUserStatus(Long id, String userStatus) {
-        String normalized = normalizeUserStatus(userStatus);
-        if (normalized == null) {
-            throw new BusinessException("用户状态只能是 active/inactive 或 1/0");
-        }
-        CoreUserAdminClient.CoreApiResponse<Void> response = coreUserAdminClient.updateStatus(
-                id, new CoreUserAdminClient.UserStatusUpdate("active".equals(normalized) ? 1 : 0));
-        if (response.code() == null || response.code() != 0) {
-            throw new BusinessException(response.message() == null
-                    ? "统一用户状态更新失败" : response.message());
-        }
+        throw new BusinessException("账号启停请前往用户中心运营端办理；主数据端统一用户为只读视图");
     }
 
     private List<UserVO> loadUnifiedUsers() {

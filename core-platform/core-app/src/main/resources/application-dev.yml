@@ -30,6 +30,10 @@ agri:
         # 注意白名单是**前缀**匹配：`http://localhost/` 只覆盖 :80，不含带端口的地址。
         - http://localhost:8190/
         - http://127.0.0.1:8190/
+        # 生产管理 uni-app 移动 H5（:8180），回调路径为 /prod-mobile/sso/callback。
+        - http://localhost:8180/
+        - http://127.0.0.1:8180/
+        - http://192.168.11.196:8180/
         - http://localhost:5173/
         - http://prod.agri.local/
       mdm:

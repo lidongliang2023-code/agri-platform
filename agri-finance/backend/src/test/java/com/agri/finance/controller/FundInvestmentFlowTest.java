@@ -64,6 +64,9 @@ class FundInvestmentFlowTest {
     @Autowired
     private InvestmentController investmentController;
 
+    @Autowired
+    private LoanController loanController;
+
     /** 身份由令牌解析，测试里把它钉在 PROVIDER-BANK-001 上（真实令牌链路见 scripts/e2e-finance-flow.mjs）。 */
     @MockBean
     private FinanceIdentityService identityService;
@@ -184,5 +187,155 @@ class FundInvestmentFlowTest {
         assertThat(((Number) summary.get("completedCount")).intValue()).isEqualTo(1);
         assertThat((List<?>) portfolio.get("allocation")).isNotEmpty();
         assertThat((List<?>) portfolio.get("investments")).hasSize(2);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void adminApprovalOverviewSucceedsWithoutBoundProvider() {
+        when(identityService.hasPermission("finance:admin")).thenReturn(true);
+        when(identityService.providerIdFor("")).thenThrow(
+                new com.agri.common.exception.BusinessException(403, "当前账号还没有绑定资金机构")
+        );
+
+        Map<String, Object> adminView = loanController.approvalOverview("", "admin");
+        assertThat(adminView).containsEntry("code", 200);
+        Map<String, Object> data = (Map<String, Object>) adminView.get("data");
+        assertThat(data).containsEntry("scope", "admin");
+        assertThat(data).containsEntry("canSubmitReview", false);
+        assertThat((List<?>) data.get("items")).isNotEmpty();
+
+        // 即使未显式传 scope=admin，具备 finance:admin 的运营账号也不应被未绑定资金机构挡成 403
+        Map<String, Object> fallbackView = loanController.approvalOverview("", "");
+        assertThat(fallbackView).containsEntry("code", 200);
+        Map<String, Object> fallbackData = (Map<String, Object>) fallbackView.get("data");
+        assertThat(fallbackData).containsEntry("scope", "admin");
+
+        // 非运营账号未绑定资金机构时，仍必须按 403 拒绝，不放宽资金方边界
+        when(identityService.hasPermission("finance:admin")).thenReturn(false);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> loanController.approvalOverview("", "admin"))
+                .isInstanceOf(com.agri.common.exception.BusinessException.class)
+                .hasMessageContaining("资金机构");
+    }
+
+    @Test
+    void overdueReadAllowsFinanceReviewWhileWritesRemainAdminOnly() throws Exception {
+        com.agri.common.rbac.PermissionResolver resolver = org.mockito.Mockito.mock(com.agri.common.rbac.PermissionResolver.class);
+        com.agri.common.rbac.RbacProperties props = new com.agri.common.rbac.RbacProperties();
+        props.setOperatorPaths(List.of("/api/**"));
+        props.setReadPermission("finance:read");
+        props.setWritePermission("finance:write");
+        props.setRequireAuth(true);
+        com.agri.common.rbac.OperatorGuardInterceptor interceptor =
+                new com.agri.common.rbac.OperatorGuardInterceptor(resolver, props);
+
+        var listMethod = new org.springframework.web.method.HandlerMethod(
+                new Object(),
+                OverdueController.class.getMethod("getOverdueRecords", String.class, String.class, String.class));
+        var scanMethod = new org.springframework.web.method.HandlerMethod(
+                new Object(),
+                OverdueController.class.getMethod("scan"));
+        var assignMethod = new org.springframework.web.method.HandlerMethod(
+                new Object(),
+                OverdueController.class.getMethod("assignCollector", Map.class));
+        var paidMethod = new org.springframework.web.method.HandlerMethod(
+                new Object(),
+                OverdueController.class.getMethod("markPaid", Map.class));
+
+        // 资金方（finance:fund + finance:review，不含 finance:admin）：可读取逾期列表，但禁止扫描/分配/核销
+        when(resolver.currentPermissions()).thenReturn(java.util.Set.of("finance:read", "finance:write", "finance:fund", "finance:review"));
+        var fundListReq = new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/v1/overdue/list");
+        fundListReq.addHeader("Authorization", "Bearer fund-token");
+        assertThat(interceptor.preHandle(fundListReq, new org.springframework.mock.web.MockHttpServletResponse(), listMethod)).isTrue();
+
+        for (var writeEntry : List.of(
+                Map.entry("/api/v1/overdue/scan", scanMethod),
+                Map.entry("/api/v1/overdue/assign", assignMethod),
+                Map.entry("/api/v1/overdue/paid", paidMethod))) {
+            var req = new org.springframework.mock.web.MockHttpServletRequest("POST", writeEntry.getKey());
+            req.addHeader("Authorization", "Bearer fund-token");
+            var res = new org.springframework.mock.web.MockHttpServletResponse();
+            assertThat(interceptor.preHandle(req, res, writeEntry.getValue())).isFalse();
+            assertThat(res.getStatus()).isEqualTo(403);
+        }
+
+        // 融资方（仅 finance:borrower，不含 finance:review）：读取逾期列表必须拒绝 403
+        when(resolver.currentPermissions()).thenReturn(java.util.Set.of("finance:read", "finance:write", "finance:borrower"));
+        var borrowerReq = new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/v1/overdue/list");
+        borrowerReq.addHeader("Authorization", "Bearer borrower-token");
+        var borrowerRes = new org.springframework.mock.web.MockHttpServletResponse();
+        assertThat(interceptor.preHandle(borrowerReq, borrowerRes, listMethod)).isFalse();
+        assertThat(borrowerRes.getStatus()).isEqualTo(403);
+
+        // 运营（finance:admin + finance:review）：读写全部放行
+        when(resolver.currentPermissions()).thenReturn(java.util.Set.of("finance:read", "finance:write", "finance:admin", "finance:review"));
+        var adminScanReq = new org.springframework.mock.web.MockHttpServletRequest("POST", "/api/v1/overdue/scan");
+        adminScanReq.addHeader("Authorization", "Bearer admin-token");
+        assertThat(interceptor.preHandle(adminScanReq, new org.springframework.mock.web.MockHttpServletResponse(), scanMethod)).isTrue();
+    }
+
+    @Test
+    void riskRuleReadAllowsFinanceReviewWhileWritesAndCenterRemainFundOnly() throws Exception {
+        com.agri.common.rbac.PermissionResolver resolver = org.mockito.Mockito.mock(com.agri.common.rbac.PermissionResolver.class);
+        com.agri.common.rbac.RbacProperties props = new com.agri.common.rbac.RbacProperties();
+        props.setOperatorPaths(List.of("/api/**"));
+        props.setReadPermission("finance:read");
+        props.setWritePermission("finance:write");
+        props.setRequireAuth(true);
+        com.agri.common.rbac.OperatorGuardInterceptor interceptor =
+                new com.agri.common.rbac.OperatorGuardInterceptor(resolver, props);
+        // 必须用真实控制器实例：HandlerMethod 按 bean 类型读取类级 @OperatorOnly("finance:fund")。
+        RiskControlController riskBean = new RiskControlController(null, null);
+
+        Map<String, org.springframework.web.method.HandlerMethod> reads = Map.of(
+                "/api/v1/risk-control/rules", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("getAllRules")),
+                "/api/v1/risk-control/rules/enabled", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("getEnabledRules")),
+                "/api/v1/risk-control/rules/type/CREDIT", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("getRulesByType", String.class)));
+        List<Map.Entry<String, org.springframework.web.method.HandlerMethod>> fundOnly = List.of(
+                Map.entry("PUT /api/v1/risk-control/rule", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("updateRule", com.agri.finance.entity.RiskControlRule.class))),
+                Map.entry("POST /api/v1/risk-control/rule", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("createRule", com.agri.finance.entity.RiskControlRule.class))),
+                Map.entry("POST /api/v1/risk-control/rule/enable/R1", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("enableRule", String.class))),
+                Map.entry("POST /api/v1/risk-control/rule/disable/R1", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("disableRule", String.class))),
+                Map.entry("GET /api/v1/risk-control/center", new org.springframework.web.method.HandlerMethod(riskBean,
+                        RiskControlController.class.getMethod("center", String.class))));
+
+        // 平台运营 MARKET_OPS（finance:admin + finance:review，无 finance:fund）：可读规则，不能改规则、不能进风控中台
+        when(resolver.currentPermissions()).thenReturn(java.util.Set.of("finance:read", "finance:write", "finance:admin", "finance:review"));
+        for (var read : reads.entrySet()) {
+            var req = new org.springframework.mock.web.MockHttpServletRequest("GET", read.getKey());
+            req.addHeader("Authorization", "Bearer ops-token");
+            assertThat(interceptor.preHandle(req, new org.springframework.mock.web.MockHttpServletResponse(), read.getValue())).isTrue();
+        }
+        for (var write : fundOnly) {
+            String[] parts = write.getKey().split(" ");
+            var req = new org.springframework.mock.web.MockHttpServletRequest(parts[0], parts[1]);
+            req.addHeader("Authorization", "Bearer ops-token");
+            var res = new org.springframework.mock.web.MockHttpServletResponse();
+            assertThat(interceptor.preHandle(req, res, write.getValue())).isFalse();
+            assertThat(res.getStatus()).isEqualTo(403);
+        }
+
+        // 资金方（finance:fund + finance:review）：读写全部放行
+        when(resolver.currentPermissions()).thenReturn(java.util.Set.of("finance:read", "finance:write", "finance:fund", "finance:review"));
+        for (var write : fundOnly) {
+            String[] parts = write.getKey().split(" ");
+            var req = new org.springframework.mock.web.MockHttpServletRequest(parts[0], parts[1]);
+            req.addHeader("Authorization", "Bearer fund-token");
+            assertThat(interceptor.preHandle(req, new org.springframework.mock.web.MockHttpServletResponse(), write.getValue())).isTrue();
+        }
+
+        // 融资方（无 finance:review）：读取规则仍必须拒绝
+        when(resolver.currentPermissions()).thenReturn(java.util.Set.of("finance:read", "finance:write", "finance:borrower"));
+        var borrowerReq = new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/v1/risk-control/rules");
+        borrowerReq.addHeader("Authorization", "Bearer borrower-token");
+        var borrowerRes = new org.springframework.mock.web.MockHttpServletResponse();
+        assertThat(interceptor.preHandle(borrowerReq, borrowerRes, reads.get("/api/v1/risk-control/rules"))).isFalse();
+        assertThat(borrowerRes.getStatus()).isEqualTo(403);
     }
 }

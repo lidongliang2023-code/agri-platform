@@ -228,9 +228,11 @@ public class LoanController {
 
     @GetMapping("/approval/overview")
     @OperatorOnly("finance:review")
-    public Map<String, Object> approvalOverview(@RequestParam(defaultValue = "") String providerId) {
+    public Map<String, Object> approvalOverview(@RequestParam(defaultValue = "") String providerId,
+                                                @RequestParam(defaultValue = "") String scope) {
+        String resolvedProviderId = resolveOverviewProviderId(providerId, scope);
         return Map.of("code", 200, "message", "success",
-                "data", approvalService.overview(resolveProvider(providerId).getId()));
+                "data", approvalService.overview(resolvedProviderId));
     }
 
     @GetMapping("/list")
@@ -265,6 +267,35 @@ public class LoanController {
             return Map.of("code", 400, "message", "缺少融资申请编号", "data", "");
         }
         return Map.of("code", 200, "message", "放款成功", "data", loanService.disburse(applicationId));
+    }
+
+    private String resolveOverviewProviderId(String requested, String scope) {
+        if ("admin".equalsIgnoreCase(scope) && identityService.hasPermission("finance:admin")) {
+            if (requested != null && !requested.isBlank()) {
+                return resolveAdminRequestedProvider(requested).getId();
+            }
+            return null;
+        }
+        try {
+            return resolveProvider(requested).getId();
+        } catch (com.agri.common.exception.BusinessException error) {
+            if (error.getCode() == 403 && identityService.hasPermission("finance:admin")) {
+                if (requested != null && !requested.isBlank()) {
+                    return resolveAdminRequestedProvider(requested).getId();
+                }
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    private FundProvider resolveAdminRequestedProvider(String requested) {
+        String providerId = requested.trim();
+        FundProvider provider = providerService.getById(providerId);
+        if (provider == null || Integer.valueOf(1).equals(provider.getDelFlag())) {
+            throw new com.agri.common.exception.BusinessException(404, "资金机构不存在：" + providerId);
+        }
+        return provider;
     }
 
     private FundProvider resolveProvider(String requested) {

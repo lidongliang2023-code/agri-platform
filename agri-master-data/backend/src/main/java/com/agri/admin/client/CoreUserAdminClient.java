@@ -3,9 +3,6 @@ package com.agri.admin.client;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
@@ -23,10 +20,6 @@ public interface CoreUserAdminClient {
             @RequestParam("page") long page,
             @RequestParam("size") long size,
             @RequestParam(value = "keyword", required = false) String keyword);
-
-    @PutMapping("/api/v1/admin/users/{id}/status")
-    CoreApiResponse<Void> updateStatus(@PathVariable("id") Long id,
-                                       @RequestBody UserStatusUpdate request);
 
     @GetMapping("/api/v1/admin/user-merchants")
     CoreApiResponse<CorePage<CoreMembership>> pageMemberships(
@@ -67,9 +60,6 @@ public interface CoreUserAdminClient {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record CorePage<T>(List<T> records, long total, long page, long size) {
-    }
-
-    record UserStatusUpdate(Integer status) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

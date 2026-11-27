@@ -8,6 +8,7 @@ import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.TraceCodeContractVO;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -102,6 +103,14 @@ public class TraceController {
     public ApiResponse<Integer> expireOverdue() {
         return ApiResponse.success(traceService.expireOverdue(TenantContextService.currentTenantId()));
     }
+
+    /** uni-app 微信请求不支持 PATCH，使用同一服务规则的 PUT 等价入口。 */
+    @PutMapping("/codes/activate")
+    public ApiResponse<Integer> batchActivateMobile(@RequestBody Map<String, Object> body) { return batchActivate(body); }
+    @PutMapping("/codes/expire")
+    public ApiResponse<Integer> batchExpireMobile(@RequestBody Map<String, Object> body) { return batchExpire(body); }
+    @PutMapping("/codes/expire-overdue")
+    public ApiResponse<Integer> expireOverdueMobile() { return expireOverdue(); }
 
     /** 单码详情（前端 fetchTraceCodeDetail 走 /trace/{code}；另有调用方走 /trace/codes/{code}）。 */
     @GetMapping("/codes/{code}")

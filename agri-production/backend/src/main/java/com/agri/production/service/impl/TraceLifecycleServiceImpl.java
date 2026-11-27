@@ -699,13 +699,20 @@ public class TraceLifecycleServiceImpl implements ITraceLifecycleService {
      */
     private static String chainConclusion(String expiredPrefix, List<Map<String, Object>> nodes,
                                          long attestedCount, long onChainCount) {
-        return (expiredPrefix == null ? "" : expiredPrefix)
-                + (nodes.isEmpty()
-                ? "该码没有关联批次，取不到链路节点，无法核验"
-                : onChainCount + "/" + nodes.size() + " 个节点已完成链上存证（状态 SUCCESS）"
-                        + (attestedCount > onChainCount
-                        ? "，另有 " + (attestedCount - onChainCount) + " 个节点存证未成功，请谨慎采信" : "")
-                        + (attestedCount == 0 ? "，当前没有任何链上存证" : ""));
+        String prefix = expiredPrefix == null ? "" : expiredPrefix;
+        if (nodes.isEmpty()) return prefix + "没有可核验的链路节点";
+        long pending = 0;
+        long failed = 0;
+        for (Map<String, Object> node : nodes) {
+            String status = String.valueOf(node.get("chainStatus"));
+            if ("PENDING".equalsIgnoreCase(status)) pending++;
+            if ("FAILED".equalsIgnoreCase(status)) failed++;
+        }
+        long unknown = attestedCount - onChainCount - pending - failed;
+        return prefix + onChainCount + "/" + nodes.size() + " 个节点已完成链上存证"
+                + "，处理中 " + pending + "，失败 " + failed + "，未存证 " + (nodes.size() - attestedCount)
+                + (unknown > 0 ? "，存证状态未知 " + unknown : "")
+                + (failed > 0 ? "。失败节点请谨慎采信" : "");
     }
 
     /**

@@ -117,11 +117,13 @@ public class OpsController {
         return ApiResponse.success("投诉工单已处理", repository.resolveComplaint(id, body));
     }
 
+    @OperatorOnly("service:policy:desk")
     @GetMapping("/ops/policy-applications")
     public ApiResponse<List<Map<String, Object>>> policyApplications() {
         return ApiResponse.success(repository.policyApplications());
     }
 
+    @OperatorOnly("service:policy:desk")
     @PostMapping("/ops/policy-applications/{id}/review")
     public ApiResponse<Map<String, Object>> reviewPolicy(
             @PathVariable long id,

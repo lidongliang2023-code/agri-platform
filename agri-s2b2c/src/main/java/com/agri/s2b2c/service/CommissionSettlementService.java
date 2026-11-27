@@ -62,13 +62,18 @@ public class CommissionSettlementService {
 
     @Transactional
     public SettlementResult settle(Long channelId, LocalDate periodStart, LocalDate periodEnd, String operator) {
+        if (periodStart != null && periodEnd != null && periodStart.isAfter(periodEnd)) {
+            throw new IllegalArgumentException("结算开始日期不能晚于结束日期");
+        }
         LambdaQueryWrapper<Commission> wrapper = new LambdaQueryWrapper<Commission>()
                 .eq(Commission::getStatus, "PENDING")
                 .eq(channelId != null, Commission::getChannelId, channelId)
                 .ge(periodStart != null, Commission::getCreateTime,
                         periodStart == null ? null : periodStart.atStartOfDay())
                 .lt(periodEnd != null, Commission::getCreateTime,
-                        periodEnd == null ? null : periodEnd.plusDays(1).atStartOfDay());
+                        periodEnd == null ? null : periodEnd.plusDays(1).atStartOfDay())
+                .orderByAsc(Commission::getId)
+                .last("FOR UPDATE");
         List<Commission> pending = commissionMapper.selectList(wrapper);
         if (pending.isEmpty()) {
             return new SettlementResult(null, 0, BigDecimal.ZERO, 0, BigDecimal.ZERO, List.of());
@@ -86,7 +91,7 @@ public class CommissionSettlementService {
                 settleable.add(commission);
             } else {
                 blocked.add(new Blocked(commission.getId(), verdict.orderId(), verdict.orderStatus(),
-                        verdict.reason(), commission.getAmount()));
+                        verdict.reason(), commission.getAmount() == null ? BigDecimal.ZERO : commission.getAmount()));
             }
         }
         if (settleable.isEmpty()) {
@@ -100,7 +105,9 @@ public class CommissionSettlementService {
             commission.setStatus("SETTLED");
             commission.setSettleTime(now);
             commission.setSettleBatchNo(batchNo);
-            commissionMapper.updateById(commission);
+            if (commissionMapper.updateById(commission) != 1) {
+                throw new IllegalStateException("佣金状态更新失败，结算已回滚");
+            }
             if (commission.getAmount() != null) {
                 amount = amount.add(commission.getAmount());
             }
@@ -115,7 +122,9 @@ public class CommissionSettlementService {
         // 操作人取令牌账号。写死"平台运营"等于把审计字段变成装饰：出了纠纷查不到是谁点的。
         settlement.setOperator(operator == null || operator.isBlank() ? "unknown" : operator);
         settlement.setCreatedAt(now);
-        settlementMapper.insert(settlement);
+        if (settlementMapper.insert(settlement) != 1) {
+            throw new IllegalStateException("结算批次保存失败，结算已回滚");
+        }
         return new SettlementResult(batchNo, settleable.size(), amount,
                 blocked.size(), blocked.stream().map(Blocked::amount)
                         .reduce(BigDecimal.ZERO, BigDecimal::add), blocked);

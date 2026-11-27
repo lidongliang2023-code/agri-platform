@@ -22,9 +22,11 @@ import java.util.Map;
 public class ServiceIdentityController {
 
     private final ServiceIdentityService identity;
+    private final com.agri.service.repository.ExpertRepository experts;
 
-    public ServiceIdentityController(ServiceIdentityService identity) {
+    public ServiceIdentityController(ServiceIdentityService identity, com.agri.service.repository.ExpertRepository experts) {
         this.identity = identity;
+        this.experts = experts;
     }
 
     @GetMapping("/identity")
@@ -63,6 +65,15 @@ public class ServiceIdentityController {
         roles.put("consumer", identity.hasPermission("service:consumer"));
         roles.put("provider", identity.hasPermission("service:provider"));
         roles.put("admin", identity.isOps());
+        try {
+            Map<String,Object> expert = experts.profile();
+            data.put("expertId", expert.get("id"));
+            data.put("expertName", expert.get("name"));
+            roles.put("expert", true);
+        } catch (com.agri.common.exception.BusinessException e) {
+            data.put("expertError", e.getMessage());
+            roles.put("expert", false);
+        }
         data.put("roles", roles);
         return ApiResponse.success(data);
     }

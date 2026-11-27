@@ -7,6 +7,7 @@ import com.agri.production.service.TenantContextService;
 import com.agri.production.vo.ChainRecordContractVO;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -130,7 +131,7 @@ public class BlockchainController {
     }
 
     /** 重试上链（前端 retryChain）。 */
-    @PatchMapping("/records/{recordId}/retry")
+    @RequestMapping(value = "/records/{recordId}/retry", method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ApiResponse<ChainRecordContractVO> retry(@PathVariable Long recordId) {
         return ApiResponse.success(chainRecordService.retry(recordId, TenantContextService.currentTenantId()));
     }
