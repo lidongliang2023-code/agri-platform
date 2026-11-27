@@ -7,8 +7,9 @@ spring:
 
 logging:
   level:
-    com.agri.trade: DEBUG
-    org.mybatis: DEBUG
+    com.agri.trade: INFO
+    com.agri.trade.mapper: INFO
+    org.mybatis: INFO
 
 services:
   masterdata:

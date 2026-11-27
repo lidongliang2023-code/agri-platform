@@ -31,7 +31,7 @@ mybatis-plus:
       logic-not-delete-value: 0
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 sa-token:
   token-name: satoken
@@ -87,7 +87,8 @@ knife4j:
 
 logging:
   level:
-    com.agri.finance: DEBUG
+    com.agri.finance: INFO
+    com.agri.finance.mapper: INFO
     org.springframework: INFO
 
 # Unified probes: dependency failures affect readiness, not liveness.

@@ -18,7 +18,8 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 统一走 SLF4J 受 logging.level 管控，避免 StdOutImpl 无视日志级别持续向 stdout 倾倒轮询与列表 SQL
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       id-type: auto
@@ -28,7 +29,8 @@ mybatis-plus:
 
 logging:
   level:
-    com.agri.production: debug
+    com.agri.production: info
+    com.agri.production.mapper: info
 
 # 运营端准入（平台 RBAC，V2.0 第 5.5 节）—— 组件来自 agri-common 的 com.agri.common.rbac，
 # 这里只声明"本服务的运营接口在哪、要什么权限码"。

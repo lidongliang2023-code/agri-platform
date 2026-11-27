@@ -31,7 +31,7 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       table-underline: true
@@ -61,8 +61,8 @@ platform:
 logging:
   level:
     root: INFO
-    com.agri.iot: DEBUG
-    com.agri.iot.feign: DEBUG
+    com.agri.iot: INFO
+    com.agri.iot.feign: INFO
 
 # Unified probes: dependency failures affect readiness, not liveness.
 management:

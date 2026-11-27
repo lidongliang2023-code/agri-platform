@@ -162,5 +162,10 @@ agri:
 
 logging:
   level:
-    com.agri: debug
+    # 避免开发态 MyBatis-Plus 对 Outbox/推送/行情等高频轮询与常规 SQL 持续 DEBUG 刷屏导致日志暴涨；
+    # 短信 dev 验证码走 WARN 级别，不受 INFO 影响；需排查单条 SQL 时可按需对具体 Mapper 临时开 debug。
+    com.agri: info
+    com.agri.core.infra.event.OutboxMapper: info
+    com.agri.platform.internal.uc.MessagePushTaskMapper: info
+    com.agri.service.internal.quote.QuoteMapper: info
     org.springframework.web: info

@@ -47,7 +47,7 @@ mybatis-plus:
       table-underline: true
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 # 平台访问令牌（V2.0 第 5.2/5.3 节）—— 与 core-platform 的 agri.jwt 同一份配置键。
 # 生产必须由环境变量 AGRI_JWT_SECRET 注入（≥32 字符）；这里的开发默认值仅为本地可跑通。
@@ -96,7 +96,8 @@ services:
 
 logging:
   level:
-    com.agri: DEBUG
+    com.agri: INFO
+    com.agri.masterdata.mapper: INFO
     org.springframework: INFO
 
 # Unified probes: dependency failures affect readiness, not liveness.

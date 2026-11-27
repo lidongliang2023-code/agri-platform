@@ -10,4 +10,5 @@ spring:
 
 logging:
   level:
-    com.agri: DEBUG
+    com.agri: INFO
+    com.agri.masterdata.mapper: INFO

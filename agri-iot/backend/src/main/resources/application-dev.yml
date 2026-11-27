@@ -21,5 +21,5 @@ services:
 logging:
   level:
     root: INFO
-    com.agri.iot: DEBUG
-    com.agri.iot.feign: DEBUG
+    com.agri.iot: INFO
+    com.agri.iot.feign: INFO

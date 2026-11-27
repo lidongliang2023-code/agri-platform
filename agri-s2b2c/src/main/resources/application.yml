@@ -18,7 +18,7 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       id-type: assign_id
@@ -64,7 +64,8 @@ platform:
 
 logging:
   level:
-    com.agri.s2b2c: DEBUG
+    com.agri.s2b2c: INFO
+    com.agri.s2b2c.mapper: INFO
 
 # Unified probes: dependency failures affect readiness, not liveness.
 management:
