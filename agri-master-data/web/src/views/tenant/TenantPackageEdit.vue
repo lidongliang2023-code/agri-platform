@@ -14,24 +14,24 @@
       <section class="form-card">
         <div class="card-head"><h2>套餐定义</h2></div>
         <div class="field-grid">
-          <label><span>套餐编码 *</span><input v-model.trim="form.packageCode" :disabled="isEdit" placeholder="如：BASE_MONTHLY" /></label>
-          <label><span>套餐名称 *</span><input v-model.trim="form.packageName" placeholder="如：标准版" /></label>
-          <label class="wide"><span>套餐说明</span><textarea v-model.trim="form.packageDesc" rows="3" placeholder="请输入套餐适用范围与说明" /></label>
-          <label><span>价格（元）</span><input v-model.number="form.price" type="number" min="0" step="0.01" /></label>
-          <label><span>有效期（天）</span><input v-model.number="form.duration" type="number" min="1" /></label>
-          <label><span>服务级别</span><select v-model.number="form.serviceLevel"><option :value="1">基础支持</option><option :value="2">标准支持</option><option :value="3">7×24 专属支持</option></select></label>
-          <label><span>状态</span><select v-model.number="form.status"><option :value="1">启用</option><option :value="0">停用</option></select></label>
+          <label class="form-field" :class="{ 'has-error': fieldErrors.packageCode }"><span>套餐编码 <b class="required-mark">*</b></span><input data-field="packageCode" v-model.trim="form.packageCode" :disabled="isEdit" placeholder="如：BASE_MONTHLY" /><small v-if="fieldErrors.packageCode" class="field-error">{{ fieldErrors.packageCode }}</small></label>
+          <label class="form-field" :class="{ 'has-error': fieldErrors.packageName }"><span>套餐名称 <b class="required-mark">*</b></span><input data-field="packageName" v-model.trim="form.packageName" placeholder="如：标准版" /><small v-if="fieldErrors.packageName" class="field-error">{{ fieldErrors.packageName }}</small></label>
+          <label class="form-field wide"><span>套餐说明</span><textarea v-model.trim="form.packageDesc" rows="3" placeholder="请输入套餐适用范围与说明" /></label>
+          <label class="form-field" :class="{ 'has-error': fieldErrors.price }"><span>价格（元）</span><input data-field="price" v-model.number="form.price" type="number" min="0" step="0.01" /><small v-if="fieldErrors.price" class="field-error">{{ fieldErrors.price }}</small></label>
+          <label class="form-field" :class="{ 'has-error': fieldErrors.duration }"><span>有效期（天）</span><input data-field="duration" v-model.number="form.duration" type="number" min="1" /><small v-if="fieldErrors.duration" class="field-error">{{ fieldErrors.duration }}</small></label>
+          <label class="form-field"><span>服务级别</span><select v-model.number="form.serviceLevel"><option :value="1">基础支持</option><option :value="2">标准支持</option><option :value="3">7×24 专属支持</option></select></label>
+          <label class="form-field"><span>状态</span><select v-model.number="form.status"><option :value="1">启用</option><option :value="0">停用</option></select></label>
         </div>
       </section>
 
       <section class="form-card">
         <div class="card-head"><h2>资源限额</h2><span>0 表示不开放该资源</span></div>
         <div class="field-grid">
-          <label><span>用户上限</span><input v-model.number="form.userLimit" type="number" min="0" /></label>
-          <label><span>组织上限</span><input v-model.number="form.orgLimit" type="number" min="0" /></label>
-          <label><span>商品上限</span><input v-model.number="form.productLimit" type="number" min="0" /></label>
-          <label><span>存储上限（GB）</span><input v-model.number="form.storageGb" type="number" min="0" step="0.1" /></label>
-          <label><span>每日 API 上限</span><input v-model.number="form.apiLimit" type="number" min="0" /></label>
+          <label class="form-field"><span>用户上限</span><input v-model.number="form.userLimit" type="number" min="0" /></label>
+          <label class="form-field"><span>组织上限</span><input v-model.number="form.orgLimit" type="number" min="0" /></label>
+          <label class="form-field"><span>商品上限</span><input v-model.number="form.productLimit" type="number" min="0" /></label>
+          <label class="form-field"><span>存储上限（GB）</span><input v-model.number="form.storageGb" type="number" min="0" step="0.1" /></label>
+          <label class="form-field"><span>每日 API 上限</span><input v-model.number="form.apiLimit" type="number" min="0" /></label>
         </div>
       </section>
 
@@ -44,7 +44,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { createTenantPackage, getTenantPackageDetail, updateTenantPackage } from '../../utils/api'
@@ -56,6 +56,7 @@ const isEdit = computed(() => Boolean(route.params.id))
 const loading = ref(false)
 const saving = ref(false)
 const loadError = ref('')
+const fieldErrors = reactive({ packageCode: '', packageName: '', price: '', duration: '' })
 const form = reactive({
   packageCode: '',
   packageName: '',
@@ -99,9 +100,23 @@ const load = async () => {
   }
 }
 
+const validate = () => {
+  Object.keys(fieldErrors).forEach((key) => { fieldErrors[key] = '' })
+  if (!form.packageCode) fieldErrors.packageCode = '套餐编码不能为空'
+  else if (!form.packageName) fieldErrors.packageName = '套餐名称不能为空'
+  else if (Number(form.price) < 0) fieldErrors.price = '价格不能小于 0'
+  else if (Number(form.duration) <= 0) fieldErrors.duration = '有效期必须大于 0 天'
+  return Object.values(fieldErrors).find(Boolean) || ''
+}
+
+const focusFirstError = async () => {
+  await nextTick()
+  const key = Object.keys(fieldErrors).find((name) => fieldErrors[name])
+  document.querySelector(`[data-field="${key}"]`)?.focus()
+}
+
 const save = async () => {
-  if (!form.packageCode || !form.packageName) return message.warning('请填写套餐编码和名称')
-  if (form.price < 0 || form.duration <= 0) return message.warning('价格不能小于 0，有效期必须大于 0 天')
+  if (validate()) { await focusFirstError(); return }
   saving.value = true
   try {
     const payload = {
@@ -141,7 +156,7 @@ onMounted(load)
 .page-head h1 { margin:0 0 5px; font-size:24px; }
 .page-head p { margin:0; color:#6b7280; }
 .back { height:36px; padding:0 14px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#4b5563; cursor:pointer; }
-.state,.form-card { border-radius:10px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.state,.form-card { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-shadow:none; }
 .state { padding:40px; text-align:center; color:#6b7280; }
 .state.error { color:#b91c1c; background:#fef2f2; }
 .form-card { padding:19px; margin-bottom:14px; }
@@ -149,17 +164,23 @@ onMounted(load)
 .card-head h2 { margin:0; font-size:17px; }
 .card-head span { color:#94a3b8; font-size: var(--agri-font-size-micro); }
 .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-.field-grid label { display:flex; flex-direction:column; gap:6px; color:#64748b; font-size:12.5px; }
+.field-grid label { display:grid; grid-template-columns:minmax(96px,112px) minmax(0,1fr); align-items:center; column-gap:12px; row-gap:6px; color:#1f2937; font-size:14px; }
+.field-grid label > span { grid-column:1; text-align:right; line-height:20px; }
+.field-grid label > small { grid-column:2; }
 .field-grid .wide { grid-column:span 2; }
-.field-grid input,.field-grid select,.field-grid textarea { width:100%; padding:0 11px; border:1px solid #d1d5db; border-radius:8px; background:#fff; outline:none; }
+.field-grid input,.field-grid select,.field-grid textarea { grid-column:2; width:100%; min-height:40px; padding:0 11px; border:1px solid #d1d5db; border-radius:4px; background:#fff; outline:none; box-sizing:border-box; }
 .field-grid input,.field-grid select { height:40px; }
-.field-grid textarea { padding-top:10px; resize:vertical; }
-.field-grid input:focus,.field-grid select:focus,.field-grid textarea:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.1); }
+.field-grid textarea { min-height:80px; padding:10px; resize:vertical; }
+.field-grid input:focus,.field-grid select:focus,.field-grid textarea:focus { border-color:#2d8f4e; box-shadow:0 0 0 2px rgba(45,143,78,.12); }
 .field-grid input:disabled { background:#f8fafc; color:#94a3b8; }
+.form-field.has-error input,.form-field.has-error select,.form-field.has-error textarea { border-color:#c62828; box-shadow:0 0 0 2px rgba(198,40,40,.1); }
+.required-mark { color:#c62828; font-weight:400; }
+.field-error { grid-column:2; color:#c62828; font-size:12px; line-height:18px; }
 .actions { display:flex; justify-content:flex-end; gap:10px; }
 .actions button { height:38px; padding:0 18px; border-radius:8px; cursor:pointer; }
 .cancel { border:1px solid #d1d5db; background:#fff; color:#4b5563; }
-.save { border:0; background:#10b981; color:#fff; }
+.save { border:0; background:#2d8f4e; color:#fff; }
+.save:hover:not(:disabled) { background:#247a3f; }
 .save:disabled { opacity:.55; cursor:wait; }
 @media(max-width:650px){.field-grid{grid-template-columns:1fr}.field-grid .wide{grid-column:auto}.page-head{align-items:flex-start;flex-wrap:wrap}}
 </style>

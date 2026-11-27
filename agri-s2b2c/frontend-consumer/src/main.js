@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import router from './router'
 import App from './App.vue'
+import SignedOut from './views/SignedOut.vue'
 
 import 'element-plus/dist/index.css'
 // 统一品牌令牌（与主数据 / 生产 / 金融等模块同源）
@@ -18,21 +19,30 @@ import {
   showUnifiedAuthFailure,
 } from '../../frontend-shared/unified-auth'
 import { PUBLIC_PATHS } from './config/public-paths'
+import '../../../shared/pc-ui-v1.mjs'
 
-bootstrapUnifiedSso({
-  clientId: 'mall-consumer',
-  permission: 's2b2c:consumer',
-  landingPath: '/',
-  publicPaths: PUBLIC_PATHS,
-})
-  .then((session) => {
-    // 只有"正在跳登录"（null）不挂载；匿名访客（{ anonymous: true }）照常挂载，
-    // 否则扫码进来的第一步就是"先注册"，溯源码等于白印。
-    if (!session) return
-    const app = createApp(App)
-    app.use(createPinia())
-    app.use(router)
-    app.use(ElementPlus, { locale: zhCn })
-    app.mount('#app')
+
+async function startMall() {
+  // SSO 退出完成后返回 /?logout=1。只渲染确认页，避免受保护的首页立即发起登录。
+  const { pathname, search } = window.location
+  if (pathname === '/' && new URLSearchParams(search).get('logout') === '1') {
+    document.title = '已退出商城 · 丰链云'
+    createApp(SignedOut).mount('#app')
+    return
+  }
+
+  const session = await bootstrapUnifiedSso({
+    clientId: 'mall-consumer',
+    permission: 's2b2c:consumer',
+    landingPath: '/',
+    publicPaths: PUBLIC_PATHS,
   })
-  .catch((error) => showUnifiedAuthFailure(error, 'mall-consumer'))
+  if (!session) return
+  const app = createApp(App)
+  app.use(createPinia())
+  app.use(router)
+  app.use(ElementPlus, { locale: zhCn })
+  app.mount('#app')
+}
+
+startMall().catch((error) => showUnifiedAuthFailure(error, 'mall-consumer'))

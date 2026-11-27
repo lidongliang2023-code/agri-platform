@@ -9,7 +9,7 @@
  */
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios'
 import { useSessionStore } from '@/stores/session'
-import { LOGIN_PATH } from '@/utils/sso'
+import { redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
 
 export interface ApiBody<T = unknown> {
   code: number
@@ -45,9 +45,9 @@ function gotoLogin() {
   useSessionStore().clear()
   if (redirecting) return
   redirecting = true
-  if (!window.location.pathname.startsWith(LOGIN_PATH)) {
-    const current = `${window.location.pathname}${window.location.search}`
-    window.location.href = `${LOGIN_PATH}?redirect=${encodeURIComponent(current)}`
+  if (window.location.pathname.replace(/\/+$/, '') !== SSO_CALLBACK_PATH) {
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    void redirectToSso(current)
   }
 }
 

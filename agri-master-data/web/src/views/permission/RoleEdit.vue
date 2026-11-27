@@ -26,17 +26,20 @@
             <span class="mode-badge">运营应急维护</span>
           </div>
           <div class="form-grid">
-            <label class="form-field">
-              <span>角色名称 *</span>
-              <input v-model.trim="form.roleName" type="text" maxlength="50" placeholder="例如：区域数据审核员" />
+            <label class="form-field" :class="{ 'has-error': fieldErrors.roleName }">
+              <span>角色名称 <b class="required-mark">*</b></span>
+              <input data-field="roleName" v-model.trim="form.roleName" type="text" maxlength="50" placeholder="例如：区域数据审核员" />
+              <small v-if="fieldErrors.roleName" class="field-error">{{ fieldErrors.roleName }}</small>
             </label>
-            <label class="form-field">
-              <span>角色编码 *</span>
-              <input v-model.trim="form.roleCode" type="text" maxlength="64" :disabled="isEdit || saving" placeholder="例如：REGION_AUDITOR" />
+            <label class="form-field" :class="{ 'has-error': fieldErrors.roleCode }">
+              <span>角色编码 <b class="required-mark">*</b></span>
+              <input data-field="roleCode" v-model.trim="form.roleCode" type="text" maxlength="64" :disabled="isEdit || saving" placeholder="例如：REGION_AUDITOR" />
+              <small v-if="fieldErrors.roleCode" class="field-error">{{ fieldErrors.roleCode }}</small>
             </label>
-            <label class="form-field">
-              <span>角色标识 *</span>
-              <input v-model.trim="form.roleKey" type="text" maxlength="100" placeholder="例如：regionAuditor" />
+            <label class="form-field" :class="{ 'has-error': fieldErrors.roleKey }">
+              <span>角色标识 <b class="required-mark">*</b></span>
+              <input data-field="roleKey" v-model.trim="form.roleKey" type="text" maxlength="100" placeholder="例如：regionAuditor" />
+              <small v-if="fieldErrors.roleKey" class="field-error">{{ fieldErrors.roleKey }}</small>
             </label>
             <label class="form-field">
               <span>显示排序</span>
@@ -83,7 +86,7 @@
               <p>数据范围限定角色能够查看的业务数据边界。</p>
             </div>
           </div>
-          <div class="scope-grid">
+          <div class="scope-grid" :class="{ 'has-error': fieldErrors.dataScope }">
             <button
               v-for="scope in DATA_SCOPES"
               :key="scope.value"
@@ -96,6 +99,7 @@
               <span>{{ scope.description }}</span>
             </button>
           </div>
+          <small v-if="fieldErrors.dataScope" class="field-error scope-error">{{ fieldErrors.dataScope }}</small>
         </section>
 
         <section class="form-card">
@@ -167,7 +171,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { createRole, getRoleDetail, getTenantList, updateRole } from '../../utils/api'
@@ -187,6 +191,7 @@ const loading = ref(true)
 const saving = ref(false)
 const loadError = ref('')
 const saveError = ref('')
+const fieldErrors = reactive({ roleName: '', roleCode: '', roleKey: '', dataScope: '' })
 const subjects = ref([])
 const roleData = ref(null)
 
@@ -240,16 +245,24 @@ const handleOwnershipChange = () => {
 }
 
 const validate = () => {
-  if (!form.roleName) return '角色名称不能为空'
-  if (!/^[A-Za-z0-9_-]{2,64}$/.test(form.roleCode)) return '角色编码应为 2-64 位字母、数字、下划线或中划线'
-  if (!/^[A-Za-z][A-Za-z0-9:_-]{1,99}$/.test(form.roleKey)) return '角色标识格式不正确'
-  if (!selectedScope.value) return '请选择数据范围'
-  return ''
+  Object.keys(fieldErrors).forEach((key) => { fieldErrors[key] = '' })
+  if (!form.roleName) fieldErrors.roleName = '角色名称不能为空'
+  else if (!/^[A-Za-z0-9_-]{2,64}$/.test(form.roleCode)) fieldErrors.roleCode = '角色编码应为 2-64 位字母、数字、下划线或中划线'
+  else if (!/^[A-Za-z][A-Za-z0-9:_-]{1,99}$/.test(form.roleKey)) fieldErrors.roleKey = '角色标识格式不正确'
+  else if (!selectedScope.value) fieldErrors.dataScope = '请选择数据范围'
+  return Object.values(fieldErrors).find(Boolean) || ''
+}
+
+const focusFirstError = async () => {
+  await nextTick()
+  const key = Object.keys(fieldErrors).find((name) => fieldErrors[name])
+  if (key === 'dataScope') document.querySelector('.scope-card')?.focus()
+  else document.querySelector(`[data-field="${key}"]`)?.focus()
 }
 
 const save = async () => {
   saveError.value = validate()
-  if (saveError.value) return
+  if (saveError.value) { await focusFirstError(); return }
   saving.value = true
   try {
     const payload = {
@@ -309,7 +322,7 @@ onMounted(async () => {
 .page-header h1 { margin:0 0 5px; font-size:24px; }
 .page-header p { margin:0; color:#6b7280; }
 .back-btn { height:36px; padding:0 14px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#4b5563; cursor:pointer; }
-.state-card,.form-card { border-radius:11px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.state-card,.form-card { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-shadow:none; }
 .state-card { padding:40px; text-align:center; color:#6b7280; }
 .state-card.error { color:#b91c1c; background:#fef2f2; }
 .state-card p { margin:8px 0 14px; }
@@ -322,11 +335,18 @@ onMounted(async () => {
 .card-head p { margin:5px 0 0; color:#94a3b8; font-size:12px; line-height:1.5; }
 .mode-badge { padding:4px 9px; border-radius:999px; background:#ecfdf5; color:#047857; font-size: var(--agri-font-size-micro); white-space:nowrap; }
 .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-.form-field { display:flex; flex-direction:column; gap:6px; color:#64748b; font-size:12.5px; }
-.form-field input,.form-field select,.form-field textarea { width:100%; min-height:38px; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#1f2937; outline:none; box-sizing:border-box; }
+.form-field { display:grid; grid-template-columns:minmax(96px,112px) minmax(0,1fr); align-items:center; column-gap:12px; row-gap:6px; color:#1f2937; font-size:14px; }
+.form-field > span { grid-column:1; text-align:right; line-height:20px; }
+.form-field > small { grid-column:2; }
+.form-field input,.form-field select,.form-field textarea { grid-column:2; width:100%; min-height:40px; padding:8px 10px; border:1px solid #d1d5db; border-radius:4px; background:#fff; color:#1f2937; outline:none; box-sizing:border-box; }
 .form-field textarea { resize:vertical; }
-.form-field input:focus,.form-field select:focus,.form-field textarea:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.1); }
+.form-field input:focus,.form-field select:focus,.form-field textarea:focus { border-color:#2d8f4e; box-shadow:0 0 0 2px rgba(45,143,78,.12); }
 .form-field input:disabled,.form-field select:disabled { background:#f8fafc; color:#64748b; }
+.form-field.has-error input,.form-field.has-error select,.form-field.has-error textarea { border-color:#c62828; box-shadow:0 0 0 2px rgba(198,40,40,.1); }
+.required-mark { color:#c62828; font-weight:400; }
+.field-error { grid-column:2; color:#c62828; font-size:12px; line-height:18px; }
+.scope-error { display:block; margin-top:8px; }
+.scope-grid.has-error .scope-card { border-color:#c62828; }
 .wide-field { grid-column:1 / -1; }
 .scope-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
 .scope-card { display:flex; flex-direction:column; gap:5px; padding:13px; border:1px solid #e5e7eb; border-radius:9px; background:#fff; text-align:left; cursor:pointer; }
@@ -336,7 +356,7 @@ onMounted(async () => {
 .scope-card span { color:#94a3b8; font-size: var(--agri-font-size-micro); line-height:1.5; }
 .ownership-card { position:relative; overflow:hidden; }
 .ownership-card::after { content:''; position:absolute; right:-32px; top:-40px; width:130px; height:130px; border-radius:50%; background:#ecfdf5; }
-.ownership-icon { position:relative; z-index:1; width:46px; height:46px; display:grid; place-items:center; margin-bottom:12px; border-radius:12px; background:#d1fae5; color:#047857; font-size:19px; font-weight:700; }
+.ownership-icon { position:relative; z-index:1; width:46px; height:46px; display:grid; place-items:center; margin-bottom:12px; border-radius:12px; background:#d1fae5; color:#047857; font-size:19px; font-weight:600; }
 .ownership-card h2,.ownership-card p { position:relative; z-index:1; }
 .ownership-card p { margin:6px 0 14px; color:#6b7280; font-size:12px; }
 .ownership-card dl { position:relative; z-index:1; margin:0; }
@@ -349,7 +369,8 @@ onMounted(async () => {
 .permission-count strong { color:#1f3b2a; }
 .save-error { margin:0 0 10px; padding:10px; border-radius:8px; background:#fef2f2; color:#b91c1c; font-size:12.5px; }
 .save-btn,.cancel-btn { width:100%; height:38px; border-radius:8px; cursor:pointer; }
-.save-btn { border:0; background:#10b981; color:#fff; }
+.save-btn { border:0; background:#2d8f4e; color:#fff; }
+.save-btn:hover:not(:disabled) { background:#247a3f; }
 .cancel-btn { margin-top:9px; border:1px solid #d1d5db; background:#fff; color:#4b5563; }
 .save-btn:disabled,.cancel-btn:disabled { opacity:.55; cursor:wait; }
 @media(max-width:900px){.edit-layout{grid-template-columns:1fr}}

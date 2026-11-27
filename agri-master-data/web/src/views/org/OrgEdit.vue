@@ -26,9 +26,10 @@
             <span class="mode-badge">运营应急维护</span>
           </div>
           <div class="form-grid">
-            <label class="form-field">
-              <span>所属经营主体 *</span>
+            <label class="form-field" :class="{ 'has-error': fieldErrors.tenantId }">
+              <span>所属经营主体 <b class="required-mark">*</b></span>
               <select
+                data-field="tenantId"
                 v-model="form.tenantId"
                 :disabled="isEdit || saving"
                 @change="handleSubjectChange"
@@ -38,16 +39,18 @@
                   {{ subject.tenantName }}（{{ subjectTypeText(subject.tenantType) }}）
                 </option>
               </select>
+              <small v-if="fieldErrors.tenantId" class="field-error">{{ fieldErrors.tenantId }}</small>
             </label>
-            <label class="form-field">
+            <label class="form-field" :class="{ 'has-error': fieldErrors.parentId }">
               <span>上级组织</span>
-              <select v-model="form.parentId" :disabled="!form.tenantId || saving">
+              <select data-field="parentId" v-model="form.parentId" :disabled="!form.tenantId || saving">
                 <option value="0">无上级，作为一级组织</option>
                 <option v-for="option in parentOptions" :key="option.id" :value="String(option.id)">
                   {{ '　'.repeat(option.depth) }}{{ option.orgName }}（{{ option.orgCode }}）
                 </option>
               </select>
               <small>层级和完整路径由系统自动计算。</small>
+              <small v-if="fieldErrors.parentId" class="field-error">{{ fieldErrors.parentId }}</small>
             </label>
             <label class="form-field">
               <span>组织编码</span>
@@ -60,9 +63,10 @@
               />
               <small>仅支持字母、数字、下划线和中划线。</small>
             </label>
-            <label class="form-field">
-              <span>组织名称 *</span>
-              <input v-model.trim="form.orgName" type="text" maxlength="128" placeholder="例如：华东生产运营中心" />
+            <label class="form-field" :class="{ 'has-error': fieldErrors.orgName }">
+              <span>组织名称 <b class="required-mark">*</b></span>
+              <input data-field="orgName" v-model.trim="form.orgName" type="text" maxlength="128" placeholder="例如：华东生产运营中心" />
+              <small v-if="fieldErrors.orgName" class="field-error">{{ fieldErrors.orgName }}</small>
             </label>
           </div>
         </section>
@@ -75,14 +79,15 @@
             </div>
           </div>
           <div class="form-grid">
-            <label class="form-field">
-              <span>组织类型 *</span>
-              <select v-model="form.orgType">
+            <label class="form-field" :class="{ 'has-error': fieldErrors.orgType }">
+              <span>组织类型 <b class="required-mark">*</b></span>
+              <select data-field="orgType" v-model="form.orgType">
                 <option value="DEPARTMENT">部门</option>
                 <option value="TEAM">团队</option>
                 <option value="PRODUCTION_UNIT">生产单位</option>
                 <option value="FARM">农场 / 基地</option>
               </select>
+              <small v-if="fieldErrors.orgType" class="field-error">{{ fieldErrors.orgType }}</small>
             </label>
             <label class="form-field">
               <span>组织状态</span>
@@ -95,9 +100,10 @@
               <span>负责人</span>
               <input v-model.trim="form.contactPerson" type="text" maxlength="64" placeholder="请输入组织负责人姓名" />
             </label>
-            <label class="form-field">
+            <label class="form-field" :class="{ 'has-error': fieldErrors.contactPhone }">
               <span>联系电话</span>
-              <input v-model.trim="form.contactPhone" type="tel" maxlength="32" placeholder="请输入手机号或固定电话" />
+              <input data-field="contactPhone" v-model.trim="form.contactPhone" type="tel" maxlength="32" placeholder="请输入手机号或固定电话" />
+              <small v-if="fieldErrors.contactPhone" class="field-error">{{ fieldErrors.contactPhone }}</small>
             </label>
           </div>
         </section>
@@ -169,7 +175,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -187,6 +193,7 @@ const loading = ref(true)
 const saving = ref(false)
 const loadError = ref('')
 const saveError = ref('')
+const fieldErrors = reactive({ tenantId: '', orgName: '', orgType: '', contactPhone: '', parentId: '' })
 const subjects = ref([])
 const parentTree = ref([])
 
@@ -304,21 +311,25 @@ const handleSubjectChange = async () => {
 }
 
 const validate = () => {
-  if (!form.tenantId) return '请选择企业或个人主体'
-  if (!form.orgName) return '组织名称不能为空'
-  if (!form.orgType) return '请选择组织类型'
-  if (form.contactPhone && !/^(1[3-9]\d{9}|0\d{2,3}-?\d{7,8})$/.test(form.contactPhone)) {
-    return '联系电话格式不正确'
-  }
-  if (form.parentId !== '0' && String(form.parentId) === String(route.params.id)) {
-    return '组织不能选择自己作为上级'
-  }
-  return ''
+  Object.keys(fieldErrors).forEach((key) => { fieldErrors[key] = '' })
+  if (!form.tenantId) fieldErrors.tenantId = '请选择企业或个人主体'
+  else if (!form.orgName) fieldErrors.orgName = '组织名称不能为空'
+  else if (!form.orgType) fieldErrors.orgType = '请选择组织类型'
+  else if (form.contactPhone && !/^(1[3-9]\d{9}|0\d{2,3}-?\d{7,8})$/.test(form.contactPhone)) fieldErrors.contactPhone = '联系电话格式不正确'
+  else if (form.parentId !== '0' && String(form.parentId) === String(route.params.id)) fieldErrors.parentId = '组织不能选择自己作为上级'
+  const firstError = Object.values(fieldErrors).find(Boolean) || ''
+  return firstError
+}
+
+const focusFirstError = async () => {
+  await nextTick()
+  const key = Object.keys(fieldErrors).find((name) => fieldErrors[name])
+  document.querySelector(`[data-field="${key}"]`)?.focus()
 }
 
 const save = async () => {
   saveError.value = validate()
-  if (saveError.value) return
+  if (saveError.value) { await focusFirstError(); return }
   saving.value = true
   try {
     const payload = {
@@ -384,7 +395,7 @@ onMounted(async () => {
 .page-header h1 { margin:0 0 5px; font-size:24px; }
 .page-header p { margin:0; color:#6b7280; }
 .back-btn { height:36px; padding:0 14px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#4b5563; cursor:pointer; }
-.state-card,.form-card { border-radius:11px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.state-card,.form-card { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-shadow:none; }
 .state-card { padding:40px; text-align:center; color:#6b7280; }
 .state-card.error { color:#b91c1c; background:#fef2f2; }
 .state-card p { margin:8px 0 14px; }
@@ -398,16 +409,22 @@ onMounted(async () => {
 .mode-badge { padding:4px 9px; border-radius:999px; background:#ecfdf5; color:#047857; font-size: var(--agri-font-size-micro); white-space:nowrap; }
 .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
 .form-grid.three-columns { grid-template-columns:repeat(3,minmax(0,1fr)); }
-.form-field { display:flex; flex-direction:column; gap:6px; color:#64748b; font-size:12.5px; }
-.form-field input,.form-field select,.form-field textarea { width:100%; min-height:38px; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#1f2937; outline:none; box-sizing:border-box; }
+.form-field { display:grid; grid-template-columns:minmax(96px,112px) minmax(0,1fr); align-items:center; column-gap:12px; row-gap:6px; color:#1f2937; font-size:14px; }
+.form-field > span { grid-column:1; text-align:right; line-height:20px; }
+.form-field > small { grid-column:2; }
+.form-field.has-error input,.form-field.has-error select,.form-field.has-error textarea { border-color:#c62828; box-shadow:0 0 0 2px rgba(198,40,40,.1); }
+.form-field input,.form-field select,.form-field textarea { grid-column:2; width:100%; min-height:40px; padding:8px 10px; border:1px solid #d1d5db; border-radius:4px; background:#fff; color:#1f2937; outline:none; box-sizing:border-box; }
 .form-field textarea { resize:vertical; }
-.form-field input:focus,.form-field select:focus,.form-field textarea:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.1); }
+.form-field input:focus,.form-field select:focus,.form-field textarea:focus { border-color:#2d8f4e; box-shadow:0 0 0 2px rgba(45,143,78,.12); }
+.form-field.has-error input,.form-field.has-error select,.form-field.has-error textarea { border-color:#c62828; box-shadow:0 0 0 2px rgba(198,40,40,.1); }
+.required-mark { color:#c62828; font-weight:400; }
+.field-error { grid-column:2; color:#c62828; font-size:12px; line-height:18px; }
 .form-field input:disabled,.form-field select:disabled { background:#f8fafc; color:#64748b; cursor:not-allowed; }
 .form-field small { color:#9ca3af; font-size: var(--agri-font-size-micro); }
 .wide-field { grid-column:1 / -1; }
 .context-card { position:relative; overflow:hidden; }
 .context-card::after { content:''; position:absolute; right:-32px; top:-40px; width:130px; height:130px; border-radius:50%; background:#ecfdf5; }
-.context-icon { position:relative; z-index:1; width:46px; height:46px; display:grid; place-items:center; margin-bottom:12px; border-radius:12px; background:#d1fae5; color:#047857; font-size:19px; font-weight:700; }
+.context-icon { position:relative; z-index:1; width:46px; height:46px; display:grid; place-items:center; margin-bottom:12px; border-radius:12px; background:#d1fae5; color:#047857; font-size:19px; font-weight:600; }
 .context-card h2,.context-card p { position:relative; z-index:1; }
 .context-card p { margin:6px 0 14px; color:#6b7280; font-size:12px; }
 .context-card dl { position:relative; z-index:1; margin:0; }
@@ -417,7 +434,8 @@ onMounted(async () => {
 .policy-card ul { margin:12px 0 0; padding-left:18px; color:#64748b; font-size:12px; line-height:1.9; }
 .save-error { margin:0 0 10px; padding:10px; border-radius:8px; background:#fef2f2; color:#b91c1c; font-size:12.5px; }
 .save-btn,.cancel-btn { width:100%; height:38px; border-radius:8px; cursor:pointer; }
-.save-btn { border:0; background:#10b981; color:#fff; }
+.save-btn { border:0; background:#2d8f4e; color:#fff; }
+.save-btn:hover:not(:disabled) { background:#247a3f; }
 .cancel-btn { margin-top:9px; border:1px solid #d1d5db; background:#fff; color:#4b5563; }
 .save-btn:disabled,.cancel-btn:disabled { opacity:.55; cursor:wait; }
 @media(max-width:900px){.edit-layout{grid-template-columns:1fr}}

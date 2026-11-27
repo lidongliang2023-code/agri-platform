@@ -2,7 +2,7 @@
   <header class="mds-page-head">
     <div>
       <h1 class="mds-page-title">{{ title }}</h1>
-      <p v-if="subtitle" class="mds-page-sub">{{ subtitle }}</p>
+      <p v-if="subtitle" class="mds-page-sub" :title="subtitle">{{ subtitle }}</p>
       <slot />
     </div>
     <div class="mds-head-actions">

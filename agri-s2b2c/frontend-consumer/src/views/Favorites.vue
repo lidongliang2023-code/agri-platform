@@ -35,7 +35,7 @@
         <span>共收藏 <b class="num">{{ rows.length }}</b> 件商品</span>
         <span class="m-tag plain" v-if="invalidRows.length">其中 {{ invalidRows.length }} 件已下架或售罄</span>
         <span class="m-spacer" />
-        <span class="muted small">失效商品指：商品状态不是 APPROVED，或可售库存 ≤ 0</span>
+        <span class="muted small">失效商品指：商品已下架或未审核通过，或可售库存 ≤ 0</span>
       </div>
 
       <!-- 收藏列表 -->
@@ -240,7 +240,7 @@ watch(
 .sum-bar b {
   color: #0b1a12;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .fav-grid {

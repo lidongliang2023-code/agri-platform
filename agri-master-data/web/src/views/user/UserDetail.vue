@@ -1,15 +1,20 @@
 <template>
   <div class="user-detail">
     <header class="page-head">
-      <button class="back" @click="goBack">← 返回用户列表</button>
+      <button type="button" class="back" @click="goBack">← 返回用户列表</button>
       <div>
         <h1>统一用户详情</h1>
-        <p>账号资料来自统一认证中心，主体成员关系来自平台用户与经营主体绑定。</p>
+        <p>账号资料来自统一认证中心，主体成员关系来自平台用户与经营主体绑定；账号启停与实名审核由用户中心运营端办理。</p>
       </div>
-      <button v-point="'PUT /admin/masterdata/user/{id}/status'" v-if="userData" class="status-action" :class="isActive ? 'disable' : 'enable'" @click="toggleStatus">
-        {{ isActive ? '停用账号' : '启用账号' }}
-      </button>
+      <div class="head-actions">
+        <span class="readonly-source">只读 · 统一认证用户主档</span>
+        <button type="button" class="uc-link-btn" @click="openUserCenter">前往用户中心 · 用户管理</button>
+      </div>
     </header>
+
+    <NoticeBar tone="info" title="只读视图：">
+      本页已移除「停用 / 启用账号」操作 —— 账号启停、密码重置与实名审核统一由用户中心运营端办理，避免同一账号在两处产生状态冲突。
+    </NoticeBar>
 
     <div v-if="loading" class="state">正在加载统一用户…</div>
     <div v-else-if="loadError" class="state error">{{ loadError }}</div>
@@ -44,7 +49,7 @@
           <div><label>更新时间</label><strong>{{ formatDate(userData.updateTime) }}</strong></div>
           <div><label>用户标识</label><strong>{{ value(userData.id) }}</strong></div>
         </div>
-        <p class="note">账号资料和密码在个人中心维护；本页仅执行账号启停和查看主体关系。</p>
+        <p class="note">本页仅提供账号资料与主体绑定关系的只读查询；账号启停、冻结解冻及实名审核请前往用户中心运营端办理，个人资料与密码由用户本人在个人中心维护。</p>
       </section>
 
       <section class="card">
@@ -89,8 +94,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { changeStatus, getUserDetail } from '../../utils/api'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
+import { getUserDetail } from '../../utils/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,16 +122,8 @@ const loadDetail = async () => {
   }
 }
 
-const toggleStatus = async () => {
-  const next = isActive.value ? 0 : 1
-  try {
-    const response = await changeStatus(userData.value.id, next)
-    if (response.code !== 200) throw new Error(response.message || '账号状态更新失败')
-    message.success(next === 1 ? '账号已启用' : '账号已停用')
-    await loadDetail()
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '账号状态更新失败')
-  }
+const openUserCenter = () => {
+  window.open(`${window.location.protocol}//${window.location.hostname}:8115/user-center-ops/`, '_blank', 'noopener')
 }
 
 const goBack = () => router.push('/user/list')
@@ -141,62 +138,63 @@ onMounted(loadDetail)
 </script>
 
 <style scoped>
-.user-detail { padding:20px; color:#1f2937; }
-.page-head { display:flex; align-items:center; gap:18px; margin-bottom:18px; }
-.page-head > div { flex:1; }
-.page-head h1 { margin:0 0 5px; font-size:24px; }
-.page-head p { margin:0; color:#6b7280; }
-.back,.status-action { height:36px; padding:0 14px; border-radius:8px; cursor:pointer; }
-.back { border:1px solid #d1d5db; background:#fff; color:#4b5563; }
-.status-action { border:0; color:#fff; }
-.status-action.disable { background:#dc2626; }
-.status-action.enable { background:#10b981; }
-.state,.hero,.card { border-radius:11px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-.state { padding:40px; text-align:center; color:#6b7280; }
-.state.error { color:#b91c1c; background:#fef2f2; }
-.hero { display:flex; justify-content:space-between; align-items:center; gap:18px; padding:20px; margin-bottom:14px; }
+.user-detail { padding:0; color:var(--pc-text,#1a1a1a); }
+.page-head { display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:20px; }
+.page-head > div { flex:1; min-width:0; }
+.page-head h1 { margin:0 0 4px; font-size:24px; line-height:1.35; color:var(--pc-text,#1a1a1a); }
+.page-head p { margin:0; color:var(--pc-secondary,#595959); font-size:14px; }
+.head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex:none; }
+.readonly-source { display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:12px; background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); font-size:12px; font-weight:500; white-space:nowrap; }
+.back,.uc-link-btn { height:32px; padding:0 16px; border-radius:4px; font-size:14px; font-weight:500; cursor:pointer; }
+.back,.uc-link-btn { border:1px solid var(--pc-border,#e8e8e8); background:#fff; color:var(--pc-text,#1a1a1a); }
+.back:hover,.uc-link-btn:hover { border-color:var(--pc-brand,#2d8f4e); color:var(--pc-brand,#2d8f4e); }
+.state,.hero,.card { border:1px solid var(--pc-border,#e8e8e8); border-radius:8px; background:#fff; box-shadow:none; }
+.state { padding:40px; text-align:center; color:var(--pc-secondary,#595959); }
+.state.error { color:#b71c1c; background:#ffebee; border-color:#ffcdd2; }
+.hero { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 24px; margin-bottom:16px; }
 .identity { display:flex; align-items:center; gap:14px; }
-.avatar { width:52px; height:52px; display:grid; place-items:center; border-radius:50%; background:linear-gradient(135deg,#10b981,#0ea5e9); color:#fff; font-size:18px; font-weight:700; }
-.hero h2 { margin:0; font-size:21px; }
-.hero p { margin:5px 0 0; color:#94a3b8; font-family:ui-monospace,Consolas,monospace; font-size: var(--agri-font-size-micro); }
-.summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; margin-bottom:14px; }
-.summary-grid div { padding:14px; border:1px solid #e3eae5; border-radius:9px; background:#fff; }
+.avatar { width:48px; height:48px; display:grid; place-items:center; border-radius:8px; background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); font-size:18px; font-weight:600; }
+.hero h2 { margin:0; font-size:20px; color:var(--pc-text,#1a1a1a); }
+.hero p { margin:4px 0 0; color:var(--pc-secondary,#595959); font-family:var(--pc-mono,ui-monospace,Consolas,monospace); font-size:12px; }
+.summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:16px; }
+.summary-grid div { padding:16px 20px; border:1px solid var(--pc-border,#e8e8e8); border-radius:8px; background:#fff; }
 .summary-grid span,.summary-grid strong { display:block; }
-.summary-grid span { color:#94a3b8; font-size: var(--agri-font-size-micro); }
-.summary-grid strong { margin-top:5px; color:#0f6740; font-size:21px; }
-.card { padding:18px; margin-bottom:14px; }
-.card-head { display:flex; justify-content:space-between; gap:12px; margin-bottom:14px; }
-.card-head h2 { margin:0; font-size:16px; }
-.card-head p,.card-head > span { margin:4px 0 0; color:#94a3b8; font-size: var(--agri-font-size-micro); }
-.info-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-.info-grid div { padding:11px; border-radius:8px; background:#f8fafc; }
-.info-grid label { display:block; margin-bottom:5px; color:#94a3b8; font-size: var(--agri-font-size-micro); }
-.info-grid strong { color:#334155; font-size:12.5px; word-break:break-all; }
-.note { margin:13px 0 0; padding:10px; border-radius:8px; background:#f8fafc; color:#64748b; font-size: var(--agri-font-size-micro); }
-.membership-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:11px; }
-.membership-card { padding:14px; border:1px solid #e5e7eb; border-radius:9px; }
+.summary-grid span { color:var(--pc-secondary,#595959); font-size:12px; }
+.summary-grid strong { margin-top:6px; color:var(--pc-text,#1a1a1a); font-size:22px; font-variant-numeric:tabular-nums; }
+.card { padding:24px; margin-bottom:16px; }
+.card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:16px; }
+.card-head h2 { margin:0; font-size:18px; color:var(--pc-text,#1a1a1a); }
+.card-head p,.card-head > span { margin:4px 0 0; color:var(--pc-secondary,#595959); font-size:12px; }
+.info-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.info-grid div { padding:12px 14px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
+.info-grid label { display:block; margin-bottom:4px; color:var(--pc-secondary,#595959); font-size:12px; }
+.info-grid strong { color:var(--pc-text,#1a1a1a); font-size:14px; font-weight:500; word-break:break-all; }
+.note { margin:14px 0 0; padding:10px 12px; border-radius:6px; background:var(--pc-bg,#f5f6fa); color:var(--pc-secondary,#595959); font-size:12px; }
+.membership-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.membership-card { padding:16px; border:1px solid var(--pc-border,#e8e8e8); border-radius:8px; background:#fff; }
 .membership-head { display:flex; align-items:flex-start; gap:10px; }
-.membership-head > div { flex:1; }
-.subject-icon { width:34px; height:34px; display:grid; place-items:center; flex:none; border-radius:8px; background:#ecfdf5; }
-.membership-head h3 { margin:0; font-size:14px; }
-.membership-head p { margin:4px 0 0; color:#94a3b8; font-family:ui-monospace,Consolas,monospace; font-size: var(--agri-font-size-micro); }
-.membership-meta { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin:12px 0; }
-.membership-meta div { padding:8px; border-radius:7px; background:#f8fafc; }
+.membership-head > div { flex:1; min-width:0; }
+.subject-icon { width:36px; height:36px; display:grid; place-items:center; flex:none; border-radius:6px; background:var(--pc-light,#e8f5e9); }
+.membership-head h3 { margin:0; font-size:14px; color:var(--pc-text,#1a1a1a); }
+.membership-head p { margin:4px 0 0; color:var(--pc-secondary,#595959); font-family:var(--pc-mono,ui-monospace,Consolas,monospace); font-size:12px; }
+.membership-meta { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:12px 0; }
+.membership-meta div { padding:8px 10px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
 .membership-meta span,.membership-meta strong { display:block; }
-.membership-meta span { color:#94a3b8; font-size: var(--agri-font-size-micro); }
-.membership-meta strong { margin-top:4px; color:#334155; font-size:12px; }
-.subject-link { color:#047857; text-decoration:none; font-size: var(--agri-font-size-micro); }
-.status-badge { display:inline-block; padding:4px 9px; border-radius:999px; font-size: var(--agri-font-size-micro); white-space:nowrap; }
-.status-badge.active { background:#ecfdf5; color:#047857; }
-.status-badge.pending { background:#fffbeb; color:#b45309; }
-.status-badge.rejected { background:#fef2f2; color:#b91c1c; }
-.status-badge.inactive { background:#f3f4f6; color:#6b7280; }
-.empty { padding:28px; border-radius:8px; background:#f8fafc; text-align:center; color:#94a3b8; }
-.note-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
-.note-grid div { padding:10px; border-radius:8px; background:#f8fafc; }
+.membership-meta span { color:var(--pc-secondary,#595959); font-size:12px; }
+.membership-meta strong { margin-top:4px; color:var(--pc-text,#1a1a1a); font-size:13px; font-weight:500; }
+.subject-link { color:var(--pc-active,#1b6332); text-decoration:none; font-size:13px; }
+.subject-link:hover { text-decoration:underline; }
+.status-badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:12px; font-weight:500; white-space:nowrap; }
+.status-badge.active { background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); }
+.status-badge.pending { background:#fff3e0; color:#8f4500; }
+.status-badge.rejected { background:#ffebee; color:#b71c1c; }
+.status-badge.inactive { background:var(--pc-bg,#f5f6fa); color:var(--pc-secondary,#595959); }
+.empty { padding:24px; border-radius:6px; background:var(--pc-bg,#f5f6fa); text-align:center; color:var(--pc-secondary,#595959); font-size:13px; }
+.note-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.note-grid div { padding:10px 12px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
 .note-grid label,.note-grid span { display:block; }
-.note-grid label { color:#94a3b8; font-size: var(--agri-font-size-micro); }
-.note-grid span { margin-top:4px; color:#475569; font-family:ui-monospace,Consolas,monospace; font-size: var(--agri-font-size-micro); }
+.note-grid label { color:var(--pc-secondary,#595959); font-size:12px; }
+.note-grid span { margin-top:4px; color:var(--pc-text,#1a1a1a); font-family:var(--pc-mono,ui-monospace,Consolas,monospace); font-size:12px; }
 @media(max-width:950px){.info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.membership-grid{grid-template-columns:1fr}}
 @media(max-width:650px){.page-head,.hero{flex-wrap:wrap}.summary-grid,.info-grid,.note-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:480px){.summary-grid,.info-grid,.note-grid,.membership-meta{grid-template-columns:1fr}}

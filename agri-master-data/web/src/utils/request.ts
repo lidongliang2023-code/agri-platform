@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { useSessionStore } from '@/stores/session'
+import { redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
 
 /**
  * 运营端 axios 实例之一：`baseURL: '/api'`，调用方传**相对**路径。
@@ -24,7 +26,7 @@ const request = axios.create({
 
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token')
+    const token = useSessionStore().accessToken
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -41,8 +43,11 @@ request.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/login'
+      useSessionStore().clear()
+      if (window.location.pathname.replace(/\/+$/, '') !== SSO_CALLBACK_PATH) {
+        const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+        void redirectToSso(current)
+      }
     }
     return Promise.reject(error)
   },

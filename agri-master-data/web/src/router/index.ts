@@ -16,7 +16,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import AdminLayout from '@/components/Layout.vue'
 import UserLayout from '@/components/UserLayout.vue'
 import { useSessionStore } from '@/stores/session'
-import { LOGIN_PATH } from '@/utils/sso'
+import { normalizeReturnTarget, redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
 
 const modules = import.meta.glob('../views/**/*.vue') as Record<string, () => Promise<unknown>>
 
@@ -178,15 +178,13 @@ const USER_ROUTES: RouteSpec[] = [
 const consumed = new Set<string>([
   ...(ADMIN_ROUTES.map((route) => route.view).filter(Boolean) as string[]),
   ...(USER_ROUTES.map((route) => route.view).filter(Boolean) as string[]),
-  'Login',
   'SsoCallback',
-  'userportal/UserLogin',
 ])
 const takenPaths = new Set<string>([
   ...ADMIN_ROUTES.map((route) => route.path),
   ...USER_ROUTES.map((route) => route.path),
-  LOGIN_PATH,
-  '/sso/callback',
+  '/login',
+  SSO_CALLBACK_PATH,
   '/user/login',
 ])
 
@@ -224,10 +222,17 @@ const adminChildren: RouteRecordRaw[] = [
 ]
 
 const routes: RouteRecordRaw[] = [
-  // 公开页：登录页与 SSO 回跳页必须在守卫之外，否则"要去登录"本身会被判定为未登录
-  { path: LOGIN_PATH, name: 'login', component: resolve('Login'), meta: { public: true } },
-  { path: '/sso/callback', name: 'sso-callback', component: resolve('SsoCallback'), meta: { public: true } },
-  { path: '/user/login', name: 'user-login', component: resolve('userportal/UserLogin'), meta: { public: true } },
+  // 公开页：SSO 回跳页必须在守卫之外，否则换票前会被守卫拦下
+  { path: SSO_CALLBACK_PATH, name: 'sso-callback', component: resolve('SsoCallback'), meta: { public: true } },
+  // 已删除本地登录页：旧 /login 与 /user/login 书签直接回到目标业务页（未登录时由守卫/启动入口直跳统一认证中心）
+  {
+    path: '/login',
+    redirect: (to) => normalizeReturnTarget(typeof to.query.redirect === 'string' ? to.query.redirect : undefined, '/dashboard'),
+  },
+  {
+    path: '/user/login',
+    redirect: (to) => normalizeReturnTarget(typeof to.query.redirect === 'string' ? to.query.redirect : undefined, '/user/workbench'),
+  },
   {
     path: '/',
     component: AdminLayout,
@@ -278,7 +283,8 @@ router.beforeEach((to) => {
     return true
   }
   if (!session.isLoggedIn) {
-    return { path: LOGIN_PATH, query: { redirect: to.fullPath } }
+    void redirectToSso(to.fullPath)
+    return false
   }
   return true
 })

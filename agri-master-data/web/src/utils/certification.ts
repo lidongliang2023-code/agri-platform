@@ -40,9 +40,6 @@ export interface UserIdentity {
 export const getMerchantCertifications = (params: Record<string, unknown>) =>
   request.get('/api/v1/admin/merchant-certifications', { params })
 
-export const auditMerchantCertification = (id: number | string, status: 'approved' | 'rejected', remark?: string) =>
-  request.post(`/api/v1/admin/merchant-certifications/${id}/audit`, { status, remark })
-
 /** 审核端以 Bearer 令牌读取材料文件，返回 Blob 供页面生成临时预览地址。 */
 export const getMerchantCertificationDocument = (
   merchantId: number | string,
@@ -58,6 +55,3 @@ export const getMerchantCertificationDocument = (
 
 export const getUserIdentities = (params: Record<string, unknown>) =>
   request.get('/api/v1/admin/user-identities', { params })
-
-export const reviewUserIdentity = (id: number | string, approved: boolean, remark?: string) =>
-  request.post(`/api/v1/admin/user-identities/${id}/review`, { approved, remark })

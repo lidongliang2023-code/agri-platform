@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { consumerApi } from '../api'
 import {
@@ -33,6 +33,13 @@ export const useUserStore = defineStore('user', () => {
   const displayName = computed(() => user.value?.nickname || '我的')
   const isLoggedIn = computed(() => Boolean(token.value))
 
+  watch(() => unifiedSession.user, (account) => {
+    token.value = getUnifiedToken()
+    user.value = accountView(account)
+    cartCount.value = 0
+    unreadCount.value = 0
+  }, { flush: 'sync' })
+
   async function init() {
     token.value = getUnifiedToken()
     user.value = accountView(unifiedSession.user)
@@ -42,34 +49,22 @@ export const useUserStore = defineStore('user', () => {
     }
     // 统一账号 ID ≠ 消费者 ID：必须按 /consumer/profile 换一次真实档案，
     // 否则购物车/订单接口会拿错 ID 被后端 403 拒绝。
+    await refreshProfile()
+    booted.value = true
+    await Promise.all([refreshCart(), refreshUnread()])
+  }
+
+  async function refreshProfile() {
+    const requestedToken = token.value
     try {
       const profile = await consumerApi.getProfile()
+      if (requestedToken !== token.value || !user.value) return null
       if (profile?.id) {
         user.value = {
           ...user.value,
           id: profile.id,
           nickname: profile.nickname || user.value.nickname,
           phone: profile.phone || user.value.phone,
-          memberLevel: profile.memberLevel || 'NORMAL',
-          points: profile.points ?? 0,
-          totalConsume: profile.totalConsume ?? 0,
-        }
-      }
-    } catch {
-      // 建档失败时保留统一身份；写操作会被后端拒绝，好过静默用错 ID
-    }
-    booted.value = true
-    await Promise.all([refreshCart(), refreshUnread()])
-  }
-
-  async function refreshProfile() {
-    try {
-      const profile = await consumerApi.getProfile()
-      if (profile?.id && user.value) {
-        user.value = {
-          ...user.value,
-          id: profile.id,
-          nickname: profile.nickname || user.value.nickname,
           memberLevel: profile.memberLevel || 'NORMAL',
           points: profile.points ?? 0,
           totalConsume: profile.totalConsume ?? 0,
@@ -86,11 +81,13 @@ export const useUserStore = defineStore('user', () => {
       cartCount.value = 0
       return
     }
+    const requestedToken = token.value
     try {
       const lines = await consumerApi.getCart(consumerId.value)
+      if (requestedToken !== token.value) return
       cartCount.value = (lines || []).reduce((sum, line) => sum + (line.quantity || 0), 0)
     } catch {
-      cartCount.value = 0
+      if (requestedToken === token.value) cartCount.value = 0
     }
   }
 
@@ -99,11 +96,13 @@ export const useUserStore = defineStore('user', () => {
       unreadCount.value = 0
       return
     }
+    const requestedToken = token.value
     try {
       const rows = await consumerApi.getMessages({ consumerId: consumerId.value })
+      if (requestedToken !== token.value) return
       unreadCount.value = (rows || []).filter((row) => !row.isRead).length
     } catch {
-      unreadCount.value = 0
+      if (requestedToken === token.value) unreadCount.value = 0
     }
   }
 

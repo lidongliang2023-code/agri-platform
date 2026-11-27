@@ -54,6 +54,9 @@ function isAuthenticatedRoute(path) {
 }
 
 export function financeHomeForPermissions() {
+  // 平台超管（* / finance:*）以运营视角进入；融资方、资金方页面仍可通过侧栏切换访问。
+  const permissions = financeSession.permissions
+  if (permissions.includes('*') || permissions.includes('finance:*')) return '/admin/workbench'
   if (hasFinancePermission('finance:borrower')) return '/borrower/home'
   if (hasFinancePermission('finance:fund')) return '/fund/workbench'
   if (hasFinancePermission('finance:admin')) return '/admin/workbench'
@@ -67,13 +70,9 @@ export function canAccessFinancePath(path) {
   return true
 }
 
-function currentFinancePath() {
-  const hashPath = window.location.hash.replace(/^#/, '')
-  return hashPath || '/borrower/home'
-}
-
 function financeReturnTarget() {
-  return `${window.location.pathname}${window.location.search}${window.location.hash || '#/borrower/home'}`
+  // 未指定页面时回到根路径，由路由按账号角色决定落点，不再写死融资方首页。
+  return `${window.location.pathname}${window.location.search}${window.location.hash || '#/'}`
 }
 
 export function getFinanceToken() {
@@ -177,7 +176,7 @@ export async function bootstrapFinanceSso() {
     const code = params.get('code')
     if (!code) throw new Error('统一认证回跳缺少授权码')
     login = await exchangeCode(code, params.get('state'))
-    const returnTo = sessionStorage.getItem(RETURN_KEY) || '/finance/#/borrower/home'
+    const returnTo = sessionStorage.getItem(RETURN_KEY) || '/finance/#/'
     sessionStorage.removeItem(RETURN_KEY)
     window.history.replaceState({}, '', returnTo)
   } else {
@@ -185,7 +184,7 @@ export async function bootstrapFinanceSso() {
   }
 
   if (!login) {
-    await redirectToSso(currentFinancePath() === '/borrower/home' ? '/finance/#/borrower/home' : financeReturnTarget())
+    await redirectToSso(financeReturnTarget())
     return null
   }
   const permissions = await loadPermissions(login.accessToken)

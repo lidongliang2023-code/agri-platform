@@ -2,7 +2,8 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import { canAccessFinancePath, financeHomeForPermissions } from '../auth'
 
 const routes = [
-  { path: '/', redirect: '/borrower/home' },
+  // 根路径按当前账号的金融角色落地：平台超管/运营进运营工作台，资金方进资金工作台，融资方进融资工作台。
+  { path: '/', redirect: () => financeHomeForPermissions() || '/borrower/home' },
   
   {
     path: '/borrower',
@@ -108,15 +109,22 @@ const routes = [
   { path: '/admin/post-loan', redirect: '/admin/workbench' }
 ]
 
-const router = createRouter({
-  history: createWebHashHistory(),
-  routes
-})
+/**
+ * 路由必须在统一认证回跳完成、地址栏恢复为原始目标之后再创建。
+ * createWebHashHistory 在创建时就会读取并缓存当前地址；如果在 /sso/callback 上提前创建，
+ * 首次挂载会按回跳页的空 hash 导航到根路径，用户原本要去的页面（如 /admin/workbench）会丢失。
+ */
+export function createFinanceRouter() {
+  const router = createRouter({
+    history: createWebHashHistory(),
+    routes
+  })
 
-router.beforeEach((to) => {
-  if (canAccessFinancePath(to.path)) return true
-  const home = financeHomeForPermissions()
-  return home && home !== to.path ? home : false
-})
+  router.beforeEach((to) => {
+    if (canAccessFinancePath(to.path)) return true
+    const home = financeHomeForPermissions()
+    return home && home !== to.path ? home : false
+  })
 
-export default router
+  return router
+}

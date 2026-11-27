@@ -18,9 +18,6 @@ export const SSO_CLIENT_ID = 'mdm'
 /** 授权码回跳路径。必须落在注册表里的 redirect_uri 前缀 `http://localhost:8080/` 之下。 */
 export const SSO_CALLBACK_PATH = '/sso/callback'
 
-/** 登录页路径 */
-export const LOGIN_PATH = '/login'
-
 /**
  * 认证中心地址。
  *
@@ -39,18 +36,24 @@ function resolveSsoOrigin(): string {
 const VERIFIER_KEY = 'agri_mdm_code_verifier'
 const STATE_KEY = 'agri_mdm_state'
 const RETURN_KEY = 'agri_mdm_return'
-/**
- * 上一次"自动跳认证中心"的时间戳。
- *
- * <p>用途是**防无限打转**：如果换票没成功（state 不匹配、Cookie 被禁、回调页被别处
- * 打断等），用户会回到登录页，而登录页挂载后又自动跳认证中心 —— 就形成
- * 「认证中心 ↔ 回调页」的死循环，用户只看到页面在闪，没有任何提示。</p>
- *
- * <p>所以自动跳转加冷却：冷却期内再次自动跳直接报错，把控制权交回用户（页面上有
- * 手动按钮）。手动点击不受冷却限制。</p>
- */
-const NAV_AT_KEY = 'agri_mdm_sso_nav_at'
-const NAV_COOLDOWN_MS = 8000
+
+/** 单页并发防重入锁：同一时刻只发起一次 PKCE 跳转，避免多个并发 401 互相覆盖 state/verifier */
+let pendingRedirect: Promise<void> | null = null
+
+/** 规范化回跳目标：去掉 logout=1，避免跳回外部地址、/login、/user/login 或 /sso/callback */
+export function normalizeReturnTarget(target?: string | null, fallback = '/dashboard'): string {
+  if (!target || !target.startsWith('/') || target.startsWith('//')) {
+    return fallback
+  }
+  const cleaned = target
+    .replace(/([?&])logout=1(?=&|$)/, '$1')
+    .replace(/[?&]$/, '')
+  const pathname = cleaned.split(/[?#]/)[0].replace(/\/+$/, '') || '/'
+  if (pathname === '/login' || pathname === '/user/login' || pathname === SSO_CALLBACK_PATH) {
+    return fallback
+  }
+  return cleaned || fallback
+}
 
 /** base64url（PKCE 要求 URL 安全且无填充） */
 function base64Url(bytes: Uint8Array): string {
@@ -77,47 +80,36 @@ async function codeChallengeOf(verifier: string): Promise<string> {
  * <p>verifier 与 state 放 sessionStorage：它们是本次跳转的**短期状态**，不是凭证，
  * 也不该跨标签页长期留存（放 localStorage 反而会让它们一直躺在磁盘上）。</p>
  */
-export async function redirectToSso(returnTo?: string, options?: { manual?: boolean }): Promise<void> {
-  const now = Date.now()
-  let lastNavAt = 0
-  try {
-    lastNavAt = Number(sessionStorage.getItem(NAV_AT_KEY) ?? 0)
-  } catch {
-    // 会话存储不可用时不做冷却判断，交给后续流程兜底
+export async function redirectToSso(returnTo?: string): Promise<void> {
+  if (pendingRedirect) {
+    return pendingRedirect
   }
-  if (!options?.manual && lastNavAt > 0 && now - lastNavAt < NAV_COOLDOWN_MS) {
-    throw new Error(
-      '刚完成一次认证跳转但仍未登录，可能是浏览器禁用了 Cookie 或登录态未能建立。请点上方按钮重试。',
-    )
-  }
-  try {
-    sessionStorage.setItem(NAV_AT_KEY, String(now))
-  } catch {
-    // 同上
-  }
-
-  const verifier = randomBase64Url()
-  const state = randomBase64Url(16)
-  sessionStorage.setItem(VERIFIER_KEY, verifier)
-  sessionStorage.setItem(STATE_KEY, state)
-  if (returnTo) {
-    sessionStorage.setItem(RETURN_KEY, returnTo)
-  }
-  const params = new URLSearchParams({
-    client_id: SSO_CLIENT_ID,
-    redirect_uri: `${window.location.origin}${SSO_CALLBACK_PATH}`,
-    state,
-    code_challenge: await codeChallengeOf(verifier),
-    code_challenge_method: 'S256',
+  pendingRedirect = (async () => {
+    const verifier = randomBase64Url()
+    const state = randomBase64Url(16)
+    sessionStorage.setItem(VERIFIER_KEY, verifier)
+    sessionStorage.setItem(STATE_KEY, state)
+    sessionStorage.setItem(RETURN_KEY, normalizeReturnTarget(returnTo))
+    const params = new URLSearchParams({
+      client_id: SSO_CLIENT_ID,
+      redirect_uri: `${window.location.origin}${SSO_CALLBACK_PATH}`,
+      state,
+      code_challenge: await codeChallengeOf(verifier),
+      code_challenge_method: 'S256',
+    })
+    window.location.replace(`${resolveSsoOrigin()}/authorize?${params.toString()}`)
+  })().catch((cause) => {
+    pendingRedirect = null
+    throw cause
   })
-  window.location.href = `${resolveSsoOrigin()}/authorize?${params.toString()}`
+  return pendingRedirect
 }
 
 /** 回跳后要去的页面（没记过就回 undefined，由调用方决定默认页） */
 export function takeReturnTo(): string | undefined {
   const value = sessionStorage.getItem(RETURN_KEY)
   sessionStorage.removeItem(RETURN_KEY)
-  return value ?? undefined
+  return value ? normalizeReturnTarget(value) : undefined
 }
 
 /** 平台令牌响应体（core-platform LoginVO） */
@@ -162,8 +154,6 @@ export async function exchangeCode(code: string, state: string | null): Promise<
   }
   sessionStorage.removeItem(VERIFIER_KEY)
   sessionStorage.removeItem(STATE_KEY)
-  // 换票成功说明这一轮认证闭环了，清掉冷却标记，避免影响下一次正常登录
-  sessionStorage.removeItem(NAV_AT_KEY)
   return body.data as SsoLoginResult
 }
 

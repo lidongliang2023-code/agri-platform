@@ -1,5 +1,9 @@
 <template>
   <div class="trace-wrap">
+    <div v-if="invalidCodeLabel" class="code-warning" role="status">
+      <span>溯源码 {{ trace.traceCode }}</span>
+      <strong>{{ invalidCodeLabel }}</strong>
+    </div>
     <EmptyBlock
       v-if="trace.unavailable"
       icon="⚠"
@@ -29,7 +33,7 @@
           <span v-if="displayName" class="m-tag">{{ displayName }}</span>
           <span v-if="trace.qualityGrade" class="m-tag">{{ trace.qualityGrade }} 级</span>
           <span v-if="trace.origin" class="m-tag">产地 {{ trace.origin }}</span>
-          <span v-if="trace.codeStatus" class="m-tag">码状态 {{ trace.codeStatus }}</span>
+          <span v-if="trace.codeStatus && !invalidCodeLabel" class="m-tag">码状态 {{ codeLabel(trace.codeStatus) }}</span>
         </div>
         <div class="trace-ops">
           <span class="muted small">
@@ -43,6 +47,7 @@
         </div>
       </div>
 
+      <h3 v-if="invalidCodeLabel && nodes.length" class="history-title">批次历史记录</h3>
       <ol class="trace-timeline">
         <li v-for="n in nodes" :key="n.seq" class="trace-node" :class="{ onchain: n.onChain }">
           <span class="node-dot">{{ n.seq }}</span>
@@ -50,13 +55,15 @@
             <div class="node-hd">
               <b>{{ n.stageName || n.title }}</b>
               <span v-if="n.occurredAt" class="node-time">{{ fmtTime(n.occurredAt) }}</span>
-              <span v-if="n.onChain" class="node-chain ok">已上链</span>
-              <span v-else-if="n.attested" class="node-chain pending">存证未成功</span>
+              <span v-if="n.onChain" class="node-chain ok">{{ n.chainType === 'SIMULATED' ? '模拟存证成功' : '存证成功' }}</span>
+              <span v-else-if="statusOf(n) === 'PENDING'" class="node-chain pending">存证处理中</span>
+              <span v-else-if="statusOf(n) === 'FAILED'" class="node-chain failed">存证失败</span>
+              <span v-else-if="n.attested" class="node-chain">存证状态未知</span>
               <span v-else class="node-chain none">未存证</span>
             </div>
             <p class="node-detail">{{ n.detail }}</p>
             <p v-if="n.txHash" class="node-hash">交易号 {{ n.txHash }}</p>
-            <p v-if="n.failedReason" class="node-fail">存证失败原因：{{ n.failedReason }}</p>
+            <p v-if="statusOf(n) === 'FAILED' && n.failedReason" class="node-fail">存证失败原因：{{ n.failedReason }}</p>
           </div>
         </li>
       </ol>
@@ -64,7 +71,7 @@
       <div v-if="codes.length" class="trace-codes">
         <span class="muted small">本批次溯源码（{{ codes.length }} 支）：</span>
         <code v-for="c in codes" :key="c.code" class="code-chip">
-          {{ c.code }}<em>{{ c.status }}</em><em v-if="c.expired">已过期</em>
+          {{ c.code }}<em>{{ c.code === trace.traceCode && invalidCodeLabel ? invalidCodeLabel : codeLabel(c.status, c.expired) }}</em>
         </code>
       </div>
 
@@ -98,6 +105,23 @@ const nodes = computed(() => props.trace.nodes ?? [])
 const codes = computed(() => props.trace.codes ?? [])
 const displayName = computed(() => props.productName || props.trace.productName || props.trace.cropName || '')
 
+const codeLabels = { active: '已激活', scanned: '已扫码', generated: '未激活', inactive: '未激活', expired: '已过期', revoked: '已作废' }
+function codeLabel(status, expired = false) {
+  const key = String(status ?? '').trim().toLowerCase()
+  if (key === 'revoked') return '已作废'
+  if (expired === true) return '已过期'
+  return codeLabels[key] || '状态未知'
+}
+const invalidCodeLabel = computed(() => {
+  const t = props.trace
+  if (!t.traceCode || t.unavailable) return ''
+  const label = codeLabel(t.codeStatus, t.expired)
+  if (label === '已作废' || label === '已过期') return `${label}，不可核验`
+  if (t.verifiable === false) return label === '未激活' ? '未激活，不可核验' : '当前不可核验'
+  return ''
+})
+
+const statusOf = (node) => String(node.chainStatus ?? '').toUpperCase()
 const has = (stage) => (props.trace.stages ?? []).includes(stage)
 
 const fmtTime = (value) => String(value ?? '').replace('T', ' ').slice(0, 16)
@@ -119,6 +143,23 @@ const chainDeepLink = computed(() => productionChainUrl({
 .trace-wrap {
   display: grid;
   gap: 12px;
+}
+
+.code-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  padding: 12px 16px;
+  border-left: 4px solid #ac3c2e;
+  background: #fff2ed;
+  color: #822a20;
+  overflow-wrap: anywhere;
+}
+
+.history-title {
+  margin: 0;
+  font-size: 16px;
 }
 
 .trace-head {
@@ -192,7 +233,7 @@ const chainDeepLink = computed(() => productionChainUrl({
 }
 
 .trace-node.onchain .node-dot {
-  background: #12764a;
+  background: #2d8f4e;
   color: #fff;
 }
 
@@ -229,6 +270,11 @@ const chainDeepLink = computed(() => productionChainUrl({
 .node-chain.pending {
   background: #fff3dd;
   color: #a96a08;
+}
+
+.node-chain.failed {
+  background: #fbe9e9;
+  color: #913838;
 }
 
 .node-detail {

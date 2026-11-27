@@ -45,8 +45,8 @@
           <span class="ic">🔔</span><b>消息</b>
           <i v-if="userStore.unreadCount" class="m-badge">{{ userStore.unreadCount }}</i>
         </button>
-        <button type="button" class="cl" @click="go('/mine')">
-          <span class="ic">👤</span><b>{{ userStore.displayName }}</b>
+        <button type="button" class="cl" @click="openAccount">
+          <span class="ic">👤</span><b>{{ userStore.isLoggedIn ? userStore.displayName : '登录' }}</b>
         </button>
       </div>
     </div>
@@ -76,6 +76,7 @@ const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
+import { redirectToUnifiedLogin } from '../../../frontend-shared/unified-auth'
 import { crossModule } from '../config/cross-module'
 
 const router = useRouter()
@@ -102,6 +103,11 @@ onMounted(() => {
 
 function isActive(item) {
   return item.match.includes(route.name)
+}
+
+function openAccount() {
+  if (userStore.isLoggedIn) return go('/mine')
+  return redirectToUnifiedLogin('mall-consumer', route.fullPath)
 }
 
 function go(path) {
@@ -157,9 +163,9 @@ function onCategory(categoryId) {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 19px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .5px;
   line-height: 1.15;
 }
@@ -189,7 +195,7 @@ function onCategory(categoryId) {
 
 .m-allcat:hover {
   border-color: #9fd0b6;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .m-allcat .ar {
@@ -205,7 +211,7 @@ function onCategory(categoryId) {
   height: 44px;
   min-width: 240px;
   padding: 0 6px 0 14px;
-  border: 1.5px solid #12764a;
+  border: 1.5px solid #2d8f4e;
   border-radius: 22px;
   background: #fff;
 }
@@ -253,7 +259,7 @@ function onCategory(categoryId) {
 
 .cl:hover {
   background: #f1fbf5;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .cl .ic {
@@ -300,13 +306,13 @@ function onCategory(categoryId) {
 }
 
 .m-nav-item:hover {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .m-nav-item.active {
-  border-bottom-color: #12764a;
-  color: #12764a;
-  font-weight: 700;
+  border-bottom-color: #2d8f4e;
+  color: #2d8f4e;
+  font-weight: 600;
 }
 
 .m-nav-item.ext {
@@ -320,5 +326,39 @@ function onCategory(categoryId) {
 
 .cat-ico {
   margin-right: 8px;
+}
+
+@media (max-width: 1023px) {
+  .m-top-inner {
+    gap: 10px;
+  }
+
+  .m-logo .txt {
+    font-size: 16px;
+  }
+
+  .m-logo .txt small {
+    display: none;
+  }
+
+  .m-allcat {
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .m-search {
+    min-width: 150px;
+    padding: 0 4px 0 10px;
+  }
+
+  .m-links {
+    gap: 2px;
+  }
+
+  .cl {
+    padding: 0 7px;
+    gap: 4px;
+    font-size: 12.5px;
+  }
 }
 </style>

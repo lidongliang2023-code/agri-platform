@@ -76,6 +76,46 @@ const LOAD_TIMEOUT_MS = 15_000
 
 let tiandituLoader: Promise<TiandituNamespace> | null = null
 
+/** 天地图 v4.0 冷启动时动态插入的组件脚本（military.js 依赖 components.js 定义的 T.Tool） */
+const TIANDITU_COMPONENT_SCRIPT = /api\.tianditu\.gov\.cn\/(v4\.0\/(components|service|military)\.js|api\?v=4\.0&name=(components|service|military))/
+
+/** 有序插入窗口：超过该时长自动恢复，避免长期改写 document.head */
+const ORDERED_WINDOW_MS = 30_000
+
+/**
+ * 让天地图 SDK 动态插入的组件脚本按插入顺序执行。
+ *
+ * <p>天地图主脚本在本地无缓存（首次访问 / 版本更新）时，会用 `createElement('script')`
+ * 依次插入 components.js、service.js、military.js。动态脚本默认 async，执行顺序取决于
+ * 谁先下载完；military.js 先执行时 `T.Tool` 尚未定义，会抛出
+ * “Cannot read properties of undefined (reading 'extend')”。这里在加载期间把这几个
+ * 脚本的 async 置为 false，浏览器即按插入顺序执行，不改 SDK 本身的加载与缓存逻辑。</p>
+ *
+ * @returns 恢复函数（可重复调用）
+ */
+function keepTiandituComponentOrder(): () => void {
+  const head = document.head as HTMLHeadElement & { appendChild: Node['appendChild'] }
+  if (!head) return () => {}
+  const hadOwn = Object.prototype.hasOwnProperty.call(head, 'appendChild')
+  const original = head.appendChild
+  let restored = false
+  const restore = () => {
+    if (restored) return
+    restored = true
+    window.clearTimeout(timer)
+    if (hadOwn) head.appendChild = original
+    else delete (head as { appendChild?: unknown }).appendChild
+  }
+  head.appendChild = function appendInOrder<T extends Node>(this: Node, node: T): T {
+    if (node instanceof HTMLScriptElement && node.src && TIANDITU_COMPONENT_SCRIPT.test(node.src)) {
+      node.async = false
+    }
+    return original.call(this, node) as T
+  } as Node['appendChild']
+  const timer = window.setTimeout(restore, ORDERED_WINDOW_MS)
+  return restore
+}
+
 /**
  * 读取天地图浏览器端密钥。
  *
@@ -122,12 +162,16 @@ export function loadTianditu(token: string): Promise<TiandituNamespace> {
       existing = null
     }
     const script = existing ?? document.createElement('script')
+    const restoreOrder = keepTiandituComponentOrder()
     const timeout = window.setTimeout(() => {
+      restoreOrder()
       tiandituLoader = null
       reject(new Error('天地图服务加载超时'))
     }, LOAD_TIMEOUT_MS)
     const finish = () => {
       window.clearTimeout(timeout)
+      // 组件脚本在主脚本执行期间已同步插入，主脚本 load 后即可恢复 head.appendChild
+      restoreOrder()
       if (runtime.T?.Map) {
         resolve(runtime.T)
         return
@@ -140,6 +184,7 @@ export function loadTianditu(token: string): Promise<TiandituNamespace> {
       'error',
       () => {
         window.clearTimeout(timeout)
+        restoreOrder()
         tiandituLoader = null
         reject(new Error('天地图 SDK 加载失败，请检查网络和访问密钥'))
       },

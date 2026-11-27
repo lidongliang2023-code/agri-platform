@@ -13,8 +13,7 @@
     </template>
     <template v-else>
       <a-result status="error" title="登录未完成" :sub-title="error" />
-      <!-- 带 ?local=1 回到登录页：绕过自动跳转，避免"跳过去又失败"来回打转 -->
-      <a-button type="primary" @click="goLogin">返回登录页</a-button>
+      <a-button type="primary" @click="retrySso">重新前往统一认证</a-button>
     </template>
   </div>
 </template>
@@ -22,15 +21,18 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { exchangeCode, takeReturnTo, LOGIN_PATH } from '@/utils/sso'
+import { exchangeCode, redirectToSso, takeReturnTo } from '@/utils/sso'
+import { usePointStore } from '@/stores/points'
 import { useSessionStore } from '@/stores/session'
 
 const router = useRouter()
 const session = useSessionStore()
 const error = ref('')
 
-function goLogin(): void {
-  window.location.href = `${LOGIN_PATH}?local=1`
+function retrySso(): void {
+  void redirectToSso('/dashboard').catch((cause) => {
+    error.value = cause instanceof Error ? cause.message : '无法前往统一认证中心'
+  })
 }
 
 onMounted(async () => {
@@ -43,6 +45,7 @@ onMounted(async () => {
   try {
     const result = await exchangeCode(code, params.get('state'))
     session.apply(result)
+    void usePointStore().load()
     const returnTo = takeReturnTo()
     await router.replace(returnTo ?? '/dashboard')
   } catch (cause) {

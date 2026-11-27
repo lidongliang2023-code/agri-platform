@@ -153,8 +153,8 @@ const pendingRows = computed(() =>
 )
 
 const links = [
-  { path: '/user/audit', label: '认证审核', desc: '企业与个人实名认证统一审核' },
-  { path: '/user/list', label: '用户列表', desc: '平台账号查询与管理' },
+  { path: '/user/audit', label: '认证审核台账', desc: '企业与个人实名认证只读台账（审核在用户中心办理）' },
+  { path: '/user/list', label: '全平台用户', desc: '统一认证账号与主体绑定只读查询' },
   { path: '/org/list', label: '主体内组织', desc: '经营主体的成员与结构' },
   { path: '/permission/role', label: '角色管理', desc: '平台角色与权限分配' },
 ]

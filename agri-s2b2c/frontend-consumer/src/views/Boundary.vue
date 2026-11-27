@@ -107,7 +107,7 @@ import { capabilityRows, crossModuleRows } from '../config/cross-module'
 // 这些是「看起来能做、但按域不该做」的能力，写清楚比偷偷补一个假接口更安全
 const notDo = [
   { title: '不维护商品主数据', desc: '商品档案、品类编码由主数据管理与供应商端负责，消费者端只读。' },
-  { title: '不做商品审核与上下架', desc: '审核在平台运营端，上架在供应商端；消费者端只消费 APPROVED 商品。' },
+  { title: '不做商品审核与上下架', desc: '审核在平台运营端，上架在供应商端；消费者端只消费审核通过的上架商品。' },
   { title: '不做发货与退款打款', desc: '发货由供应商端/运营端履约，退款由运营端审核后走财务，消费者端只发起申请。' },
   { title: '不生成溯源数据', desc: '批次、检测报告由生产环节写入；消费者端只查询与展示，不回写。' },
   { title: '不做 AI 推荐模型', desc: '首页「智能选品」用的是销量/库存/产地规则打分，AI 能力属于 AI 中台，未接入前不冒充。' },
@@ -123,7 +123,7 @@ const notDo = [
 .blk-title {
   margin: 0 0 14px;
   font-size: 15.5px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .boundary section + section {
@@ -175,13 +175,13 @@ const notDo = [
 }
 
 .flow-box.core {
-  border-color: #12764a;
+  border-color: #2d8f4e;
   background: linear-gradient(140deg, #f1fbf5, #ffffff);
   box-shadow: 0 8px 20px rgba(18, 118, 74, .08);
 }
 
 .flow-box.core b {
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 14.5px;
 }
 
@@ -198,11 +198,11 @@ const notDo = [
   padding: 1px 5px;
   border-radius: 4px;
   background: #f1f5f2;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .go {
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 13px;
   font-weight: 600;
 }

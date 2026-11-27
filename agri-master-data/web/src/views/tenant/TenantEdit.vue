@@ -19,9 +19,10 @@
             <span class="type-badge" :class="isPersonal ? 'personal' : 'enterprise'">{{ subjectTypeText(tenantType) }}</span>
           </div>
           <div class="form-grid">
-            <label class="form-field">
-              <span>{{ isPersonal ? '真实姓名 *' : '企业名称 *' }}</span>
-              <input v-model.trim="form.tenantName" type="text" />
+            <label class="form-field" :class="{ 'has-error': fieldErrors.tenantName }">
+              <span>{{ isPersonal ? '真实姓名' : '企业名称' }} <b class="required-mark">*</b></span>
+              <input data-field="tenantName" v-model.trim="form.tenantName" type="text" />
+              <small v-if="fieldErrors.tenantName" class="field-error">{{ fieldErrors.tenantName }}</small>
             </label>
             <label class="form-field">
               <span>主体编码</span>
@@ -47,9 +48,10 @@
             </template>
 
             <template v-else>
-              <label class="form-field">
+              <label class="form-field" :class="{ 'has-error': fieldErrors.creditCode }">
                 <span>统一社会信用代码</span>
-                <input v-model.trim="form.creditCode" type="text" maxlength="18" />
+                <input data-field="creditCode" v-model.trim="form.creditCode" type="text" maxlength="18" />
+                <small v-if="fieldErrors.creditCode" class="field-error">{{ fieldErrors.creditCode }}</small>
               </label>
               <label class="form-field">
                 <span>所属行业</span>
@@ -89,9 +91,10 @@
               <span>联系人</span>
               <input v-model.trim="form.contactName" type="text" />
             </label>
-            <label class="form-field">
+            <label class="form-field" :class="{ 'has-error': fieldErrors.contactPhone }">
               <span>联系电话</span>
-              <input v-model.trim="form.contactPhone" type="tel" maxlength="11" />
+              <input data-field="contactPhone" v-model.trim="form.contactPhone" type="tel" maxlength="11" />
+              <small v-if="fieldErrors.contactPhone" class="field-error">{{ fieldErrors.contactPhone }}</small>
             </label>
             <label class="form-field">
               <span>主体状态</span>
@@ -113,7 +116,7 @@
             <div><dt>认证渠道</dt><dd>{{ form.verificationChannel || '—' }}</dd></div>
             <div v-if="isPersonal"><dt>公安二要素</dt><dd>{{ yesNo(form.policeVerified) }}</dd></div>
             <div v-if="isPersonal"><dt>活体核验</dt><dd>{{ yesNo(form.livenessVerified) }}</dd></div>
-            <div v-if="!isPersonal"><dt>法人扫脸</dt><dd>{{ form.legalPersonFaceStatus || '—' }}</dd></div>
+            <div v-if="!isPersonal"><dt>法人扫脸</dt><dd>{{ faceStatusText(form.legalPersonFaceStatus) }}</dd></div>
           </dl>
           <p class="form-note">认证材料、法人身份和证件号码不允许在本页直接改写；需要变更时走重新认证审核流程。</p>
         </section>
@@ -131,7 +134,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getTenantDetail, updateTenant } from '../../utils/api'
@@ -146,6 +149,7 @@ const loading = ref(true)
 const saving = ref(false)
 const loadError = ref('')
 const saveError = ref('')
+const fieldErrors = reactive({ tenantName: '', contactPhone: '', creditCode: '' })
 const tenantType = ref('')
 const isPersonal = computed(() => tenantType.value === 'INDIVIDUAL')
 const validityText = computed(() => form.validStart || form.validEnd
@@ -217,17 +221,22 @@ const loadDetail = async () => {
 }
 
 const validate = () => {
-  if (!form.tenantName) return isPersonal.value ? '真实姓名不能为空' : '企业名称不能为空'
-  if (form.contactPhone && !/^1[3-9]\d{9}$/.test(form.contactPhone)) return '联系电话应为 11 位手机号'
-  if (!isPersonal.value && form.creditCode && !/^[0-9A-Za-z]{15,18}$/.test(form.creditCode)) {
-    return '统一社会信用代码应为 15-18 位字母数字'
-  }
-  return ''
+  Object.keys(fieldErrors).forEach((key) => { fieldErrors[key] = '' })
+  if (!form.tenantName) fieldErrors.tenantName = isPersonal.value ? '真实姓名不能为空' : '企业名称不能为空'
+  else if (form.contactPhone && !/^1[3-9]\d{9}$/.test(form.contactPhone)) fieldErrors.contactPhone = '联系电话应为 11 位手机号'
+  else if (!isPersonal.value && form.creditCode && !/^[0-9A-Za-z]{15,18}$/.test(form.creditCode)) fieldErrors.creditCode = '统一社会信用代码应为 15-18 位字母数字'
+  return Object.values(fieldErrors).find(Boolean) || ''
+}
+
+const focusFirstError = async () => {
+  await nextTick()
+  const key = Object.keys(fieldErrors).find((name) => fieldErrors[name])
+  document.querySelector(`[data-field="${key}"]`)?.focus()
 }
 
 const save = async () => {
   saveError.value = validate()
-  if (saveError.value) return
+  if (saveError.value) { await focusFirstError(); return }
   saving.value = true
   try {
     const response = await updateTenant(form.id, {
@@ -256,6 +265,7 @@ const goBack = () => router.push(`/subject/detail/${route.params.id}`)
 const subjectTypeText = (type) => type === 'INDIVIDUAL' ? '个人主体' : '企业主体'
 const verifyText = (status) => ({ approved: '已认证', pending: '审核中', rejected: '已驳回', draft: '草稿', unverified: '未认证' }[status] || '未认证')
 const yesNo = (value) => value === true ? '已通过' : value === false ? '未通过' : '—'
+const faceStatusText = (status) => ({ verified: '已通过', uploaded: '材料已上传', pending: '待核验', rejected: '未通过' }[String(status || '').toLowerCase()] || status || '—')
 
 onMounted(loadDetail)
 </script>
@@ -266,7 +276,7 @@ onMounted(loadDetail)
 .page-header h1 { margin:0 0 5px; font-size:24px; }
 .page-header p { margin:0; color:#6b7280; }
 .back-btn { height:36px; padding:0 14px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#4b5563; cursor:pointer; }
-.state-card,.form-card { border-radius:11px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+.state-card,.form-card { border:1px solid #e8e8e8; border-radius:8px; background:#fff; box-shadow:none; }
 .state-card { padding:40px; text-align:center; color:#6b7280; }
 .state-card.error { color:#b91c1c; background:#fef2f2; }
 .edit-layout { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,.55fr); gap:14px; align-items:start; }
@@ -278,10 +288,15 @@ onMounted(loadDetail)
 .type-badge.enterprise { background:#ecfdf5; color:#047857; }
 .type-badge.personal { background:#eff6ff; color:#1d4ed8; }
 .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
-.form-field { display:flex; flex-direction:column; gap:6px; color:#64748b; font-size:12.5px; }
-.form-field input,.form-field select { height:38px; padding:0 10px; border:1px solid #d1d5db; border-radius:8px; background:#fff; outline:none; }
-.form-field input:focus,.form-field select:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.1); }
+.form-field { display:grid; grid-template-columns:minmax(96px,112px) minmax(0,1fr); align-items:center; column-gap:12px; row-gap:6px; color:#1f2937; font-size:14px; }
+.form-field > span { grid-column:1; text-align:right; line-height:20px; }
+.form-field > small { grid-column:2; }
+.form-field input,.form-field select { grid-column:2; min-height:40px; height:40px; padding:0 10px; border:1px solid #d1d5db; border-radius:4px; background:#fff; outline:none; }
+.form-field input:focus,.form-field select:focus { border-color:#2d8f4e; box-shadow:0 0 0 2px rgba(45,143,78,.12); }
 .form-field input:disabled { background:#f8fafc; color:#94a3b8; }
+.form-field.has-error input,.form-field.has-error select { border-color:#c62828; box-shadow:0 0 0 2px rgba(198,40,40,.1); }
+.required-mark { color:#c62828; font-weight:400; }
+.field-error { grid-column:2; color:#c62828; font-size:12px; line-height:18px; }
 .wide-field { grid-column:span 2; }
 .read-only-card dl { margin:0; }
 .read-only-card dl > div { display:flex; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid #edf0f2; }
@@ -290,7 +305,8 @@ onMounted(loadDetail)
 .form-note { margin:13px 0 0; padding:10px; border-radius:8px; background:#f8fafc; color:#64748b; font-size:12px; line-height:1.65; }
 .save-error { margin:12px 0 0; padding:10px; border-radius:8px; background:#fef2f2; color:#b91c1c; font-size:12.5px; }
 .save-btn,.cancel-btn { width:100%; height:38px; margin-top:10px; border-radius:8px; cursor:pointer; }
-.save-btn { border:0; background:#10b981; color:#fff; }
+.save-btn { border:0; background:#2d8f4e; color:#fff; }
+.save-btn:hover:not(:disabled) { background:#247a3f; }
 .cancel-btn { border:1px solid #d1d5db; background:#fff; color:#4b5563; }
 .save-btn:disabled,.cancel-btn:disabled { opacity:.55; cursor:wait; }
 @media(max-width:900px){.edit-layout{grid-template-columns:1fr}}

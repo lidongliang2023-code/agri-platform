@@ -42,7 +42,7 @@
             :value="String(item.id)"
           />
         </el-select>
-        <span v-if="optionsError" class="muted small">商品列表加载失败，可改用溯源码查询。</span>
+        <span v-if="optionsError" role="status" class="muted small">{{ optionsError }}</span>
         <span v-else-if="!optionsLoading && !productOptions.length" class="muted small">
           暂无可选商品（当前没有在架商品）。
         </span>
@@ -105,7 +105,7 @@ const router = useRouter()
 
 const loading = ref(false)
 const optionsLoading = ref(false)
-const optionsError = ref(false)
+const optionsError = ref('')
 
 const code = ref('')
 const productId = ref('')
@@ -150,13 +150,15 @@ function applyResult(payload, err) {
 
 async function loadOptions() {
   optionsLoading.value = true
-  optionsError.value = false
+  optionsError.value = ''
   try {
     const page = await consumerApi.getProducts({ page: 1, size: 50 })
     productOptions.value = page?.records || []
-  } catch {
+  } catch (err) {
     productOptions.value = []
-    optionsError.value = true
+    optionsError.value = err?.response?.status === 401
+      ? '登录后可按商品查询。也可以直接输入溯源码查询。'
+      : '商品列表加载失败，可改用溯源码查询。'
   } finally {
     optionsLoading.value = false
   }
@@ -304,7 +306,7 @@ onMounted(async () => {
 .result-hd h2 {
   margin: 0;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 @media (max-width: 960px) {

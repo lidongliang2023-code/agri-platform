@@ -196,7 +196,10 @@ export async function bootstrapUnifiedSso({ clientId, permission, landingPath = 
      * 返回值刻意用对象而不是 null：null 表示"正在跳登录，别挂载"，
      * { anonymous: true } 表示"没有会话但要挂载"，调用方据此分流。
      */
-    if (isPublicPath(window.location.pathname, publicPaths)) return { anonymous: true }
+    if (isPublicPath(window.location.pathname, publicPaths)) {
+      clearSession()
+      return { anonymous: true }
+    }
     const returnTo = window.location.pathname === '/login' ? landingPath : window.location.pathname + window.location.search
     await redirectToUnifiedLogin(clientId, returnTo)
     return null
@@ -239,11 +242,16 @@ export function attachUnifiedAuth(instance, clientId, publicPaths = []) {
   instance.interceptors.response.use(
     (response) => response,
     async (error) => {
-      if (error.response?.status === 401 && !isPublicPath(window.location.pathname, publicPaths)) {
-        // 公开路径上这个跳转尤其致命：溯源页顺带拉一次商品下拉就会 401，
-        // 于是"扫码即验"的人被整页送去登录，链路一次都看不到。
-        clearSession()
-        await redirectToUnifiedLogin(clientId, window.location.pathname + window.location.search)
+      if (error.response?.status === 401) {
+        const token = getUnifiedToken()
+        const sent = error.config?.headers?.Authorization || ''
+        // 旧请求的响应不能注销后来登录的账号。
+        if (sent === (token ? `Bearer ${token}` : '')) {
+          if (token) clearSession()
+          if (!isPublicPath(window.location.pathname, publicPaths)) {
+            await redirectToUnifiedLogin(clientId, window.location.pathname + window.location.search)
+          }
+        }
       }
       return Promise.reject(error)
     },

@@ -17,7 +17,7 @@
  */
 import axios, { type AxiosInstance, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { useSessionStore } from '@/stores/session'
-import { LOGIN_PATH } from '@/utils/sso'
+import { redirectToSso, SSO_CALLBACK_PATH } from '@/utils/sso'
 
 /** 统一响应体（主数据业务侧形态：code/message/data） */
 export interface ApiBody<T = unknown> {
@@ -94,7 +94,7 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
-/** 清理本地登录态并跳登录页（同一时刻只跳一次，避免并发 401 把页面弹来弹去） */
+/** 清理本地登录态并直跳统一认证中心（同一时刻只跳一次，避免并发 401 互相覆盖 PKCE 状态） */
 let redirecting = false
 function gotoLogin(): void {
   useSessionStore().clear()
@@ -102,10 +102,9 @@ function gotoLogin(): void {
     return
   }
   redirecting = true
-  if (!window.location.pathname.startsWith(LOGIN_PATH)) {
-    // 带上当前页面：从“认证审核”被 401 弹去登录后，登录成功要回到审核页，而不是统一回首页。
-    const current = `${window.location.pathname}${window.location.search}`
-    window.location.href = `${LOGIN_PATH}?redirect=${encodeURIComponent(current)}`
+  if (window.location.pathname.replace(/\/+$/, '') !== SSO_CALLBACK_PATH) {
+    const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+    void redirectToSso(current)
   }
 }
 
@@ -198,25 +197,11 @@ export const deleteTenantPackage = (id: number | string) => del(`${BASE}/subject
 export const getTenantStatistics = (params?: QueryParams) => get(`${BASE}/subject/statistics`, params)
 export const getTenantStatisticsSummary = () => get(`${BASE}/subject/statistics/summary`)
 
-/* ---------------------------------- 用户管理 ---------------------------------- */
+/* ---------------------------------- 用户管理（只读） ---------------------------------- */
 
 export const getUserList = (params?: QueryParams) => get(`${BASE}/user/list`, params)
 export const getUserDetail = (id: number | string) => get(`${BASE}/user/detail/${id}`)
-export const createUser = (data: unknown) => post(`${BASE}/user`, data)
-export const updateUser = (id: number | string, data: unknown) => put(`${BASE}/user/${id}`, data)
-export const deleteUser = (id: number | string) => del(`${BASE}/user/${id}`)
-/**
- * 改用户状态。
- *
- * <p>后端参数名是 `userStatus`（String），不是 `status`，而且走 query。
- * 传错名字会得到 400「缺少必需的请求参数」——这类报错在页面上只表现为"操作失败"，
- * 不看后端签名很难定位。</p>
- */
-export const changeStatus = (id: number | string, userStatus: number | string) =>
-  put(`${BASE}/user/${id}/status`, null, { userStatus })
 export const getUserAuditList = (params?: QueryParams) => get(`${BASE}/user/cert-audit`, params)
-export const reviewUserCert = (id: number | string, data: unknown) =>
-  put(`${BASE}/user/cert-audit/${id}`, data)
 
 /* ---------------------------------- 组织管理 ---------------------------------- */
 
