@@ -49,7 +49,7 @@
   place-items: center;
   border: 1px solid #cde7d8;
   border-radius: 22px;
-  background: linear-gradient(135deg, #12764a, #1c9a60);
+  background: linear-gradient(135deg, #2d8f4e, #1c9a60);
   color: #fff;
   font-size: 35px;
   box-shadow: 0 12px 28px rgba(18, 118, 74, .2);
@@ -67,7 +67,7 @@
   margin-bottom: 7px;
   color: #138151;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: .05em;
 }
 
@@ -110,10 +110,10 @@
   gap: 8px;
   padding: 11px 16px;
   border-radius: 10px;
-  background: #12764a;
+  background: #2d8f4e;
   color: #fff;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   box-shadow: 0 8px 18px rgba(18, 118, 74, .18);
 }
 
@@ -144,7 +144,7 @@
   color: #35634c;
   font: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -152,7 +152,7 @@
 .shop-service-action:hover {
   border-color: #96c9ac;
   background: #f2faf5;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .shop-follow-action.followed {
@@ -169,7 +169,7 @@
 .shop-service-action {
   border-color: #94cdb0;
   background: #eef9f3;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .shop-interaction-notice {
@@ -255,7 +255,7 @@
 .shop-alert a {
   color: #6d5310;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .shop-layout {
@@ -285,7 +285,7 @@
 .shop-section-head > div > span {
   color: #1a8657;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .12em;
 }
 
@@ -373,7 +373,7 @@
 .shop-category-row button.on {
   border-color: #b8dfc8;
   background: #eaf7ef;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .shop-loading {
@@ -452,7 +452,7 @@
   color: #138151;
   font-size: var(--agri-font-size-micro);
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
   box-shadow: 0 3px 9px rgba(18, 70, 44, .08);
 }
 
@@ -471,7 +471,7 @@
 .shop-product-cat {
   color: #168255;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .shop-product-body > strong {
@@ -527,7 +527,7 @@
 .shop-product-foot > span {
   color: #1a7950;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .shop-aside {
@@ -589,7 +589,7 @@
   border-top: 1px solid #edf2ee;
   color: #16784f;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .shop-trust ul,
@@ -635,7 +635,7 @@
 .shop-guide li span {
   color: #188454;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .shop-chat-mask {
@@ -719,7 +719,7 @@
 .shop-chat-conversations > button { display: flex; width: 100%; align-items: center; gap: 10px; padding: 11px 10px; border: 0; border-radius: 10px; background: transparent; color: #365442; font-family: inherit; text-align: left; cursor: pointer; }
 .shop-chat-conversations > button:hover { background: #eef7f2; }
 .shop-chat-conversations > button.active { background: #e3f4ea; box-shadow: inset 3px 0 0 #159a5e; }
-.shop-chat-avatar { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 11px; background: linear-gradient(135deg, #12764a, #31a66e); color: #fff; font-size: 13px; font-weight: 800; }
+.shop-chat-avatar { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 11px; background: linear-gradient(135deg, #2d8f4e, #31a66e); color: #fff; font-size: 13px; font-weight: 600; }
 .shop-chat-conversation-main { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 5px; }
 .shop-chat-conversation-main > span { overflow: hidden; color: #819088; font-size: var(--agri-font-size-micro); text-overflow: ellipsis; white-space: nowrap; }
 .shop-chat-conversation-main > span:first-child { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: inherit; }
@@ -745,24 +745,24 @@
 .shop-chat-bubble { padding: 10px 12px; border: 1px solid #dde9e1; border-radius: 4px 12px 12px 12px; background: #fff; color: #354d40; box-shadow: 0 5px 14px rgba(20, 66, 42, .04); }
 .shop-chat-message.mine .shop-chat-bubble { border-color: #a6dbbd; border-radius: 12px 4px 12px 12px; background: #dff5e9; color: #174c33; }
 .shop-chat-bubble.quote { border-color: #e7cd93; background: #fff8e8; }
-.shop-chat-bubble.quote small { display: block; margin-bottom: 4px; color: #a66f10; font-size: var(--agri-font-size-micro); font-weight: 700; }
+.shop-chat-bubble.quote small { display: block; margin-bottom: 4px; color: #a66f10; font-size: var(--agri-font-size-micro); font-weight: 600; }
 .shop-chat-bubble p { margin: 0; font-size: var(--agri-font-size-micro); line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 .shop-chat-message > span { color: #97a39c; font-size: var(--agri-font-size-micro); }
 .shop-chat-error { padding: 7px 16px; border-top: 1px solid #f4d3d3; background: #fff5f5; color: #c74343; font-size: var(--agri-font-size-micro); }
 .shop-chat-compose { display: flex; align-items: end; gap: 9px; padding: 13px 16px; border-top: 1px solid #e5eee8; background: #fff; }
 .shop-chat-compose .ant-input { min-width: 0; flex: 1; }
-.shop-chat-quote { align-self: stretch; padding: 0 11px; border: 1px solid #e3cf9f; border-radius: 8px; background: #fff9eb; color: #9e6b11; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 700; cursor: pointer; }
-.shop-chat-order-request { align-self: stretch; flex: none; padding: 0 11px; border: 1px solid #9ecfb3; border-radius: 8px; background: #edf9f2; color: #0f6a43; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 700; cursor: pointer; }
+.shop-chat-quote { align-self: stretch; padding: 0 11px; border: 1px solid #e3cf9f; border-radius: 8px; background: #fff9eb; color: #9e6b11; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 600; cursor: pointer; }
+.shop-chat-order-request { align-self: stretch; flex: none; padding: 0 11px; border: 1px solid #9ecfb3; border-radius: 8px; background: #edf9f2; color: #0f6a43; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 600; cursor: pointer; }
 .shop-chat-compose textarea { resize: none !important; border-color: #d6e5db !important; border-radius: 9px !important; box-shadow: none !important; font-size: var(--agri-font-size-micro) !important; }
 .shop-chat-compose textarea:focus { border-color: #159a5e !important; box-shadow: 0 0 0 3px rgba(21, 154, 94, .08) !important; }
-.shop-chat-send { display: inline-flex; height: 40px; align-items: center; gap: 5px; padding: 0 16px; border: 0; border-radius: 9px; background: #12764a; color: #fff; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 700; cursor: pointer; }
+.shop-chat-send { display: inline-flex; height: 40px; align-items: center; gap: 5px; padding: 0 16px; border: 0; border-radius: 9px; background: #2d8f4e; color: #fff; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 600; cursor: pointer; }
 .shop-chat-send:disabled { cursor: not-allowed; opacity: .5; }
 .shop-chat-loading { display: flex; flex: 1; align-items: center; justify-content: center; gap: 9px; color: #74877b; font-size: var(--agri-font-size-micro); }
 .shop-chat-order-card { display: grid; min-width: 230px; gap: 7px; padding: 13px 14px; border: 1px solid #e5c983; border-radius: 11px; background: linear-gradient(145deg, #fffdf6, #fff8e8); box-shadow: 0 7px 18px rgba(129, 91, 15, .08); }
-.shop-chat-order-card small { color: #a26b0d; font-size: var(--agri-font-size-micro); font-weight: 800; letter-spacing: .08em; }
+.shop-chat-order-card small { color: #a26b0d; font-size: var(--agri-font-size-micro); font-weight: 600; letter-spacing: .08em; }
 .shop-chat-order-card strong { color: #3d4f43; font-size: 12px; }
 .shop-chat-order-card span { color: #7b755e; font-size: var(--agri-font-size-micro); }
-.shop-chat-order-card button { justify-self: start; margin-top: 3px; padding: 6px 12px; border: 0; border-radius: 7px; background: #12764a; color: #fff; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 700; cursor: pointer; }
+.shop-chat-order-card button { justify-self: start; margin-top: 3px; padding: 6px 12px; border: 0; border-radius: 7px; background: #2d8f4e; color: #fff; font: inherit; font-size: var(--agri-font-size-micro); font-weight: 600; cursor: pointer; }
 .shop-chat-order-form { display: grid; gap: 13px; padding-top: 4px; }
 .shop-chat-order-form > div,.shop-chat-order-form label { display: grid; gap: 5px; }
 .shop-chat-order-form span { color: #65766b; font-size: var(--agri-font-size-micro); }

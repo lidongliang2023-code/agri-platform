@@ -266,14 +266,14 @@ onMounted(load)
 
 .rail-item:hover {
   background: #f8fbf9;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .rail-item.on {
-  border-left-color: #12764a;
+  border-left-color: #2d8f4e;
   background: #f1fbf5;
-  color: #12764a;
-  font-weight: 700;
+  color: #2d8f4e;
+  font-weight: 600;
 }
 
 .rail-item .ico {
@@ -333,6 +333,6 @@ onMounted(load)
   .cat-layout { grid-template-columns: minmax(0, 1fr); }
   .cat-rail { grid-auto-flow: column; overflow-x: auto; padding: 0; }
   .rail-item { width: auto; border-left: 0; border-bottom: 3px solid transparent; }
-  .rail-item.on { border-bottom-color: #12764a; }
+  .rail-item.on { border-bottom-color: #2d8f4e; }
 }
 </style>

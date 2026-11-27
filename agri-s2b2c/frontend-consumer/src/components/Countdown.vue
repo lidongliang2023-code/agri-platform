@@ -92,7 +92,7 @@ const parts = computed(() => {
   background: #2b1a14;
   color: #fff;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .m-countdown em.unit {
@@ -106,7 +106,7 @@ const parts = computed(() => {
 .m-countdown i {
   color: #d45b32;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .end-text {

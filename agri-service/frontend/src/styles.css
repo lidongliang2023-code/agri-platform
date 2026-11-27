@@ -3,7 +3,7 @@
   --green-900: #062f1e;
   --green-800: #0a3a25;
   --green-700: #0e5233;
-  --green-600: #12764a;
+  --green-600: #2d8f4e;
   --green-500: #159a5e;
   --green-400: #3bb779;
   --green-100: #e4f6ec;
@@ -195,7 +195,7 @@ p {
   background: linear-gradient(135deg, rgba(24, 161, 98, .98), rgba(16, 124, 76, .96));
   box-shadow: 0 8px 20px rgba(7, 53, 33, .25);
   color: #fff;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .sidebar-icon {
@@ -522,7 +522,7 @@ p {
 .section-kicker {
   color: var(--green-600);
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .13em;
   text-transform: uppercase;
 }
@@ -588,7 +588,7 @@ p {
   color: var(--green-700);
   font-family: "DIN Alternate", "Roboto Mono", ui-monospace, monospace;
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -604,7 +604,7 @@ p {
   margin: 0 !important;
   border: 0 !important;
   font-size: var(--agri-font-size-micro) !important;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 21px !important;
 }
 
@@ -645,7 +645,7 @@ p {
   background: #f8f3fc;
   color: var(--purple-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -790,7 +790,7 @@ p {
   gap: 7px;
   color: rgba(255, 255, 255, .68);
   font-size: var(--agri-font-size-micro);
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: .08em;
 }
 
@@ -849,7 +849,7 @@ p {
   background: linear-gradient(135deg, #1aa563, #117348);
   color: #fff;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -1136,7 +1136,7 @@ p {
   background: #fff;
   box-shadow: 0 2px 6px rgba(20, 58, 38, .08);
   color: var(--green-700);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .season-grid {
@@ -1594,7 +1594,7 @@ p {
 .order-tabs button.on {
   background: var(--green-100);
   color: var(--green-700);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .sort-select {
@@ -1617,7 +1617,7 @@ p {
 
 .result-heading span {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .result-heading small,
@@ -1893,7 +1893,7 @@ p {
 
 .slot-grid span {
   font-size: var(--agri-font-size-micro);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .slot-grid small {
@@ -1934,7 +1934,7 @@ p {
   background: var(--green-100);
   color: var(--green-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .review-row > div {
@@ -1964,7 +1964,7 @@ p {
 .booking-kicker {
   color: var(--green-600);
   font-size: var(--agri-font-size-micro);
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: .12em;
 }
 
@@ -2059,7 +2059,7 @@ p {
 .note-label {
   color: var(--ink-600);
   font-size: var(--agri-font-size-micro);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .review-order-summary,
@@ -2070,7 +2070,7 @@ p {
   border-radius: 8px;
   background: var(--green-050);
   font-size: var(--agri-font-size-micro);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .review-order-summary small {
@@ -2188,7 +2188,7 @@ p {
   background: linear-gradient(135deg, var(--green-600), var(--green-400));
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .order-provider div { display: grid; }
@@ -2268,7 +2268,7 @@ p {
 .order-kicker {
   color: var(--green-600);
   font-size: var(--agri-font-size-micro);
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: .12em;
 }
 
@@ -2382,7 +2382,7 @@ p {
   color: var(--green-700);
   font-family: ui-monospace, monospace;
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .quality-score small { font-family: inherit; font-size: var(--agri-font-size-micro); font-weight: 400; }
@@ -2448,7 +2448,7 @@ p {
   background: linear-gradient(135deg, var(--green-600), var(--green-400));
   color: #fff;
   font-size: 22px;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .provider-summary h3 { margin-top: 9px; font-size: 13px; }
@@ -2896,7 +2896,7 @@ p {
   background: var(--green-050);
 }
 
-.policy-score span { color: var(--green-700); font-family: ui-monospace, monospace; font-size: 18px; font-weight: 800; }
+.policy-score span { color: var(--green-700); font-family: ui-monospace, monospace; font-size: 18px; font-weight: 600; }
 .policy-score small { color: var(--ink-400); font-size: var(--agri-font-size-micro); }
 
 .policy-tag-line { display: flex; align-items: center; gap: 5px; }
@@ -3189,7 +3189,7 @@ p {
   place-items: center;
   border-radius: 50%;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .expert-main { min-width: 0; }
@@ -3369,14 +3369,14 @@ p {
 
 .legal-chat { min-height: 440px; }
 .legal-message { display: flex; gap: 9px; padding: 14px; border-radius: 9px; background: var(--purple-100); }
-.legal-message > span { display: grid; width: 31px; height: 31px; flex: 0 0 31px; place-items: center; border-radius: 9px; background: var(--purple-700); color: #fff; font-size: var(--agri-font-size-micro); font-weight: 700; }
+.legal-message > span { display: grid; width: 31px; height: 31px; flex: 0 0 31px; place-items: center; border-radius: 9px; background: var(--purple-700); color: #fff; font-size: var(--agri-font-size-micro); font-weight: 600; }
 .legal-message b { color: var(--purple-700); font-size: var(--agri-font-size-micro); }
 .legal-message p { margin-top: 4px; color: var(--ink-600); font-size: var(--agri-font-size-micro); line-height: 1.7; }
 .legal-input { margin-top: 10px; padding: 10px; border: 1px solid #e2d7eb; border-radius: 9px; background: #fff; }
 .legal-input > div { display: flex; justify-content: flex-end; gap: 6px; margin-top: 7px; }
 .legal-topics { display: flex; gap: 5px; margin-top: 10px; flex-wrap: wrap; }
 .legal-topics button { padding: 4px 7px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink-500); font-size: var(--agri-font-size-micro); cursor: pointer; }
-.lawyer-avatar { display: grid; width: 52px; height: 52px; place-items: center; border-radius: 50%; background: var(--purple-100); color: var(--purple-700); font-size: 20px; font-weight: 700; }
+.lawyer-avatar { display: grid; width: 52px; height: 52px; place-items: center; border-radius: 50%; background: var(--purple-100); color: var(--purple-700); font-size: 20px; font-weight: 600; }
 
 /* Messages / contracts / complaints */
 .message-center { overflow: hidden; }
@@ -3402,7 +3402,7 @@ p {
 .contract-table-wrap { overflow: hidden; }
 .contract-table { overflow-x: auto; }
 .contract-table-head, .contract-table-row { display: grid; min-width: 900px; grid-template-columns: 1.6fr 1fr .7fr .6fr .8fr .8fr; align-items: center; gap: 12px; padding: 12px 15px; }
-.contract-table-head { background: #f7faf8; color: var(--ink-500); font-size: var(--agri-font-size-micro); font-weight: 650; }
+.contract-table-head { background: #f7faf8; color: var(--ink-500); font-size: var(--agri-font-size-micro); font-weight: 600; }
 .contract-table-row { border-top: 1px solid var(--line-soft); font-size: var(--agri-font-size-micro); }
 .contract-table-row > span:first-child { display: grid; gap: 3px; }
 .contract-table-row b { font-size: var(--agri-font-size-micro); }
@@ -3418,7 +3418,7 @@ p {
 .contract-preview dt { color: var(--ink-500); background: #f7faf8; }
 .contract-preview dd { color: var(--ink-700); }
 .contract-clause { padding: 12px; border-radius: 7px; background: #f7faf8; color: var(--ink-500) !important; text-align: left !important; font-size: var(--agri-font-size-micro) !important; }
-.contract-stamp { position: absolute; right: 35px; top: 48px; display: grid; width: 84px; height: 84px; place-items: center; border: 2px solid rgba(201, 75, 75, .45); border-radius: 50%; color: rgba(201, 75, 75, .55); font-size: var(--agri-font-size-micro); font-weight: 700; transform: rotate(-12deg); }
+.contract-stamp { position: absolute; right: 35px; top: 48px; display: grid; width: 84px; height: 84px; place-items: center; border: 2px solid rgba(201, 75, 75, .45); border-radius: 50%; color: rgba(201, 75, 75, .55); font-size: var(--agri-font-size-micro); font-weight: 600; transform: rotate(-12deg); }
 .contract-doc-icon { display: block; margin: 10px auto; color: var(--green-600); font-size: 28px; }
 
 .service-commitment { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -3463,14 +3463,14 @@ p {
 .join-benefit p { margin-top: 4px; color: var(--ink-500); font-size: var(--agri-font-size-micro); line-height: 1.6; }
 .join-contact { display: grid; gap: 3px; padding: 15px; border-radius: 10px; background: var(--green-050); text-align: center; }
 .join-contact b { color: var(--ink-500); font-size: var(--agri-font-size-micro); }
-.join-contact span { color: var(--green-700); font-size: 15px; font-weight: 700; }
+.join-contact span { color: var(--green-700); font-size: 15px; font-weight: 600; }
 .join-contact small { color: var(--ink-400); font-size: var(--agri-font-size-micro); }
 .join-success { display: grid; justify-items: center; gap: 8px; padding: 40px 10px; text-align: center; }
 .join-success > span { color: var(--green-500); font-size: 45px; }
 .join-success h2 { font-size: 20px; }
 .join-success p { max-width: 430px; color: var(--ink-500); font-size: var(--agri-font-size-micro); line-height: 1.7; }
 .join-success > div { display: flex; gap: 15px; padding: 10px 18px; border-radius: 8px; background: var(--green-050); font-size: var(--agri-font-size-micro); }
-.join-success > div span { color: var(--green-700); font-weight: 650; }
+.join-success > div span { color: var(--green-700); font-weight: 600; }
 
 /* Responsive */
 @media (max-width: 1280px) {

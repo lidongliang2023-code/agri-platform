@@ -152,7 +152,7 @@ onMounted(load)
   align-items: center;
   gap: 26px;
   padding: 27px 30px;
-  border-radius: 18px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at 88% 8%, rgba(126, 228, 169, .17), transparent 13rem),
     linear-gradient(135deg, #083c27, #0f7048);
@@ -190,7 +190,7 @@ onMounted(load)
 .credit-hero-copy > small {
   color: #a9dfbe;
   font-size: var(--fin-fs-xs);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 
@@ -254,7 +254,7 @@ onMounted(load)
 .credit-dimensions span {
   color: #506a59;
   font-size: var(--fin-fs-xs);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .credit-dimensions b {

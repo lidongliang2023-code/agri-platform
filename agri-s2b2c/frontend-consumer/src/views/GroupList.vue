@@ -184,11 +184,11 @@ onMounted(load)
 
 .seg:hover {
   background: #f1fbf5;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .seg.on {
-  background: linear-gradient(135deg, #12764a, #159a5e);
+  background: linear-gradient(135deg, #2d8f4e, #159a5e);
   color: #fff;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(18, 118, 74, .18);
@@ -199,7 +199,7 @@ onMounted(load)
   border-radius: 8px;
   background: rgba(11, 26, 18, .06);
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .seg.on .seg-num {
@@ -237,7 +237,7 @@ onMounted(load)
 .g-title b {
   overflow: hidden;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -250,7 +250,7 @@ onMounted(load)
 }
 
 .g-title span:hover {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .g-hd .m-tag {

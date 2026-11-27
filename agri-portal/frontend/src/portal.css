@@ -59,7 +59,7 @@
   background: linear-gradient(135deg, var(--green-500), #0ea5e9);
   color: #fff;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .portal-user-status {
@@ -128,7 +128,7 @@
   padding: 6px 8px 10px;
   border-bottom: 1px solid var(--line);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .portal-account-head small {
@@ -251,7 +251,7 @@
 .portal-hero h1 {
   margin-top: 16px;
   font-size: 36px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.3;
   letter-spacing: .5px;
 }
@@ -333,7 +333,7 @@
   margin-top: 8px;
   font-family: var(--mono);
   font-size: 27px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.1;
 }
 
@@ -378,7 +378,7 @@
   color: var(--green-700);
   font-family: var(--mono);
   font-size: 28px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -578,7 +578,7 @@
 }
 
 .portal-join-card {
-  background: linear-gradient(135deg, #0e5233, #12764a);
+  background: linear-gradient(135deg, #0e5233, #2d8f4e);
   border: none;
   color: #fff;
 }
@@ -597,7 +597,7 @@
   color: #fff;
   background:
     radial-gradient(640px 380px at 88% 0%, rgba(56, 189, 248, .26), transparent 62%),
-    linear-gradient(135deg, #0a3a25, #12764a);
+    linear-gradient(135deg, #0a3a25, #2d8f4e);
   padding: 38px 0 34px;
 }
 
@@ -609,7 +609,7 @@
 .portal-chain-hero h1 {
   margin-top: 14px;
   font-size: 32px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .portal-chain-hero p {
@@ -726,7 +726,7 @@
 .portal-cert-hero h1 {
   margin-top: 12px;
   font-size: 32px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .portal-cert-hero p {
@@ -745,7 +745,7 @@
   display: block;
   font-family: var(--mono);
   font-size: 25px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .portal-cert-hero-stats span {
@@ -790,7 +790,7 @@
   background: var(--bg-alt);
   color: var(--ink-500);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .portal-status-node.done > span {
@@ -849,7 +849,7 @@
   background: linear-gradient(135deg, var(--green-600), var(--green-500));
   color: #fff;
   font-family: var(--mono);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 13px;
 }
 
@@ -945,13 +945,13 @@
   color: #fff;
   background:
     radial-gradient(420px 220px at 92% 0%, rgba(56, 189, 248, .3), transparent 62%),
-    linear-gradient(135deg, #0e5233, #12764a);
+    linear-gradient(135deg, #0e5233, #2d8f4e);
 }
 
 .portal-cert-cta strong {
   display: block;
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .portal-cert-cta span {
@@ -1436,7 +1436,7 @@
 .portal-mobile-links a.active {
   background: var(--green-050);
   color: var(--green-700);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 @media (max-width: 860px) {
@@ -1463,7 +1463,7 @@
 }
 .portal-page-hero-inner { position: relative; z-index: 1; padding-top: 48px; padding-bottom: 44px; }
 .portal-page-hero-badge { display: inline-flex; padding: 5px 12px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--r-pill); background: rgba(255,255,255,.12); font-size: 12px; font-weight: 600; }
-.portal-page-hero h1 { margin: 16px 0 0; color: #fff; font-size: 36px; font-weight: 800; line-height: 1.3; letter-spacing: .5px; }
+.portal-page-hero h1 { margin: 16px 0 0; color: #fff; font-size: 36px; font-weight: 600; line-height: 1.3; letter-spacing: .5px; }
 .portal-page-hero p { max-width: 720px; margin-top: 14px; color: rgba(255,255,255,.8); font-size: 14px; line-height: 1.8; }
 .portal-page-hero-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 .portal-page-btn-light { background: #fff; border-color: #fff; color: var(--green-800); }
@@ -1475,7 +1475,7 @@
 .portal-channel-page > :not(.portal-page-hero) { width: calc(100% - 48px); max-width: calc(var(--maxw) - 48px); margin-left: auto; margin-right: auto; }
 .portal-channel-page > .info-loading { margin-top: 24px; }
 .portal-channel-page .info-section-head { gap: 12px; flex-wrap: wrap; }
-.portal-channel-page .info-section-head h2 { color: var(--ink-900); font-size: 20px; font-weight: 800; }
+.portal-channel-page .info-section-head h2 { color: var(--ink-900); font-size: 20px; font-weight: 600; }
 .portal-channel-page .info-card { background: var(--surface); border-radius: var(--r-md); box-shadow: var(--shadow-xs); }
 .portal-channel-page .info-filter { padding: 20px 24px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
 .portal-channel-page .info-filter input { min-height: 40px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--surface); }

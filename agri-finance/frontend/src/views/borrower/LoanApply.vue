@@ -340,7 +340,7 @@ onMounted(async () => {
   align-items: center;
   color: #b45b12;
   font-size: var(--fin-fs-xs);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .apply-quick-amount {
@@ -404,7 +404,7 @@ onMounted(async () => {
   gap: 9px;
   padding: 14px 16px;
   border: 1px solid var(--fin-line);
-  border-radius: 13px;
+  border-radius: 8px;
   background: #fff;
 }
 
@@ -438,7 +438,7 @@ onMounted(async () => {
 
 .apply-credit-card {
   padding: 18px;
-  border-radius: 15px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at 88% 10%, rgba(131, 228, 170, .18), transparent 10rem),
     linear-gradient(135deg, #083c27, #0f7048);

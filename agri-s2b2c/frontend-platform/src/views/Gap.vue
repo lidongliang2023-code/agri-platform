@@ -172,7 +172,7 @@ const info = computed(() => CATALOG[route.params.key] || {
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .card h3 { margin: 0 0 10px; font-size: 15px; }
-.owner { margin: 0 0 6px; color: #0f6a43; font-weight: 700; }
+.owner { margin: 0 0 6px; color: #0f6a43; font-weight: 600; }
 .muted { margin: 0; color: #84938a; font-size: 12px; line-height: 1.7; }
 .list { margin: 0 0 14px; padding-left: 18px; color: #52665a; font-size: 13px; line-height: 1.9; }
 .note { margin: 12px 0 0; color: #84938a; font-size: 12px; }

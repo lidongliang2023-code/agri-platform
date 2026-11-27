@@ -1,19 +1,19 @@
 :root {
-  --van-primary-color: #12764a;
-  --van-success-color: #159a5e;
-  --van-danger-color: #c94b4b;
-  --van-warning-color: #d88718;
-  --van-text-color: #0b1a12;
-  --van-text-color-2: #6b7c72;
-  --van-background: #f4f7f5;
+  --van-primary-color: #2d8f4e;
+  --van-success-color: #2d8f4e;
+  --van-danger-color: #b71c1c;
+  --van-warning-color: #8f4500;
+  --van-text-color: #1a1a1a;
+  --van-text-color-2: #595959;
+  --van-background: #f5f6fa;
   --van-background-2: #ffffff;
-  --van-border-color: #e3eae5;
-  --van-active-color: #f1fbf5;
-  --van-button-primary-background: #12764a;
-  --van-button-primary-border-color: #12764a;
-  --van-button-danger-background: #12764a;
-  --van-button-danger-border-color: #12764a;
-  --van-tabbar-item-active-color: #12764a;
+  --van-border-color: #e8e8e8;
+  --van-active-color: #f0f9f1;
+  --van-button-primary-background: #2d8f4e;
+  --van-button-primary-border-color: #2d8f4e;
+  --van-button-danger-background: #2d8f4e;
+  --van-button-danger-border-color: #2d8f4e;
+  --van-tabbar-item-active-color: #2d8f4e;
   --van-search-content-background: #fff;
 }
 
@@ -29,7 +29,7 @@ body {
 .van-tabbar { border-top: 1px solid #e3eae5 !important; box-shadow: 0 -8px 24px rgba(17,62,41,.05) !important; }
 .van-button { border-radius: 8px !important; font-weight: 600; }
 .van-nav-bar { border-bottom: 1px solid #e3eae5; background: #fff; }
-.van-nav-bar__title { color: #0b1a12; font-weight: 700; }
+.van-nav-bar__title { color: #0b1a12; font-weight: 600; }
 .van-divider { border-color: #e3eae5 !important; }
 .van-empty__description { color: #7a8b81 !important; }
 .product-img { background: #eef7f1; }
@@ -99,6 +99,6 @@ html body .bottom-bar {
 }
 
 html body .van-button--danger {
-  background: linear-gradient(135deg,#159a5e,#12764a) !important;
-  border-color: #12764a !important;
+  background: linear-gradient(135deg,#159a5e,#2d8f4e) !important;
+  border-color: #2d8f4e !important;
 }

@@ -240,7 +240,7 @@ watch(
 .notice-title {
   margin: 0;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pay-hd {
@@ -277,7 +277,7 @@ watch(
 
 .addr-name {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .addr-detail {
@@ -350,7 +350,7 @@ watch(
 .side-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .methods {

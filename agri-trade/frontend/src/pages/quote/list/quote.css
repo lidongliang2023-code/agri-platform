@@ -39,7 +39,7 @@
 }
 
 .quote-view-toggle button.on {
-  background: #12764a;
+  background: #2d8f4e;
   color: #fff;
   box-shadow: 0 3px 9px rgba(18, 118, 74, .16);
 }
@@ -370,7 +370,7 @@
 .quote-action-hero small {
   color: #188454;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 

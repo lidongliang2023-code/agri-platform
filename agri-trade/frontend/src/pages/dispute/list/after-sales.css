@@ -60,7 +60,7 @@
 .after-hero small {
   color: #188454;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 
@@ -226,7 +226,7 @@
   place-items: center;
   border-radius: 6px;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .after-party-badge.buyer {

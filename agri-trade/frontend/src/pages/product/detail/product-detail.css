@@ -44,9 +44,9 @@
   height: 440px;
   overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 16px;
+  border-radius: 8px;
   background: linear-gradient(135deg, #e4f6ec, #c9e9d8);
-  box-shadow: 0 12px 30px rgba(6, 40, 26, 0.06);
+  box-shadow: none;
 }
 
 .pd-main-image > img,
@@ -66,7 +66,7 @@
   background: rgba(255, 255, 255, 0.92);
   color: var(--h-green-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
   box-shadow: 0 5px 14px rgba(6, 40, 26, 0.1);
 }
 
@@ -139,7 +139,7 @@
   margin-bottom: 7px;
   color: var(--h-green-600);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -148,7 +148,7 @@
   color: var(--h-ink-900);
   font-size: clamp(24px, 2.4vw, 34px);
   line-height: 1.28;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .pd-title-row p {
@@ -178,7 +178,7 @@
 .pd-sku-picker-label span {
   color: #304f3d;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pd-sku-picker-label small {
@@ -241,7 +241,7 @@
   margin-top: 18px;
   padding: 18px;
   border: 1px solid #ccebdd;
-  border-radius: 14px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at 92% 0, rgba(111, 214, 162, 0.18), transparent 34%),
     var(--h-green-050);
@@ -263,7 +263,7 @@
   color: #e5484d;
   font-size: 32px;
   line-height: 1;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .pd-current-price strong small {
@@ -277,7 +277,7 @@
   color: var(--h-green-700);
   font-size: 12.5px;
   font-style: normal;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .pd-reference-grid {
@@ -342,7 +342,7 @@
 .pd-info-line strong {
   min-width: 0;
   color: var(--h-ink-700);
-  font-weight: 650;
+  font-weight: 600;
   text-align: right;
 }
 
@@ -405,7 +405,7 @@
   background: var(--h-green-100);
   color: var(--h-green-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .pd-buybox {
@@ -473,7 +473,7 @@
   border-radius: 9px;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
@@ -539,9 +539,9 @@
   margin-top: 24px;
   overflow: hidden;
   border: 1px solid var(--h-line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: #fff;
-  box-shadow: 0 9px 26px rgba(6, 40, 26, 0.035);
+  box-shadow: none;
 }
 
 .pd-card-head {
@@ -592,7 +592,7 @@
   flex: none;
   color: var(--h-green-500);
   font-size: 18px;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .pd-step strong {
@@ -629,7 +629,7 @@
   background: transparent;
   font: inherit;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -709,7 +709,7 @@
   background: var(--h-green-100);
   color: var(--h-green-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .pd-spec-table {
@@ -813,7 +813,7 @@
 .pd-section-head > a {
   color: var(--h-green-700);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .pd-similar-grid {
@@ -826,14 +826,14 @@
   min-width: 0;
   padding: 10px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   background: #fff;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition: border-color 0.18s ease;
 }
 
 .pd-similar-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 24px rgba(6, 40, 26, 0.08);
+  border-color: #a9d8bf;
+  box-shadow: none;
 }
 
 .pd-similar-visual {
@@ -894,7 +894,7 @@
 .pd-empty-similar {
   padding: 36px;
   border: 1px solid var(--h-line);
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--h-ink-500);
   background: #fff;
   font-size: 12px;

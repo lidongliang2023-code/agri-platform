@@ -169,7 +169,7 @@ const statusType = (status) => ({
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .card-head h2 { margin: 0 0 4px; font-size: 18px; }
 .card-head p { margin: 0; color: #84938a; font-size: 12px; }
-.amount { color: #c54b4b; font-size: 22px; font-weight: 700; }
+.amount { color: #c54b4b; font-size: 22px; font-weight: 600; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .descs { display: grid; grid-template-columns: 90px 1fr; gap: 10px 12px; margin: 0; font-size: 13px; }
 .descs dt { color: #84938a; }

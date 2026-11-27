@@ -10,7 +10,7 @@
 
 /* 子频道沿用公共门户标题；主频道使用 PortalPageHero。 */
 .info-hero { position: relative; overflow: hidden; padding: 48px 40px; border-radius: var(--r-md); background: var(--portal-hero-background); color: #fff; }
-.info-hero h1 { margin: 0 0 14px; font-size: 36px; font-weight: 800; line-height: 1.3; }
+.info-hero h1 { margin: 0 0 14px; font-size: 36px; font-weight: 600; line-height: 1.3; }
 .info-hero p { max-width: 720px; color: rgba(255,255,255,.8); font-size: 14px; line-height: 1.8; }
 
 .info-hero-metrics {
@@ -23,7 +23,7 @@
 .info-hero-metric b {
   display: block;
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -98,7 +98,7 @@
 .info-section-head h2 {
   margin: 0;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .info-section-head h2 small {
@@ -178,7 +178,7 @@
 
 .info-quote-price {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -244,7 +244,7 @@
 .info-lead-main h3 {
   margin: 8px 0 10px;
   font-size: 19px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -418,7 +418,7 @@
 .info-tile h3 {
   margin: 0;
   font-size: 14.5px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.5;
 }
 
@@ -448,7 +448,7 @@
 .info-article h1 {
   margin: 0 0 12px;
   font-size: 26px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.4;
 }
 
@@ -466,7 +466,7 @@
 .info-article-body h3 {
   margin: 24px 0 10px;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .info-back {

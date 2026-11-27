@@ -253,7 +253,7 @@ onBeforeUnmount(() => {
 }
 
 .session-tab.on {
-  border-color: #12764a;
+  border-color: #2d8f4e;
   background: #f1fbf5;
   box-shadow: 0 4px 12px rgba(18, 118, 74, .1);
 }
@@ -261,11 +261,11 @@ onBeforeUnmount(() => {
 .session-tab b {
   color: #0b1a12;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .session-tab.on b {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .session-tab small {
@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
 .active-hd h2 {
   margin: 0;
   font-size: 16.5px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .active-hd p {
@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: var(--agri-font-size-micro);
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sold-out {
@@ -346,7 +346,7 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 15px;
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 2px;
 }
 

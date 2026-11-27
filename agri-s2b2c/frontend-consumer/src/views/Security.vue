@@ -351,7 +351,7 @@ watch(
   padding: 1px 5px;
   border-radius: 4px;
   background: #f1f5f2;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12px;
 }
 
@@ -365,7 +365,7 @@ watch(
 .risk-card h3 {
   margin: 0 0 8px;
   font-size: 14.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .risk-card ul {

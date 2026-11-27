@@ -42,7 +42,7 @@
             <el-table-column label="金额" width="100">
               <template #default="{ row }">¥{{ money(row.payAmount) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="70">
+            <el-table-column label="操作" width="70" align="right" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="$router.push(`/orders/${row.id}`)">详情</el-button>
               </template>
@@ -92,7 +92,7 @@ const money = (value) => Number(value || 0).toFixed(2)
 .page-head h2 { margin: 0 0 6px; font-size: 18px; }
 .page-head p { margin: 0; color: #6b7c72; font-size: 13px; line-height: 1.6; max-width: 780px; }
 .profile-card { display: flex; align-items: center; gap: 18px; padding: 20px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; flex-wrap: wrap; }
-.avatar { display: grid; width: 56px; height: 56px; place-items: center; border-radius: 50%; background: #e5f5eb; color: #12764a; font-size: 24px; font-weight: 700; }
+.avatar { display: grid; width: 56px; height: 56px; place-items: center; border-radius: 50%; background: #e5f5eb; color: #2d8f4e; font-size: 24px; font-weight: 600; }
 .profile-main h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 17px; }
 .profile-main p { margin: 0; color: #84938a; font-size: 12px; }
 .profile-metrics { display: flex; gap: 28px; margin-left: auto; flex-wrap: wrap; }

@@ -184,11 +184,11 @@ async function submit() {
 
 <style scoped>
 .invest-dialog-title span, .invest-dialog-title small { display: block; }
-.invest-dialog-title span { color: #213f2e; font-size: 16px; font-weight: 800; }
+.invest-dialog-title span { color: #213f2e; font-size: 16px; font-weight: 600; }
 .invest-dialog-title small { margin-top: 3px; color: #8a9a91; font-size: var(--fin-fs-xs); }
 .fund-invest { display: grid; gap: 12px; }
 .fund-invest-asset { display: flex; align-items: center; gap: 11px; padding: 13px; border: 1px solid #dfe9e2; border-radius: 12px; background: #f6faf7; }
-.fund-invest-mark { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; border-radius: 11px; background: #dff1e7; color: #176f49; font-size: 15px; font-weight: 800; }
+.fund-invest-mark { display: grid; width: 42px; height: 42px; place-items: center; flex: 0 0 auto; border-radius: 11px; background: #dff1e7; color: #176f49; font-size: 15px; font-weight: 600; }
 .fund-invest-asset > div:nth-child(2) { min-width: 0; flex: 1; }
 .fund-invest-asset small, .fund-invest-asset strong, .fund-invest-asset p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fund-invest-asset small { color: #819388; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
@@ -202,7 +202,7 @@ async function submit() {
 .fund-invest-facts span, .fund-invest-facts strong { display: block; }
 .fund-invest-facts span { color: #85968c; font-size: var(--fin-fs-xs); }
 .fund-invest-facts strong { margin-top: 3px; color: #345340; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
-.fund-invest-form > label { display: block; margin-bottom: 6px; color: #3d5948; font-size: var(--fin-fs-xs); font-weight: 700; }
+.fund-invest-form > label { display: block; margin-bottom: 6px; color: #3d5948; font-size: var(--fin-fs-xs); font-weight: 600; }
 .fund-invest-quick { display: flex; gap: 6px; margin-top: 7px; }
 .fund-invest-quick button { padding: 5px 10px; border: 1px solid #d7e4db; border-radius: 99px; background: #f8fbf9; color: #5d7466; cursor: pointer; font-size: var(--fin-fs-xs); }
 .fund-invest-quick button:hover { border-color: #95c8aa; color: #126b46; }

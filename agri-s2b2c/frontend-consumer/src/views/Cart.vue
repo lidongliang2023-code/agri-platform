@@ -407,7 +407,7 @@ watch(
 }
 
 .name:hover {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .meta {

@@ -160,10 +160,10 @@ onMounted(load)
   width: 72px;
   height: 72px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #12764a, #4fb07f);
+  background: linear-gradient(135deg, #2d8f4e, #4fb07f);
   color: #fff;
   font-size: 26px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .logo img {
@@ -175,7 +175,7 @@ onMounted(load)
 .meta h1 {
   margin: 0;
   font-size: 19px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .meta p {
@@ -196,7 +196,7 @@ onMounted(load)
 .tip b {
   display: block;
   margin-bottom: 4px;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12.5px;
 }
 

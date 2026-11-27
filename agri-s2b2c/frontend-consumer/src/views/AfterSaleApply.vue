@@ -327,7 +327,7 @@ watch(
 .notice-title {
   margin: 0;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sum-row {

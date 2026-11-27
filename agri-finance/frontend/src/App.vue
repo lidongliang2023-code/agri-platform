@@ -13,8 +13,8 @@
 
 body {
   min-width: 320px;
-  background: #f2f6f3;
-  color: #14251b;
+  background: var(--pc-bg, #f5f6fa);
+  color: var(--pc-text, #1a1a1a);
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;

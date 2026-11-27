@@ -299,7 +299,7 @@ onMounted(async () => {
 .result-title {
   margin: 0;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .result-title .small {

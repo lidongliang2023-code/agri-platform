@@ -2,7 +2,7 @@
   --h-green-900: #06281a;
   --h-green-800: #0a3a25;
   --h-green-700: #0e5233;
-  --h-green-600: #12764a;
+  --h-green-600: #2d8f4e;
   --h-green-500: #159a5e;
   --h-green-300: #6fd6a2;
   --h-green-100: #e4f6ec;
@@ -88,7 +88,7 @@
   align-items: center;
   gap: 10px;
   font-size: 19px;
-  font-weight: 800;
+  font-weight: 600;
   color: var(--h-green-800);
   white-space: nowrap;
 }
@@ -138,7 +138,7 @@
 
 .main-nav a.active {
   color: var(--h-green-700);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .main-nav a.active::after {
@@ -209,7 +209,7 @@
 .hall-title-row h2 {
   margin: 0;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .hall-title-row h2 small {
@@ -325,7 +325,7 @@
   gap: 6px;
   color: var(--h-ink-700);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .hall-filter-head-right {
@@ -440,7 +440,7 @@
 }
 
 .hall-more span {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .hall-more.open span {
@@ -476,7 +476,7 @@
 .hall-province-pop-group > span {
   padding-top: 4px;
   color: var(--h-ink-400);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .hall-province-pop-chips {
@@ -758,7 +758,7 @@
   margin-top: 8px;
   color: var(--h-ink-900);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1082,9 +1082,9 @@
 
 /* 门户嵌入模式：对齐产业资讯频道设计。 */
 .hall-embed .hall-main { max-width: 1280px; margin: 0 auto; padding: 24px 24px 56px; }
-.hall-embed .hall-portal-hero { position: relative; overflow: hidden; padding: 36px 40px; border-radius: 16px; background: linear-gradient(135deg,#0a3a25,#12764a 62%,#0c7ba8); color: #fff; }
+.hall-embed .hall-portal-hero { position: relative; overflow: hidden; padding: 36px 40px; border-radius: 16px; background: linear-gradient(135deg,#0a3a25,#2d8f4e 62%,#0c7ba8); color: #fff; }
 .hall-portal-hero::after { position: absolute; right: -80px; top: -80px; width: 320px; height: 320px; border-radius: 50%; background: rgba(255,255,255,.07); content: ''; pointer-events: none; }
-.hall-portal-hero h1 { margin: 0 0 10px; font-size: 28px; font-weight: 700; letter-spacing: .5px; color: #fff; }
+.hall-portal-hero h1 { margin: 0 0 10px; font-size: 28px; font-weight: 600; letter-spacing: .5px; color: #fff; }
 .hall-portal-hero p { max-width: 720px; margin: 0; color: rgba(255,255,255,.82); font-size: 13.5px; line-height: 1.75; }
 .hall-portal-hero-meta { display: flex; flex-wrap: wrap; gap: 16px 32px; margin-top: 22px; font-size: 13px; color: rgba(255,255,255,.82); }
 .hall-embed .hall-tabs { margin-top: 28px; }
@@ -1093,8 +1093,8 @@
 .hall-embed .hall-filter-head { background: #f1fbf5; border-bottom-color: #e3eae5; }
 .hall-embed .hall-filter-line { border-color: #e3eae5; }
 .hall-embed .hall-chip-scroll button { border-radius: 999px; }
-.hall-embed .hall-chip-scroll button.on { background: #e4f6ec; color: #12764a; border-color: #b8dfc8; }
-.hall-embed button:focus-visible, .hall-embed a:focus-visible { outline: 2px solid #12764a; outline-offset: 3px; }
+.hall-embed .hall-chip-scroll button.on { background: #e4f6ec; color: #2d8f4e; border-color: #b8dfc8; }
+.hall-embed button:focus-visible, .hall-embed a:focus-visible { outline: 2px solid #2d8f4e; outline-offset: 3px; }
 @media (max-width: 760px) {
   .hall-embed .hall-main { padding: 18px 16px 40px; }
   .hall-embed .hall-portal-hero { padding: 26px 22px; }

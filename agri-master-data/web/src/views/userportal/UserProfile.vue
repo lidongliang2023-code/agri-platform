@@ -143,7 +143,7 @@ onMounted(load)
   background: linear-gradient(135deg, #159a5e, #0ea5e9);
   color: #fff;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .profile-head strong {

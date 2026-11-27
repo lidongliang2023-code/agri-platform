@@ -405,7 +405,7 @@ onMounted(loadAll)
 .center-value {
   font-family: var(--mds-mono);
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .center-label {
@@ -507,7 +507,7 @@ onMounted(loadAll)
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: #fff;
   background: var(--mds-gray-soft);
   color: var(--mds-text-2);
@@ -592,7 +592,7 @@ onMounted(loadAll)
 .domain-value {
   font-family: var(--mds-mono);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .recent-issues {

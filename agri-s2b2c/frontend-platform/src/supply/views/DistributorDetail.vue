@@ -32,7 +32,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="pickedAt" label="授权时间" width="180" />
-          <el-table-column label="操作" width="110" fixed="right">
+          <el-table-column label="操作" width="110" fixed="right" align="right">
             <template #default="{ row }">
               <el-button v-if="row.status === 'ACTIVE'" link type="danger" @click="revoke(row)">撤销授权</el-button>
             </template>

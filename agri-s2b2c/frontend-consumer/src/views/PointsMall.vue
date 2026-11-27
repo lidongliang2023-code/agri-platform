@@ -256,9 +256,9 @@ watch(
 
 .balance-card b {
   display: block;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 30px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.25;
 }
 
@@ -309,12 +309,12 @@ watch(
 
 .face.discount {
   background: linear-gradient(160deg, #f1fbf5, #e2f5ea);
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .face b {
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
   word-break: break-all;
 }
@@ -335,7 +335,7 @@ watch(
   overflow: hidden;
   color: #0b1a12;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -352,7 +352,7 @@ watch(
 .gc-cost b {
   color: #d45b32;
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -371,7 +371,7 @@ watch(
 .rules h3 {
   margin: 0 0 10px;
   font-size: 14.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .rules ul {

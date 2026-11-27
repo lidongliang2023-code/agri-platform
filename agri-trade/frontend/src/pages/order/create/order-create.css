@@ -25,9 +25,9 @@
   align-items: center;
   gap: 7px;
   margin-bottom: 9px;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: .08em;
 }
 
@@ -59,7 +59,7 @@
 }
 
 .oc-back:hover {
-  border-color: #12764a;
+  border-color: #2d8f4e;
   color: #0d6a40;
 }
 
@@ -93,7 +93,7 @@
   background: #edf4ef;
   color: #799083;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .oc-stepper strong {
@@ -107,7 +107,7 @@
 }
 
 .oc-stepper .on span {
-  background: linear-gradient(135deg, #12764a, #1c9a60);
+  background: linear-gradient(135deg, #2d8f4e, #1c9a60);
   color: #fff;
   box-shadow: 0 6px 16px rgba(18, 118, 74, .22);
 }
@@ -181,7 +181,7 @@
   place-items: center;
   border-radius: 11px;
   background: #eaf6ef;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 18px;
 }
 
@@ -240,7 +240,7 @@
 .oc-page .ant-input:focus,
 .oc-page .ant-input-number-focused,
 .oc-page .ant-select-focused .ant-select-selector {
-  border-color: #12764a !important;
+  border-color: #2d8f4e !important;
   box-shadow: 0 0 0 3px rgba(18, 118, 74, .1) !important;
 }
 
@@ -271,7 +271,7 @@
   background: linear-gradient(135deg, #0f7046, #1a9a60);
   color: #fff;
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   box-shadow: 0 9px 20px rgba(18, 118, 74, .2);
 }
@@ -311,14 +311,14 @@
 .oc-summary-head span {
   color: #173c2a;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .oc-summary-head em {
   padding: 4px 8px;
   border-radius: 999px;
   background: #e2f4e9;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: var(--agri-font-size-micro);
   font-style: normal;
 }

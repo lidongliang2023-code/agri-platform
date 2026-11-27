@@ -386,9 +386,9 @@ onMounted(load)
   padding: 3px 10px;
   border-radius: 6px;
   background: rgba(255, 255, 255, .94);
-  color: #12764a;
+  color: #2d8f4e;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .thumbs {
@@ -409,7 +409,7 @@ onMounted(load)
 }
 
 .thumb-btn.on {
-  border-color: #12764a;
+  border-color: #2d8f4e;
   box-shadow: 0 0 0 2px rgba(18, 118, 74, .12);
 }
 
@@ -426,7 +426,7 @@ onMounted(load)
 .buy-hd h1 {
   margin: 0;
   font-size: 21px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -579,7 +579,7 @@ onMounted(load)
 }
 
 .pane-note a {
-  color: #12764a;
+  color: #2d8f4e;
   text-decoration: underline;
 }
 
@@ -603,7 +603,7 @@ onMounted(load)
 .score b {
   color: #d45b32;
   font-size: 30px;
-  font-weight: 800;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -665,9 +665,9 @@ onMounted(load)
   height: 34px;
   border-radius: 50%;
   background: #e4f6ec;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .rv-hd b {

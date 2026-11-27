@@ -286,7 +286,7 @@ onMounted(load)
 .hero-top h1 {
   margin: 8px 0 4px;
   font-size: 21px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .hero-time {
@@ -297,7 +297,7 @@ onMounted(load)
 }
 
 .link {
-  color: #12764a;
+  color: #2d8f4e;
   cursor: pointer;
   text-decoration: underline;
 }
@@ -365,8 +365,8 @@ onMounted(load)
   height: 36px;
   border-radius: 50%;
   background: #e4f6ec;
-  color: #12764a;
-  font-weight: 700;
+  color: #2d8f4e;
+  font-weight: 600;
 }
 
 .inst-info b {
@@ -391,7 +391,7 @@ onMounted(load)
   display: block;
   height: 100%;
   border-radius: 4px;
-  background: linear-gradient(90deg, #7ac9a6, #12764a);
+  background: linear-gradient(90deg, #7ac9a6, #2d8f4e);
 }
 
 .rules {

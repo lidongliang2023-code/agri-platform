@@ -167,7 +167,7 @@ onMounted(load)
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--fin-line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: #fff;
 }
 
@@ -220,7 +220,7 @@ onMounted(load)
 
 .contract-aside { display: grid; gap: 12px; }
 .contract-notice {
-  padding: 18px; border-radius: 15px;
+  padding: 18px; border-radius: 8px;
   background: radial-gradient(circle at 88% 9%, rgba(131, 228, 170, .18), transparent 10rem), linear-gradient(135deg, #083c27, #0f7048);
   color: #fff;
 }

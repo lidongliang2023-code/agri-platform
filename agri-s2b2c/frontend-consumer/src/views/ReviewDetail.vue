@@ -246,9 +246,9 @@ watch(
   height: 38px;
   border-radius: 50%;
   background: #e4f6ec;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .rv-who {
@@ -292,7 +292,7 @@ watch(
 }
 
 .rv-reply b {
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12.5px;
 }
 
@@ -323,7 +323,7 @@ watch(
 .side h4 {
   margin: 0 0 10px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .side .kv {

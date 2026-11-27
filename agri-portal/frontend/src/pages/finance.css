@@ -54,7 +54,7 @@
 
 .fin-hero-copy h1 {
   font-size: 36px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.35;
   letter-spacing: -.5px;
 }
@@ -179,7 +179,7 @@
   display: block;
   margin-top: 6px;
   font-size: 28px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -231,7 +231,7 @@
 .fin-stat-grid strong {
   color: var(--green-700);
   font-size: 26px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -263,7 +263,7 @@
 
 .fin-section-head h2 {
   font-size: 28px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -313,7 +313,7 @@
 }
 
 .fin-icon.tone-emerald {
-  background: linear-gradient(135deg, #12764a, #10b981);
+  background: linear-gradient(135deg, #2d8f4e, #10b981);
 }
 
 .fin-icon.tone-sky {
@@ -331,7 +331,7 @@
 .fin-product h3 {
   margin-top: 14px;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .fin-product p {
@@ -368,7 +368,7 @@
 
 .fin-rate b {
   font-size: 21px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .fin-muted {
@@ -460,7 +460,7 @@
   background: var(--green-050);
   color: var(--green-700);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .fin-partner b {
@@ -521,7 +521,7 @@
 
 .fin-cta h3 {
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .fin-cta p {

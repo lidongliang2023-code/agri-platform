@@ -147,7 +147,7 @@ function renderTrend() {
     series: [{
       type: 'line', smooth: true, symbol: 'none',
       data: trend.value.map((p) => Number(p.amount || 0)),
-      lineStyle: { color: '#12764a', width: 2 },
+      lineStyle: { color: '#2d8f4e', width: 2 },
       areaStyle: { color: 'rgba(18,118,74,0.12)' },
     }],
   }, true)

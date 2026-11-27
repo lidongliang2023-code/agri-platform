@@ -122,7 +122,7 @@ function renderTrend() {
     ],
     series: [
       { name: 'GMV', type: 'line', smooth: true, symbol: 'none', data: trend.map((p) => Number(p.amount || 0)),
-        lineStyle: { color: '#12764a', width: 2 }, areaStyle: { color: 'rgba(18,118,74,0.12)' } },
+        lineStyle: { color: '#2d8f4e', width: 2 }, areaStyle: { color: 'rgba(18,118,74,0.12)' } },
       { name: '订单数', type: 'bar', yAxisIndex: 1, data: trend.map((p) => Number(p.orders || 0)),
         itemStyle: { color: 'rgba(23,108,147,0.35)', borderRadius: [3, 3, 0, 0] }, barMaxWidth: 14 },
     ],

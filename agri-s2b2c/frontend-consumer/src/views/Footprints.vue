@@ -250,7 +250,7 @@ watch(
 .sum-bar b {
   color: #0b1a12;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .group {
@@ -268,7 +268,7 @@ watch(
 
 .group-hd b {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .fp-list {
@@ -326,7 +326,7 @@ watch(
 }
 
 .fp-name:hover {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .fp-price {

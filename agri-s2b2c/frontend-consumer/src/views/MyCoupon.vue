@@ -220,11 +220,11 @@ watch(
 
 .seg:hover {
   background: #f1fbf5;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .seg.on {
-  background: linear-gradient(135deg, #12764a, #159a5e);
+  background: linear-gradient(135deg, #2d8f4e, #159a5e);
   color: #fff;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(18, 118, 74, .18);
@@ -235,7 +235,7 @@ watch(
   border-radius: 8px;
   background: rgba(11, 26, 18, .06);
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .seg.on .seg-num {
@@ -284,7 +284,7 @@ watch(
 
 .face.discount {
   background: linear-gradient(160deg, #f1fbf5, #e2f5ea);
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .face.discount::after {
@@ -298,7 +298,7 @@ watch(
 
 .face b {
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
   word-break: break-all;
 }
@@ -319,7 +319,7 @@ watch(
   overflow: hidden;
   color: #0b1a12;
   font-size: 13.5px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }

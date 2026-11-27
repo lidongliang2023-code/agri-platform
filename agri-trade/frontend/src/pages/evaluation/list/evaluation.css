@@ -104,7 +104,7 @@
   background: #e4f3ea;
   color: var(--mc-green-700);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .credit-evaluation-main > div {
@@ -234,7 +234,7 @@
 .credit-action-hero small {
   color: #188454;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 

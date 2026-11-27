@@ -261,9 +261,9 @@ watch(
   height: 64px;
   border-radius: 18px;
   background: linear-gradient(135deg, #e4f6ec, #cbeadb);
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 26px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .head-info {
@@ -275,7 +275,7 @@ watch(
 .head-info b {
   overflow: hidden;
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -315,7 +315,7 @@ watch(
 .quick-item b {
   color: #0b1a12;
   font-size: 19px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -353,13 +353,13 @@ watch(
 }
 
 .asset:hover b {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .asset b {
   color: #0b1a12;
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
 }
 

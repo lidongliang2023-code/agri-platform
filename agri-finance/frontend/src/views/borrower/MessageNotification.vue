@@ -129,7 +129,7 @@ onMounted(load)
   grid-template-columns: repeat(4, minmax(0, 1fr));
   overflow: hidden;
   border: 1px solid var(--fin-line);
-  border-radius: 14px;
+  border-radius: 8px;
   background: #fff;
 }
 

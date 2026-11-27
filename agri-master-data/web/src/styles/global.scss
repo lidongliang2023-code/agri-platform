@@ -1,7 +1,8 @@
-$primary-color: #1890ff;
-$success-color: #52c41a;
-$warning-color: #faad14;
-$error-color: #f5222d;
+// PC UI V1：历史样式保留兼容，颜色与当前 PC 规范一致。
+$primary-color: #2d8f4e;
+$success-color: #2d8f4e;
+$warning-color: #ff8c2a;
+$error-color: #e53935;
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -23,7 +24,7 @@ $error-color: #f5222d;
 
 .page-container {
   padding: 20px;
-  background: #f5f5f5;
+  background: var(--pc-bg, #f5f6fa);
   min-height: calc(100vh - 64px);
 }
 
@@ -37,7 +38,7 @@ $error-color: #f5222d;
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--pc-text, #1a1a1a);
 }
 
 .el-table {
@@ -50,6 +51,6 @@ $error-color: #f5222d;
 }
 
 .el-button--primary {
-  background: $primary-color;
-  border-color: $primary-color;
+  background: var(--pc-brand, #{$primary-color});
+  border-color: var(--pc-brand, #{$primary-color});
 }

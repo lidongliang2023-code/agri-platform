@@ -314,7 +314,7 @@ watch(
 
 .wb-company {
   font-size: 15.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .wb-status {

@@ -30,7 +30,7 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 15px;
-  background: linear-gradient(135deg, #12764a, #1b965c);
+  background: linear-gradient(135deg, #2d8f4e, #1b965c);
   color: #fff;
   font-size: 24px;
   box-shadow: 0 10px 24px rgba(18, 118, 74, .18);
@@ -39,7 +39,7 @@
 .contract-overview-title > div > span {
   color: #158255;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .12em;
 }
 
@@ -209,7 +209,7 @@
   place-items: center;
   border-radius: 7px;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .contract-party-mark.buyer {
@@ -288,7 +288,7 @@
 .contract-sign-heading > div:nth-child(2) > span {
   color: #198456;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: .04em;
 }
 
@@ -512,7 +512,7 @@
 .contract-evidence a {
   color: #0d6f46;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .contract-muted {
@@ -815,7 +815,7 @@
   font-family: "DIN Alternate", "Roboto Mono", ui-monospace, monospace;
   font-size: 21px;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .contract-summary-parties {

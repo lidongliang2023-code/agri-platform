@@ -390,9 +390,9 @@ onMounted(load)
   overflow: hidden;
   border-radius: 12px;
   background: #e5f5eb;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
   flex-shrink: 0;
 }
 .channel-logo img { width: 100%; height: 100%; object-fit: cover; }
@@ -417,7 +417,7 @@ onMounted(load)
   border-radius: 16px;
   background:
     radial-gradient(900px 300px at 88% -30%, rgba(255, 214, 153, .45), transparent 60%),
-    linear-gradient(120deg, #0e5233 0%, #12764a 48%, #2f8f63 100%);
+    linear-gradient(120deg, #0e5233 0%, #2d8f4e 48%, #2f8f63 100%);
   color: #fff;
 }
 
@@ -446,7 +446,7 @@ onMounted(load)
 .hero-main h1 {
   margin: 14px 0 10px;
   font-size: 30px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 1px;
   line-height: 1.32;
 }
@@ -524,9 +524,9 @@ onMounted(load)
   height: 42px;
   border-radius: 12px;
   background: linear-gradient(135deg, #e4f6ec, #cbeadb);
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .side-user b {
@@ -560,7 +560,7 @@ onMounted(load)
 
 .side-stats b {
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -648,7 +648,7 @@ onMounted(load)
   color: #fff;
   font-size: var(--agri-font-size-micro);
   font-style: normal;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .flash-bd {
@@ -736,7 +736,7 @@ onMounted(load)
 .trace-hd h2 {
   margin: 0;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .trace-hd p {
@@ -795,12 +795,12 @@ onMounted(load)
   height: 16px;
   border-radius: 50%;
   background: #e4f6ec;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: var(--agri-font-size-micro);
 }
 
 .trace-link {
-  color: #12764a;
+  color: #2d8f4e;
   font-size: var(--agri-font-size-micro);
   font-weight: 600;
 }
@@ -833,7 +833,7 @@ onMounted(load)
 
 .promo i {
   margin-top: 6px;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12.5px;
   font-style: normal;
   font-weight: 600;
@@ -888,7 +888,7 @@ onMounted(load)
   background: #f1f5f2;
   color: #6b7c72;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .rank-no.no1 { background: #d45b32; color: #fff; }
@@ -951,7 +951,7 @@ onMounted(load)
   padding: 1px 5px;
   border-radius: 4px;
   background: #f1f5f2;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12px;
 }
 

@@ -1,6 +1,6 @@
 .seller-product-page {
   --mc-green-700: #0e5233;
-  --mc-green-600: #12764a;
+  --mc-green-600: #2d8f4e;
   --mc-green-500: #159a5e;
   --mc-green-100: #e4f6ec;
   --mc-green-050: #f1fbf5;
@@ -50,7 +50,7 @@
   flex: 0 0 auto;
   place-items: center;
   border-radius: 14px;
-  background: linear-gradient(135deg, #12764a, #1b965c);
+  background: linear-gradient(135deg, #2d8f4e, #1b965c);
   color: #fff;
   font-size: 22px;
   box-shadow: 0 9px 21px rgba(18, 118, 74, .18);
@@ -64,7 +64,7 @@
 .seller-product-hero small {
   color: #188454;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 
@@ -108,7 +108,7 @@
   background: #eef3f0;
   color: #87988e;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .seller-product-steps .on span {
@@ -260,7 +260,7 @@
   background: #e5f4eb;
   color: #14764a;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .seller-sku-card-head strong {
@@ -310,7 +310,7 @@
   color: #14764a;
   font: inherit;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
 }
 

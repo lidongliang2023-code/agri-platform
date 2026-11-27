@@ -489,7 +489,7 @@ watch(
 
 .addr-name {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .addr-detail {
@@ -611,7 +611,7 @@ watch(
 .sum-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .coupon-select {
@@ -684,7 +684,7 @@ watch(
 }
 
 .addr-option.on {
-  border-color: #12764a;
+  border-color: #2d8f4e;
   background: #f1fbf5;
 }
 

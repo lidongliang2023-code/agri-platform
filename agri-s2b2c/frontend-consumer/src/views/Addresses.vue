@@ -216,7 +216,7 @@ watch(
 .sum-bar b {
   color: #0b1a12;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .addr-card {
@@ -243,7 +243,7 @@ watch(
 
 .addr-hd b {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .addr-text {

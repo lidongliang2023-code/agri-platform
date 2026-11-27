@@ -419,11 +419,11 @@ watch(
 
 .seg:hover {
   background: #f1fbf5;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .seg.on {
-  background: linear-gradient(135deg, #12764a, #159a5e);
+  background: linear-gradient(135deg, #2d8f4e, #159a5e);
   color: #fff;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(18, 118, 74, .18);
@@ -509,7 +509,7 @@ watch(
 }
 
 .oc-name:hover {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .oc-unit {
@@ -547,9 +547,9 @@ watch(
 
 .svc-phone {
   margin: 0 0 12px;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 1px;
 }
 

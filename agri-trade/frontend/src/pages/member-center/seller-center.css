@@ -39,7 +39,7 @@
 .seller-workspace-hero small {
   color: var(--mc-green-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 
@@ -687,7 +687,7 @@
   background: #e4f3ea;
   color: var(--mc-green-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .seller-review-head > div {
@@ -938,7 +938,7 @@
   background: #e4f3ea;
   color: var(--mc-green-700);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .seller-customer-head > div {
@@ -1029,7 +1029,7 @@
 .seller-iot-hero small {
   color: var(--mc-green-700);
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 
@@ -1064,7 +1064,7 @@
   color: #1a8153;
   font-family: "DIN Alternate", ui-monospace, monospace;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .seller-iot-step > i {

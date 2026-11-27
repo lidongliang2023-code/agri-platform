@@ -588,7 +588,7 @@ watch(
 
 .addr-name {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .addr-detail {
@@ -655,7 +655,7 @@ watch(
 }
 
 .item-name:hover {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .item-row .num {
@@ -688,7 +688,7 @@ watch(
 }
 
 .as-row:hover b {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .as-row b {
@@ -703,7 +703,7 @@ watch(
 }
 
 .as-link {
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12.5px;
   text-align: right;
 }
@@ -716,7 +716,7 @@ watch(
 .aside-title {
   margin: 0 0 12px;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .kv {
@@ -755,7 +755,7 @@ watch(
 .kv .total dd {
   color: #d45b32;
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .foot {
@@ -778,9 +778,9 @@ watch(
 
 .dlg-phone {
   margin: 0 0 12px;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 1px;
 }
 

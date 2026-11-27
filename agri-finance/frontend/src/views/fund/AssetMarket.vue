@@ -242,7 +242,7 @@ onMounted(load)
 
 <style scoped>
 .market-error { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; border: 1px solid #efd3cd; border-radius: 10px; background: #fff8f6; color: #a34f3e; font-size: var(--fin-fs-xs); }
-.market-position { display: grid; grid-template-columns: 1.25fr repeat(3, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--fin-line); border-radius: 15px; background: #fff; }
+.market-position { display: grid; grid-template-columns: 1.25fr repeat(3, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--fin-line); border-radius: 8px; background: #fff; }
 .market-position > div { min-width: 0; padding: 15px 17px; border-left: 1px solid #ebf0ec; }
 .market-position > div:first-child { border-left: 0; }
 .market-position-main { background: linear-gradient(135deg, #0a412b, #116d49); color: #fff; }
@@ -261,9 +261,9 @@ onMounted(load)
 .market-control-actions :deep(.el-input) { width: 240px; }
 .finance-tabs button > span { margin-left: 4px; color: #91a097; font-size: var(--fin-fs-xs); }
 .market-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
-.market-asset-card { min-width: 0; padding: 16px; border: 1px solid var(--fin-line); border-radius: 15px; background: #fff; box-shadow: 0 5px 18px rgba(20, 67, 41, .025); }
+.market-asset-card { min-width: 0; padding: 16px; border: 1px solid var(--fin-line); border-radius: 8px; background: #fff; box-shadow: 0 5px 18px rgba(20, 67, 41, .025); }
 .market-card-head { display: grid; grid-template-columns: 42px minmax(0, 1fr) 55px; align-items: center; gap: 10px; }
-.market-asset-mark { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 11px; background: linear-gradient(135deg, #dff2e7, #edf8f2); color: #176f49; font-size: 14px; font-weight: 800; }
+.market-asset-mark { display: grid; width: 42px; height: 42px; place-items: center; border-radius: 11px; background: linear-gradient(135deg, #dff2e7, #edf8f2); color: #176f49; font-size: 14px; font-weight: 600; }
 .market-card-head > div:nth-child(2) { min-width: 0; }
 .market-card-head small, .market-card-head h2, .market-card-head p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .market-card-head small { color: #85958c; font-family: ui-monospace, Consolas, monospace; font-size: var(--fin-fs-xs); }
@@ -273,7 +273,7 @@ onMounted(load)
 .market-ai-score strong { display: block; color: #16764a; font-family: ui-monospace, Consolas, monospace; font-size: 19px; }
 .market-ai-score small { display: block; color: #85958c; font-size: var(--fin-fs-xs); }
 .market-borrower { display: flex; align-items: center; gap: 8px; margin: 12px 0 10px; padding: 9px 10px; border-radius: 9px; background: #f7faf8; }
-.market-borrower > span { display: grid; width: 30px; height: 30px; place-items: center; flex: 0 0 auto; border-radius: 8px; background: #e3f2e9; color: #2d6749; font-size: var(--fin-fs-xs); font-weight: 700; }
+.market-borrower > span { display: grid; width: 30px; height: 30px; place-items: center; flex: 0 0 auto; border-radius: 8px; background: #e3f2e9; color: #2d6749; font-size: var(--fin-fs-xs); font-weight: 600; }
 .market-borrower > div { min-width: 0; flex: 1; }
 .market-borrower strong, .market-borrower small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .market-borrower strong { color: #3e5847; font-size: var(--fin-fs-xs); }

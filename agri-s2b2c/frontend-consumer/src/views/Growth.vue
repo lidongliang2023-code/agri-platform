@@ -166,7 +166,7 @@ watch(
 .metric b {
   color: #0b1a12;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.3;
 }
 
@@ -184,13 +184,13 @@ watch(
 }
 
 .up {
-  color: #12764a;
-  font-weight: 700;
+  color: #2d8f4e;
+  font-weight: 600;
 }
 
 .down {
   color: #c94b4b;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .table-note {
@@ -203,7 +203,7 @@ watch(
   padding: 1px 5px;
   border-radius: 4px;
   background: #f1f5f2;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12px;
 }
 </style>

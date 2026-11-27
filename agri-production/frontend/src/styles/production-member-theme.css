@@ -4,7 +4,7 @@
   --prod-green-900: #06281a;
   --prod-green-800: #0a3a25;
   --prod-green-700: #0e5233;
-  --prod-green-600: #12764a;
+  --prod-green-600: #2d8f4e;
   --prod-green-500: #159a5e;
   --prod-green-100: #e4f6ec;
   --prod-green-050: #f1fbf5;
@@ -17,7 +17,7 @@
   --prod-ink-500: #6b7c72;
   --prod-ink-400: #93a29a;
   --prod-line: #e3eae5;
-  --prod-bg: #f4f7f5;
+  --prod-bg: #f5f6fa;
   min-height: 100vh;
   background: var(--prod-bg);
   color: var(--prod-ink-900);
@@ -89,7 +89,7 @@
   display: block;
   color: #fff;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.15;
   letter-spacing: 0.3px;
 }
@@ -114,37 +114,58 @@
   background: transparent !important;
 }
 
+.agri-sider-menu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .agri-sider .ant-menu-dark .ant-menu-item,
 .agri-sider .ant-menu-dark .ant-menu-submenu-title {
-  margin: 2px 10px;
-  width: calc(100% - 20px);
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 13.5px;
+  margin: 0;
+  width: 100%;
+  height: 40px;
+  line-height: 40px;
+  border-radius: 0;
+  border-left: 3px solid transparent;
+  color: #a6a6a6;
+  font-size: 14px;
 }
 
 .agri-sider .ant-menu-dark .ant-menu-item:hover,
-.agri-sider .ant-menu-dark .ant-menu-submenu-title:hover,
+.agri-sider .ant-menu-dark .ant-menu-submenu-title:hover {
+  background: #0d2137 !important;
+  color: #fff !important;
+}
+
 .agri-sider .ant-menu-dark .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  background: rgba(255, 255, 255, 0.08) !important;
+  color: #fff !important;
+}
+
+.agri-sider .ant-menu-dark.ant-menu-inline-collapsed > .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  background: rgba(45, 143, 78, 0.18) !important;
+  border-left: 3px solid #2d8f4e !important;
   color: #fff !important;
 }
 
 .agri-sider .ant-menu-dark .ant-menu-item-selected {
-  background: linear-gradient(135deg, var(--prod-green-600), var(--prod-green-500)) !important;
+  background: rgba(45, 143, 78, 0.18) !important;
+  border-left: 3px solid #2d8f4e !important;
   color: #fff !important;
-  box-shadow: 0 8px 22px rgba(21, 154, 94, 0.28);
+  box-shadow: none !important;
 }
 
 .agri-sider .ant-menu-dark .ant-menu-sub.ant-menu-inline {
-  background: rgba(0, 0, 0, 0.16) !important;
-  margin: 4px 8px;
-  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18) !important;
+  margin: 0;
+  border-radius: 0;
 }
 
 .agri-sider .ant-menu-dark .ant-menu-sub .ant-menu-item {
-  margin: 1px 0;
+  margin: 0;
   width: 100%;
-  color: rgba(255, 255, 255, 0.64);
+  color: #a6a6a6;
 }
 
 .agri-sider .ant-menu-dark .ant-menu-sub .ant-menu-item-selected {
@@ -263,13 +284,13 @@
 
 .agri-layout .ant-card {
   border: 1px solid var(--prod-line);
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: none;
 }
 
 .agri-layout .ant-card-hoverable:hover {
   border-color: #9fd7b8;
-  box-shadow: 0 8px 24px rgba(18, 118, 74, 0.08);
+  box-shadow: none;
 }
 
 .agri-layout .ant-card-head {
@@ -280,7 +301,7 @@
 
 .agri-layout .ant-card-head-title {
   color: var(--prod-ink-900);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .agri-layout .ant-card-body {
@@ -308,7 +329,7 @@
 
 .agri-layout .ant-table-thead > tr > th {
   border-bottom-color: var(--prod-line) !important;
-  background: #f4f7f5 !important;
+  background: #fafafa !important;
   color: var(--prod-ink-600) !important;
   font-weight: 600;
 }

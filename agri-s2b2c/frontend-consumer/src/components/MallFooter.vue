@@ -62,9 +62,9 @@ const brandLogoSrc = `${import.meta.env.BASE_URL}fengchain.svg`
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .ft-brand .lg {

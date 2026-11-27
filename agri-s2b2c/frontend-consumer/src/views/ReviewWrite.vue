@@ -382,7 +382,7 @@ watch(
 
 .target-info b {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .form-body {
@@ -405,13 +405,13 @@ watch(
 
 .pill:hover {
   border-color: #159a5e;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .pill.on {
-  border-color: #12764a;
+  border-color: #2d8f4e;
   background: #f1fbf5;
-  color: #12764a;
+  color: #2d8f4e;
   font-weight: 600;
 }
 
@@ -435,7 +435,7 @@ watch(
 .side h4 {
   margin: 0 0 8px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .side ul {

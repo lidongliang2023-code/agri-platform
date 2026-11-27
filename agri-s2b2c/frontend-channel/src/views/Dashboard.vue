@@ -76,7 +76,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="产生时间" />
-        <el-table-column label="操作" width="90">
+        <el-table-column label="操作" width="90" align="right" fixed="right">
           <template #default="{ row }">
             <el-button v-if="row.orderId" link type="primary" @click="$router.push(`/orders/${row.orderId}`)">订单</el-button>
           </template>
@@ -145,7 +145,7 @@ function renderTrend() {
     series: [{
       type: 'line', smooth: true, symbol: 'none',
       data: todayTrend.value.map((p) => Number(p.amount || 0)),
-      lineStyle: { color: '#12764a', width: 2 },
+      lineStyle: { color: '#2d8f4e', width: 2 },
       areaStyle: { color: 'rgba(18,118,74,0.12)' },
     }],
   }, true)
@@ -163,12 +163,12 @@ const money = (value) => Number(value || 0).toFixed(2)
 .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .stat-card { display: flex; align-items: center; gap: 14px; padding: 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }
 .stat-icon { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 12px; font-size: 20px; }
-.stat-icon.sales { background: #e5f5eb; color: #12764a; }
+.stat-icon.sales { background: #e5f5eb; color: #2d8f4e; }
 .stat-icon.orders { background: #e7f3fa; color: #176c93; }
 .stat-icon.pending { background: #fff3dd; color: #a96a08; }
 .stat-icon.wallet { background: #f1eefe; color: #6b4fd8; }
 .stat-info { display: flex; flex-direction: column; gap: 4px; }
-.stat-value { margin: 0; color: #173e2a; font-size: 22px; font-weight: 700; }
+.stat-value { margin: 0; color: #173e2a; font-size: 22px; font-weight: 600; }
 .stat-label { margin: 0; color: #84938a; font-size: 12px; }
 .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
 .card { padding: 16px 18px; border: 1px solid #e3eae5; border-radius: 12px; background: #fff; }

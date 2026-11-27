@@ -331,7 +331,7 @@ watch(
 
 .sc-no {
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .sc-head .m-tag {
@@ -390,7 +390,7 @@ watch(
   padding: 0;
   border: 0;
   background: none;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 13px;
   cursor: pointer;
 }
@@ -408,7 +408,7 @@ watch(
 .opinion h4 {
   margin: 0 0 8px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .opinion-text {
@@ -436,7 +436,7 @@ watch(
 .aside-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .ops .muted.small {
@@ -460,9 +460,9 @@ watch(
 
 .dlg-phone {
   margin: 0 0 12px;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 1px;
 }
 

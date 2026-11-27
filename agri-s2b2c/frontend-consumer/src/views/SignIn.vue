@@ -234,7 +234,7 @@ watch(
 .cal-hd h2 {
   margin: 0;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .week-head {
@@ -274,12 +274,12 @@ watch(
 .day.signed {
   border-color: #cfe7da;
   background: #e4f6ec;
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .day.today {
-  border-color: #12764a;
-  box-shadow: inset 0 0 0 1px #12764a;
+  border-color: #2d8f4e;
+  box-shadow: inset 0 0 0 1px #2d8f4e;
 }
 
 .day .dot {
@@ -309,7 +309,7 @@ watch(
 .stat b {
   color: #0b1a12;
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .stat small {
@@ -325,7 +325,7 @@ watch(
 .aside-title {
   margin: 0 0 10px;
   font-size: 14.5px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .rules {
@@ -337,7 +337,7 @@ watch(
 }
 
 .rules b {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .rule-p {

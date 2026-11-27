@@ -312,7 +312,7 @@ onMounted(loadData)
 .rank-no--top {
   background: var(--mds-brand-soft);
   color: var(--mds-brand-deep);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .rank-name {
@@ -384,7 +384,7 @@ onMounted(loadData)
 .todo-count {
   font-family: var(--mds-mono);
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--mds-brand-deep);
 }
 

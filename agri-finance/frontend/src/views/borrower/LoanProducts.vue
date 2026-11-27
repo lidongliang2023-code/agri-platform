@@ -113,7 +113,7 @@ function apply(product) {
   align-items: center;
   gap: 24px;
   padding: 22px 24px;
-  border-radius: 16px;
+  border-radius: 8px;
   background:
     radial-gradient(circle at 90% 8%, rgba(125, 228, 168, .18), transparent 13rem),
     linear-gradient(135deg, #083c27, #0f7048);
@@ -203,7 +203,7 @@ function apply(product) {
 .product-catalog-card {
   padding: 16px;
   border: 1px solid var(--fin-line);
-  border-radius: 15px;
+  border-radius: 8px;
   background: #fff;
   transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
 }
@@ -230,7 +230,7 @@ function apply(product) {
   color: #12764a;
   font-family: ui-monospace, Consolas, monospace;
   font-size: var(--fin-fs-xs);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .product-catalog-card.amber .product-catalog-head > span { background: #fff4e2; color: #a96a12; }
@@ -241,7 +241,7 @@ function apply(product) {
 .product-catalog-head small {
   color: #93a098;
   font-size: var(--fin-fs-xs);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: .08em;
 }
 
@@ -295,7 +295,7 @@ function apply(product) {
   margin: 0;
   color: #425c4c;
   font-size: var(--fin-fs-xs);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .product-catalog-card dd.rate {

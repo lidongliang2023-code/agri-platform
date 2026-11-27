@@ -244,16 +244,16 @@ watch(
   height: 56px;
   border-radius: 14px;
   background: linear-gradient(135deg, #e4f6ec, #cbeadb);
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .head-info b {
   display: block;
   margin-bottom: 4px;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .head-stats {
@@ -282,7 +282,7 @@ watch(
 .stat b {
   color: #0b1a12;
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .stat small {
@@ -304,7 +304,7 @@ watch(
 .pg-hd h3 {
   margin: 0;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .bar {
@@ -318,7 +318,7 @@ watch(
   display: block;
   height: 100%;
   border-radius: 6px;
-  background: linear-gradient(90deg, #159a5e, #12764a);
+  background: linear-gradient(90deg, #159a5e, #2d8f4e);
   transition: width .3s;
 }
 
@@ -332,7 +332,7 @@ watch(
 }
 
 .pg-ft b {
-  color: #12764a;
+  color: #2d8f4e;
 }
 
 .rights-card {
@@ -371,7 +371,7 @@ watch(
   padding: 1px 5px;
   border-radius: 4px;
   background: #f1f5f2;
-  color: #12764a;
+  color: #2d8f4e;
   font-size: 12px;
 }
 

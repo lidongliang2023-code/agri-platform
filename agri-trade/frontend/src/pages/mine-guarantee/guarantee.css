@@ -340,7 +340,7 @@
 .guarantee-action-hero small {
   color: #188454;
   font-size: var(--agri-font-size-micro);
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: .1em;
 }
 
@@ -574,7 +574,7 @@
   background: #edf7f1;
   color: #537463;
   font-size: var(--agri-font-size-micro);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .guarantee-log p {
