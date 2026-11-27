@@ -69,13 +69,27 @@ onBeforeUnmount(() => { mobileMedia.removeEventListener('change', syncViewport);
 const groups = computed(() => props.admin ? menus.admin : menus.user)
 const matched = computed(() => {
   let best: { group: typeof menus.user[number]; leaf: { key: string; label: string } } | undefined
-  for (const group of groups.value) for (const leaf of group.children) if ((route.path === leaf.key || route.path.startsWith(`${leaf.key}/`)) && (!best || leaf.key.length > best.leaf.key.length)) best = { group, leaf }
+  for (const group of groups.value) {
+    for (const leaf of group.children) {
+      if ((route.path === leaf.key || route.path.startsWith(`${leaf.key}/`)) && (!best || leaf.key.length > best.leaf.key.length)) {
+        best = { group, leaf }
+      }
+    }
+  }
+  if (props.admin && /^\/admin\/production\/trace\/[^/]+$/.test(route.path) && route.path !== '/admin/production/trace/codes') {
+    const traceGroup = groups.value.find(group => group.key === 'trace')
+    const codesLeaf = traceGroup?.children.find(leaf => leaf.key === '/admin/production/trace/codes')
+    if (traceGroup && codesLeaf) return { group: traceGroup, leaf: codesLeaf }
+  }
   return best
 })
 const breadcrumb = computed(() => {
   const pageName = String(route.meta.name ?? '').trim()
   if (matched.value) {
-    const items = ['首页', matched.value.group.label, matched.value.leaf.label]
+    const items = ['首页', matched.value.group.label]
+    if (matched.value.leaf.label !== matched.value.group.label) {
+      items.push(matched.value.leaf.label)
+    }
     if (route.path !== matched.value.leaf.key && pageName && pageName !== matched.value.leaf.label) {
       items.push(pageName)
     }
