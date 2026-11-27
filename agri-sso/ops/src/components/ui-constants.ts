@@ -85,8 +85,16 @@ export const ORG_TYPE_LABEL: Record<string, string> = {
   FARMER: '生产主体',
   COOP: '专业合作社',
   COMPANY: '企业',
+  ENTERPRISE: '农业企业',
   MERCHANT: '经营主体',
   BUYER: '采购主体',
+  SELLER: '销售主体',
+  SUPPLIER: '供应主体',
+  BOTH: '购销一体主体',
+  PROVIDER: '服务商主体',
+  BANK: '金融机构',
+  GOVERNMENT: '监管机构',
+  INDIVIDUAL: '个人主体',
 }
 
 export const AUDIENCE_LABEL: Record<string, string> = {

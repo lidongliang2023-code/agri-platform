@@ -1189,3 +1189,32 @@ html.pc-ui-v1 .home-section-head strong { font-size:20px; color:var(--pc-text); 
 html.pc-ui-v1 .home-section-head span { color:var(--pc-secondary); }
 html.pc-ui-v1 :is(.finance-hero,.credit-hero,.credit-profile-hero,.ops-hero,.contract-notice,.apply-credit-card,.product-credit-banner,.repay-summary,.approval-overview,.asset-invest-card,.portfolio-command,.fund-command) .el-button:not(.finance-action-button):not(.el-button--primary):not(.hero-primary) { color:var(--pc-active); border-color:var(--pc-border); background:#fff; }
 html.pc-ui-v1 .finance-hero h1 { font-size:30px; }
+
+/* 详情页吸顶与多页签栏衔接 */
+.finance-workspace > .agri-workspace-tabbar {
+  position: sticky;
+  top: 64px;
+  z-index: 30;
+}
+
+.finance-workspace .agri-detail-header-sticky {
+  top: 104px;
+  margin-top: -16px;
+  padding-top: 16px;
+  background: var(--pc-bg, #f5f6fa);
+}
+
+.finance-workspace .agri-detail-page {
+  --detail-bg: var(--pc-bg, #f5f6fa);
+}
+
+@media print {
+  .finance-sidebar,
+  .finance-topbar,
+  .agri-workspace-tabbar {
+    display: none !important;
+  }
+  .finance-workspace {
+    margin-left: 0 !important;
+  }
+}

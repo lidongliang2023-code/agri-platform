@@ -1,238 +1,544 @@
 <template>
-  <div class="subject-detail">
-    <header class="page-header">
-      <button class="back-btn" @click="goBack">← 返回主体列表</button>
-      <div>
-        <h1>主体详情</h1>
-        <p>查看主体注册档案、认证信息、联系方式和主体资源使用情况。</p>
+  <div v-if="loadError" class="agri-detail-page">
+    <div class="mds-detail-state is-error">
+      <p>{{ loadError }}</p>
+      <div style="margin-top: 12px; display: flex; justify-content: center; gap: 8px">
+        <a-button @click="goBack">返回租户列表</a-button>
+        <a-button type="primary" @click="loadDetail">重新加载</a-button>
       </div>
-      <button v-if="tenantData" class="edit-btn" @click="editSubject">编辑资料</button>
-    </header>
-
-    <div v-if="loadError" class="state-card error">{{ loadError }}</div>
-    <div v-else-if="!tenantData" class="state-card">正在加载主体详情…</div>
-
-    <template v-else>
-      <section class="identity-card">
-        <div class="identity-main">
-          <span class="identity-icon">{{ isPersonal ? '👤' : '🏢' }}</span>
-          <div>
-            <div class="identity-title">
-              <h2>{{ value(tenantData.tenantName) }}</h2>
-              <span class="type-badge" :class="isPersonal ? 'personal' : 'enterprise'">{{ subjectTypeText(tenantData.tenantType) }}</span>
-            </div>
-            <p>{{ tenantData.tenantCode }}</p>
-          </div>
-        </div>
-        <div class="identity-status">
-          <span class="status-badge" :class="verifyClass(tenantData.verifyStatus)">{{ verifyText(tenantData.verifyStatus) }}</span>
-          <span class="status-badge" :class="Number(tenantData.status) === 1 ? 'active' : 'inactive'">
-            {{ Number(tenantData.status) === 1 ? '启用' : '停用' }}
-          </span>
-        </div>
-      </section>
-
-      <div class="content-grid">
-        <section class="detail-card">
-          <div class="card-head"><h3>注册档案</h3><span>{{ isPersonal ? '个人主体' : '企业主体' }}</span></div>
-          <div class="info-grid">
-            <div><label>主体编码</label><strong>{{ value(tenantData.tenantCode) }}</strong></div>
-            <div><label>主体类型</label><strong>{{ subjectTypeText(tenantData.tenantType) }}</strong></div>
-            <div><label>{{ isPersonal ? '真实姓名' : '企业名称' }}</label><strong>{{ value(tenantData.tenantName) }}</strong></div>
-            <template v-if="isPersonal">
-              <div><label>身份证号码</label><strong>{{ value(tenantData.identityNoMasked) }}</strong></div>
-              <div><label>个人经营类型</label><strong>{{ value(tenantData.businessType) }}</strong></div>
-              <div><label>证件有效期</label><strong>{{ validity }}</strong></div>
-            </template>
-            <template v-else>
-              <div><label>统一社会信用代码</label><strong>{{ value(tenantData.creditCode) }}</strong></div>
-              <div><label>所属行业</label><strong>{{ value(tenantData.industry) }}</strong></div>
-              <div><label>企业规模</label><strong>{{ value(tenantData.companySize) }}</strong></div>
-              <div><label>法定代表人</label><strong>{{ value(tenantData.legalPerson) }}</strong></div>
-              <div><label>营业执照号</label><strong>{{ value(tenantData.licenseNo) }}</strong></div>
-              <div><label>注册资本</label><strong>{{ value(tenantData.registeredCapital) }}</strong></div>
-            </template>
-            <div class="wide-field"><label>注册地址</label><strong>{{ value(tenantData.address) }}</strong></div>
-            <div><label>创建时间</label><strong>{{ formatDate(tenantData.createTime) }}</strong></div>
-          </div>
-        </section>
-
-        <section class="detail-card">
-          <div class="card-head"><h3>联系信息</h3></div>
-          <div class="info-grid">
-            <div><label>联系人</label><strong>{{ value(tenantData.contactName) }}</strong></div>
-            <div><label>联系电话</label><strong>{{ value(tenantData.phone) }}</strong></div>
-            <div><label>联系邮箱</label><strong>{{ value(tenantData.email) }}</strong></div>
-            <div><label>主体状态</label><strong>{{ Number(tenantData.status) === 1 ? '启用' : '停用' }}</strong></div>
-          </div>
-        </section>
-      </div>
-
-      <section class="detail-card">
-        <div class="card-head">
-          <h3>认证与核验信息</h3>
-          <span class="status-badge" :class="verifyClass(tenantData.verifyStatus)">{{ verifyText(tenantData.verifyStatus) }}</span>
-        </div>
-        <div v-if="hasCertification" class="info-grid">
-          <div><label>认证单号</label><strong>{{ value(tenantData.certificationNo) }}</strong></div>
-          <div><label>认证状态</label><strong>{{ verifyText(tenantData.certificationStatus || tenantData.verifyStatus) }}</strong></div>
-          <div><label>认证渠道</label><strong>{{ value(tenantData.verificationChannel) }}</strong></div>
-          <template v-if="isPersonal">
-            <div><label>公安二要素</label><strong>{{ yesNo(tenantData.policeVerified) }}</strong></div>
-            <div><label>活体核验</label><strong>{{ yesNo(tenantData.livenessVerified) }}</strong></div>
-          </template>
-          <template v-else>
-            <div><label>法人扫脸</label><strong>{{ faceStatusText(tenantData.legalPersonFaceStatus) }}</strong></div>
-            <div><label>对公账户户名</label><strong>{{ value(tenantData.corporateBankName) }}</strong></div>
-            <div><label>对公账户</label><strong>{{ value(tenantData.corporateBankAccount) }}</strong></div>
-            <div><label>对公打款</label><strong>{{ transferStatusText(tenantData.corporateTransferStatus) }}</strong></div>
-            <div><label>营业执照材料</label><strong>{{ tenantData.businessLicenseUrl ? '已上传' : '未上传' }}</strong></div>
-          </template>
-          <div v-if="tenantData.certificationReviewRemark" class="wide-field">
-            <label>审核意见</label><strong>{{ tenantData.certificationReviewRemark }}</strong>
-          </div>
-        </div>
-        <div v-else class="empty-certification">该主体尚未提交认证资料。</div>
-      </section>
-
-      <div class="content-grid">
-        <section class="detail-card">
-          <div class="card-head"><h3>成员与组织</h3></div>
-          <div class="stats-grid">
-            <div><span>成员总数</span><strong>{{ countText(tenantData.userOrgStats?.totalUsers) }}</strong></div>
-            <div><span>已实名成员</span><strong>{{ countText(tenantData.userOrgStats?.verifiedUsers) }}</strong></div>
-            <div><span>待认证成员</span><strong>{{ countText(tenantData.userOrgStats?.pendingUsers) }}</strong></div>
-            <div><span>组织数量</span><strong>{{ countText(tenantData.userOrgStats?.totalOrgs) }}</strong></div>
-          </div>
-        </section>
-
-        <section class="detail-card">
-          <div class="card-head"><h3>资源配额</h3><router-link to="/subject/quota">查看配额 →</router-link></div>
-          <div class="stats-grid">
-            <div><span>用户</span><strong>{{ quotaText(tenantData.quotaInfo?.usedUsers, tenantData.quotaInfo?.userLimit) }}</strong></div>
-            <div><span>组织</span><strong>{{ quotaText(tenantData.quotaInfo?.usedOrgs, tenantData.quotaInfo?.orgLimit) }}</strong></div>
-            <div><span>商品</span><strong>{{ quotaText(tenantData.quotaInfo?.usedProducts, tenantData.quotaInfo?.productLimit) }}</strong></div>
-            <div><span>API</span><strong>{{ quotaText(tenantData.quotaInfo?.usedApiToday, tenantData.quotaInfo?.apiLimit) }}</strong></div>
-          </div>
-        </section>
-      </div>
-
-      <section class="detail-card">
-        <div class="card-head"><h3>操作记录</h3></div>
-        <table v-if="tenantData.operationLogs?.length" class="log-table">
-          <thead><tr><th>时间</th><th>操作</th><th>操作人</th><th>说明</th></tr></thead>
-          <tbody>
-            <tr v-for="(log, index) in tenantData.operationLogs" :key="index">
-              <td>{{ value(log.time) }}</td><td>{{ value(log.operationType) }}</td>
-              <td>{{ value(log.operator) }}</td><td>{{ value(log.content) }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-else class="empty-tip">暂无操作记录。</p>
-      </section>
-    </template>
+    </div>
   </div>
+  <div v-else-if="!tenantData" class="agri-detail-page">
+    <div class="mds-detail-state">正在加载主体详情…</div>
+  </div>
+  <AgriVueDetailLayout
+    v-else
+    :code="tenantData.tenantCode || `SUB-${route.params.id}`"
+    :title="value(tenantData.tenantName)"
+    :status="verifyStatusBadge"
+    :extra-statuses="extraStatuses"
+    :meta="headerMeta"
+    :tabs="tabs"
+    v-model:active-tab="activeTab"
+    back-label="返回租户列表"
+    @back="goBack"
+  >
+    <template #actions>
+      <a-button @click="printPage">打印</a-button>
+      <a-button :loading="loading" @click="loadDetail">刷新</a-button>
+      <a-button @click="viewQuota">配额管理</a-button>
+      <a-button type="primary" @click="editSubject">编辑资料</a-button>
+    </template>
+
+    <template v-if="activeTab === 'detail'">
+      <AgriVueDetailSection title="注册档案">
+        <template #extra>
+          <span class="detail-section-hint">{{ isPersonal ? '个人主体' : '企业主体' }}</span>
+        </template>
+        <MdsDetailInfoGrid :items="profileItems" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="联系信息">
+        <MdsDetailInfoGrid :items="contactItems" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="资源与成员概览">
+        <template #extra>
+          <button type="button" class="detail-section-link" @click="activeTab = 'quota'">
+            查看详细配额 →
+          </button>
+        </template>
+        <div class="detail-kpi-strip">
+          <div class="detail-kpi-cell">
+            <span>成员总数</span>
+            <strong>{{ countText(tenantData.userOrgStats?.totalUsers) }}</strong>
+            <small>已实名 {{ countText(tenantData.userOrgStats?.verifiedUsers) }}</small>
+          </div>
+          <div class="detail-kpi-cell">
+            <span>待认证成员</span>
+            <strong>{{ countText(tenantData.userOrgStats?.pendingUsers) }}</strong>
+            <small>组织数 {{ countText(tenantData.userOrgStats?.totalOrgs) }}</small>
+          </div>
+          <div class="detail-kpi-cell">
+            <span>用户配额</span>
+            <strong>{{ quotaText(tenantData.quotaInfo?.usedUsers, tenantData.quotaInfo?.userLimit) }}</strong>
+            <small>已用 / 上限</small>
+          </div>
+          <div class="detail-kpi-cell">
+            <span>组织配额</span>
+            <strong>{{ quotaText(tenantData.quotaInfo?.usedOrgs, tenantData.quotaInfo?.orgLimit) }}</strong>
+            <small>已用 / 上限</small>
+          </div>
+        </div>
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="操作记录" :flush="true">
+        <template #extra>
+          <button
+            v-if="operationLogs.length > 0"
+            type="button"
+            class="detail-section-link"
+            @click="activeTab = 'logs'"
+          >
+            查看全部 {{ operationLogs.length }} 条
+          </button>
+        </template>
+        <div v-if="operationLogs.length" class="mds-detail-table-wrap">
+          <table class="mds-detail-table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>操作类型</th>
+                <th>操作人</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(log, index) in operationLogs.slice(0, 5)" :key="index">
+                <td class="detail-mono">{{ value(log.time) }}</td>
+                <td>{{ value(log.operationType) }}</td>
+                <td>{{ value(log.operator) }}</td>
+                <td>{{ value(log.content) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="mds-detail-empty">暂无操作记录。</div>
+        <template v-if="operationLogs.length" #footer>
+          <span>共 <strong class="detail-mono">{{ operationLogs.length }}</strong> 条记录</span>
+        </template>
+      </AgriVueDetailSection>
+    </template>
+
+    <template v-else-if="activeTab === 'certification'">
+      <AgriVueDetailSection title="认证与核验信息">
+        <template #extra>
+          <span class="agri-detail-status-pill" :class="`is-${verifyStatusBadge.tone}`">
+            {{ verifyStatusBadge.label }}
+          </span>
+        </template>
+        <MdsDetailInfoGrid v-if="hasCertification" :items="certificationItems" />
+        <div v-else class="mds-detail-empty">该主体尚未提交认证资料。</div>
+      </AgriVueDetailSection>
+    </template>
+
+    <template v-else-if="activeTab === 'quota'">
+      <AgriVueDetailSection title="成员与组织统计">
+        <MdsDetailInfoGrid :items="memberStatItems" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="资源配额明细" :flush="true">
+        <template #extra>
+          <button type="button" class="detail-section-link" @click="viewQuota">
+            进入配额详情 →
+          </button>
+        </template>
+        <div class="mds-detail-table-wrap">
+          <table class="mds-detail-table">
+            <thead>
+              <tr>
+                <th>资源项</th>
+                <th class="is-num">当前已用</th>
+                <th class="is-num">配额上限</th>
+                <th>口径说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in quotaRows" :key="row.label">
+                <td>{{ row.label }}</td>
+                <td class="is-num">{{ row.used }}</td>
+                <td class="is-num">{{ row.limit }}</td>
+                <td>{{ row.hint }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </AgriVueDetailSection>
+    </template>
+
+    <template v-else-if="activeTab === 'logs'">
+      <AgriVueDetailSection title="操作记录" :flush="true">
+        <div v-if="operationLogs.length" class="mds-detail-table-wrap">
+          <table class="mds-detail-table">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>操作类型</th>
+                <th>操作人</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(log, index) in operationLogs" :key="index">
+                <td class="detail-mono">{{ value(log.time) }}</td>
+                <td>{{ value(log.operationType) }}</td>
+                <td>{{ value(log.operator) }}</td>
+                <td>{{ value(log.content) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-else class="mds-detail-empty">暂无操作记录。</div>
+        <template v-if="operationLogs.length" #footer>
+          <span>共 <strong class="detail-mono">{{ operationLogs.length }}</strong> 条记录</span>
+        </template>
+      </AgriVueDetailSection>
+    </template>
+
+    <template #aside>
+      <AgriVueDetailSection title="主体状态进度">
+        <AgriVueDetailTimeline :items="timelineSteps" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="关联单据与入口">
+        <AgriVueDetailRelated :items="relatedDocs" />
+      </AgriVueDetailSection>
+    </template>
+  </AgriVueDetailLayout>
 </template>
 
-<script setup>
-import { computed, onMounted, ref } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import {
+  AgriVueDetailLayout,
+  AgriVueDetailRelated,
+  AgriVueDetailSection,
+  AgriVueDetailTimeline,
+  type DetailRelatedDocItem,
+  type DetailStatusBadge,
+  type DetailTabEntry,
+  type DetailTimelineStep,
+} from '@agri/shared/vue/detail'
+import MdsDetailInfoGrid, { type MdsDetailInfoItem } from '@/components/ui/MdsDetailInfoGrid.vue'
 import { getTenantDetail } from '../../utils/api'
+
+interface TenantLogItem {
+  time?: string
+  operationType?: string
+  operator?: string
+  content?: string
+}
+
+interface TenantDetailModel {
+  id?: number | string
+  tenantCode?: string
+  tenantName?: string
+  tenantType?: string
+  status?: number | string
+  verifyStatus?: string
+  certificationNo?: string
+  certificationStatus?: string
+  verificationChannel?: string
+  certificationReviewRemark?: string
+  identityNoMasked?: string
+  businessType?: string
+  validStart?: string
+  validEnd?: string
+  policeVerified?: boolean
+  livenessVerified?: boolean
+  creditCode?: string
+  industry?: string
+  companySize?: string
+  legalPerson?: string
+  licenseNo?: string
+  registeredCapital?: string
+  legalPersonFaceStatus?: string
+  corporateBankName?: string
+  corporateBankAccount?: string
+  corporateTransferStatus?: string
+  businessLicenseUrl?: string
+  address?: string
+  contactName?: string
+  phone?: string
+  email?: string
+  createTime?: string
+  updateTime?: string
+  userOrgStats?: {
+    totalUsers?: number
+    verifiedUsers?: number
+    pendingUsers?: number
+    totalOrgs?: number
+  }
+  quotaInfo?: {
+    usedUsers?: number
+    userLimit?: number
+    usedOrgs?: number
+    orgLimit?: number
+    usedProducts?: number
+    productLimit?: number
+    usedApiToday?: number
+    apiLimit?: number
+  }
+  operationLogs?: TenantLogItem[]
+}
 
 const route = useRoute()
 const router = useRouter()
-const tenantData = ref(null)
+const tenantData = ref<TenantDetailModel | null>(null)
+const loading = ref(false)
 const loadError = ref('')
+const activeTab = ref('detail')
+
 const isPersonal = computed(() => tenantData.value?.tenantType === 'INDIVIDUAL')
+const isEnabled = computed(() => Number(tenantData.value?.status) === 1)
+const operationLogs = computed(() => tenantData.value?.operationLogs ?? [])
+
 const hasCertification = computed(() => Boolean(
-  tenantData.value?.certificationNo ||
-  tenantData.value?.verificationChannel ||
-  tenantData.value?.legalPersonFaceStatus ||
-  tenantData.value?.identityNoMasked,
+  tenantData.value?.certificationNo
+  || tenantData.value?.verificationChannel
+  || tenantData.value?.legalPersonFaceStatus
+  || tenantData.value?.identityNoMasked,
 ))
+
 const validity = computed(() => {
   const start = tenantData.value?.validStart
   const end = tenantData.value?.validEnd
   return start || end ? `${value(start)} 至 ${value(end)}` : '—'
 })
 
+const verifyStatusBadge = computed<DetailStatusBadge>(() => {
+  const s = String(tenantData.value?.verifyStatus || '').toLowerCase()
+  const map: Record<string, DetailStatusBadge> = {
+    approved: { label: '已认证', tone: 'green' },
+    pending: { label: '审核中', tone: 'orange' },
+    rejected: { label: '已驳回', tone: 'red' },
+    draft: { label: '草稿', tone: 'gray' },
+    unverified: { label: '未认证', tone: 'gray' },
+  }
+  return map[s] || { label: '未认证', tone: 'gray' }
+})
+
+const extraStatuses = computed<DetailStatusBadge[]>(() => [
+  { label: isEnabled.value ? '启用' : '停用', tone: isEnabled.value ? 'green' : 'gray' },
+  { label: subjectTypeText(tenantData.value?.tenantType), tone: isPersonal.value ? 'blue' : 'green' },
+])
+
+const headerMeta = computed(() => {
+  const d = tenantData.value
+  if (!d) return []
+  return [
+    { label: '主体类型', value: subjectTypeText(d.tenantType) },
+    { label: '联系人', value: d.contactName || '未填写' },
+    { label: '联系电话', value: d.phone || '未填写' },
+    { label: '创建时间', value: formatDate(d.createTime) },
+  ]
+})
+
+const tabs = computed<DetailTabEntry[]>(() => [
+  { key: 'detail', label: '主体详情' },
+  { key: 'certification', label: '认证核验' },
+  { key: 'quota', label: '成员与配额' },
+  { key: 'logs', label: '操作记录', count: operationLogs.value.length },
+])
+
+const profileItems = computed<MdsDetailInfoItem[]>(() => {
+  const d = tenantData.value
+  if (!d) return []
+  const base: MdsDetailInfoItem[] = [
+    { key: 'tenantCode', label: '主体编码', value: d.tenantCode, mono: true },
+    { key: 'tenantType', label: '主体类型', value: subjectTypeText(d.tenantType) },
+    { key: 'tenantName', label: isPersonal.value ? '真实姓名' : '企业名称', value: d.tenantName },
+  ]
+  if (isPersonal.value) {
+    base.push(
+      { key: 'identityNoMasked', label: '身份证号码', value: d.identityNoMasked, mono: true },
+      { key: 'businessType', label: '个人经营类型', value: d.businessType },
+      { key: 'validity', label: '证件有效期', value: validity.value, mono: true },
+    )
+  } else {
+    base.push(
+      { key: 'creditCode', label: '统一社会信用代码', value: d.creditCode, mono: true },
+      { key: 'industry', label: '所属行业', value: d.industry },
+      { key: 'companySize', label: '企业规模', value: d.companySize },
+      { key: 'legalPerson', label: '法定代表人', value: d.legalPerson },
+      { key: 'licenseNo', label: '营业执照号', value: d.licenseNo, mono: true },
+      { key: 'registeredCapital', label: '注册资本', value: d.registeredCapital, mono: true },
+    )
+  }
+  base.push(
+    { key: 'createTime', label: '创建时间', value: formatDate(d.createTime), mono: true },
+    { key: 'address', label: '注册地址', value: d.address, fullWidth: true },
+  )
+  return base
+})
+
+const contactItems = computed<MdsDetailInfoItem[]>(() => {
+  const d = tenantData.value
+  if (!d) return []
+  return [
+    { key: 'contactName', label: '联系人', value: d.contactName },
+    { key: 'phone', label: '联系电话', value: d.phone, mono: true },
+    { key: 'email', label: '联系邮箱', value: d.email },
+    { key: 'status', label: '主体状态', value: isEnabled.value ? '启用' : '停用' },
+  ]
+})
+
+const certificationItems = computed<MdsDetailInfoItem[]>(() => {
+  const d = tenantData.value
+  if (!d) return []
+  const items: MdsDetailInfoItem[] = [
+    { key: 'certificationNo', label: '认证单号', value: d.certificationNo, mono: true },
+    { key: 'certStatus', label: '认证状态', value: verifyText(d.certificationStatus || d.verifyStatus) },
+    { key: 'channel', label: '认证渠道', value: d.verificationChannel },
+  ]
+  if (isPersonal.value) {
+    items.push(
+      { key: 'police', label: '公安二要素', value: yesNo(d.policeVerified) },
+      { key: 'liveness', label: '活体核验', value: yesNo(d.livenessVerified) },
+    )
+  } else {
+    items.push(
+      { key: 'face', label: '法人扫脸', value: faceStatusText(d.legalPersonFaceStatus) },
+      { key: 'bankName', label: '对公账户户名', value: d.corporateBankName },
+      { key: 'bankAcc', label: '对公账户', value: d.corporateBankAccount, mono: true },
+      { key: 'transfer', label: '对公打款', value: transferStatusText(d.corporateTransferStatus) },
+      { key: 'license', label: '营业执照材料', value: d.businessLicenseUrl ? '已上传' : '未上传' },
+    )
+  }
+  if (d.certificationReviewRemark) {
+    items.push({ key: 'remark', label: '审核意见', value: d.certificationReviewRemark, fullWidth: true })
+  }
+  return items
+})
+
+const memberStatItems = computed<MdsDetailInfoItem[]>(() => {
+  const s = tenantData.value?.userOrgStats
+  return [
+    { key: 'totalUsers', label: '成员总数', value: countText(s?.totalUsers), mono: true },
+    { key: 'verifiedUsers', label: '已实名成员', value: countText(s?.verifiedUsers), mono: true },
+    { key: 'pendingUsers', label: '待认证成员', value: countText(s?.pendingUsers), mono: true },
+    { key: 'totalOrgs', label: '组织数量', value: countText(s?.totalOrgs), mono: true },
+  ]
+})
+
+const quotaRows = computed(() => {
+  const q = tenantData.value?.quotaInfo
+  return [
+    { label: '用户数', used: countText(q?.usedUsers), limit: countText(q?.userLimit), hint: '绑定当前主体的有效成员数' },
+    { label: '组织数', used: countText(q?.usedOrgs), limit: countText(q?.orgLimit), hint: '归属主体的部门与生产单位数' },
+    { label: '商品数', used: countText(q?.usedProducts), limit: countText(q?.productLimit), hint: '主体名下已建档商品数' },
+    { label: '每日 API', used: countText(q?.usedApiToday), limit: countText(q?.apiLimit), hint: '今日累计接口调用量' },
+  ]
+})
+
+const timelineSteps = computed<DetailTimelineStep[]>(() => {
+  const d = tenantData.value
+  if (!d) return []
+  const vs = String(d.verifyStatus || '').toLowerCase()
+  const hasQuota = d.quotaInfo?.userLimit !== null && d.quotaInfo?.userLimit !== undefined
+  return [
+    {
+      key: 'registered',
+      title: '主体已建档',
+      time: formatDate(d.createTime),
+      description: `${subjectTypeText(d.tenantType)} · ${d.tenantCode || ''}`,
+      state: 'done',
+    },
+    {
+      key: 'verify',
+      title: vs === 'approved' ? '主体认证通过' : vs === 'rejected' ? '主体认证被驳回' : vs === 'pending' ? '等待认证审核' : '尚未完成主体认证',
+      description: d.certificationReviewRemark || (hasCertification.value ? `认证单号 ${d.certificationNo || '已提交'}` : '待主体提交实名/企业资质'),
+      state: vs === 'approved' ? 'done' : vs === 'rejected' ? 'error' : vs === 'pending' ? 'current' : 'pending',
+    },
+    {
+      key: 'quota',
+      title: hasQuota ? '资源配额已生效' : '待配置资源配额',
+      description: hasQuota ? `用户上限 ${countText(d.quotaInfo?.userLimit)} · 组织上限 ${countText(d.quotaInfo?.orgLimit)}` : '按平台默认规则或手动分配',
+      state: hasQuota ? 'done' : vs === 'approved' ? 'current' : 'pending',
+    },
+    {
+      key: 'running',
+      title: isEnabled.value ? '正常启用运营' : '主体已停用',
+      description: isEnabled.value ? `当前关联 ${countText(d.userOrgStats?.totalUsers)} 名成员、${countText(d.userOrgStats?.totalOrgs)} 个组织` : '已暂停业务访问',
+      state: isEnabled.value ? (vs === 'approved' ? 'done' : 'current') : 'error',
+    },
+  ]
+})
+
+const relatedDocs = computed<DetailRelatedDocItem[]>(() => {
+  const d = tenantData.value
+  if (!d) return []
+  const subjectId = String(d.id ?? route.params.id ?? '')
+  return [
+    {
+      key: 'cert',
+      label: '认证单号',
+      code: d.certificationNo || undefined,
+      emptyText: '尚未提交',
+      badge: verifyStatusBadge.value.label,
+      badgeTone: verifyStatusBadge.value.tone as 'green' | 'orange' | 'red' | 'blue' | 'gray',
+      clickable: true,
+      onClick: () => { activeTab.value = 'certification' },
+    },
+    {
+      key: 'quota',
+      label: '主体配额',
+      text: d.quotaInfo?.userLimit !== undefined && d.quotaInfo?.userLimit !== null ? '查看配额详情' : undefined,
+      emptyText: '前往配置配额',
+      clickable: true,
+      onClick: viewQuota,
+    },
+    {
+      key: 'orgs',
+      label: '下属组织',
+      text: `${countText(d.userOrgStats?.totalOrgs)} 个组织`,
+      mono: false,
+      clickable: true,
+      onClick: () => void router.push({ path: '/org/list', query: { tenantId: subjectId } }),
+    },
+    {
+      key: 'users',
+      label: '成员账号',
+      text: `${countText(d.userOrgStats?.totalUsers)} 名成员`,
+      mono: false,
+      clickable: true,
+      onClick: () => void router.push('/user/list'),
+    },
+  ]
+})
+
 const loadDetail = async () => {
+  loading.value = true
   loadError.value = ''
   try {
-    const response = await getTenantDetail(route.params.id)
+    const response = await getTenantDetail(String(route.params.id))
     if (response.code !== 200) throw new Error(response.message || '主体详情加载失败')
-    tenantData.value = response.data
+    tenantData.value = response.data as TenantDetailModel
   } catch (error) {
     tenantData.value = null
     loadError.value = error instanceof Error ? error.message : '主体详情加载失败'
+  } finally {
+    loading.value = false
   }
 }
 
-const goBack = () => router.push('/subject/list')
-const editSubject = () => router.push(`/subject/edit/${route.params.id}`)
-const value = (input) => input === null || input === undefined || input === '' ? '—' : input
-const countText = (input) => input === null || input === undefined ? '—' : Number(input).toLocaleString('zh-CN')
-const quotaText = (used, limit) => `${countText(used)} / ${countText(limit)}`
-const subjectTypeText = (type) => type === 'INDIVIDUAL' ? '个人主体' : '企业主体'
-const verifyText = (status) => ({ approved: '已认证', pending: '审核中', rejected: '已驳回', draft: '草稿', unverified: '未认证' }[status] || '未认证')
-const verifyClass = (status) => ({ approved: 'active', pending: 'pending', rejected: 'rejected', draft: 'inactive', unverified: 'inactive' }[status] || 'inactive')
-const yesNo = (input) => input === true ? '已通过' : input === false ? '未通过' : '—'
-const faceStatusText = (status) => ({ verified: '已通过', uploaded: '材料已上传', pending: '待核验', rejected: '未通过' }[String(status || '').toLowerCase()] || status || '—')
-const transferStatusText = (status) => ({ verified: '已验证', submitted: '已提交', pending: '待打款', rejected: '未通过' }[String(status || '').toLowerCase()] || status || '—')
-const formatDate = (input) => input ? String(input).replace('T', ' ').slice(0, 16) : '—'
+const goBack = () => void router.push('/subject/list')
+const editSubject = () => void router.push(`/subject/edit/${route.params.id}`)
+const viewQuota = () => void router.push(`/subject/quota/${route.params.id}`)
+const printPage = () => window.print()
+
+const value = (input: unknown) => (input === null || input === undefined || input === '' ? '—' : String(input))
+const countText = (input: unknown) => (input === null || input === undefined ? '—' : Number(input).toLocaleString('zh-CN'))
+const quotaText = (used: unknown, limit: unknown) => `${countText(used)} / ${countText(limit)}`
+const subjectTypeText = (type?: string) => (type === 'INDIVIDUAL' ? '个人主体' : '企业主体')
+const verifyText = (status?: string) => ({ approved: '已认证', pending: '审核中', rejected: '已驳回', draft: '草稿', unverified: '未认证' }[status || ''] || '未认证')
+const yesNo = (input?: boolean) => (input === true ? '已通过' : input === false ? '未通过' : '—')
+const faceStatusText = (status?: string) => ({ verified: '已通过', uploaded: '材料已上传', pending: '待核验', rejected: '未通过' }[String(status || '').toLowerCase()] || status || '—')
+const transferStatusText = (status?: string) => ({ verified: '已验证', submitted: '已提交', pending: '待打款', rejected: '未通过' }[String(status || '').toLowerCase()] || status || '—')
+const formatDate = (input?: string) => (input ? String(input).replace('T', ' ').slice(0, 16) : '—')
+
+watch(() => route.params.id, () => {
+  activeTab.value = 'detail'
+  void loadDetail()
+})
 
 onMounted(loadDetail)
 </script>
 
 <style scoped>
-.subject-detail { padding:0; color:var(--pc-text,#1a1a1a); }
-.page-header { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
-.page-header > div { flex:1; min-width:0; }
-.page-header h1 { margin:0 0 4px; font-size:24px; line-height:1.35; color:var(--pc-text,#1a1a1a); }
-.page-header p { margin:0; color:var(--pc-secondary,#595959); font-size:14px; }
-.back-btn,.edit-btn { height:32px; padding:0 16px; border-radius:4px; font-size:14px; font-weight:500; cursor:pointer; }
-.back-btn { border:1px solid var(--pc-border,#e8e8e8); background:#fff; color:var(--pc-text,#1a1a1a); }
-.back-btn:hover { border-color:var(--pc-brand,#2d8f4e); color:var(--pc-brand,#2d8f4e); }
-.edit-btn { border:1px solid var(--pc-brand,#2d8f4e); background:var(--pc-brand,#2d8f4e); color:#fff; }
-.edit-btn:hover { border-color:var(--pc-hover,#247a3f); background:var(--pc-hover,#247a3f); }
-.state-card,.identity-card,.detail-card { border:1px solid var(--pc-border,#e8e8e8); border-radius:8px; background:#fff; box-shadow:none; }
-.state-card { padding:40px; text-align:center; color:var(--pc-secondary,#595959); }
-.state-card.error { color:#b71c1c; background:#ffebee; border-color:#ffcdd2; }
-.identity-card { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 24px; margin-bottom:16px; }
-.identity-main { display:flex; align-items:center; gap:14px; }
-.identity-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:8px; background:var(--pc-light,#e8f5e9); font-size:24px; }
-.identity-title { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
-.identity-title h2 { margin:0; font-size:20px; color:var(--pc-text,#1a1a1a); }
-.identity-main p { margin:4px 0 0; color:var(--pc-secondary,#595959); font-family:var(--pc-mono,ui-monospace,Consolas,monospace); font-size:12px; }
-.identity-status { display:flex; gap:8px; }
-.type-badge,.status-badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:12px; font-weight:500; }
-.type-badge.enterprise,.status-badge.active { background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); }
-.type-badge.personal { background:#e3f2fd; color:#1565c0; }
-.status-badge.pending { background:#fff3e0; color:#8f4500; }
-.status-badge.rejected { background:#ffebee; color:#b71c1c; }
-.status-badge.inactive { background:var(--pc-bg,#f5f6fa); color:var(--pc-secondary,#595959); }
-.content-grid { display:grid; grid-template-columns:1.35fr .65fr; gap:16px; margin-bottom:16px; }
-.detail-card { padding:24px; margin-bottom:16px; }
-.content-grid .detail-card { margin-bottom:0; }
-.card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
-.card-head h3 { margin:0; font-size:18px; color:var(--pc-text,#1a1a1a); }
-.card-head span { color:var(--pc-secondary,#595959); font-size:12px; }
-.card-head a { color:var(--pc-active,#1b6332); font-size:13px; text-decoration:none; }
-.card-head a:hover { text-decoration:underline; }
-.info-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-.info-grid > div { padding:12px 14px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
-.info-grid label { display:block; margin-bottom:4px; color:var(--pc-secondary,#595959); font-size:12px; }
-.info-grid strong { color:var(--pc-text,#1a1a1a); font-size:14px; font-weight:500; word-break:break-all; }
-.wide-field { grid-column:span 2; }
-.stats-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-.stats-grid div { padding:12px 14px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
-.stats-grid span,.stats-grid strong { display:block; }
-.stats-grid span { color:var(--pc-secondary,#595959); font-size:12px; }
-.stats-grid strong { margin-top:6px; color:var(--pc-text,#1a1a1a); font-size:18px; font-variant-numeric:tabular-nums; }
-.log-table { width:100%; border-collapse:collapse; }
-.log-table th,.log-table td { height:48px; padding:12px 16px; border-bottom:1px solid var(--pc-line,#f0f0f0); text-align:left; font-size:14px; color:var(--pc-text,#1a1a1a); }
-.log-table th { background:#fafafa; color:var(--pc-secondary,#595959); font-size:12px; font-weight:600; border-bottom:1px solid var(--pc-border,#e8e8e8); }
-.empty-tip,.empty-certification { margin:0; padding:24px; border-radius:6px; background:var(--pc-bg,#f5f6fa); text-align:center; color:var(--pc-secondary,#595959); font-size:13px; }
-@media(max-width:1000px){.content-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:600px){.page-header{align-items:flex-start;flex-wrap:wrap}.identity-card{align-items:flex-start;flex-direction:column}.info-grid,.stats-grid{grid-template-columns:1fr}.wide-field{grid-column:auto}}
+.detail-section-hint {
+  color: #68776e;
+  font-size: 12px;
+}
 </style>

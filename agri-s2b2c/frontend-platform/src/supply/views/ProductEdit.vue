@@ -42,8 +42,19 @@
         <el-input v-model.number="form.commissionRate" type="number" />
         <span style="margin-left: 10px">%</span>
       </el-form-item>
-      <el-form-item label="认证信息" prop="certifications">
-        <el-input v-model="form.certifications" />
+      <el-form-item label="认证资质" prop="certifications">
+        <el-select
+          v-model="certTags"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          clearable
+          placeholder="选择或输入认证资质（如：有机认证、绿色食品、地理标志）"
+          style="width: 100%"
+        >
+          <el-option v-for="cert in COMMON_CERTIFICATIONS" :key="cert" :label="cert" :value="cert" />
+        </el-select>
       </el-form-item>
       <el-form-item label="溯源批次" prop="prodBatchNo">
         <el-select
@@ -87,6 +98,11 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { supplierApi } from '../api'
+import {
+  COMMON_CERTIFICATIONS,
+  parseCertifications,
+  serializeCertifications,
+} from '../../../../frontend-shared/detail/s2b2cDetailHelper'
 
 const router = useRouter()
 const route = useRoute()
@@ -126,6 +142,7 @@ const form = reactive({
 })
 
 const batches = ref([])
+const certTags = ref([])
 const batchLoading = ref(false)
 const traceHint = ref('')
 const saving = ref(false)
@@ -164,6 +181,7 @@ const loadProduct = async () => {
       return
     }
     Object.assign(form, res)
+    certTags.value = parseCertifications(res.certifications)
     // 已绑定的批次要能看见预览；它可能不在第一页候选里，所以单独按编号取一次
     if (form.prodBatchNo) {
       await previewTrace(form.prodBatchNo)
@@ -215,6 +233,7 @@ const submitForm = async () => {
     saving.value = true
     saveError.value = ''
     try {
+      form.certifications = serializeCertifications(certTags.value)
       const res = await supplierApi.updateProduct(form)
       if (res.success) {
         // 回显服务端记录的绑定值：解绑是否真的落库，不能靠"我以为提交了"

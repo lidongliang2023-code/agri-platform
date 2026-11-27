@@ -114,7 +114,7 @@
         :collapsed="collapsed"
         :mobile="isMobile"
         :mobile-open="drawerOpen"
-        :breadcrumbs="[currentGroupLabel, currentPageLabel]"
+        :breadcrumbs="headerBreadcrumbs"
         @toggle-collapse="toggleCollapse"
       >
         <template #right>
@@ -466,31 +466,47 @@ function isGroupOpen(group: MenuGroup): boolean {
   return expandedKeys.value.includes(group.key)
 }
 
-const subPageTitleRules: Array<{ pattern: RegExp; label: string }> = [
-  { pattern: /^\/(subject|tenant)\/detail\/[^/]+$/, label: '主体详情' },
+const subPageTitleRules: Array<{ pattern: RegExp; label: string; withId?: boolean }> = [
+  { pattern: /^\/(subject|tenant)\/detail\/[^/]+$/, label: '主体详情', withId: true },
   { pattern: /^\/(subject|tenant)\/edit\/[^/]+$/, label: '编辑主体资料' },
   { pattern: /^\/(subject|tenant)\/package\/new$/, label: '新建服务套餐' },
   { pattern: /^\/(subject|tenant)\/package\/[^/]+\/edit$/, label: '编辑服务套餐' },
-  { pattern: /^\/(subject|tenant)\/package\/[^/]+$/, label: '服务套餐详情' },
+  { pattern: /^\/(subject|tenant)\/package\/[^/]+$/, label: '服务套餐详情', withId: true },
   { pattern: /^\/(subject|tenant)\/quota\/[^/]+\/edit$/, label: '编辑主体配额' },
-  { pattern: /^\/(subject|tenant)\/quota\/[^/]+$/, label: '主体配额详情' },
+  { pattern: /^\/(subject|tenant)\/quota\/[^/]+$/, label: '主体配额详情', withId: true },
   { pattern: /^\/org\/new$/, label: '新建组织' },
   { pattern: /^\/org\/edit\/[^/]+$/, label: '编辑组织' },
-  { pattern: /^\/org\/detail\/[^/]+$/, label: '组织详情' },
+  { pattern: /^\/org\/detail\/[^/]+$/, label: '组织详情', withId: true },
   { pattern: /^\/permission\/role\/new$/, label: '新建角色' },
   { pattern: /^\/permission\/role\/[^/]+\/edit$/, label: '编辑角色' },
-  { pattern: /^\/permission\/role\/[^/]+$/, label: '角色详情' },
-  { pattern: /^\/user\/detail\/[^/]+$/, label: '统一用户详情' },
+  { pattern: /^\/permission\/role\/[^/]+$/, label: '角色详情', withId: true },
+  { pattern: /^\/user\/detail\/[^/]+$/, label: '统一用户详情', withId: true },
 ]
 
 const currentGroup = computed(() => menuGroups.find((group) => group.items.some((item) => isActive(item.path))))
 const currentGroupLabel = computed(() => currentGroup.value?.label ?? '主数据管理')
+const currentMenuItem = computed(() => currentGroup.value?.items.find((entry) => isActive(entry.path)))
 const currentPageLabel = computed(() => {
   const matchedSub = subPageTitleRules.find((rule) => rule.pattern.test(route.path))
-  if (matchedSub) return matchedSub.label
-  const item = currentGroup.value?.items.find((entry) => isActive(entry.path))
-  if (item) return item.label
+  if (matchedSub) {
+    const id = matchedSub.withId && route.params.id ? String(route.params.id) : ''
+    return id ? `${matchedSub.label} · ${id}` : matchedSub.label
+  }
+  if (currentMenuItem.value) return currentMenuItem.value.label
   return detailTitles[route.path] ?? '页面'
+})
+
+const headerBreadcrumbs = computed(() => {
+  const matchedSub = subPageTitleRules.find((rule) => rule.pattern.test(route.path))
+  const listItem = currentMenuItem.value
+  if (matchedSub && listItem && listItem.label !== currentPageLabel.value) {
+    return [
+      currentGroupLabel.value,
+      { label: listItem.label, onClick: () => void router.push(listItem.path) },
+      currentPageLabel.value,
+    ]
+  }
+  return [currentGroupLabel.value, currentPageLabel.value]
 })
 
 const detailTitles: Record<string, string> = {

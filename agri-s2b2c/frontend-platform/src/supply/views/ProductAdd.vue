@@ -50,8 +50,19 @@
           <el-icon><Plus /></el-icon>
         </el-upload>
       </el-form-item>
-      <el-form-item label="认证信息" prop="certifications">
-        <el-input v-model="form.certifications" />
+      <el-form-item label="认证资质" prop="certifications">
+        <el-select
+          v-model="certTags"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          clearable
+          placeholder="选择或输入认证资质（如：有机认证、绿色食品、地理标志）"
+          style="width: 100%"
+        >
+          <el-option v-for="cert in COMMON_CERTIFICATIONS" :key="cert" :label="cert" :value="cert" />
+        </el-select>
       </el-form-item>
       <el-form-item label="溯源批次" prop="prodBatchNo">
         <el-select
@@ -93,6 +104,10 @@ import { useRouter } from 'vue-router'
 import { Plus } from '@element-plus/icons-vue'
 import { supplierApi } from '../api'
 import { currentSupplierId } from '../api/supplierSession'
+import {
+  COMMON_CERTIFICATIONS,
+  serializeCertifications,
+} from '../../../../frontend-shared/detail/s2b2cDetailHelper'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -127,6 +142,7 @@ const form = reactive({
 })
 
 const batches = ref([])
+const certTags = ref([])
 const batchLoading = ref(false)
 const saveError = ref('')
 
@@ -162,6 +178,7 @@ const submitForm = async () => {
     saveError.value = ''
     try {
       form.supplierId = await currentSupplierId()
+      form.certifications = serializeCertifications(certTags.value)
       const res = await supplierApi.createProduct(form)
       if (res.success) {
         alert('商品创建成功，等待审核')

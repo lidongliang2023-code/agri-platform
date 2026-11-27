@@ -649,6 +649,77 @@
   font-weight: 400;
 }
 
+.agri-detail-section-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--detail-brand);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.agri-detail-section-link:hover {
+  color: var(--detail-brand-hover);
+  text-decoration: underline;
+}
+
+.agri-detail-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.agri-detail-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.agri-detail-kpi-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #ecefed;
+  border-radius: 8px;
+  background: #fafcfb;
+}
+
+.agri-detail-kpi-cell span {
+  color: var(--detail-text-secondary);
+  font-size: 12px;
+}
+
+.agri-detail-kpi-cell strong {
+  color: var(--detail-text);
+  font-size: 18px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.agri-detail-kpi-cell small {
+  color: var(--detail-text-muted);
+  font-size: 12px;
+}
+
+.agri-detail-page .agri-detail-section-body.is-flush .ant-table-wrapper .ant-table {
+  border-radius: 0;
+}
+
+@media print {
+  .agri-detail-header-actions,
+  .agri-detail-back-btn,
+  .agri-detail-tabs-bar {
+    display: none !important;
+  }
+  .agri-detail-header-sticky {
+    position: static !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+}
+
 @media (max-width: 1120px) {
   .agri-detail-body {
     grid-template-columns: minmax(0, 1fr);

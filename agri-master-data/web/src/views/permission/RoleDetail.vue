@@ -1,179 +1,418 @@
 <template>
-  <div class="role-detail">
-    <header class="page-header">
-      <button class="back-btn" @click="goBack">← 返回角色列表</button>
-      <div>
-        <h1>角色详情</h1>
-        <p>查看角色归属、数据范围、成员使用和权限配置状态。</p>
+  <div v-if="loadError" class="agri-detail-page">
+    <div class="mds-detail-state is-error">
+      <p>{{ loadError }}</p>
+      <div style="margin-top: 12px; display: flex; justify-content: center; gap: 8px">
+        <a-button @click="goBack">返回角色列表</a-button>
+        <a-button type="primary" @click="loadDetail">重新加载</a-button>
       </div>
-      <div v-if="roleData" class="header-actions">
-        <button class="status-btn" v-point="'PUT /admin/masterdata/permission/role/{id}/status'" :disabled="!roleData.editable || statusUpdating" @click="toggleStatus">
-          {{ roleData.status === 1 ? '停用角色' : '启用角色' }}
-        </button>
-        <button class="edit-btn" v-point="'PUT /admin/masterdata/permission/role/{id}'" :disabled="!roleData.editable" @click="editRole">编辑角色</button>
-      </div>
-    </header>
-
-    <div v-if="loadError" class="state-card error">{{ loadError }}</div>
-    <div v-else-if="!roleData" class="state-card">正在加载角色详情…</div>
-
-    <template v-else>
-      <section v-if="roleData.isSystem || roleData.legacy" class="readonly-notice">
-        <strong>{{ roleData.isSystem ? '系统内置角色 · 只读' : '历史主体角色 · 只读' }}</strong>
-        <p>{{ roleData.isSystem
-          ? '系统内置角色承担平台基础权限，不允许在运营端修改、停用或删除。'
-          : '该角色仍使用旧主体编码，未关联统一经营主体。为避免错误授权，运营端仅允许查看。' }}</p>
-      </section>
-
-      <section class="identity-card">
-        <div class="identity-main">
-          <span class="identity-icon">{{ roleData.roleType === 'system' ? '系' : '角' }}</span>
-          <div>
-            <div class="identity-title">
-              <h2>{{ roleData.roleName }}</h2>
-              <span class="type-badge" :class="roleData.roleType">{{ roleData.roleType === 'system' ? '系统角色' : '自定义角色' }}</span>
-              <span class="ownership-badge" :class="ownershipClass">{{ roleData.ownershipLabel }}</span>
-            </div>
-            <p>{{ roleData.roleCode }} · {{ roleData.roleKey || '未设置角色标识' }}</p>
-          </div>
-        </div>
-        <span class="status-badge" :class="roleData.status === 1 ? 'active' : 'inactive'">
-          {{ roleData.status === 1 ? '启用' : '停用' }}
-        </span>
-      </section>
-
-      <div class="content-grid">
-        <section class="detail-card">
-          <div class="card-head">
-            <div>
-              <h3>角色档案</h3>
-              <p>角色基础资料与程序权限标识。</p>
-            </div>
-            <span>排序 {{ roleData.roleSort ?? 0 }}</span>
-          </div>
-          <div class="info-grid">
-            <div><label>角色名称</label><strong>{{ value(roleData.roleName) }}</strong></div>
-            <div><label>角色编码</label><strong class="mono">{{ value(roleData.roleCode) }}</strong></div>
-            <div><label>角色标识</label><strong class="mono">{{ value(roleData.roleKey) }}</strong></div>
-            <div><label>角色类型</label><strong>{{ roleData.roleType === 'system' ? '系统角色' : '自定义角色' }}</strong></div>
-            <div><label>角色状态</label><strong>{{ roleData.status === 1 ? '启用' : '停用' }}</strong></div>
-            <div><label>显示排序</label><strong>{{ roleData.roleSort ?? 0 }}</strong></div>
-            <div><label>创建人</label><strong>{{ value(roleData.createBy) }}</strong></div>
-            <div><label>创建时间</label><strong>{{ formatDateTime(roleData.createTime) }}</strong></div>
-            <div><label>最后更新</label><strong>{{ formatDateTime(roleData.updateTime) }}</strong></div>
-          </div>
-        </section>
-
-        <section class="detail-card">
-          <div class="card-head">
-            <div>
-              <h3>角色归属</h3>
-              <p>角色可属于平台公共范围或单一经营主体。</p>
-            </div>
-          </div>
-          <div class="owner-card">
-            <span class="owner-icon">{{ roleData.ownershipType === 'PLATFORM' ? '台' : '主' }}</span>
-            <div>
-              <strong>{{ roleData.tenantName || '平台公共' }}</strong>
-              <p>{{ roleData.ownershipLabel }}</p>
-              <small v-if="roleData.tenantId" class="mono">{{ roleData.tenantId }}</small>
-            </div>
-          </div>
-          <div class="owner-note" :class="{ warning: roleData.legacy }">
-            {{ roleData.ownershipType === 'PLATFORM'
-              ? '平台公共角色可被符合条件的经营主体引用。'
-              : roleData.legacy
-                ? '历史主体编码尚未迁移，当前不可继续授权。'
-                : '主体角色只在所属主体内生效，日常维护应通过个人中心完成。' }}
-          </div>
-        </section>
-      </div>
-
-      <div class="content-grid">
-        <section class="detail-card">
-          <div class="card-head">
-            <div><h3>数据范围</h3><p>角色可访问业务数据的边界。</p></div>
-          </div>
-          <div class="scope-display">
-            <span>{{ roleData.dataScope || '—' }}</span>
-            <div>
-              <strong>{{ roleData.dataScopeName || '未设置' }}</strong>
-              <p>{{ scopeDescription }}</p>
-            </div>
-          </div>
-        </section>
-
-        <section class="detail-card">
-          <div class="card-head">
-            <div><h3>使用情况</h3><p>角色成员与权限资源绑定数量。</p></div>
-          </div>
-          <div class="usage-grid">
-            <div><span>绑定成员</span><strong>{{ roleData.userCount ?? 0 }}</strong></div>
-            <div><span>菜单权限</span><strong>{{ roleData.menuCount ?? 0 }}</strong></div>
-            <div><span>接口权限</span><strong>{{ roleData.permissionCount ?? 0 }}</strong></div>
-          </div>
-        </section>
-      </div>
-
-      <section class="detail-card">
-        <div class="card-head">
-          <div><h3>角色说明</h3><p>角色职责、适用场景和运营备注。</p></div>
-        </div>
-        <div class="text-grid">
-          <div><label>角色说明</label><p>{{ value(roleData.description, '未填写角色说明') }}</p></div>
-          <div><label>运营备注</label><p>{{ value(roleData.remark, '未填写运营备注') }}</p></div>
-        </div>
-      </section>
-
-      <section class="detail-card permission-status">
-        <div>
-          <h3>权限配置状态</h3>
-          <p v-if="(roleData.menuCount ?? 0) === 0 && (roleData.permissionCount ?? 0) === 0">
-            <template v-if="roleData.editable">该角色还没有绑定任何权限点，可到「角色权限矩阵」开启编辑授权后按单元格分配。</template>
-            <template v-else>该角色没有绑定权限点，且只读角色不允许在运营端修改授权。</template>
-          </p>
-          <p v-else>
-            已关联 {{ roleData.menuCount ?? 0 }} 个菜单和 {{ roleData.permissionCount ?? 0 }} 个接口权限点。
-          </p>
-        </div>
-        <div class="permission-actions">
-          <button v-if="roleData.editable" class="edit-btn" type="button" @click="goMatrix">去矩阵配置</button>
-          <span>{{ (roleData.menuCount ?? 0) + (roleData.permissionCount ?? 0) > 0 ? '已配置' : '未配置' }}</span>
-        </div>
-      </section>
-    </template>
+    </div>
   </div>
+  <div v-else-if="!roleData" class="agri-detail-page">
+    <div class="mds-detail-state">正在加载角色详情…</div>
+  </div>
+  <AgriVueDetailLayout
+    v-else
+    :code="roleData.roleCode || `ROLE-${route.params.id}`"
+    :title="value(roleData.roleName)"
+    :status="statusBadge"
+    :extra-statuses="extraStatuses"
+    :meta="headerMeta"
+    :tabs="tabs"
+    v-model:active-tab="activeTab"
+    back-label="返回角色列表"
+    @back="goBack"
+  >
+    <template #actions>
+      <a-button @click="printPage">打印</a-button>
+      <a-button :loading="loading" @click="loadDetail">刷新</a-button>
+      <a-button v-if="roleData.editable" @click="goMatrix">权限矩阵</a-button>
+      <a-button
+        v-if="roleData.editable && isEnabled"
+        v-point="'PUT /admin/masterdata/permission/role/{id}/status'"
+        danger
+        :loading="statusUpdating"
+        @click="toggleStatus"
+      >
+        停用角色
+      </a-button>
+      <a-button
+        v-else-if="roleData.editable"
+        v-point="'PUT /admin/masterdata/permission/role/{id}/status'"
+        :loading="statusUpdating"
+        @click="toggleStatus"
+      >
+        启用角色
+      </a-button>
+      <a-button
+        v-point="'PUT /admin/masterdata/permission/role/{id}'"
+        type="primary"
+        :disabled="!roleData.editable"
+        @click="editRole"
+      >
+        编辑角色
+      </a-button>
+    </template>
+
+    <template v-if="roleData.isSystem || roleData.legacy" #banner>
+      <NoticeBar tone="warning" :title="roleData.isSystem ? '系统内置角色 · 只读：' : '历史主体角色 · 只读：'">
+        {{ roleData.isSystem
+          ? '系统内置角色承担平台基础权限，不允许在运营端修改、停用或删除。'
+          : '该角色仍使用旧主体编码，未关联统一经营主体。为避免错误授权，运营端仅允许查看。' }}
+      </NoticeBar>
+    </template>
+
+    <template v-if="activeTab === 'detail'">
+      <AgriVueDetailSection title="角色档案">
+        <template #extra>
+          <span class="detail-section-hint">排序 {{ roleData.roleSort ?? 0 }}</span>
+        </template>
+        <MdsDetailInfoGrid :items="profileItems" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="归属与数据范围">
+        <MdsDetailInfoGrid :items="scopeItems" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="成员与权限绑定概览">
+        <template #extra>
+          <button type="button" class="detail-section-link" @click="activeTab = 'permissions'">
+            查看权限配置 →
+          </button>
+        </template>
+        <div class="detail-kpi-strip">
+          <div class="detail-kpi-cell">
+            <span>绑定成员</span>
+            <strong>{{ roleData.userCount ?? 0 }}</strong>
+            <small>使用该角色的账号数</small>
+          </div>
+          <div class="detail-kpi-cell">
+            <span>菜单权限</span>
+            <strong>{{ roleData.menuCount ?? 0 }}</strong>
+            <small>已授权功能菜单</small>
+          </div>
+          <div class="detail-kpi-cell">
+            <span>接口权限</span>
+            <strong>{{ roleData.permissionCount ?? 0 }}</strong>
+            <small>已授权后端接口点</small>
+          </div>
+        </div>
+      </AgriVueDetailSection>
+    </template>
+
+    <template v-else-if="activeTab === 'permissions'">
+      <AgriVueDetailSection title="数据访问边界">
+        <MdsDetailInfoGrid :items="dataScopeDetailItems" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="权限配置状态" :flush="true">
+        <template #extra>
+          <button v-if="roleData.editable" type="button" class="detail-section-link" @click="goMatrix">
+            前往权限矩阵配置 →
+          </button>
+        </template>
+        <div class="mds-detail-table-wrap">
+          <table class="mds-detail-table">
+            <thead>
+              <tr>
+                <th>权限维度</th>
+                <th class="is-num">已绑定数量</th>
+                <th>配置状态</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>菜单权限</td>
+                <td class="is-num">{{ menuCountNum }}</td>
+                <td>
+                  <span class="agri-detail-status-pill" :class="menuCountNum > 0 ? 'is-green' : 'is-orange'">
+                    {{ menuCountNum > 0 ? '已配置' : '未配置' }}
+                  </span>
+                </td>
+                <td>控制侧栏菜单与页面访问入口</td>
+              </tr>
+              <tr>
+                <td>接口权限点</td>
+                <td class="is-num">{{ permissionCountNum }}</td>
+                <td>
+                  <span class="agri-detail-status-pill" :class="permissionCountNum > 0 ? 'is-green' : 'is-orange'">
+                    {{ permissionCountNum > 0 ? '已配置' : '未配置' }}
+                  </span>
+                </td>
+                <td>控制按钮显隐与写接口鉴权</td>
+              </tr>
+              <tr>
+                <td>绑定成员</td>
+                <td class="is-num">{{ userCountNum }}</td>
+                <td>
+                  <span class="agri-detail-status-pill" :class="userCountNum > 0 ? 'is-blue' : 'is-gray'">
+                    {{ userCountNum > 0 ? '使用中' : '暂无成员' }}
+                  </span>
+                </td>
+                <td>关联当前角色的成员账号总数</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </AgriVueDetailSection>
+    </template>
+
+    <template v-else-if="activeTab === 'notes'">
+      <AgriVueDetailSection title="角色说明与运营备注">
+        <MdsDetailInfoGrid :items="noteItems" />
+      </AgriVueDetailSection>
+    </template>
+
+    <template #aside>
+      <AgriVueDetailSection title="角色配置进度">
+        <AgriVueDetailTimeline :items="timelineSteps" />
+      </AgriVueDetailSection>
+
+      <AgriVueDetailSection title="关联范围与入口">
+        <AgriVueDetailRelated :items="relatedDocs" />
+      </AgriVueDetailSection>
+    </template>
+  </AgriVueDetailLayout>
 </template>
 
-<script setup>
-import { computed, onMounted, ref } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import {
+  AgriVueDetailLayout,
+  AgriVueDetailRelated,
+  AgriVueDetailSection,
+  AgriVueDetailTimeline,
+  type DetailRelatedDocItem,
+  type DetailStatusBadge,
+  type DetailTabEntry,
+  type DetailTimelineStep,
+} from '@agri/shared/vue/detail'
+import MdsDetailInfoGrid, { type MdsDetailInfoItem } from '@/components/ui/MdsDetailInfoGrid.vue'
+import NoticeBar from '@/components/ui/NoticeBar.vue'
 import { getRoleDetail, updateRoleStatus } from '../../utils/api'
+
+interface RoleDetailModel {
+  id: number | string
+  roleName?: string
+  roleCode?: string
+  roleKey?: string
+  roleType?: string
+  roleSort?: number
+  status?: number
+  editable?: boolean
+  isSystem?: boolean
+  legacy?: boolean
+  ownershipType?: string
+  ownershipLabel?: string
+  tenantId?: number | string
+  tenantName?: string
+  dataScope?: string
+  dataScopeName?: string
+  userCount?: number
+  menuCount?: number
+  permissionCount?: number
+  description?: string
+  remark?: string
+  createBy?: string
+  createTime?: string
+  updateTime?: string
+}
 
 const route = useRoute()
 const router = useRouter()
-const roleData = ref(null)
+const roleData = ref<RoleDetailModel | null>(null)
+const loading = ref(false)
 const loadError = ref('')
 const statusUpdating = ref(false)
-const ownershipClass = computed(() => String(roleData.value?.ownershipType || '').toLowerCase())
+const activeTab = ref('detail')
+
+const isEnabled = computed(() => Number(roleData.value?.status) === 1)
+const menuCountNum = computed(() => Number(roleData.value?.menuCount ?? 0) || 0)
+const permissionCountNum = computed(() => Number(roleData.value?.permissionCount ?? 0) || 0)
+const userCountNum = computed(() => Number(roleData.value?.userCount ?? 0) || 0)
+const totalPermissions = computed(() => menuCountNum.value + permissionCountNum.value)
+
 const scopeDescription = computed(() => ({
   ALL: '可访问平台或主体范围内的全部业务数据。',
   TENANT: '仅访问所属经营主体范围内的数据。',
   ORG: '仅访问成员所属组织及其下级组织的数据。',
   DEPT: '仅访问成员所在部门的数据。',
   OWNER: '仅访问本人创建或负责的数据。',
-}[roleData.value?.dataScope] || '尚未设置数据范围。'))
+}[roleData.value?.dataScope || ''] || '尚未设置数据范围。'))
+
+const statusBadge = computed<DetailStatusBadge>(() => ({
+  label: isEnabled.value ? '启用' : '停用',
+  tone: isEnabled.value ? 'green' : 'gray',
+}))
+
+const extraStatuses = computed<DetailStatusBadge[]>(() => {
+  const d = roleData.value
+  if (!d) return []
+  return [
+    { label: d.roleType === 'system' ? '系统角色' : '自定义角色', tone: d.roleType === 'system' ? 'orange' : 'blue' },
+    { label: d.ownershipLabel || (d.ownershipType === 'PLATFORM' ? '平台公共' : '主体角色'), tone: d.legacy ? 'gray' : 'green' },
+  ]
+})
+
+const headerMeta = computed(() => {
+  const d = roleData.value
+  if (!d) return []
+  return [
+    { label: '角色标识', value: d.roleKey || '未设置' },
+    { label: '归属范围', value: d.tenantName || '平台公共' },
+    { label: '数据范围', value: d.dataScopeName || d.dataScope || '未设置' },
+    { label: '创建时间', value: formatDateTime(d.createTime) },
+  ]
+})
+
+const tabs = computed<DetailTabEntry[]>(() => [
+  { key: 'detail', label: '角色详情' },
+  { key: 'permissions', label: '权限与范围', count: totalPermissions.value },
+  { key: 'notes', label: '说明与备注' },
+])
+
+const profileItems = computed<MdsDetailInfoItem[]>(() => {
+  const d = roleData.value
+  if (!d) return []
+  return [
+    { key: 'roleName', label: '角色名称', value: d.roleName },
+    { key: 'roleCode', label: '角色编码', value: d.roleCode, mono: true },
+    { key: 'roleKey', label: '角色标识', value: d.roleKey, mono: true },
+    { key: 'roleType', label: '角色类型', value: d.roleType === 'system' ? '系统角色' : '自定义角色' },
+    { key: 'status', label: '角色状态', value: isEnabled.value ? '启用' : '停用' },
+    { key: 'roleSort', label: '显示排序', value: String(d.roleSort ?? 0), mono: true },
+    { key: 'createBy', label: '创建人', value: d.createBy },
+    { key: 'createTime', label: '创建时间', value: formatDateTime(d.createTime), mono: true },
+    { key: 'updateTime', label: '最后更新', value: formatDateTime(d.updateTime), mono: true },
+  ]
+})
+
+const scopeItems = computed<MdsDetailInfoItem[]>(() => {
+  const d = roleData.value
+  if (!d) return []
+  const note = d.ownershipType === 'PLATFORM'
+    ? '平台公共角色可被符合条件的经营主体引用。'
+    : d.legacy
+      ? '历史主体编码尚未迁移，当前不可继续授权。'
+      : '主体角色只在所属主体内生效，日常维护应通过个人中心完成。'
+  return [
+    { key: 'owner', label: '归属主体', value: d.tenantName || '平台公共' },
+    { key: 'ownership', label: '归属类别', value: d.ownershipLabel || d.ownershipType },
+    { key: 'dataScope', label: '数据范围', value: `${d.dataScopeName || '未设置'}（${d.dataScope || '—'}）` },
+    { key: 'tenantId', label: '主体编号', value: d.tenantId ? String(d.tenantId) : '平台公共', mono: Boolean(d.tenantId) },
+    { key: 'scopeNote', label: '归属说明', value: note, fullWidth: true },
+  ]
+})
+
+const dataScopeDetailItems = computed<MdsDetailInfoItem[]>(() => {
+  const d = roleData.value
+  if (!d) return []
+  return [
+    { key: 'code', label: '范围编码', value: d.dataScope || '—', mono: true },
+    { key: 'name', label: '范围名称', value: d.dataScopeName || '未设置' },
+    { key: 'desc', label: '访问规则', value: scopeDescription.value, fullWidth: true },
+  ]
+})
+
+const noteItems = computed<MdsDetailInfoItem[]>(() => {
+  const d = roleData.value
+  if (!d) return []
+  return [
+    { key: 'description', label: '角色说明', value: value(d.description, '未填写角色说明'), fullWidth: true },
+    { key: 'remark', label: '运营备注', value: value(d.remark, '未填写运营备注'), fullWidth: true },
+  ]
+})
+
+const timelineSteps = computed<DetailTimelineStep[]>(() => {
+  const d = roleData.value
+  if (!d) return []
+  const hasPerm = totalPermissions.value > 0
+  const hasUsers = userCountNum.value > 0
+  return [
+    {
+      key: 'created',
+      title: '角色已创建',
+      time: formatDateTime(d.createTime),
+      description: `${d.roleType === 'system' ? '系统内置' : '自定义角色'} · ${d.roleCode || ''}`,
+      state: 'done',
+    },
+    {
+      key: 'scope',
+      title: d.dataScope ? `已配置数据范围（${d.dataScopeName || d.dataScope}）` : '待设置数据范围',
+      description: scopeDescription.value,
+      state: d.dataScope ? 'done' : 'current',
+    },
+    {
+      key: 'perm',
+      title: hasPerm ? `已分配 ${totalPermissions.value} 项权限` : '尚未绑定权限点',
+      description: hasPerm ? `菜单 ${d.menuCount ?? 0} 个 · 接口 ${d.permissionCount ?? 0} 个` : '可前往角色权限矩阵分配权限',
+      state: hasPerm ? 'done' : 'current',
+    },
+    {
+      key: 'active',
+      title: !isEnabled.value ? '角色已停用' : hasUsers ? `生效使用中（${d.userCount} 名成员）` : '已启用（待分配成员）',
+      time: formatDateTime(d.updateTime),
+      state: !isEnabled.value ? 'error' : hasUsers ? 'done' : 'pending',
+    },
+  ]
+})
+
+const relatedDocs = computed<DetailRelatedDocItem[]>(() => {
+  const d = roleData.value
+  if (!d) return []
+  return [
+    {
+      key: 'matrix',
+      label: '角色权限矩阵',
+      text: '查看权限分配',
+      mono: false,
+      badge: totalPermissions.value > 0 ? '已配置' : '未配置',
+      badgeTone: totalPermissions.value > 0 ? 'green' : 'orange',
+      clickable: true,
+      onClick: goMatrix,
+    },
+    {
+      key: 'subject',
+      label: '归属经营主体',
+      text: d.tenantName || '平台公共',
+      mono: false,
+      clickable: Boolean(d.tenantId && !d.legacy && d.ownershipType !== 'PLATFORM'),
+      onClick: () => { if (d.tenantId) void router.push(`/subject/detail/${d.tenantId}`) },
+    },
+    {
+      key: 'anomaly',
+      label: '异常权限检测',
+      text: '前往巡检',
+      mono: false,
+      clickable: true,
+      onClick: () => void router.push('/permission/anomaly'),
+    },
+    {
+      key: 'audit',
+      label: '操作审计日志',
+      text: '查看变更记录',
+      mono: false,
+      clickable: true,
+      onClick: () => void router.push('/permission/log'),
+    },
+  ]
+})
 
 const loadDetail = async () => {
+  loading.value = true
   loadError.value = ''
   try {
-    const response = await getRoleDetail(route.params.id)
+    const response = await getRoleDetail(String(route.params.id))
     if (response.code !== 200) throw new Error(response.message || '角色详情加载失败')
-    roleData.value = response.data
+    roleData.value = response.data as RoleDetailModel
   } catch (error) {
     roleData.value = null
     loadError.value = error instanceof Error ? error.message : '角色详情加载失败'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -194,84 +433,27 @@ const toggleStatus = async () => {
   }
 }
 
-const goBack = () => router.push('/permission/role')
-const goMatrix = () => router.push('/permission/matrix')
-const editRole = () => roleData.value?.editable && router.push(`/permission/role/${roleData.value.id}/edit`)
-const value = (input, fallback = '—') => input === null || input === undefined || input === '' ? fallback : input
-const formatDateTime = (input) => input ? String(input).replace('T', ' ').slice(0, 16) : '—'
+const goBack = () => void router.push('/permission/role')
+const goMatrix = () => void router.push('/permission/matrix')
+const editRole = () => {
+  if (roleData.value?.editable) void router.push(`/permission/role/${roleData.value.id}/edit`)
+}
+const printPage = () => window.print()
+
+const value = (input: unknown, fallback = '—') => (input === null || input === undefined || input === '' ? fallback : String(input))
+const formatDateTime = (input?: string) => (input ? String(input).replace('T', ' ').slice(0, 16) : '—')
+
+watch(() => route.params.id, () => {
+  activeTab.value = 'detail'
+  void loadDetail()
+})
 
 onMounted(loadDetail)
 </script>
 
 <style scoped>
-.role-detail { padding:0; color:var(--pc-text,#1a1a1a); }
-.page-header { display:flex; align-items:center; gap:16px; margin-bottom:20px; }
-.page-header > div:not(.header-actions) { flex:1; min-width:0; }
-.page-header h1 { margin:0 0 4px; font-size:24px; line-height:1.35; color:var(--pc-text,#1a1a1a); }
-.page-header p { margin:0; color:var(--pc-secondary,#595959); font-size:14px; }
-.header-actions { display:flex; gap:8px; }
-.back-btn,.status-btn,.edit-btn { height:32px; padding:0 16px; border-radius:4px; font-size:14px; font-weight:500; cursor:pointer; }
-.back-btn,.status-btn { border:1px solid var(--pc-border,#e8e8e8); background:#fff; color:var(--pc-text,#1a1a1a); }
-.back-btn:hover,.status-btn:hover:not(:disabled) { border-color:var(--pc-brand,#2d8f4e); color:var(--pc-brand,#2d8f4e); }
-.edit-btn { border:1px solid var(--pc-brand,#2d8f4e); background:var(--pc-brand,#2d8f4e); color:#fff; }
-.edit-btn:hover:not(:disabled) { border-color:var(--pc-hover,#247a3f); background:var(--pc-hover,#247a3f); }
-.header-actions button:disabled { opacity:.45; cursor:not-allowed; }
-.state-card,.identity-card,.detail-card { border:1px solid var(--pc-border,#e8e8e8); border-radius:8px; background:#fff; box-shadow:none; }
-.state-card { padding:40px; text-align:center; color:var(--pc-secondary,#595959); }
-.state-card.error { color:#b71c1c; background:#ffebee; border-color:#ffcdd2; }
-.readonly-notice { padding:14px 16px; margin-bottom:16px; border:1px solid var(--pc-border,#e8e8e8); border-left:4px solid var(--pc-muted,#8c8c8c); border-radius:8px; background:#fff; }
-.readonly-notice strong { color:var(--pc-text,#1a1a1a); font-size:14px; }
-.readonly-notice p { margin:4px 0 0; color:var(--pc-secondary,#595959); font-size:13px; line-height:1.6; }
-.identity-card { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 24px; margin-bottom:16px; }
-.identity-main { display:flex; align-items:center; gap:14px; }
-.identity-icon { width:48px; height:48px; display:grid; place-items:center; border-radius:8px; background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); font-size:18px; font-weight:600; }
-.identity-title { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
-.identity-title h2 { margin:0; font-size:20px; color:var(--pc-text,#1a1a1a); }
-.identity-main p { margin:4px 0 0; color:var(--pc-secondary,#595959); font-family:var(--pc-mono,ui-monospace,Consolas,monospace); font-size:12px; }
-.type-badge,.status-badge,.ownership-badge { display:inline-block; padding:3px 10px; border-radius:4px; font-size:12px; font-weight:500; }
-.type-badge.system { background:#fff3e0; color:#8f4500; }
-.type-badge.custom { background:#f3e5f5; color:#6a1b9a; }
-.ownership-badge.platform { background:#e3f2fd; color:#1565c0; }
-.ownership-badge.subject { background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); }
-.ownership-badge.legacy { background:var(--pc-bg,#f5f6fa); color:var(--pc-secondary,#595959); }
-.status-badge.active { background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); }
-.status-badge.inactive { background:var(--pc-bg,#f5f6fa); color:var(--pc-secondary,#595959); }
-.content-grid { display:grid; grid-template-columns:1.35fr .65fr; gap:16px; margin-bottom:16px; }
-.detail-card { padding:24px; margin-bottom:16px; }
-.content-grid .detail-card { margin-bottom:0; }
-.card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
-.card-head h3,.permission-status h3 { margin:0; font-size:18px; color:var(--pc-text,#1a1a1a); }
-.card-head p { margin:4px 0 0; color:var(--pc-secondary,#595959); font-size:12px; }
-.card-head > span { color:var(--pc-secondary,#595959); font-size:12px; }
-.info-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
-.info-grid > div { padding:12px 14px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
-.info-grid label,.text-grid label { display:block; margin-bottom:4px; color:var(--pc-secondary,#595959); font-size:12px; }
-.info-grid strong { color:var(--pc-text,#1a1a1a); font-size:14px; font-weight:500; word-break:break-all; }
-.mono { font-family:var(--pc-mono,ui-monospace,SFMono-Regular,Consolas,monospace) !important; font-size:13px !important; }
-.owner-card { display:flex; align-items:center; gap:12px; padding:14px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
-.owner-icon { width:38px; height:38px; display:grid; place-items:center; flex:0 0 auto; border-radius:6px; background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); font-weight:600; }
-.owner-card strong { font-size:14px; color:var(--pc-text,#1a1a1a); }
-.owner-card p { margin:4px 0; color:var(--pc-secondary,#595959); font-size:12px; }
-.owner-card small { color:var(--pc-secondary,#595959); font-size:12px; word-break:break-all; }
-.owner-note { margin-top:12px; padding:10px 12px; border-radius:6px; background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); font-size:12px; line-height:1.6; }
-.owner-note.warning { background:var(--pc-bg,#f5f6fa); color:var(--pc-secondary,#595959); }
-.scope-display { display:flex; align-items:center; gap:14px; padding:14px; border:1px solid #c8e6c9; border-radius:6px; background:var(--pc-light,#e8f5e9); }
-.scope-display > span { min-width:76px; padding:6px 10px; border-radius:4px; background:var(--pc-brand,#2d8f4e); color:#fff; font-family:var(--pc-mono,ui-monospace,Consolas,monospace); font-size:12px; text-align:center; }
-.scope-display strong { font-size:14px; color:var(--pc-active,#1b6332); }
-.scope-display p { margin:4px 0 0; color:var(--pc-secondary,#595959); font-size:13px; }
-.usage-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
-.usage-grid div { padding:12px 14px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
-.usage-grid span,.usage-grid strong { display:block; }
-.usage-grid span { color:var(--pc-secondary,#595959); font-size:12px; }
-.usage-grid strong { margin-top:6px; color:var(--pc-text,#1a1a1a); font-size:18px; font-variant-numeric:tabular-nums; }
-.text-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.text-grid > div { padding:14px; border:1px solid var(--pc-line,#f0f0f0); border-radius:6px; background:var(--pc-bg,#f5f6fa); }
-.text-grid p { margin:0; color:var(--pc-text,#1a1a1a); font-size:13px; line-height:1.7; white-space:pre-wrap; }
-.permission-status { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; border-left:4px solid var(--pc-brand,#2d8f4e); }
-.permission-status p { margin:6px 0 0; color:var(--pc-secondary,#595959); font-size:13px; line-height:1.6; }
-.permission-status > span { flex:0 0 auto; padding:4px 10px; border-radius:4px; background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); font-size:12px; font-weight:500; }
-.permission-actions { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
-.permission-actions span { padding:4px 10px; border-radius:4px; background:var(--pc-light,#e8f5e9); color:var(--pc-active,#1b6332); font-size:12px; font-weight:500; }
-@media(max-width:1000px){.content-grid{grid-template-columns:1fr}.info-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:650px){.page-header{align-items:flex-start;flex-wrap:wrap}.header-actions{width:100%}.identity-card,.permission-status{align-items:flex-start;flex-direction:column}.info-grid,.usage-grid,.text-grid{grid-template-columns:1fr}}
+.detail-section-hint {
+  color: #68776e;
+  font-size: 12px;
+}
 </style>

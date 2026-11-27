@@ -44,7 +44,7 @@
         :collapsed="collapsed"
         :mobile="isMobile"
         :mobile-open="mobileOpen"
-        :breadcrumbs="['用户中心 · 运营端', activeLabel]"
+        :breadcrumbs="breadcrumbs"
         @toggle-collapse="toggleCollapse"
       >
         <template #right>
@@ -234,6 +234,14 @@ const showSidebarCopy = computed(() => !collapsed.value || mobileOpen.value)
 const displayName = computed(() => ucSession.user?.nickname || ucSession.user?.username || '平台运营')
 const highlight = computed(() => PARENT_OF[app.page] ?? app.page)
 const activeLabel = computed(() => TITLES[app.page])
+const breadcrumbs = computed(() => {
+  const parentKey = PARENT_OF[app.page]
+  if (parentKey) {
+    const tail = app.id ? `${activeLabel.value} · ${app.id.slice(-6)}` : activeLabel.value
+    return ['用户中心 · 运营端', TITLES[parentKey], tail]
+  }
+  return ['用户中心 · 运营端', activeLabel.value]
+})
 const activeTabKey = computed(() => (app.id === undefined ? app.page : `${app.page}/${encodeURIComponent(app.id)}`))
 const activeTabLabel = computed(() => (app.id === undefined ? activeLabel.value : `${activeLabel.value} · ${app.id.slice(-6)}`))
 const activeTabPath = computed(() => app.hash.replace(/^#\/?/, '') || 'dashboard')

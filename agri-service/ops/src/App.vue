@@ -78,7 +78,7 @@
                 v-for="item in group.items"
                 :key="item.page"
                 type="button"
-                :class="{ on: route.page === item.page }"
+                :class="{ on: (route.page === 'provider-detail' ? 'providers' : route.page) === item.page }"
                 :title="item.label"
                 @click="go(item.page)"
               >
@@ -103,7 +103,7 @@
             header-class="ops-header"
             right-class="ops-header-right"
             :collapsed="collapsed"
-            :breadcrumbs="['综合服务', TITLES[route.page]]"
+            :breadcrumbs="breadcrumbs"
             @toggle-collapse="collapsed = !collapsed"
           >
             <template #center>
@@ -348,66 +348,17 @@
             <div v-else-if="route.page === 'provider-detail'" class="ops-page">
               <div v-if="!providerDetail" class="ops-loading"><i /><i /><i /></div>
               <template v-else>
-                <button type="button" class="ops-back" @click="go('providers')">← 返回服务商列表</button>
-                <section class="ops-provider-hero">
-                  <span>{{ providerDetail.categoryIcon }}</span>
-                  <div>
-                    <div>
-                      <a-tag :class="`ops-status tone-${labelMeta(PROVIDER_STATUS, providerDetail.status).tone}`">{{ labelMeta(PROVIDER_STATUS, providerDetail.status).label }}</a-tag>
-                      <a-tag>{{ providerDetail.badge }}</a-tag>
-                    </div>
-                    <h1>{{ providerDetail.name }}</h1>
-                    <p>{{ providerDetail.creditCode ?? '统一社会信用代码待补' }} · {{ providerDetail.region }} · {{ providerDetail.category }}</p>
-                    <em>信用分 {{ providerDetail.creditScore }} · 服务 {{ providerDetail.orderCount }} 单 · ★ {{ providerDetail.rating }} · 取消率 {{ providerDetail.cancelRate }}%</em>
-                  </div>
-                  <div>
-                    <a-button @click="go('catalog')">查看其服务商品</a-button>
-                    <a-button type="primary" @click="openDetailStatusModal">调整经营状态</a-button>
-                  </div>
-                </section>
-                <div class="ops-provider-grid">
-                  <section class="ops-card">
-                    <div class="ops-card-head"><div><b>经营与风险概况</b><small>近 7 日指标</small></div></div>
-                    <div class="ops-kv-grid">
-                      <span><small>信用等级</small><b>{{ providerDetail.creditScore >= 90 ? 'A / 优质' : providerDetail.creditScore >= 75 ? 'B / 正常' : 'C / 风险' }}</b></span>
-                      <span><small>接单取消率</small><b :class="providerDetail.cancelRate > 10 ? 'text-red' : ''">{{ providerDetail.cancelRate }}%</b></span>
-                      <span><small>响应时效</small><b>档案未记录</b></span>
-                      <span><small>平台主体</small><b>{{ providerDetail.merchantId ?? '未绑定' }}</b></span>
-                      <span><small>风险等级</small><b>{{ providerDetail.riskLevel }}</b></span>
-                      <span><small>联系人</small><b>{{ providerDetail.contactName ?? '待补' }}</b></span>
-                      <span><small>联系电话</small><b>{{ providerDetail.contactPhone ?? '待补' }}</b></span>
-                    </div>
-                  </section>
-                  <section class="ops-card">
-                    <div class="ops-card-head"><div><b>最近订单</b><small>履约与结算概况</small></div></div>
-                    <div class="ops-mini-list">
-                      <div v-for="order in providerDetail.orders || []" :key="order.id">
-                        <span>{{ order.orderNo }}</span>
-                        <b>{{ order.serviceName }}</b>
-                        <a-tag :class="`ops-status tone-${labelMeta(ORDER_STATUS, order.status).tone}`">{{ labelMeta(ORDER_STATUS, order.status).label }}</a-tag>
-                        <em>¥{{ order.totalAmount.toLocaleString() }}</em>
-                      </div>
-                    </div>
-                  </section>
-                </div>
-                <AgriAntdvListTable
-                  :columns="providerDetailItemColumns"
-                  :data="providerDetail.items ?? []"
-                  row-key="id"
-                  client-pagination
-                  column-settings-storage-key="service-ops:provider-detail-items"
+                <ProviderDetailView
+                  :provider="providerDetail"
+                  :item-columns="providerDetailItemColumns"
+                  @back="go('providers')"
                   @refresh="reloadProviderDetail"
-                >
-                  <template #toolbar-left>
-                    <div class="ops-table-caption"><b>服务商品与目录</b><small>审核状态与近期选择量</small></div>
-                  </template>
-                  <template #cell-price="{ record }">¥{{ record.price }} / {{ record.unit }}</template>
-                  <template #cell-auditStatus="{ record }">
-                    <a-tag :color="record.auditStatus === 'approved' ? 'green' : 'orange'">{{ record.auditStatus === 'approved' ? '已通过' : record.auditStatus === 'rejected' ? '已驳回' : '待审核' }}</a-tag>
-                  </template>
-                  <template #cell-aiScore="{ record }">{{ record.aiScore }} 分</template>
-                  <template #cell-selectedCount="{ record }">{{ record.selectedCount }} 人</template>
-                </AgriAntdvListTable>
+                  @open-catalog="go('catalog')"
+                  @open-orders="go('orders')"
+                  @open-quality="go('quality')"
+                  @open-settlement="go('settlement')"
+                  @open-status="(next) => openDetailStatusModal(next)"
+                />
                 <a-modal v-model:open="detailStatusOpen" title="调整服务商经营状态" ok-text="确认处置" @ok="submitDetailStatus">
                   <a-form layout="vertical">
                     <a-form-item label="处置状态"><a-select v-model:value="detailNextStatus" :options="providerStatusOptions" /></a-form-item>
@@ -1053,6 +1004,7 @@ import { logoutUnified, serviceSession } from './sso'
 import UnifiedSsoGate from './UnifiedSsoGate.vue'
 import SidebarUserCard from './SidebarUserCard.vue'
 import ExpertsPage from './ExpertsPage.vue'
+import ProviderDetailView from './ProviderDetailView.vue'
 
 type Page =
   | 'dashboard'
@@ -1264,6 +1216,13 @@ const activeTabKey = computed(() => (route.value.id === undefined ? route.value.
 const activeTabLabel = computed(() =>
   route.value.id === undefined ? TITLES[route.value.page] : `${TITLES[route.value.page]} · ${route.value.id}`,
 )
+const breadcrumbs = computed(() => {
+  if (route.value.page === 'provider-detail') {
+    const tail = route.value.id !== undefined ? `服务商详情档案 · ${route.value.id}` : '服务商详情档案'
+    return ['综合服务', '服务商管理', tail]
+  }
+  return ['综合服务', TITLES[route.value.page]]
+})
 
 // 大盘与待办
 const overview = ref<OpsOverview | null>(null)
@@ -1689,9 +1648,9 @@ function exportProvidersCsv() {
   message.success(`已导出当前 ${providers.value.length} 条服务商名录`)
 }
 
-function openDetailStatusModal() {
+function openDetailStatusModal(nextStatus?: string) {
   if (!providerDetail.value) return
-  detailNextStatus.value = providerDetail.value.status === 'available' ? 'restricted' : 'available'
+  detailNextStatus.value = nextStatus || (providerDetail.value.status === 'available' ? 'restricted' : 'available')
   detailReason.value = ''
   detailStatusOpen.value = true
 }

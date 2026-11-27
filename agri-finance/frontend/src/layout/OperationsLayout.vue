@@ -41,7 +41,7 @@
         :collapsed="collapsed"
         :mobile="isMobile"
         :mobile-open="navOpen"
-        :breadcrumbs="['供应链金融', role === 'fund' ? '资金方端' : '运营风控端', String(route.meta.title || '工作台')]"
+        :breadcrumbs="breadcrumbs"
         @toggle-collapse="toggleSidebar"
       >
         <template #right>
@@ -132,6 +132,13 @@ const homeLabel = computed(() => role.value === 'fund' ? '资金工作台' : '�
 const activeTabLabel = computed(() => {
   const base = String(route.meta.title || homeLabel.value)
   return route.params.assetId ? `${base} · ${route.params.assetId}` : base
+})
+const breadcrumbs = computed(() => {
+  const roleLabel = role.value === 'fund' ? '资金方端' : '运营风控端'
+  if (route.params.assetId) {
+    return ['供应链金融', roleLabel, '资产市场', `资产详情 · ${route.params.assetId}`]
+  }
+  return ['供应链金融', roleLabel, String(route.meta.title || '工作台')]
 })
 const displayUser = computed(() => role.value === 'fund' ? fundProvider : operationUser)
 

@@ -1247,3 +1247,201 @@
 .mds-page .agri-vue-toolbar-left .mds-btn {
   height: 32px;
 }
+
+/* -------------------- 共享详情页规范适配（@agri/shared/vue/detail） -------------------- */
+.layout-container .agri-detail-header-sticky {
+  top: 104px;
+  margin-top: -16px;
+  padding-top: 16px;
+  background: var(--pc-bg, #f5f6fa);
+}
+
+.layout-container .agri-detail-page {
+  --detail-bg: var(--pc-bg, #f5f6fa);
+}
+
+.layout-container .agri-detail-page .detail-section-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--pc-brand, #2d8f4e);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.layout-container .agri-detail-page .detail-section-link:hover {
+  color: var(--pc-hover, #247a3f);
+  text-decoration: underline;
+}
+
+.layout-container .agri-detail-page .detail-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.layout-container .agri-detail-page .detail-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.layout-container .agri-detail-page .detail-kpi-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid #ecefed;
+  border-radius: 8px;
+  background: #fafcfb;
+}
+
+.layout-container .agri-detail-page .detail-kpi-cell span {
+  color: #68776e;
+  font-size: 12px;
+}
+
+.layout-container .agri-detail-page .detail-kpi-cell strong {
+  color: #141c17;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.layout-container .agri-detail-page .detail-kpi-cell small {
+  color: #8c9a92;
+  font-size: 12px;
+}
+
+.layout-container .agri-detail-page .mds-detail-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.layout-container .agri-detail-page .mds-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.layout-container .agri-detail-page .mds-detail-table th,
+.layout-container .agri-detail-page .mds-detail-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f2f1;
+  text-align: left;
+  vertical-align: middle;
+  color: #141c17;
+}
+
+.layout-container .agri-detail-page .mds-detail-table th {
+  height: 42px;
+  background: #fafafa;
+  color: #5a6860;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  border-bottom: 1px solid #e8ecea;
+}
+
+.layout-container .agri-detail-page .mds-detail-table td {
+  height: 44px;
+}
+
+.layout-container .agri-detail-page .mds-detail-table tbody tr:hover {
+  background: #f6fbf8;
+}
+
+.layout-container .agri-detail-page .mds-detail-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.layout-container .agri-detail-page .mds-detail-table th.is-num,
+.layout-container .agri-detail-page .mds-detail-table td.is-num {
+  text-align: right;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.layout-container .agri-detail-page .mds-detail-empty {
+  padding: 28px 20px;
+  text-align: center;
+  color: #8c9a92;
+  font-size: 13px;
+}
+
+.layout-container .agri-detail-page .mds-detail-state {
+  padding: 48px 24px;
+  text-align: center;
+  border: 1px solid #e8ecea;
+  border-radius: 10px;
+  background: #fff;
+  color: #68776e;
+  font-size: 14px;
+}
+
+.layout-container .agri-detail-page .mds-detail-state.is-error {
+  border-color: #ffccc7;
+  background: #fff2f0;
+  color: #cf1322;
+}
+
+.layout-container .agri-detail-page .mds-detail-text-block {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 6px;
+  background: #fafcfb;
+  border: 1px solid #ecefed;
+  color: #141c17;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.layout-container .agri-detail-page .detail-quota-bar {
+  width: 100%;
+  min-width: 90px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ecefed;
+  overflow: hidden;
+}
+
+.layout-container .agri-detail-page .detail-quota-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #2d8f4e;
+  transition: width 0.2s ease;
+}
+
+.layout-container .agri-detail-page .detail-quota-bar > i.is-danger {
+  background: #ff4d4f;
+}
+
+@media (max-width: 767px) {
+  .layout-container .agri-detail-header-sticky {
+    top: 64px;
+  }
+}
+
+@media print {
+  .layout-container .sidebar,
+  .layout-container .top-header,
+  .layout-container .agri-route-workspace,
+  .layout-container .agri-detail-header-actions,
+  .layout-container .agri-detail-back-btn,
+  .layout-container .agri-detail-tabs-bar {
+    display: none !important;
+  }
+
+  .layout-container .main-content {
+    margin-left: 0 !important;
+  }
+
+  .layout-container .agri-detail-header-sticky {
+    position: static !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+  }
+}

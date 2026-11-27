@@ -37,7 +37,22 @@
 
       <template v-if="activeTab === 'overview'">
         <AgriVueDetailSection title="基本信息">
-          <S2b2cDetailInfoGrid :items="basicInfoItems" />
+          <S2b2cDetailInfoGrid :items="basicInfoItems">
+            <template #value-certifications>
+              <div v-if="certificationTags.length" class="detail-cert-tags">
+                <el-tag
+                  v-for="tag in certificationTags"
+                  :key="tag"
+                  size="small"
+                  type="success"
+                  effect="light"
+                >
+                  {{ tag }}
+                </el-tag>
+              </div>
+              <span v-else>—</span>
+            </template>
+          </S2b2cDetailInfoGrid>
         </AgriVueDetailSection>
 
         <AgriVueDetailSection title="经营核心指标">
@@ -195,6 +210,7 @@ import {
   formatDateTime,
   formatMoney,
   formatShortTime,
+  parseCertifications,
   resolveAuditStatus,
 } from '../../../frontend-shared/detail/s2b2cDetailHelper'
 import { platformApi } from '../api'
@@ -298,6 +314,8 @@ const tabs = computed(() => [
   { key: 'auditLogs', label: '审核记录', count: auditLogs.value.length },
 ])
 
+const certificationTags = computed(() => parseCertifications(product.value?.certifications))
+
 const basicInfoItems = computed(() => [
   { key: 'id', label: '商品编号', value: `PRD-${product.value?.id}`, mono: true },
   { key: 'name', label: '商品名称', value: product.value?.name || '—' },
@@ -308,7 +326,7 @@ const basicInfoItems = computed(() => [
   { key: 'grade', label: '商品品级', value: product.value?.grade || '—' },
   { key: 'shelfLife', label: '保质期', value: product.value?.shelfLife || '—' },
   { key: 'sellingPoint', label: '核心卖点', value: product.value?.sellingPoint || '—', fullWidth: true },
-  { key: 'certifications', label: '认证资质', value: product.value?.certifications || '—', fullWidth: true },
+  { key: 'certifications', label: '认证资质', value: certificationTags.value.join('、') || '—', fullWidth: true },
 ])
 
 const pricingInfoItems = computed(() => [
@@ -493,5 +511,12 @@ function printPage() {
   border: 1px solid #e8ecea;
   border-radius: 10px;
   background: #fff;
+}
+
+.detail-cert-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 </style>

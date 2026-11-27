@@ -14,7 +14,7 @@
             v-for="item in group.items"
             :key="item.key"
             type="button"
-            :class="{ on: app.page === item.key }"
+            :class="{ on: highlight === item.key }"
             :title="collapsed ? item.label : undefined"
             @click="go(item.key)"
           >
@@ -44,7 +44,7 @@
         :collapsed="collapsed"
         :mobile="isMobile"
         :mobile-open="mobileOpen"
-        :breadcrumbs="['综合服务', activeLabel]"
+        :breadcrumbs="breadcrumbs"
         @toggle-collapse="toggleCollapse"
       >
         <template #center>
@@ -223,8 +223,22 @@ const keyword = ref('')
 const unread = ref(0)
 const subjectName = ref('')
 
+const PARENT_OF: Partial<Record<PageKey, PageKey>> = {
+  'order-detail': 'orders',
+  provider: 'services',
+}
+
 const showSidebarCopy = computed(() => !collapsed.value || mobileOpen.value)
+const highlight = computed(() => PARENT_OF[app.page] ?? app.page)
 const activeLabel = computed(() => TITLES[app.page])
+const breadcrumbs = computed(() => {
+  const parentKey = PARENT_OF[app.page]
+  if (parentKey) {
+    const tail = app.id !== undefined ? `${activeLabel.value} · ${app.id}` : activeLabel.value
+    return ['综合服务', TITLES[parentKey], tail]
+  }
+  return ['综合服务', activeLabel.value]
+})
 const displayName = computed(() => serviceSession.user?.nickname || serviceSession.user?.username || '平台用户')
 const activeTabKey = computed(() => (app.id === undefined ? app.page : `${app.page}/${app.id}`))
 const activeTabLabel = computed(() => (app.id === undefined ? activeLabel.value : `${activeLabel.value} · ${app.id}`))

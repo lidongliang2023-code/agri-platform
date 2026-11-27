@@ -22,6 +22,7 @@
       "@agri/shared/vue/workspace": ["../../packages/agri-shared/src/vue/workspace/index.ts"],
       "@agri/shared/vue/list": ["../../packages/agri-shared/src/vue/list/index.ts"],
       "@agri/shared/vue/antdv": ["../../packages/agri-shared/src/vue/antdv/index.ts"],
+      "@agri/shared/vue/detail": ["../../packages/agri-shared/src/vue/detail/index.ts"],
       "@agri/shared/*": ["../../packages/agri-shared/src/*"],
       "@/*": ["src/*"]
     }

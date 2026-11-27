@@ -136,6 +136,96 @@ export function resolveGradeText(grade) {
   return { LEVEL_1: '铜牌 (LEVEL_1)', LEVEL_2: '银牌 (LEVEL_2)', LEVEL_3: '金牌 (LEVEL_3)' }[grade] || grade || '—'
 }
 
+export const COMMON_CERTIFICATIONS = [
+  '有机认证',
+  '绿色食品',
+  '地理标志',
+  '无公害农产品',
+  'GAP 良好农业规范',
+  'HACCP 认证',
+  'ISO22000 认证',
+  '可追溯认证',
+]
+
+const CERTIFICATION_LABEL_MAP = {
+  ORGANIC: '有机认证',
+  ORGANIC_FOOD: '有机认证',
+  GREEN: '绿色食品',
+  GREEN_FOOD: '绿色食品',
+  GI: '地理标志',
+  PGI: '地理标志',
+  GEO_INDICATION: '地理标志',
+  GEOGRAPHICAL_INDICATION: '地理标志',
+  POLLUTION_FREE: '无公害农产品',
+  HAZARD_FREE: '无公害农产品',
+  GAP: 'GAP 良好农业规范',
+  GLOBAL_GAP: 'GAP 良好农业规范',
+  HACCP: 'HACCP 认证',
+  ISO22000: 'ISO22000 认证',
+  HALAL: '清真认证',
+  TRACEABLE: '可追溯认证',
+}
+
+function normalizeCertificationLabel(item) {
+  if (item == null) return ''
+  const raw = typeof item === 'object' ? (item.label ?? item.name ?? item.value ?? '') : String(item)
+  const text = String(raw).trim().replace(/^["'[\]]+|["'[\]]+$/g, '').trim()
+  if (!text) return ''
+  const upper = text.toUpperCase().replace(/[\s-]+/g, '_')
+  return CERTIFICATION_LABEL_MAP[upper] || text
+}
+
+/** 解析商品认证资质字段（兼容 JSON 数组字符串、数组、顿号/逗号分隔文本与英文编码），输出去重后的中文标签数组 */
+export function parseCertifications(raw) {
+  if (raw == null || raw === '') return []
+  let items = []
+  if (Array.isArray(raw)) {
+    items = raw
+  } else {
+    let text = String(raw).trim()
+    if (!text) return []
+    let parsed = null
+    for (let i = 0; i < 2; i += 1) {
+      if ((text.startsWith('[') && text.endsWith(']')) || (text.startsWith('"') && text.endsWith('"'))) {
+        try {
+          parsed = JSON.parse(text)
+          if (typeof parsed === 'string') {
+            text = parsed.trim()
+            parsed = null
+            continue
+          }
+          break
+        } catch {
+          break
+        }
+      }
+      break
+    }
+    if (Array.isArray(parsed)) {
+      items = parsed
+    } else if (parsed && typeof parsed === 'object') {
+      items = [parsed]
+    } else {
+      items = text.split(/[,，、;；|]/).map((s) => s.trim()).filter(Boolean)
+    }
+  }
+  const seen = new Set()
+  const result = []
+  for (const entry of items) {
+    const label = normalizeCertificationLabel(entry)
+    if (label && !seen.has(label)) {
+      seen.add(label)
+      result.push(label)
+    }
+  }
+  return result
+}
+
+export function serializeCertifications(list) {
+  const normalized = parseCertifications(list)
+  return normalized.length ? JSON.stringify(normalized) : ''
+}
+
 export function resolveProposerText(proposerType, selfSide = '') {
   const key = String(proposerType || '').toUpperCase()
   if (key === 'SUPPLIER') return selfSide === 'SUPPLIER' ? '供应商（我方）' : '供应商'
