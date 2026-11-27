@@ -20,7 +20,11 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json-summary', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/**/*.d.ts'],
+      exclude: [
+        'src/**/*.d.ts',
+        // 纯 Ant Design Vue JSX 组件包装层（同 .vue/.tsx 视图组件），由应用端浏览器 E2E 覆盖。
+        'src/vue/antdv/jsxUi.ts',
+      ],
       // 未被测试直接 import 的源文件也纳入统计，避免“少测一个文件反而分数更高”。
       all: true,
       thresholds: {

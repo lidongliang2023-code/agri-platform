@@ -58,7 +58,7 @@
       </view>
 
       <view v-if="detail.buyer" class="card">
-        <view class="card-head"><text class="card-title">买家</text><text class="card-sub">{{ detail.buyer.memberLevel || '会员' }}</text></view>
+        <view class="card-head"><text class="card-title">买家</text><text class="card-sub">{{ memberLevelLabel(detail.buyer.memberLevel, '会员') }}</text></view>
         <text class="line-strong">{{ detail.buyer.nickname || '丰链云会员' }} {{ detail.buyer.phone }}</text>
         <text class="line">在本店下单 {{ detail.buyer.orderCount || 0 }} 次 · 累计 {{ money(detail.buyer.totalAmount) }}</text>
       </view>
@@ -87,7 +87,7 @@ import { computed, reactive, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { channelApi, type OrderDetail, type Shipment } from '../../api'
 import { requireChannelLogin } from '../../session'
-import { afterSaleStatus, afterSaleTypeLabel, commissionStatus, confirmAction, formatTime, money, orderStatus, promptText, toast } from '../../utils'
+import { afterSaleStatus, afterSaleTypeLabel, commissionStatus, confirmAction, formatTime, memberLevelLabel, money, orderStatus, promptText, toast } from '../../utils'
 
 const detail = ref<OrderDetail | null>(null)
 const shipment = ref<Shipment | null>(null)

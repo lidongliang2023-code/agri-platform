@@ -70,6 +70,33 @@ export const afterSaleStatus = (status: string, returnShippedAt?: string | null)
     : meta(AFTER_SALE_STATUS, status)
 export const withdrawalStatus = (status: string) => meta(WITHDRAWAL_STATUS, status)
 
+export const CHANNEL_GRADE: Record<string, string> = {
+  LEVEL_1: '铜牌渠道',
+  LEVEL_2: '银牌渠道',
+  LEVEL_3: '金牌渠道',
+}
+
+export function channelGradeLabel(grade?: string | null, fallback = '待定级') {
+  const raw = String(grade || '').trim()
+  if (!raw) return fallback
+  return CHANNEL_GRADE[raw.toUpperCase()] || raw
+}
+
+export const MEMBER_LEVEL: Record<string, string> = {
+  NORMAL: '普通会员',
+  SILVER: '白银会员',
+  GOLD: '黄金会员',
+  PLATINUM: '铂金会员',
+  DIAMOND: '钻石会员',
+  VIP: 'VIP 会员',
+}
+
+export function memberLevelLabel(level?: string | null, fallback = '普通会员') {
+  const raw = String(level || '').trim()
+  if (!raw) return fallback
+  return MEMBER_LEVEL[raw.toUpperCase()] || raw
+}
+
 export function afterSaleTypeLabel(type: string) {
   return type === 'RETURN' ? '退货退款' : type === 'REFUND' ? '仅退款' : type || '售后'
 }

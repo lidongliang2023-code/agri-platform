@@ -10,6 +10,7 @@ import {
   INVENTORY_HEALTH_META,
   INVENTORY_HEALTH_OPTIONS,
   MATURITY_LEVEL_META,
+  inventoryExpiryState,
   resolveInventoryHealth,
   resolveMaturityLevel,
 } from '../src/types/harvest'
@@ -40,10 +41,10 @@ describe('resolveMaturityLevel：评分 → 成熟度分级（阈值 60 / 80 / 9
   })
 })
 
-describe('resolveInventoryHealth：库存健康（优先级 不足 > 临期 > 预警 > 正常）', () => {
+describe('resolveInventoryHealth：库存健康（优先级 已过期 > 不足 > 临期 > 正常，与后端 fillHealth 同源）', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    // 固定“当前时间”，让“距到期几天”成为确定值（实现内部读 new Date()）。
+    // 固定“当前时间”，让按北京时间自然日计算的“距到期几天”成为确定值。
     vi.setSystemTime(new Date('2026-10-11T12:00:00+08:00'))
   })
 
@@ -51,37 +52,52 @@ describe('resolveInventoryHealth：库存健康（优先级 不足 > 临期 > �
     vi.useRealTimers()
   })
 
-  it('不足：当前库存 ≤ 安全库存的 50%', () => {
+  it('已过期：保质期早于今日（有效期当天仍有效，次日过期），且优先级压过不足', () => {
+    expect(resolveInventoryHealth(1000, 100, '2026-10-10')).toBe('expired')
+    expect(resolveInventoryHealth(10, 100, '2026-10-01')).toBe('expired')
+    expect(resolveInventoryHealth(0, 0, '2026-10-01')).toBe('expired')
+  })
+
+  it('不足：已配置安全库存（>0）且当前库存 ≤ 安全库存', () => {
     expect(resolveInventoryHealth(10, 100)).toBe('shortage')
     expect(resolveInventoryHealth(50, 100)).toBe('shortage')
+    expect(resolveInventoryHealth(51, 100)).toBe('shortage')
+    expect(resolveInventoryHealth(100, 100)).toBe('shortage')
   })
 
-  it('预警：介于安全库存 50% ~ 100%', () => {
-    expect(resolveInventoryHealth(51, 100)).toBe('warning')
-    expect(resolveInventoryHealth(100, 100)).toBe('warning')
-  })
-
-  it('正常：高于安全库存', () => {
+  it('正常：高于安全库存且未临期/过期', () => {
     expect(resolveInventoryHealth(101, 100)).toBe('normal')
-  })
-
-  it('未配置安全库存（0）时不误判为不足/预警', () => {
-    expect(resolveInventoryHealth(0, 0)).toBe('normal')
-  })
-
-  it('临期：距到期 3 天内（含已过期）', () => {
-    expect(resolveInventoryHealth(100, 100, '2026-10-12')).toBe('expiring')
-    expect(resolveInventoryHealth(100, 100, '2026-10-01')).toBe('expiring')
-  })
-
-  it('未临期时回到库存档位判定', () => {
-    expect(resolveInventoryHealth(100, 100, '2026-12-31')).toBe('warning')
     expect(resolveInventoryHealth(1000, 100, '2026-12-31')).toBe('normal')
   })
 
-  it('优先级：不足 压过 临期，临期 压过 预警', () => {
+  it('未配置安全库存（0 或非正数）时不误判为不足', () => {
+    expect(resolveInventoryHealth(0, 0)).toBe('normal')
+    expect(resolveInventoryHealth(50, 0)).toBe('normal')
+    expect(resolveInventoryHealth(0, -10)).toBe('normal')
+  })
+
+  it('临期：有效期当天起至 30 天内到期（含边界 0 天与 30 天，31 天归正常）', () => {
+    expect(resolveInventoryHealth(200, 100, '2026-10-11')).toBe('expiring')
+    expect(resolveInventoryHealth(200, 100, '2026-10-12')).toBe('expiring')
+    expect(resolveInventoryHealth(200, 100, '2026-11-10')).toBe('expiring')
+    expect(resolveInventoryHealth(200, 100, '2026-11-11')).toBe('normal')
+  })
+
+  it('优先级：已过期 > 不足 > 临期 > 正常', () => {
+    expect(resolveInventoryHealth(10, 100, '2026-10-10')).toBe('expired')
     expect(resolveInventoryHealth(10, 100, '2026-10-12')).toBe('shortage')
-    expect(resolveInventoryHealth(80, 100, '2026-10-12')).toBe('expiring')
+    expect(resolveInventoryHealth(100, 100, '2026-10-12')).toBe('shortage')
+    expect(resolveInventoryHealth(101, 100, '2026-10-12')).toBe('expiring')
+    expect(resolveInventoryHealth(101, 100, '2026-12-31')).toBe('normal')
+  })
+
+  it('非法或空日期时安全忽略效期判定', () => {
+    expect(inventoryExpiryState(undefined)).toBeUndefined()
+    expect(inventoryExpiryState(null)).toBeUndefined()
+    expect(inventoryExpiryState('not-a-date')).toBeUndefined()
+    expect(inventoryExpiryState('2026-02-31')).toBeUndefined()
+    expect(inventoryExpiryState('2026-10-11', '2026-10-11')).toBe('expiring')
+    expect(resolveInventoryHealth(200, 100, '2026-13-40')).toBe('normal')
   })
 
   it('返回值恒为 INVENTORY_HEALTH_META 的键（UI 取色不会取空）', () => {
@@ -90,7 +106,8 @@ describe('resolveInventoryHealth：库存健康（优先级 不足 > 临期 > �
       [51, 100],
       [101, 100],
       [0, 0],
-      [100, 100, '2026-10-12'],
+      [200, 100, '2026-10-12'],
+      [200, 100, '2026-10-01'],
       [1000, 100, '2026-12-31'],
     ]
     for (const [currentQty, safeQty, expireDate] of samples) {

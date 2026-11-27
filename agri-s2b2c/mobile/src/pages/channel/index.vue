@@ -73,7 +73,7 @@ const cartMessage = ref('')
 
 const gradeText = computed(() => {
   const grade = shop.value?.grade || ''
-  const names: Record<string, string> = { LEVEL_1: '金牌渠道', LEVEL_2: '银牌渠道', LEVEL_3: '铜牌渠道' }
+  const names: Record<string, string> = { LEVEL_1: '铜牌渠道', LEVEL_2: '银牌渠道', LEVEL_3: '金牌渠道' }
   return names[grade] || grade
 })
 

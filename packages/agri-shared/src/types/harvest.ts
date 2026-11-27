@@ -394,16 +394,16 @@ export function resolveMaturityLevel(score: number): MaturityLevel {
 }
 
 /**
- * 依据当前库存 / 安全库存 / 保质期推导库存健康状态（原型 P16）。
+ * 依据当前库存 / 安全库存 / 保质期推导库存健康状态（与后端 HarvestInventoryServiceImpl.fillHealth 同源）。
  *
- * 判定顺序：不足（≤安全库存 50%）> 临期（≤3 天到期）> 预警（≤安全库存）> 正常。
+ * 判定顺序（按北京时间自然日）：已过期（早于今日）> 不足（safeQty > 0 且当前库存 ≤ 安全库存）> 临期（0~30 天内到期）> 正常。
+ * 未配置安全库存（safeQty ≤ 0）时不误判为不足；历史值 warning 仅作兼容保留，当前库存域不再产生。
  *
  * @param currentQty 当前库存
  * @param safeQty 安全库存
  * @param expireDate 保质期截止日期（yyyy-MM-dd）
  * @returns 库存健康状态
  */
-
 export function resolveInventoryHealth(
   currentQty: number,
   safeQty: number,
@@ -411,7 +411,9 @@ export function resolveInventoryHealth(
 ): InventoryHealthStatus {
   const expiry = inventoryExpiryState(expireDate)
   if (expiry === 'expired') return 'expired'
-  if (Number.isFinite(safeQty) && Number.isFinite(currentQty) && currentQty <= safeQty) return 'shortage'
+  if (Number.isFinite(safeQty) && safeQty > 0 && Number.isFinite(currentQty) && currentQty <= safeQty) {
+    return 'shortage'
+  }
   if (expiry === 'expiring') return 'expiring'
   return 'normal'
 }

@@ -7,7 +7,7 @@
           <text class="hero-title">{{ channel?.shopName || channelSession.account?.shopName || '商家工作台' }}</text>
           <text class="hero-desc">{{ channel?.companyName || '产地好物分销' }}</text>
         </view>
-        <text class="grade-tag">{{ channel?.grade || '渠道商家' }}</text>
+        <text class="grade-tag">{{ channelGradeLabel(channel?.grade, '渠道商家') }}</text>
       </view>
       <view class="today-row">
         <view><text class="strong-copy">{{ dashboard.todayOrders ?? 0 }}</text><text>今日订单</text></view>
@@ -67,7 +67,7 @@ import { ref } from 'vue'
 import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
 import { channelApi, type ChannelPartner, type CommissionSummary, type Dashboard, type Order } from '../../api'
 import { channelSession, currentChannelId, openPage } from '../../session'
-import { formatTime, money, orderStatus, toast } from '../../utils'
+import { channelGradeLabel, formatTime, money, orderStatus, toast } from '../../utils'
 
 const channel = ref<ChannelPartner | null>(null)
 const dashboard = ref<Dashboard>({})

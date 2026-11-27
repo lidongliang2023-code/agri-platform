@@ -5,7 +5,7 @@
       <view class="shop-hero">
         <view class="shop-mark">渠</view>
         <view class="shop-copy"><text class="shop-name">{{ channel?.shopName || '商家店铺' }}</text><text class="shop-company">{{ channel?.companyName || '丰链云渠道合作伙伴' }}</text><text class="shop-account">{{ accountText }}</text></view>
-        <text class="tag tag-green">{{ channel?.grade || '商家' }}</text>
+        <text class="tag tag-green">{{ channelGradeLabel(channel?.grade, '商家') }}</text>
       </view>
 
       <view class="card menu-card">
@@ -27,7 +27,7 @@ import { computed, ref } from 'vue'
 import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
 import { channelApi, type ChannelPartner } from '../../api'
 import { channelSession, clearChannelSession, currentChannelId, openPage } from '../../session'
-import { toast } from '../../utils'
+import { channelGradeLabel, toast } from '../../utils'
 import { logoutUnifiedAccount } from '../../../../frontend-shared/mobile-unified-auth'
 
 const channel = ref<ChannelPartner | null>(null)
