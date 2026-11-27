@@ -18,18 +18,22 @@
     <view class="home-content">
       <view class="search-box" @tap="goSearch">
         <text class="search-icon">⌕</text>
-        <text>搜索农产品、产地或店铺</text>
+        <text>搜索农产品</text>
         <text class="search-action">搜索</text>
       </view>
 
-      <view class="hero">
-        <view class="hero-orbit hero-orbit-one" />
-        <view class="hero-orbit hero-orbit-two" />
-        <text class="hero-kicker">FARM DIRECT · 产地直供</text>
-        <text class="hero-title">从田间到餐桌，\n每一份都看得见</text>
-        <text class="hero-desc">平台认证基地、品质检测与全链路溯源</text>
-        <view class="hero-button" @tap="goCategory(0)">查看当季好物 <text>→</text></view>
-        <view class="hero-page"><text class="active" /><text /><text /></view>
+      <view class="season-banner" @tap="goCategory(0)"><view><text class="season-title">当季好物，新鲜到家</text><text class="season-caption">产地直供 · 查看商品溯源</text></view><text class="season-link">去选购 ›</text></view>
+
+      <view class="section-head">
+        <view><text class="section-kicker">FARM CATEGORY</text><text class="section-title">源头分类</text></view>
+        <text class="section-link" @tap="goCategoryPage">全部商品 →</text>
+      </view>
+      <view class="category-grid">
+        <view v-for="item in categories" :key="item.id" class="category-card" @tap="goCategory(item.id)">
+          <view class="category-icon">{{ item.icon }}</view>
+          <text class="category-name">{{ item.name }}</text>
+          <text class="category-sub">{{ item.sub }}</text>
+        </view>
       </view>
 
       <view v-if="channels.length" class="channel-sec">
@@ -48,24 +52,6 @@
             </view>
           </view>
         </scroll-view>
-      </view>
-
-      <view class="trust-row">
-        <view class="trust-item"><text class="trust-mark">源</text><view><b>产地直供</b><small>源头基地可追溯</small></view></view>
-        <view class="trust-item"><text class="trust-mark">保</text><view><b>平台保障</b><small>交易售后无忧</small></view></view>
-        <view class="trust-item"><text class="trust-mark">检</text><view><b>全程品控</b><small>检测信息可查</small></view></view>
-      </view>
-
-      <view class="section-head">
-        <view><text class="section-kicker">FARM CATEGORY</text><text class="section-title">源头分类</text></view>
-        <text class="section-link" @tap="goCategoryPage">全部商品 →</text>
-      </view>
-      <view class="category-grid">
-        <view v-for="item in categories" :key="item.id" class="category-card" @tap="goCategory(item.id)">
-          <view class="category-icon">{{ item.icon }}</view>
-          <text class="category-name">{{ item.name }}</text>
-          <text class="category-sub">{{ item.sub }}</text>
-        </view>
       </view>
 
       <view class="selection-head">
@@ -102,30 +88,25 @@ import { mallApi, type ChannelShop, type Product } from '../../api'
 import { firstImage, money, openProduct, toast } from '../../utils'
 import { ref } from 'vue'
 
-const statusBarHeight = ref(uni.getSystemInfoSync().statusBarHeight || 24)
+const statusBarHeight = ref(uni.getSystemInfoSync().statusBarHeight || 0)
 const loading = ref(false)
 const products = ref<Product[]>([])
 const channels = ref<ChannelShop[]>([])
-const categories = [
-  { id: 7, name: '粮油调味', sub: '五常大米', icon: '🍚' },
-  { id: 12, name: '新鲜果蔬', sub: '当季鲜果', icon: '🥬' },
-  { id: 16, name: '肉禽蛋奶', sub: '散养鲜蛋', icon: '🥩' },
-  { id: 17, name: '茶叶茶饮', sub: '原叶好茶', icon: '🍵' },
-  { id: 18, name: '滋补养生', sub: '地方风物', icon: '🍯' },
-  { id: 0, name: '地方特产', sub: '助农甄选', icon: '🎁' },
-]
+const categories = ref([{ id:0, name:'全部商品', sub:'更多好物', icon:'丰' }])
 
 onMounted(loadProducts)
 
 async function loadProducts() {
   loading.value = true
   try {
-    const [result, shops] = await Promise.all([
+    const [result, shops, tree] = await Promise.all([
       mallApi.getProducts({ page: 1, size: 10 }),
       mallApi.getChannels({ limit: 8 }).catch(() => []),
+      mallApi.getCategories(),
     ])
     products.value = result.records || []
     channels.value = shops || []
+    categories.value = [...tree.slice(0,5).map(c=>({id:c.id,name:c.name,sub:'查看商品',icon:'丰'})),{id:0,name:'全部商品',sub:'更多好物',icon:'全'}]
   } catch (error) {
     toast((error as Error).message)
   } finally {
@@ -139,6 +120,7 @@ function openChannel(id: string | number) {
 }
 
 function goSearch() {
+  uni.setStorageSync('s2b2c_search_focus', true)
   uni.switchTab({ url: '/pages/category/index' })
 }
 
@@ -166,8 +148,8 @@ onPullDownRefresh(loadProducts)
 .channel-logo-m { width: 72rpx; height: 72rpx; border-radius: 16rpx; background: #e5f5eb; flex-shrink: 0; }
 .channel-logo-m.fallback { display: grid; place-items: center; color: #12764a; font-size: 30rpx; font-weight: 800; }
 .channel-name-m { overflow: hidden; color: #0b1a12; font-size: 26rpx; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.channel-meta-m { color: #84938a; font-size: 24rpx; }
-.channel-price-m { color: #d45b32; font-size: 24rpx; font-weight: 700; }
+.channel-meta-m { color: #666666; font-size: 24rpx; }
+.channel-price-m { color: #e53935; font-size: 32rpx; font-weight: 700; }
 
 .home-page {
   padding-bottom: 32rpx;
@@ -218,7 +200,7 @@ onPullDownRefresh(loadProducts)
 
 .brand-sub {
   margin-top: 3rpx;
-  color: #6b7c72;
+  color: #666666;
   font-size: 24rpx;
   letter-spacing: 1rpx;
 }
@@ -233,7 +215,7 @@ onPullDownRefresh(loadProducts)
   display: flex;
   align-items: center;
   gap: 8rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -271,7 +253,7 @@ onPullDownRefresh(loadProducts)
   border: 1rpx solid #e3eae5;
   border-radius: 18rpx;
   background: #fff;
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -413,19 +395,19 @@ onPullDownRefresh(loadProducts)
   font-weight: 800;
 }
 
-.trust-item b,
-.trust-item small {
+.trust-item .strong-copy,
+.trust-item .small-copy {
   display: block;
 }
 
-.trust-item b {
+.trust-item .strong-copy {
   color: #0e5233;
   font-size: 24rpx;
 }
 
-.trust-item small {
+.trust-item .small-copy {
   margin-top: 3rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
   white-space: nowrap;
   transform: scale(0.92);
@@ -460,7 +442,7 @@ onPullDownRefresh(loadProducts)
 }
 
 .section-link {
-  color: #829188;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -503,7 +485,7 @@ onPullDownRefresh(loadProducts)
 
 .loading {
   padding: 70rpx 0;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }
@@ -561,7 +543,7 @@ onPullDownRefresh(loadProducts)
 
 .product-point {
   margin-top: 8rpx;
-  color: #829188;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -573,12 +555,22 @@ onPullDownRefresh(loadProducts)
 }
 
 .product-price {
-  color: #d45b32;
-  font-size: 30rpx;
-}
+  color: #e53935;
+  font-size: 32rpx;
+ font-weight:700;}
 
 .product-sales {
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
+
+.season-banner { display:flex; align-items:center; justify-content:space-between; gap:16rpx; margin:18rpx 0 6rpx; padding:24rpx; border-radius:20rpx; background:#e5f1e8; }
+.season-title,.season-caption { display:block; }.season-title { font-size:32rpx; font-weight:750; color:#164a30; }.season-caption { margin-top:8rpx; font-size:24rpx; color:#666666; }.season-link { flex-shrink:0; font-size:26rpx; color:#12764a; }
+.category-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8rpx; }.category-card { min-height:110rpx; padding:14rpx 6rpx; background:transparent; border:none; }.category-sub { display:none; }.category-icon { width:64rpx; height:64rpx; margin:0 auto 8rpx; font-size:36rpx; }.section-head,.selection-head { padding-top:20rpx; }.round-button { min-width:44px; min-height:44px; }.channel-card-m { width:220rpx; padding:16rpx; }.channel-logo-m { width:56rpx;height:56rpx; }.channel-row-m { padding-left:0; }.product-name { white-space:normal; line-height:1.5; }
+
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.round-button, .search-box { min-width:48px; min-height:48px; }
+.category-card { width:auto; min-width:48px; justify-self:stretch; }
+.category-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
 </style>

@@ -25,6 +25,7 @@ onShow(()=>{
  void load()
 })
 onPullDownRefresh(()=>void load().finally(()=>uni.stopPullDownRefresh()))
+function backToCenter(){uni.switchTab({url:'/pages/profile/index'})}
 function go(k:string){uni.navigateTo({url:'/pages/business/index?key='+k+'&role='+ctx.value.role})}
 function fail(e:unknown){return e instanceof Error?e.message:'请求失败，请重试'}
 function toast(e:unknown){uni.showToast({title:fail(e),icon:'none'})}
@@ -97,7 +98,12 @@ const overviewFields=computed(()=>['totalOrders',ctx.value.role==='buyer'?'total
           </template>
         </view>
       </view>
-      <view v-if="!rows.length && mod.path" class="empty">暂无记录</view>
+      <view v-if="!rows.length && mod.path" class="empty-state">
+        <text class="empty-title">{{ keyword.trim() ? '没有找到匹配的记录' : `还没有${mod.title}记录` }}</text>
+        <text class="empty-desc">{{ keyword.trim() ? '换个关键词再试试' : mod.create ? `可以点下方按钮${mod.create.label}` : '有新的业务发生后会显示在这里' }}</text>
+        <button v-if="mod.create && !keyword.trim()" class="btn btn-primary btn-sm" :disabled="busy" @tap="run(mod.create)">{{ mod.create.label }}</button>
+        <button v-else class="btn btn-ghost btn-sm" :disabled="loading" @tap="load">刷新</button>
+      </view>
       <view v-if="mod.paged && total > 0" class="pager">
         <button class="btn btn-sm" :disabled="page <= 1 || loading" @tap="turn(-1)">上一页</button>
         <text class="tiny">第 {{ page }} 页 · 共 {{ total }} 条</text>
@@ -148,7 +154,7 @@ const overviewFields=computed(()=>['totalOrders',ctx.value.role==='buyer'?'total
                 <button v-if="detailActions" class="btn btn-ghost btn-sm" @tap="go('quotes')">进入报价管理</button>
               </view>
             </view>
-            <view v-if="!details.length" class="empty">暂无记录</view>
+            <view v-if="!details.length" class="empty-state"><text class="empty-title">没有可显示的内容</text><text class="empty-desc">这条业务可能已处理，关闭后刷新列表再看</text></view>
           </view>
         </scroll-view>
         <view v-if="chatPath" class="sheet-foot chat-foot">
@@ -161,16 +167,16 @@ const overviewFields=computed(()=>['totalOrders',ctx.value.role==='buyer'?'total
       </view>
     </view>
   </view>
-  <view v-else class="page"><view class="empty">该功能不存在，请返回工作台</view></view>
+  <view v-else class="page"><view class="empty-state"><text class="empty-title">当前中心没有这项功能</text><text class="empty-desc">这项业务属于{{ props.requiredRole === 'seller' ? '卖家' : props.requiredRole === 'buyer' ? '买家' : '另一个' }}中心，请在「我的」切换中心后再进入</text><button class="btn btn-primary btn-sm" @tap="backToCenter">去切换中心</button></view></view>
 </template>
 
 <style scoped lang="scss">
 .link { margin-left: 8rpx; color: var(--c-primary); font-weight: 600; }
 .children-scroll { margin: -4rpx 0 20rpx; }
 .children { display: inline-flex; gap: 16rpx; white-space: nowrap; }
-.child { display: flex; min-width: 180rpx; min-height: 76rpx; align-items: center; justify-content: space-between; gap: 8rpx; padding: 0 22rpx; border: 1rpx solid #dce9e0; border-radius: 38rpx; background: #fff; color: var(--c-primary); font-size: 26rpx; font-weight: 600; }
+.child { display: flex; min-width: 180rpx; min-height: 88rpx; align-items: center; justify-content: space-between; gap: 8rpx; padding: 0 22rpx; border: 1rpx solid #dce9e0; border-radius: 38rpx; background: #fff; color: var(--c-primary); font-size: 26rpx; font-weight: 600; }
 .mobile-toolbar { margin-bottom: 20rpx; }
-.toolbar-create { flex: 0 0 72rpx; padding: 0; }
+.toolbar-create { flex: 0 0 88rpx; min-height: 88rpx; padding: 0; }
 .create { margin-bottom: 20rpx; }
 .record-card { padding: 20rpx 24rpx 24rpx; }
 .record-card .action-row { padding-top: 4rpx; }

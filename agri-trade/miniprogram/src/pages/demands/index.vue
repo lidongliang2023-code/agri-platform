@@ -40,7 +40,7 @@ function budget(item: TradeDemand) {
   if (item.priceMin != null && item.priceMax != null) return `${money(item.priceMin)}–${money(item.priceMax)}`
   return money(item.priceMin ?? item.priceMax)
 }
-function statusText(status: string) { return ({ open: '招募中', matching: '撮合中', closed: '已关闭', completed: '已完成' } as Record<string, string>)[status] || status }
+function statusText(status: string) { return ({ open: '招募中', pending: '待撮合', matching: '撮合中', quoted: '已报价', closed: '已关闭', completed: '已完成' } as Record<string, string>)[status] || status }
 </script>
 
 <template>
@@ -75,7 +75,12 @@ function statusText(status: string) { return ({ open: '招募中', matching: '�
           <text class="tiny">{{ item.responseCount || 0 }} 条报价</text>
         </view>
       </view>
-      <view v-if="!shown.length" class="empty">{{ keyword ? '没有符合条件的需求' : '暂无公开采购需求' }}</view>
+      <view v-if="!shown.length" class="empty-state">
+        <text class="empty-title">{{ keyword ? '没有符合条件的需求' : '暂时没有公开采购需求' }}</text>
+        <text class="empty-desc">{{ keyword ? '换个关键词试试' : '发布一条需求，让供应商主动报价' }}</text>
+        <button v-if="keyword" class="btn btn-ghost btn-sm" @tap="clearKeyword">清除筛选</button>
+        <button v-else class="btn btn-primary btn-sm" @tap="publish">发布需求</button>
+      </view>
     </template>
 
     <view v-if="role === 'buyer'" class="fab" @tap="publish">＋ 发布需求</view>
@@ -92,5 +97,5 @@ function statusText(status: string) { return ({ open: '招募中', matching: '�
 .stats { display: flex; gap: 16rpx; margin-top: 20rpx; padding: 20rpx 24rpx; border-radius: 16rpx; background: #f5faf7; }
 .stat { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
 .stat-value { font-size: 28rpx; font-weight: 600; overflow-wrap: anywhere; }
-.stat-value.price { font-size: 28rpx; }
+.stat-value.price { font-size: 32rpx; }
 </style>

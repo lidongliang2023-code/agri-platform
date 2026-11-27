@@ -6,7 +6,7 @@ const SESSION_KEY = 's2b2c_mobile_user'
 const savedUser = uni.getStorageSync(SESSION_KEY) as Consumer | null
 
 export const session = reactive<{ user: Consumer | null }>({
-  user: savedUser || null,
+  user: getUnifiedToken() ? savedUser || null : null,
 })
 
 export function saveSession(user: Consumer) {
@@ -58,3 +58,5 @@ export function leaveLoginPage(redirect?: string) {
     uni.switchTab({ url: '/pages/profile/index' })
   }
 }
+
+uni.$on('s2b2c:session-cleared', () => { session.user = null; uni.removeStorageSync('s2b2c_mobile_user') })

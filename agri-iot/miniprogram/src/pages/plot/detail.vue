@@ -6,7 +6,7 @@ import {go} from '../../utils/ui'
 const id=ref(0),data=ref<Row|null>(null),error=ref('')
 const located=computed(()=>data.value?.plot?.latitude!=null&&data.value?.plot?.longitude!=null)
 const markers=computed(()=>located.value?[{id:id.value,latitude:Number(data.value!.plot.latitude),longitude:Number(data.value!.plot.longitude),title:data.value!.plot.plotName}]:[])
-onLoad(o=>{id.value=Number(o?.id);void load()})
+onLoad(o=>{id.value=Number(o?.id);if(!Number.isSafeInteger(id.value)||id.value<=0){error.value='缺少地块编号，请从地块列表进入';return}void load()})
 async function load(){try{data.value=await api.plotMonitoring(id.value);error.value=''}catch(e){error.value=e instanceof Error?e.message:'地块读取失败'}}
 function devices(){uni.removeStorageSync('iot_group');uni.removeStorageSync('iot_status');uni.setStorageSync('iot_plot',id.value);uni.switchTab({url:'/pages/device/list'})}
 </script>
@@ -44,4 +44,7 @@ function devices(){uni.removeStorageSync('iot_group');uni.removeStorageSync('iot
     </template>
   </view>
 </template>
-<style scoped>.detail-title{display:block;margin-bottom:6rpx;font-size:34rpx;font-weight:700}.head-kv{margin:18rpx 0 8rpx}.plot-map{width:100%;height:400rpx;border-radius:14rpx;overflow:hidden}.telemetry{margin-top:18rpx}.alert-row{display:flex;flex-direction:column;gap:4rpx;padding:16rpx 0;border-bottom:1rpx solid #edf2ee}.alert-row:last-child{border-bottom:0}</style>
+<style scoped>.detail-title{display:block;margin-bottom:6rpx;font-size:34rpx;font-weight:700}.head-kv{margin:18rpx 0 8rpx}.plot-map{width:100%;height:400rpx;border-radius:14rpx;overflow:hidden}.telemetry{margin-top:18rpx}.alert-row{display:flex;flex-direction:column;gap:4rpx;padding:16rpx 0;border-bottom:1rpx solid #edf2ee}.alert-row:last-child{border-bottom:0}
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.error { min-height:48px; }
+</style>

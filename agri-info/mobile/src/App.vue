@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app'
+import { getInfoToken } from './auth'
 
 onLaunch(() => {
   // 多端统一入口：H5、微信小程序与 App 共用同一套平台统一账号会话。
-  if (!uni.getStorageSync('info_unified_token')) {
+  if (!getInfoToken()) {
     setTimeout(() => uni.reLaunch({ url: '/pages/login/index' }), 0)
   }
 })
@@ -13,7 +14,7 @@ onLaunch(() => {
 /* ===== 平台移动端设计令牌（与综合服务、政府监管等模块保持同一套视觉语言） ===== */
 page {
   min-height: 100%;
-  background: #f4f7f5;
+  background: #f5f6fa;
   color: #0b1a12;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 28rpx;
@@ -65,12 +66,12 @@ button::after {
 }
 
 .muted {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
 .tiny {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -101,7 +102,7 @@ button::after {
 }
 
 .card-sub {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -135,7 +136,7 @@ button::after {
 .btn-danger {
   border-color: #efcccc;
   background: #fff2f2;
-  color: #c54b4b;
+  color: #b71c1c;
 }
 
 .btn-sm {
@@ -171,17 +172,17 @@ button::after {
 
 .tag.orange {
   background: #fff3dd;
-  color: #a96a08;
+  color: #8f4500;
 }
 
 .tag.red {
   background: #feebeb;
-  color: #c54b4b;
+  color: #b71c1c;
 }
 
 .tag.gray {
   background: #eef2ef;
-  color: #718277;
+  color: #666666;
 }
 
 .tag.purple {
@@ -202,7 +203,7 @@ button::after {
 }
 
 .field-label {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -293,7 +294,7 @@ button::after {
   justify-content: center;
   flex-direction: column;
   gap: 12rpx;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -303,7 +304,7 @@ button::after {
 
 .loading {
   padding: 30rpx;
-  color: #718277;
+  color: #666666;
   text-align: center;
 }
 
@@ -373,7 +374,7 @@ button::after {
 }
 
 .ai-copy text:last-child {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -432,7 +433,7 @@ button::after {
 }
 
 .flat {
-  color: #718277;
+  color: #666666;
 }
 
 .price {
@@ -444,7 +445,7 @@ button::after {
 
 .price-unit {
   margin-left: 4rpx;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
   font-weight: 400;
 }
@@ -482,7 +483,7 @@ button::after {
   flex: 1;
   padding: 12rpx 0;
   border-radius: 12rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }
@@ -568,7 +569,7 @@ button::after {
 
 .item-sub {
   overflow: hidden;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -618,7 +619,7 @@ button::after {
 }
 
 .stat-label {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -651,7 +652,7 @@ button::after {
   justify-content: center;
   flex-direction: column;
   gap: 2rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -702,7 +703,7 @@ button::after {
     max-width: 750px;
     margin: 0 auto;
     min-height: 100vh;
-    background: #f4f7f5;
+    background: #f5f6fa;
   }
 
   .action-bar {
@@ -723,7 +724,7 @@ page { line-height: 1.55; }
 .btn-primary { background: #12764a; box-shadow: none; }
 .input, .select { min-height: 88rpx; height: 88rpx; font-size: 28rpx; }
 .textarea { font-size: 28rpx; line-height: 1.7; }
-.tiny, .card-sub, .muted { color: #66796d; }
+.tiny, .card-sub, .muted { color: #666666; }
 .item-title { line-height: 1.55; overflow-wrap: anywhere; }
 .item-body, .head-copy, .hero-copy { min-width: 0; }
 .custom-nav .back, .custom-nav .right { display: flex; align-items: center; justify-content: center; min-width: 88rpx; min-height: 88rpx; }
@@ -735,7 +736,7 @@ page { line-height: 1.55; }
 .native-page { max-width: 900rpx; margin: 0 auto; padding: 28rpx 28rpx calc(40rpx + env(safe-area-inset-bottom)); }
 .native-heading { padding: 20rpx 4rpx 30rpx; }
 .native-title { display: block; color: #123f2d; font-size: 42rpx; font-weight: 700; line-height: 1.4; }
-.native-muted,.native-meta { display: block; margin-top: 12rpx; color: #6b7e73; font-size: 25rpx; line-height: 1.65; }
+.native-muted,.native-meta { display: block; margin-top: 12rpx; color: #666666; font-size: 25rpx; line-height: 1.65; }
 .native-card { margin: 20rpx 0; padding: 28rpx; border: 1rpx solid #dde7e0; border-radius: 20rpx; background: #fff; }
 .native-card-title { display: block; font-size: 30rpx; font-weight: 650; line-height: 1.6; }
 .native-body { display: block; margin-top: 16rpx; font-size: 28rpx; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
@@ -748,7 +749,7 @@ page { line-height: 1.55; }
 .native-page .btn { min-height: 88rpx; height: auto; line-height: 1.5; padding: 22rpx; white-space: normal; }
 .native-filter { margin: 18rpx 0; padding: 24rpx; border-radius: 16rpx; background: #e8f1eb; }
 .native-note { margin: 24rpx 0; padding: 24rpx; color: #5d705f; border-left: 6rpx solid #98bca7; background: #edf5ef; font-size: 26rpx; line-height: 1.7; }
-.native-state { display: flex; flex-direction: column; align-items: center; gap: 24rpx; padding: 50rpx 24rpx; color: #718277; text-align: center; line-height: 1.7; }
+.native-state { display: flex; flex-direction: column; align-items: center; gap: 24rpx; padding: 50rpx 24rpx; color: #666666; text-align: center; line-height: 1.7; }
 .native-options { max-height: 420rpx; margin: 20rpx 0; }
 .native-option { display: flex; justify-content: space-between; gap: 20rpx; padding: 22rpx; border-bottom: 1rpx solid #e1e9e3; background: #fff; }
 .native-option.selected { color: #12764a; background: #deefe3; }
@@ -758,4 +759,5 @@ page { line-height: 1.55; }
 .native-field input { height:88rpx; }
 .native-field textarea { height:240rpx; }
 
+@import '../../../shared/mobile-ui-v1.scss';
 </style>

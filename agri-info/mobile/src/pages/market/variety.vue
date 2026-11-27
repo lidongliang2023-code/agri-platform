@@ -19,6 +19,7 @@ const detail = ref<MarketDetail | null>(null)
 const series = ref<SeriesPoint[]>([])
 const { saved, saving, refresh, toggle } = useFavorite('quote', () => detail.value ? { id: detail.value.id, title: detail.value.name, summary: detail.value.origin } : null)
 const horizon = ref('7d')
+const loadError = ref('')
 const loading = ref(true)
 const statusBarHeight = ref(0)
 
@@ -53,10 +54,13 @@ const high = computed(() => (chartPoints.value.length ? Math.max(...chartPoints.
 
 onLoad((options) => {
   id.value = Number(options?.id || 0)
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '缺少行情编号，请从行情列表进入'; return }
   load()
 })
 
 async function load() {
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '链接缺少有效编号，请返回列表'; return }
+  loadError.value = ''
   loading.value = true
   try {
     const data = await infoApi.market(id.value)
@@ -71,7 +75,7 @@ async function load() {
       icon: data.icon,
     })
   } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
+    loadError.value = error instanceof Error ? error.message : '加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -104,6 +108,7 @@ function compare() {
 function goBack() {
   uni.navigateBack({ delta: 1 })
 }
+function backToList() { uni.reLaunch({ url: '/pages/market/index' }) }
 </script>
 
 <template>
@@ -117,6 +122,7 @@ function goBack() {
     </view>
 
     <view v-if="loading" class="loading">正在加载行情…</view>
+    <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @click="load">重新加载</button><button class="btn" @click="backToList">返回列表</button></view>
 
     <template v-else-if="detail">
       <view class="head">
@@ -274,7 +280,7 @@ function goBack() {
 <style lang="scss" scoped>
 .variety-page {
   padding-bottom: 170rpx;
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .nav-holder {
@@ -407,4 +413,7 @@ function goBack() {
   font-size: 25rpx;
   font-weight: 650;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.back, .right { min-width:48px; min-height:48px; }
 </style>

@@ -1,12 +1,13 @@
 <template>
   <view class="page category-page">
+    <view class="browse-head">
     <view class="search-wrap">
       <view class="search-box">
         <text class="search-icon">⌕</text>
-        <input v-model="keyword" confirm-type="search" placeholder="搜索农产品" @confirm="search" />
-        <text v-if="keyword" class="clear" @tap="clearSearch">×</text>
+        <input v-model="keyword" :focus="searchFocus" @blur="searchFocus = false" confirm-type="search" placeholder="搜索农产品" @confirm="search" />
+        <text v-if="keyword" class="ui-action-target clear" @tap="clearSearch">×</text>
       </view>
-      <view class="search-button" @tap="search">搜索</view>
+      <view class="ui-action-target search-button" @tap="search">搜索</view>
     </view>
 
     <scroll-view class="category-scroller" scroll-x :show-scrollbar="false">
@@ -23,6 +24,7 @@
         </view>
       </view>
     </scroll-view>
+    </view>
 
     <view class="result-head">
       <view>
@@ -33,6 +35,7 @@
     </view>
 
     <view v-if="loading" class="loading">正在加载商品…</view>
+    <view v-else-if="loadError && !products.length" class="empty"><text>{{ loadError }}</text><button class="btn" @tap="loadProducts()">重新加载</button></view>
     <view v-else-if="products.length" class="product-list">
       <view v-for="item in products" :key="item.id" class="product-card" @tap="openProduct(item)">
         <image v-if="firstImage(item.images)" class="product-image" :src="firstImage(item.images)" mode="aspectFill" />
@@ -59,40 +62,51 @@
       <text>没有找到相关商品</text>
       <text class="tiny">换个关键词或分类试试</text>
     </view>
+    <view v-if="products.length && !loading" class="list-feedback">
+      <text v-if="loadError">{{ loadError }}</text>
+      <button v-if="loadError" class="btn load-more" :disabled="loadingMore" @tap="loadProducts(failedAppend)">重新加载商品</button>
+      <button v-else-if="products.length < total" class="btn load-more" :disabled="loadingMore" @tap="loadMore">{{ loadingMore ? '加载中…' : loadError ? '重试加载' : '加载更多' }}</button>
+      <text v-else>已显示全部 {{ total }} 条</text>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { onPullDownRefresh, onShow } from '@dcloudio/uni-app'
+import { computed, ref } from 'vue'
+import { onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import { mallApi, type Product } from '../../api'
 import { firstImage, money, openProduct, toast } from '../../utils'
 
-const categories = [
-  { id: 0, name: '全部', icon: '全' },
-  { id: 7, name: '粮油', icon: '🍚' },
-  { id: 12, name: '果蔬', icon: '🥬' },
-  { id: 16, name: '蛋奶', icon: '🥚' },
-  { id: 17, name: '茶叶', icon: '🍵' },
-  { id: 18, name: '养生', icon: '🍯' },
-]
+const categories = ref([{id:0,name:'全部',icon:'全'}])
 
+const searchFocus = ref(false)
 const keyword = ref('')
 const activeCategory = ref(0)
 const products = ref<Product[]>([])
 const total = ref(0)
 const loading = ref(false)
-const currentName = computed(() => categories.find((item) => item.id === activeCategory.value)?.name || '全部商品')
+const loadingMore = ref(false)
+const loadError = ref('')
+const currentPage = ref(0)
+const failedAppend = ref(false)
+let requestSeq = 0
+const currentName = computed(() => categories.value.find((item) => item.id === activeCategory.value)?.name || '全部商品')
 const categoryStorageKey = 's2b2c_pending_category'
 const searchStorageKey = 's2b2c_search_keyword'
 
-onMounted(loadProducts)
+
 
 onShow(() => {
+  mallApi.getCategories().then(tree=>{
+    const flat: {id:number;name:string;icon:string}[]=[]
+    const visit=(nodes: import('../../api').Category[],depth=0)=>{for(const c of nodes){flat.push({id:c.id,name:(depth?'· ':'')+c.name,icon:'丰'});visit(c.children || [],depth+1)}}
+    visit(tree);categories.value=[{id:0,name:'全部',icon:'全'},...flat]
+  }).catch(e=>{loadError.value=(e as Error).message})
   const pendingCategory = uni.getStorageSync(categoryStorageKey)
   const pendingKeyword = uni.getStorageSync(searchStorageKey)
   let changed = false
   if (pendingCategory !== '' && pendingCategory !== undefined && pendingCategory !== null) {
+    keyword.value = ''
     activeCategory.value = Number(pendingCategory)
     uni.removeStorageSync(categoryStorageKey)
     changed = true
@@ -102,27 +116,36 @@ onShow(() => {
     uni.removeStorageSync(searchStorageKey)
     changed = true
   }
-  if (changed) loadProducts()
+  if (uni.getStorageSync('s2b2c_search_focus')) {
+    uni.removeStorageSync('s2b2c_search_focus')
+    searchFocus.value = true
+  }
+  if (changed || !products.value.length) loadProducts()
 })
 
-async function loadProducts() {
-  loading.value = true
+async function loadProducts(append = false) {
+
+  if (append && (loading.value || loadingMore.value || products.value.length >= total.value)) return
+  const seq = ++requestSeq
+  const nextPage = append ? currentPage.value + 1 : 1
+  if (append) loadingMore.value = true
+  else { loading.value = true; loadingMore.value = false }
+  loadError.value = ''
   try {
-    const result = await mallApi.getProducts({
-      page: 1,
-      size: 30,
-      keyword: keyword.value.trim() || undefined,
-      categoryId: activeCategory.value || null,
-    })
-    products.value = result.records || []
-    total.value = result.total || 0
+    const result = await mallApi.getProducts({ page: nextPage, size: 20, keyword: keyword.value.trim() || undefined, categoryId: activeCategory.value || null, })
+    if (seq !== requestSeq) return
+    const rows = result.records || []
+    products.value = append ? [...products.value, ...rows] : rows
+    total.value = Number(result.total || 0)
+    currentPage.value = nextPage
   } catch (error) {
-    toast((error as Error).message)
+    if (seq === requestSeq) { failedAppend.value = append; loadError.value = (error as Error).message }
   } finally {
-    loading.value = false
-    uni.stopPullDownRefresh()
+    if (seq === requestSeq) { loading.value = false; loadingMore.value = false; uni.stopPullDownRefresh() }
   }
 }
+function loadMore() { return loadProducts(true) }
+onReachBottom(loadMore)
 
 function selectCategory(id: number) {
   activeCategory.value = id
@@ -138,7 +161,7 @@ function clearSearch() {
   loadProducts()
 }
 
-onPullDownRefresh(loadProducts)
+onPullDownRefresh(() => loadProducts())
 </script>
 
 <style scoped lang="scss">
@@ -178,7 +201,7 @@ onPullDownRefresh(loadProducts)
 }
 
 .clear {
-  color: #94a198;
+  color: #666666;
   font-size: 32rpx;
 }
 
@@ -252,13 +275,13 @@ onPullDownRefresh(loadProducts)
 }
 
 .result-count {
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
 .loading {
   padding: 100rpx 0;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }
@@ -313,7 +336,7 @@ onPullDownRefresh(loadProducts)
 
 .product-point {
   margin-top: 8rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -333,18 +356,19 @@ onPullDownRefresh(loadProducts)
 }
 
 .price {
-  font-size: 30rpx;
+  font-size: 32rpx;
 }
 
 .original {
   margin-left: 9rpx;
-  color: #a8b1ab;
+  color: #666666;
   font-size: 24rpx;
   text-decoration: line-through;
 }
 
 .sales {
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
+.browse-head { position:sticky;top:var(--window-top,0px);z-index:12;background:#f5f6fa; }.search-box { min-height:48px; }.product-meta { flex-wrap:wrap;gap:12rpx; }.product-name { white-space:normal;line-height:1.5; }
 </style>

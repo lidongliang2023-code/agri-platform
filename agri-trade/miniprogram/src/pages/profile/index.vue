@@ -85,6 +85,11 @@ function logout() {
 
 <style scoped lang="scss">
 .hero { padding: 0 32rpx 72rpx; background: radial-gradient(circle at 85% 0, rgba(82, 204, 134, .23), transparent 390rpx), linear-gradient(150deg, #073821, #0f6440); color: #fff; }
+/* 与首页一致：一级页面顶部采用浅色表面，品牌色留给标题和可操作元素。 */
+.hero { background: #fff; color: #14512a; }
+.hero .account { color: #666; }
+.hero .verified { background: #e8f5eb; color: #1e6b38; }
+.hero .avatar { border-color: #e8f5eb; color: #fff; }
 .nav-title { display: flex; height: 88rpx; align-items: center; font-size: 32rpx; font-weight: 700; }
 .account-row { display: flex; align-items: center; gap: 24rpx; margin-top: 16rpx; }
 .avatar { display: flex; width: 120rpx; height: 120rpx; flex-shrink: 0; align-items: center; justify-content: center; border: 6rpx solid rgba(255, 255, 255, .18); border-radius: 50%; background: linear-gradient(135deg, #26a96a, #12764a); font-size: 44rpx; font-weight: 700; }

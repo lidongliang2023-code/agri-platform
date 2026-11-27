@@ -1,3 +1,4 @@
+import { readSessionToken, sessionDeadline } from '../../../../packages/agri-shared/src/auth/mobileSession'
 import { logoutMobile } from '../../../../packages/agri-shared/src/auth/logoutMobile'
 /**
  * 登录态与「当前农场」上下文。
@@ -5,7 +6,8 @@ import { logoutMobile } from '../../../../packages/agri-shared/src/auth/logoutMo
  * <p>移动端不复用浏览器 Cookie 会话（小程序没有 Cookie 语义），而是拿统一认证中心
  * 返回的 accessToken 存本地、按 Bearer 发送 —— 这与 PC 端探针/联调脚本用的是同一套。</p>
  */
-import { BASE_URL, request, TOKEN_KEY, clearProductionContext } from './request'
+import { request, TOKEN_KEY, clearProductionContext, invalidateProductionRequests } from './request'
+import { apiBase } from './runtime'
 
 /** 用户信息存储键 */
 const USER_KEY = 'agri_user'
@@ -109,9 +111,10 @@ export interface FarmBrief {
  * @param payload 账号 / 密码 / 市场 ID
  * @returns 登录后的用户信息
  */
-function persistLogin(data: any, fallbackUsername: string): MobileUser {
+export function persistLogin(data: any, fallbackUsername: string): MobileUser {
   const token = data?.accessToken ?? data?.token
   if (!token) throw new Error('登录失败：认证中心未返回访问令牌')
+  const expires = sessionDeadline(data?.expiresIn)
   clearProductionContext()
   uni.setStorageSync(TOKEN_KEY, token)
   const user: MobileUser = {
@@ -121,6 +124,7 @@ function persistLogin(data: any, fallbackUsername: string): MobileUser {
     phone: data?.user?.phone ?? data?.phone ?? data?.user?.mobile,
     roles: data?.roles ?? data?.user?.roles ?? [],
   }
+  uni.setStorageSync("agri_session_expires", expires)
   uni.setStorageSync(USER_KEY, user)
   return user
 }
@@ -264,7 +268,7 @@ export function uploadOnboardingFile(
   const token = uni.getStorageSync(TOKEN_KEY)
   return new Promise((resolve, reject) => {
     uni.uploadFile({
-      url: `${BASE_URL}/api/v1/sso/account/businesses/${encodeURIComponent(merchantId)}/certification-files?kind=${kind}`,
+      url: `${apiBase()}/api/v1/sso/account/businesses/${encodeURIComponent(merchantId)}/certification-files?kind=${kind}`,
       filePath,
       name: 'file',
       header: token ? { Authorization: `Bearer ${token}` } : {},
@@ -287,17 +291,24 @@ export function uploadOnboardingFile(
 
 /** 退出当前账号及各端凭据，成功后才清除本地状态。 */
 export function logout(): Promise<boolean> {
-  return logoutMobile(`${BASE_URL}/api/v1/auth/logout`, String(uni.getStorageSync(TOKEN_KEY) || ''), () => {
+  const token = String(uni.getStorageSync(TOKEN_KEY) || '')
+  const clear = () => {
     clearProductionContext()
     uni.removeStorageSync(TOKEN_KEY)
     uni.removeStorageSync(USER_KEY)
     uni.removeStorageSync(FARM_KEY)
-  })
+    uni.removeStorageSync('agri_session_expires')
+  }
+  return logoutMobile(`${apiBase()}/api/v1/auth/logout`, token, clear,
+    () => { clear(); uni.reLaunch({ url: '/pages/login/login' }) },
+    () => String(uni.getStorageSync(TOKEN_KEY) || '') === token)
 }
 
 /** 是否已登录 */
 export function isLoggedIn(): boolean {
-  return Boolean(uni.getStorageSync(TOKEN_KEY))
+  return Boolean(readSessionToken(TOKEN_KEY, 'agri_session_expires', () => {
+    clearProductionContext(); uni.removeStorageSync(TOKEN_KEY); uni.removeStorageSync(USER_KEY); uni.removeStorageSync('agri_session_expires')
+  }))
 }
 
 /** 读当前用户 */
@@ -313,6 +324,7 @@ export function currentFarm(): FarmBrief | null {
 
 /** 写当前农场 */
 export function setCurrentFarm(farm: FarmBrief): void {
+  if (String(currentFarm()?.farmId || '') !== String(farm.farmId)) invalidateProductionRequests()
   uni.setStorageSync(FARM_KEY, farm)
 }
 

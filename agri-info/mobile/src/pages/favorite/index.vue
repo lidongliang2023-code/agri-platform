@@ -178,7 +178,10 @@ function manage() {
 }
 
 .remove {
-  color: #c54b4b;
+  color: #b71c1c;
   font-size: 24rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.manage { display:inline-flex; align-items:center; justify-content:center; min-width:48px; min-height:48px; }
 </style>

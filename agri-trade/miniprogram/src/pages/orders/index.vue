@@ -38,6 +38,8 @@ async function load() {
 function pickStatus(value: string) { if (status.value !== value) { status.value = value; void load() } }
 function changeCenter() { uni.switchTab({ url: '/pages/profile/index' }) }
 function clearFilters() { status.value = ''; void load() }
+function toHall() { uni.switchTab({ url: '/pages/products/index' }) }
+function toGoods() { uni.navigateTo({ url: '/pages/seller/goods' }) }
 function tone(value: string) {
   if (['completed'].includes(value)) return ''
   if (['cancelled', 'closed', 'refunded'].includes(value)) return 'gray'
@@ -73,7 +75,13 @@ function tone(value: string) {
             <view><text class="tiny">合计 </text><text class="price">{{ money(item.totalAmount) }}</text></view>
           </view>
         </view>
-        <view v-if="!orders.length" class="empty">{{ status || side ? '当前筛选下没有订单' : '暂无交易订单' }}</view>
+        <view v-if="!orders.length" class="empty-state">
+        <text class="empty-title">{{ status ? '当前筛选下没有订单' : side === 'seller' ? '还没有销售订单' : '还没有采购订单' }}</text>
+        <text class="empty-desc">{{ status ? '换个状态看看，或查看全部订单' : side === 'seller' ? '买家下单后，销售订单会显示在这里' : '去交易大厅挑选货源，下单后会显示在这里' }}</text>
+        <button v-if="status" class="btn btn-ghost btn-sm" @tap="clearFilters">查看全部订单</button>
+        <button v-else-if="side === 'seller'" class="btn btn-ghost btn-sm" @tap="toGoods">管理商品</button>
+        <button v-else class="btn btn-primary btn-sm" @tap="toHall">去交易大厅</button>
+      </view>
       </template>
     </view>
   </view>

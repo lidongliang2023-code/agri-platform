@@ -239,4 +239,7 @@ function repost(item: SupplyDemand) {
   border-radius: 10rpx;
   background: #eef7f2;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.act { display:inline-flex; align-items:center; justify-content:center; min-width:48px; min-height:48px; }
 </style>

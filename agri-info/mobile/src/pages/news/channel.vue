@@ -131,12 +131,12 @@ function toSearch() {
 }
 
 .search-icon {
-  color: #94a198;
+  color: #666666;
   font-size: 28rpx;
 }
 
 .search-ph {
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -155,7 +155,7 @@ function toSearch() {
 
 .foot {
   padding: 24rpx 0 8rpx;
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }

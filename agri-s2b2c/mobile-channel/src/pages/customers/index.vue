@@ -1,0 +1,13 @@
+<template><view class="native-page"><text class="title">客户与运营</text><view v-if="error" class="panel error"><text>{{error}}</text><button :disabled="loading" @tap="reload">重新加载</button></view><view v-if="loading" class="sub">正在同步…</view><template v-if="!loading"><view class="panel"><input v-model="keyword" placeholder="搜索客户姓名或手机号" @confirm="search"/><picker :range="layers" range-key="label" @change="layerIndex=Number($event.detail.value);search()"><view class="picker">{{layers[layerIndex].label}}</view></picker><button @tap="search">查询客户</button><text class="sub">客户 {{summary.total || 0}} 人 · 复购 {{summary.repeat || 0}} 人 · 高价值 {{summary.highValue || 0}} 人</text></view><view class="panel" v-for="r in rows" :key="r.consumerId" @tap="go('/pages/customers/detail?id='+r.consumerId)"><view class="row"><text>{{r.name}}</text><text>{{layerLabel(r.layer)}}</text></view><text class="sub">{{r.phone}} · {{r.orderCount}} 笔订单</text><text class="amount">{{money(r.totalAmount)}}</text><text class="sub">最近下单 {{r.lastOrderTime}}</text><text class="badge">查看客户画像 ›</text></view><text v-if="!rows.length" class="sub">没有符合条件的客户</text><view class="row"><button :disabled="pageNo<=1 || busy" @tap="change(-1)">上一页</button><text>第 {{pageNo}} 页 / 共 {{total}} 条</text><button :disabled="pageNo*20>=total || busy" @tap="change(1)">下一页</button></view></template></view></template>
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { request, channelApi } from '../../api'
+import { channelSession, saveChannelSession } from '../../session'
+import { useNativePage, go, confirmAction } from '../../useNativePage'
+import { money } from '../../utils'
+const rows=ref<any[]>([]),summary=ref<any>({}),keyword=ref(''),layerIndex=ref(0),pageNo=ref(1),total=ref(0)
+const layers=[{label:'全部客户',value:''},{label:'新客户',value:'NEW'},{label:'活跃客户',value:'ACTIVE'},{label:'高价值客户',value:'HIGH_VALUE'},{label:'沉睡客户',value:'SLEEPING'}]
+const {loading,error,busy,reload,act}=useNativePage(async()=>{const r=await request<any>('/channel/customers','GET',undefined,{keyword:keyword.value.trim()||undefined,layer:layers[layerIndex.value].value||undefined,page:pageNo.value,size:20});rows.value=r.records;total.value=r.total;summary.value=r.summary})
+function search(){pageNo.value=1;reload()}function change(n:number){pageNo.value+=n;reload()}function layerLabel(value:string){return layers.find(x=>x.value===value)?.label || value}
+</script><style src="../../native-page.scss" lang="scss"></style>

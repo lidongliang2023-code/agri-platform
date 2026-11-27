@@ -21,14 +21,14 @@ export const TASK_STATUS_LABEL: Record<string, string> = {
 
 /** 任务状态 → 颜色（对应样式类） */
 export const TASK_STATUS_COLOR: Record<string, string> = {
-  pending: '#1677ff',
-  assigned: '#1677ff',
-  executing: '#fa8c16',
-  doing: '#fa8c16',
-  completed: '#13a05a',
-  done: '#13a05a',
-  suspended: '#8c8c8c',
-  cancelled: '#8c8c8c',
+  pending: '#14512a',
+  assigned: '#14512a',
+  executing: '#8f4500',
+  doing: '#8f4500',
+  completed: '#1e6b38',
+  done: '#1e6b38',
+  suspended: '#666666',
+  cancelled: '#666666',
   expired: '#d4380d',
   rejected: '#d4380d',
 }
@@ -44,9 +44,9 @@ export const TASK_PRIORITY_LABEL: Record<number, string> = {
 /** 任务优先级 → 颜色 */
 export const TASK_PRIORITY_COLOR: Record<number, string> = {
   4: '#ff4d4f',
-  3: '#fa8c16',
-  2: '#1677ff',
-  1: '#8c8c8c',
+  3: '#8f4500',
+  2: '#14512a',
+  1: '#666666',
 }
 
 /** 入库状态：0 待入库 / 1 已入库 / 2 已出库 */
@@ -58,9 +58,9 @@ export const INBOUND_STATUS_LABEL: Record<number, string> = {
 
 /** 入库状态 → 颜色 */
 export const INBOUND_STATUS_COLOR: Record<number, string> = {
-  0: '#faad14',
-  1: '#13a05a',
-  2: '#1677ff',
+  0: '#8f4500',
+  1: '#1e6b38',
+  2: '#14512a',
 }
 
 /** 告警级别（PC 端 alerts 用 1/2/3 或 low/medium/high，两种都兜住） */
@@ -76,9 +76,9 @@ export function alertLevelLabel(level: any): string {
 export function alertLevelColor(level: any): string {
   const label = alertLevelLabel(level)
   if (label === '高危') return '#ff4d4f'
-  if (label === '中危') return '#fa8c16'
-  if (label === '低危') return '#faad14'
-  return '#8c8c8c'
+  if (label === '中危') return '#8f4500'
+  if (label === '低危') return '#8f4500'
+  return '#666666'
 }
 
 /** 日期时间格式化：'2026-06-01T10:00:00' → '2026-06-01 10:00' */
@@ -123,4 +123,10 @@ export function addDays(date: string, days: number): string {
   base.setDate(base.getDate() + days)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}`
+}
+
+export function taskTypeLabel(value: unknown): string {
+  const labels: Record<string, string> = { irrigating: '灌溉', irrigation: '灌溉', fertilizing: '施肥', fertilizing_task: '施肥', pest_control: '病虫害防治', 'pest-control': '病虫害防治', pruning: '整枝打杈', weeding: '除草', harvesting: '采收', harvest: '采收', other: '其他' }
+  const text = String(value ?? '').trim()
+  return text ? labels[text.toLowerCase()] || text : '—'
 }

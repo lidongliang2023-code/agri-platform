@@ -140,7 +140,7 @@ function budget(item: TradeDemand) {
             </view>
             <view class="product-price"><text class="price">{{ money(item.price ?? item.priceMin) }}</text><text class="tiny">/{{ item.unit }}</text></view>
           </view>
-          <view v-if="!products.length" class="empty">暂无在售货源</view>
+          <view v-if="!products.length" class="empty-state"><text class="empty-title">暂时没有在售货源</text><text class="empty-desc">供应商上架后会显示在这里，稍后刷新看看</text><button class="btn btn-ghost btn-sm" @tap="loadProducts">刷新</button></view>
         </template>
       </view>
 
@@ -154,7 +154,7 @@ function budget(item: TradeDemand) {
             <text class="tiny ellipsis demand-line">{{ item.buyerName }} · {{ item.deliveryAddress || '交货地待协商' }}</text>
             <view class="between demand-foot"><text class="muted">{{ item.quantity }} {{ item.unit || '吨' }}</text><text class="price">{{ budget(item) }}</text></view>
           </view>
-          <view v-if="!demands.length" class="empty">暂无公开采购需求</view>
+          <view v-if="!demands.length" class="empty-state"><text class="empty-title">暂时没有公开采购需求</text><text class="empty-desc">可以先发布一条需求，让供应商主动报价</text><button class="btn btn-ghost btn-sm" @tap="toDemand">去采购需求</button></view>
         </template>
       </view>
     </view>
@@ -170,6 +170,12 @@ function budget(item: TradeDemand) {
 .hero-title { display: block; margin-top: 24rpx; font-size: 44rpx; font-weight: 750; }
 .hero-desc { display: block; margin-top: 8rpx; color: rgba(255, 255, 255, .68); font-size: 26rpx; }
 .hero-search { display: flex; height: 80rpx; align-items: center; gap: 14rpx; margin-top: 32rpx; padding: 0 28rpx; border-radius: 40rpx; background: rgba(255, 255, 255, .96); color: var(--c-text-3); font-size: 26rpx; }
+/* 首页采用浅色表面，品牌色留给标题和可操作元素。 */
+.hero { background: #fff; color: #14512a; }
+.hero .hero-desc, .hero .metric-label { color: #666; }
+.hero .hero-search { min-height: 48px; background: #f7f8fa; color: #666; font-size: 14px; }
+.hero .login-link { min-height: 48px; border-color: #eaeaea; }
+.hero .metric + .metric { border-color: #eaeaea; }
 .search-icon { font-size: 34rpx; }
 .metrics { display: flex; margin-top: 28rpx; }
 .metric { display: flex; flex: 1; align-items: center; flex-direction: column; gap: 4rpx; }

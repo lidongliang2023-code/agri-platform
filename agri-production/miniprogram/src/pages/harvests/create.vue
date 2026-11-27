@@ -3,8 +3,8 @@
     <view v-if="error" class="error-box">{{ error }}</view>
 
     <view class="card">
-      <view class="card-title"><text>🌾 Step1 · 选择地块</text></view>
-      <picker mode="selector" :range="plotNames" @change="onPlotChange">
+      <view class="card-title"><text>选择采收地块</text></view>
+      <picker :disabled="submitting || saved" mode="selector" :range="plotNames" @change="onPlotChange">
         <view class="field" style="border-bottom: none">
           <text class="field-label">采收地块</text>
           <text class="field-value">{{ plotLabel || '请选择' }}</text>
@@ -13,33 +13,33 @@
     </view>
 
     <view class="card">
-      <view class="card-title"><text>🧾 Step2 · 填写信息</text></view>
-      <picker mode="date" :value="form.harvestDate" @change="onDateChange">
+      <view class="card-title"><text>填写采收信息</text></view>
+      <picker :disabled="submitting || saved" mode="date" :value="form.harvestDate" @change="onDateChange">
         <view class="field"><text class="field-label">采收日期</text><text class="field-value">{{ form.harvestDate }}</text></view>
       </picker>
       <view class="field">
         <text class="field-label">采收数量</text>
-        <input v-model="form.quantity" class="input" type="digit" placeholder="如 500" />
+        <input :disabled="submitting || saved" v-model="form.quantity" class="input" type="digit" placeholder="如 500" />
       </view>
       <view class="field">
         <text class="field-label">单位</text>
-        <input v-model="form.unit" class="input" placeholder="kg" />
+        <input :disabled="submitting || saved" v-model="form.unit" class="input" placeholder="kg" />
       </view>
-      <picker mode="selector" :range="grades" @change="onGradeChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="grades" @change="onGradeChange">
         <view class="field"><text class="field-label">质量等级</text><text class="field-value">{{ form.grade }}</text></view>
       </picker>
-      <picker mode="selector" :range="memberNames" @change="onMemberChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="memberNames" @change="onMemberChange">
         <view class="field"><text class="field-label">采收人</text><text class="field-value">{{ memberLabel || '请选择' }}</text></view>
       </picker>
       <view class="field" style="border-bottom: none">
         <text class="field-label">备注</text>
-        <input v-model="form.remark" class="input" placeholder="选填" />
+        <input :disabled="submitting || saved" v-model="form.remark" class="input" placeholder="选填" />
       </view>
     </view>
 
     <!-- Step3 休药期校验：用该地块真实用药记录 + 安全间隔期推算 -->
     <view class="card">
-      <view class="card-title"><text>⏳ Step3 · 休药期校验</text></view>
+      <view class="card-title"><text>采收前安全检查</text></view>
       <view v-if="!form.plotId" class="muted">先选择地块，系统按该地块最近用药记录推算</view>
       <view v-else-if="checkLoading" class="muted">正在向服务端校验休药期…</view>
       <view v-else-if="withdrawal.blocked" class="error-box" style="margin: 0">
@@ -51,25 +51,20 @@
       <view v-else class="notice" style="margin: 0">
         ✅ 休药期通过{{ withdrawal.earliest ? '（最早可采收 ' + withdrawal.earliest + '）' : '' }}{{ withdrawal.note ? '——' + withdrawal.note : '' }}
       </view>
+      <button v-if="checkError" class="btn-ghost" :disabled="checkLoading || submitting" @click="loadWithdrawalCheck(form.plotId, form.harvestDate)">重新校验</button>
       <!-- 结论来源写清楚：规则在服务端，与 PC 端同一份，前端不再自己算一套 -->
       <view v-if="serverCheck || checkError" class="muted" style="margin-top: 8rpx">
-        结论来自服务端校验（规则与 PC 端同一份）。{{ withdrawal.basis || '' }}
+        {{ withdrawal.basis || '' }}
       </view>
     </view>
 
-    <view style="margin: 24rpx">
-      <view
-        class="btn-primary"
-        :style="submitLabel !== '提交采收登记' ? 'background-color:#d9d9d9' : ''"
-        @click="submit"
-      >
-        {{ submitting ? '提交中…' : submitLabel }}
-      </view>
+    <view class="form-actions">
+      <button class="btn-primary" :loading="submitting" :disabled="submitting || saved || checkLoading || withdrawal.blocked" @click="submit">{{ saved ? '已登记' : submitLabel }}</button>
+      <text class="muted">采收登记通过服务端休药期校验后才会写入</text>
     </view>
 
-    <view class="muted" style="text-align: center; padding: 0 48rpx">
-      提交走 POST /api/v1/production/harvests；休药期校验走服务端（GET /food-safety/pre-harvest-check），
-      结论为「未过」或**校验接口不可用**时都不放行（安全红线 fail-closed，与 PRD 4.4.2 Step3 的"拦截"一致）。
+    <view class="muted form-source-note">
+      提交前会自动检查休药期，检查未通过时不能登记；登记成功后可在采收详情查看批次和溯源码。
     </view>
   </view>
 </template>
@@ -84,7 +79,7 @@ import {
   listPlots,
   preHarvestCheck,
 } from '@/api/production'
-import { currentFarm, currentUser } from '@/utils/auth-helper'
+import { currentUser, resolveCurrentFarm } from '@/utils/auth-helper'
 import { today } from '@/utils/format'
 
 /** 质量等级候选（与 PC 端采收登记同值域） */
@@ -96,8 +91,11 @@ const members = ref<any[]>([])
 const serverCheck = ref<any | null>(null)
 const checkLoading = ref(false)
 const checkError = ref('')
+const checkedKey = ref('')
+let checkVersion = 0
 const error = ref('')
 const submitting = ref(false)
+const saved = ref(false)
 
 const form = ref({
   plotId: '',
@@ -186,55 +184,59 @@ const submitLabel = computed(() => {
  * @param plannedDate 计划采收日期（yyyy-MM-dd）
  */
 async function loadWithdrawalCheck(plotId: string, plannedDate: string): Promise<void> {
-  if (!plotId) {
-    serverCheck.value = null
-    return
-  }
-  checkLoading.value = true
+  const version = ++checkVersion
+  serverCheck.value = null
+  checkedKey.value = ''
   checkError.value = ''
+  checkLoading.value = Boolean(plotId)
+  if (!plotId) return
   try {
-    serverCheck.value = await preHarvestCheck({ plotId, plannedHarvestDate: plannedDate })
+    const result = await preHarvestCheck({ plotId, plannedHarvestDate: plannedDate })
+    if (version !== checkVersion || form.value.plotId !== plotId || form.value.harvestDate !== plannedDate) return
+    serverCheck.value = result
+    checkedKey.value = plotId + '|' + plannedDate
   } catch (err: any) {
-    serverCheck.value = null
-    checkError.value = err?.message ?? '未知错误'
-  } finally {
-    checkLoading.value = false
-  }
+    if (version === checkVersion) checkError.value = err?.message || '校验失败，请重试'
+  } finally { if (version === checkVersion) checkLoading.value = false }
 }
 
 function onPlotChange(event: any): void {
+  if (submitting.value || saved.value) return
   const plot = plots.value[Number(event.detail.value)]
   form.value.plotId = String(plot?.plotId ?? '')
   void loadWithdrawalCheck(form.value.plotId, form.value.harvestDate)
 }
 
 function onDateChange(event: any): void {
+  if (submitting.value || saved.value) return
   form.value.harvestDate = String(event.detail.value)
   void loadWithdrawalCheck(form.value.plotId, form.value.harvestDate)
 }
 
 function onGradeChange(event: any): void {
+  if (submitting.value || saved.value) return
   form.value.grade = grades[Number(event.detail.value)] ?? 'A'
 }
 
 function onMemberChange(event: any): void {
+  if (submitting.value || saved.value) return
   const member = members.value[Number(event.detail.value)]
   form.value.operatorId = String(member?.id ?? '')
   form.value.operatorName = String(member?.realName ?? '')
 }
 
 async function submit(): Promise<void> {
+  if (submitting.value || saved.value) return
+  submitting.value = true
+  try {
   error.value = ''
-  const farm = currentFarm()
-  if (!farm) {
-    error.value = '当前账号未关联农场，请到「我的」页选择农场'
-    return
-  }
+  const farm = await resolveCurrentFarm().catch((e: any) => { error.value = e?.message || '农场加载失败，请稍后重试'; return null })
+  if (!farm) return
   if (!form.value.plotId) {
     error.value = '请选择采收地块'
     return
   }
-  if (!form.value.quantity || Number(form.value.quantity) <= 0) {
+  if (!form.value.quantity || (!Number.isFinite(Number(form.value.quantity)) || Number(form.value.quantity) <= 0)) {
     error.value = '请填写大于 0 的采收数量'
     return
   }
@@ -242,11 +244,11 @@ async function submit(): Promise<void> {
     error.value = '请选择采收人'
     return
   }
+  if (checkLoading.value || checkedKey.value !== form.value.plotId + '|' + form.value.harvestDate) { error.value = '请等待当前地块和日期的休药期校验完成'; return }
   if (withdrawal.value.blocked) {
     error.value = '不能登记本次采收：' + withdrawal.value.reason
     return
   }
-  submitting.value = true
   try {
     const plot = plots.value.find((item) => String(item.plotId) === String(form.value.plotId))
     const batchId = await createHarvest({
@@ -266,29 +268,27 @@ async function submit(): Promise<void> {
       inboundStatus: 0,
       remark: form.value.remark || undefined,
     })
+    saved.value = true
+    let traceMessage = '采收已登记'
     // 溯源码生成失败不阻断主流程（批次已落库），但要如实提示
     try {
       await generateHarvestBatch(batchId, {})
     } catch (err: any) {
-      uni.showToast({ title: `批次已登记，溯源码未生成：${err?.message ?? ''}`, icon: 'none' })
+      traceMessage = '采收已登记，溯源码待生成，请在详情重试'
     }
-    uni.showToast({ title: '采收已登记', icon: 'success' })
+    uni.showToast({ title: traceMessage, icon: 'none', duration: 3000 })
     setTimeout(() => {
       uni.redirectTo({ url: `/pages/harvests/detail?id=${batchId}` })
     }, 700)
   } catch (err: any) {
     error.value = err?.message ?? '登记失败，请稍后重试'
-  } finally {
-    submitting.value = false
   }
+  } finally { submitting.value = false }
 }
 
 onMounted(async () => {
-  const farm = currentFarm()
-  if (!farm) {
-    error.value = '当前账号未关联农场，请到「我的」页选择农场'
-    return
-  }
+  const farm = await resolveCurrentFarm().catch((e: any) => { error.value = e?.message || '农场加载失败，请稍后重试'; return null })
+  if (!farm) return
   try {
     const [plotPage, memberList] = await Promise.all([
       listPlots({ farmId: farm.farmId, pageSize: 100 }),
@@ -316,3 +316,8 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.form-actions { position: sticky; bottom: 0; z-index: 8; display: flex; flex-direction: column; gap: 10rpx; margin-top: 22rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background: rgba(245,247,245,.96); backdrop-filter: blur(14rpx); }
+.form-source-note { display: block; text-align: center; padding: 0 48rpx 24rpx; }
+</style>

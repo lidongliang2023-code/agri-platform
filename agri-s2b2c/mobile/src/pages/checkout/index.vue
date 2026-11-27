@@ -1,5 +1,7 @@
 <template>
   <view class="page checkout-page">
+    <view v-if="loading" class="list-feedback">正在确认商品与收货信息…</view>
+    <view v-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @tap="load">重新加载</button></view>
     <view class="address-card" @tap="chooseAddress">
       <view class="address-icon">址</view>
       <view v-if="selectedAddress" class="address-copy">
@@ -17,6 +19,7 @@
       <text class="arrow">›</text>
     </view>
 
+    <view v-if="groupBuyId" class="card"><text>拼团订单 · {{groupInstanceId?'加入拼团':'发起拼团'}}，按当前活动价格结算，不叠加优惠券</text></view>
     <view class="card order-products">
       <view class="card-head">
         <text class="card-title">商品清单</text>
@@ -43,11 +46,11 @@
       <view v-if="usableCoupons.length" class="coupon-block">
         <text class="coupon-title">优惠券</text>
         <view class="coupon-chips">
-          <view class="coupon-chip" :class="{ active: couponIndex === 0 }" @tap="couponIndex = 0">不使用</view>
+          <view class="coupon-chip" :class="{ active: !couponId }" @tap="couponId = ''">不使用</view>
           <view v-for="(coupon, index) in usableCoupons" :key="coupon.id"
-                class="coupon-chip" :class="{ active: couponIndex === index + 1 }"
-                @tap="couponIndex = index + 1">
-            {{ coupon.name }}
+                class="coupon-chip" :class="{ active: couponId === String(coupon.id) }"
+                @tap="couponId = String(coupon.id)">
+            {{ coupon.name }} · 省 {{ money(couponDiscount(coupon)) }}
           </view>
         </view>
       </view>
@@ -62,8 +65,8 @@
     </view>
 
     <view class="security-note">
-      <text class="security-mark">保</text>
-      <view><b>平台担保交易</b><text>订单、支付与售后全流程留痕</text></view>
+<text class="security-mark">保</text>
+      <view><text class="strong-copy">平台担保交易</text><text>订单、支付与售后全流程留痕</text></view>
     </view>
 
     <view class="fixed-bottom submit-bar">
@@ -71,32 +74,40 @@
         <text>应付</text>
         <text class="price">{{ money(payAmount) }}</text>
       </view>
-      <button class="btn btn-primary submit-button" :loading="submitting" @tap="submitOrder">提交订单</button>
+      <button class="btn btn-primary submit-button" :loading="submitting" :disabled="submitting || loading || !!loadError || !items.length || !selectedAddress" @tap="submitOrder">提交订单</button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { mallApi, type Address, type CartItem, type CouponItem } from '../../api'
-import { session } from '../../session'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import { mallApi, request, type Address, type CartItem, type CouponItem } from '../../api'
+import { session, ensureLogin } from '../../session'
 import { money, toast } from '../../utils'
 
 const items = ref<CartItem[]>([])
 const addresses = ref<Address[]>([])
 const selectedAddress = ref<Address | null>(null)
 const coupons = ref<CouponItem[]>([])
-const couponIndex = ref(0)
+const couponId = ref('')
+const loading = ref(true)
+const loadError = ref('')
 const remark = ref('')
 const submitting = ref(false)
 const freightAmount = ref(0)
+const groupBuyId = ref(''), groupInstanceId = ref(''), groupPrice = ref<number|null>(null)
+let rawCartSignature = ''
+onLoad(options => { groupBuyId.value=String(options?.groupBuyId || ''); groupInstanceId.value=String(options?.groupInstanceId || '') })
+const cartSignature = (rows: CartItem[]) => rows.map(item => `${item.id}:${item.quantity}:${Number(item.price)}`).sort().join('|')
 
 const totalAmount = computed(() => items.value.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0))
 const totalQuantity = computed(() => items.value.reduce((sum, item) => sum + item.quantity, 0))
 
 const usableCoupons = computed(() => {
-  const today = new Date().toISOString().slice(0, 10)
+  if (groupBuyId.value) return []
+  const date = new Date()
+  const today = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
   return coupons.value.filter((coupon) => {
     if (String(coupon.status || '').toUpperCase() !== 'UNUSED') return false
     if (coupon.validStart && today < String(coupon.validStart).slice(0, 10)) return false
@@ -106,9 +117,7 @@ const usableCoupons = computed(() => {
   })
 })
 
-const selectedCoupon = computed(() => couponIndex.value > 0 && couponIndex.value <= usableCoupons.value.length
-  ? usableCoupons.value[couponIndex.value - 1]
-  : null)
+const selectedCoupon = computed(() => usableCoupons.value.find(coupon => String(coupon.id) === couponId.value) || null)
 const discountAmount = computed(() => selectedCoupon.value ? couponDiscount(selectedCoupon.value) : 0)
 const payAmount = computed(() => Math.max(0, totalAmount.value + freightAmount.value - discountAmount.value))
 
@@ -132,18 +141,26 @@ function round2(value: number) {
 onShow(load)
 
 async function load() {
-  if (!session.user) {
-    uni.redirectTo({ url: '/pages/login/index?redirect=%2Fpages%2Fcheckout%2Findex' })
-    return
-  }
+  if (!ensureLogin() || !session.user) return
+  loading.value = true
+  loadError.value = ''
   try {
     const [cart, addressList] = await Promise.all([
       mallApi.getCart(session.user.id),
       mallApi.getAddresses(session.user.id),
     ])
-    const storedIds = uni.getStorageSync('s2b2c_checkout_item_ids')
-    const ids: string[] = Array.isArray(storedIds) ? storedIds.map(String) : []
-    items.value = ids.length ? cart.filter((item) => ids.includes(String(item.id))) : cart
+    // Spring Boot 按服务端全部勾选项结算；展示必须使用完全相同的集合。
+    items.value = cart.filter(item => item.selected)
+    rawCartSignature = cartSignature(items.value)
+    if(groupBuyId.value) {
+      const detail = await request<{activity:{productId:string|number;groupPrice:number;leaderPrice?:number;status:string};instances:{instanceId:string|number}[]}>(`/consumer/group-buy/${groupBuyId.value}`)
+      const activity = detail.activity
+      if(activity.status!=='ACTIVE' || items.value.length!==1 || String(items.value[0].productId)!==String(activity.productId)) throw new Error('拼团活动或结算商品已变化，请重新选择')
+      if(groupInstanceId.value && !detail.instances.some(x=>String(x.instanceId)===groupInstanceId.value)) throw new Error('所选拼团已结束，请返回重新选择')
+      groupPrice.value=Number(!groupInstanceId.value && Number(activity.leaderPrice)>0 ? activity.leaderPrice : activity.groupPrice)
+      items.value=items.value.map(item=>({...item,price:groupPrice.value!}))
+      couponId.value=''
+    }
     addresses.value = addressList || []
     const chosenId = String(uni.getStorageSync('s2b2c_selected_address_id') || '')
     selectedAddress.value =
@@ -156,10 +173,10 @@ async function load() {
     } catch {
       coupons.value = []
     }
-    if (couponIndex.value > usableCoupons.value.length) couponIndex.value = 0
+    if (!selectedCoupon.value) couponId.value = ''
   } catch (error) {
-    toast((error as Error).message)
-  }
+    loadError.value = (error as Error).message
+  } finally { loading.value = false }
 }
 
 function chooseAddress() {
@@ -171,27 +188,38 @@ function fullAddress(address: Address) {
 }
 
 async function submitOrder() {
-  if (!session.user) return
+  if (submitting.value || loading.value || loadError.value || !session.user) return
   if (!selectedAddress.value) return toast('请选择收货地址')
   if (!items.value.length) return toast('请选择结算商品')
   submitting.value = true
   try {
+    const current = (await mallApi.getCart(session.user.id)).filter(item => item.selected)
+    if (cartSignature(current) !== rawCartSignature) {
+      await load()
+      throw new Error('购物车已更新，请核对商品和金额后重新提交')
+    }
     const payload: Record<string, unknown> = {
       consumerId: session.user.id,
       addressId: selectedAddress.value.id,
       freightAmount: freightAmount.value.toFixed(2),
       remark: remark.value,
     }
-    if (selectedCoupon.value) payload.couponUserId = selectedCoupon.value.id
+    if(groupBuyId.value) {
+      const detail = await request<{activity:{groupPrice:number;leaderPrice?:number}}>(`/consumer/group-buy/${groupBuyId.value}`)
+      const latestPrice=Number(!groupInstanceId.value && Number(detail.activity.leaderPrice)>0 ? detail.activity.leaderPrice : detail.activity.groupPrice)
+      if(latestPrice!==groupPrice.value) { await load(); throw new Error('拼团价格已变化，请核对后重新提交') }
+      payload.groupBuyId=groupBuyId.value
+      if(groupInstanceId.value) payload.groupInstanceId=groupInstanceId.value
+    }
+    if (selectedCoupon.value && !groupBuyId.value) payload.couponUserId = selectedCoupon.value.id
     const result = await mallApi.createOrder(payload)
     if (!result.success) throw new Error(result.message || '订单提交失败')
     uni.removeStorageSync('s2b2c_checkout_item_ids')
     uni.removeStorageSync('s2b2c_selected_address_id')
     toast('下单成功', 'success')
-    setTimeout(() => uni.redirectTo({ url: '/pages/orders/index' }), 400)
+    uni.redirectTo({ url: '/pages/orders/index', fail: () => { submitting.value = false } })
   } catch (error) {
     toast((error as Error).message)
-  } finally {
     submitting.value = false
   }
 }
@@ -241,7 +269,7 @@ async function submitOrder() {
 }
 
 .address-person > text:nth-child(2) {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   font-weight: 400;
 }
@@ -253,7 +281,7 @@ async function submitOrder() {
 
 .address-detail {
   margin-top: 8rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -316,7 +344,7 @@ async function submitOrder() {
 
 .item-spec {
   margin-top: 7rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -332,13 +360,13 @@ async function submitOrder() {
 }
 
 .quantity {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
 .empty-mini {
   padding: 60rpx 0;
-  color: #94a198;
+  color: #666666;
   text-align: center;
 }
 
@@ -405,7 +433,7 @@ async function submitOrder() {
 }
 
 .coupon-empty {
-  color: #94a198;
+  color: #666666;
 }
 
 .remark-label {
@@ -439,19 +467,19 @@ async function submitOrder() {
   font-weight: 800;
 }
 
-.security-note b,
+.security-note .strong-copy,
 .security-note text {
   display: block;
 }
 
-.security-note b {
+.security-note .strong-copy {
   color: #0e5233;
   font-size: 24rpx;
 }
 
 .security-note text {
   margin-top: 4rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -463,7 +491,7 @@ async function submitOrder() {
   display: flex;
   align-items: baseline;
   gap: 8rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -475,4 +503,5 @@ async function submitOrder() {
   width: 280rpx;
   height: 82rpx;
 }
+.coupon-chips { flex-direction:column; }.coupon-chip { min-height:44px;display:flex;align-items:center;padding:16rpx 20rpx; }.security-note { margin-bottom:24rpx; }.address-person { flex-wrap:wrap; }.submit-bar { gap:16rpx; }
 </style>

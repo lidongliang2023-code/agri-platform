@@ -1,25 +1,8 @@
-<template>
-  <AiUnavailable
-    title="📈 AI 产量预测"
-    description="PRD §11：按地块预测产量、置信区间、归因分析与同比/区域对比。本部署没有预测模型。"
-    :loader="loadForecast"
-    :fallbacks="fallbacks"
-  />
-</template>
-
+<template><view class="page"><view class="card"><view class="card-title">完整业务服务</view><text class="muted">进入与电脑端一致的业务流程，数据按当前账号与经营主体保存。</text><button class="btn-primary" @tap="open">进入业务</button></view></view></template>
 <script setup lang="ts">
-import AiUnavailable from '@/components/AiUnavailable.vue'
-import { aiYieldForecast } from '@/api/production'
-import { currentFarm } from '@/utils/auth-helper'
-
-const loadForecast = async () => {
-  const farm = currentFarm()
-  return aiYieldForecast(farm?.farmId ? farm.farmId : '1')
-}
-
-/** 改走真实数据：预测没有，但历史实际产量是有的 */
-const fallbacks = [
-  { label: '采收台账（实际产量/等级）', path: '/pages/harvests/harvests', tab: true },
-  { label: '地块列表（面积与当前作物）', path: '/pages/plots/plots', tab: true },
-]
+import { onLoad } from '@dcloudio/uni-app'
+import { openWorkspace } from '@/utils/workspace'
+function open():void { openWorkspace('/production/ai/yield-forecast') }
+onLoad(open)
 </script>
+<style scoped>.btn-primary{margin-top:24rpx}</style>

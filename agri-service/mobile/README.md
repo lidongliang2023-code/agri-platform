@@ -1,6 +1,6 @@
 # 综合服务移动端（uni-app）
 
-同一套 Vue 3 + TypeScript 源码支持：
+唯一移动端：同一套 Vue 3 + TypeScript 源码支持以下目标，不再维护独立 H5：
 
 - H5：`pnpm run build:h5`，产物 `dist/build/h5`
 - 微信小程序：`pnpm run build:mp-weixin`，产物 `dist/build/mp-weixin`
@@ -24,6 +24,8 @@ $env:VITE_SERVICE_API_BASE='https://service-api.example.com'
 pnpm run build:mp-weixin
 pnpm run build:app
 ```
+
+统一认证可通过 `VITE_SERVICE_AUTH_BASE` 指定；不填时沿用服务地址，网关需转发认证与权限接口。小程序/App 未配置可访问地址时会明确报错，不回退到设备自身地址。
 
 微信正式发布前需在微信公众平台配置该域名为 request 合法域名。App 需按平台安全要求配置 HTTPS、隐私政策、权限说明和签名证书。
 

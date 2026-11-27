@@ -212,7 +212,7 @@ onShareAppMessage(() => ({
 
 .section-kicker {
   display: block;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
   letter-spacing: 2rpx;
 }
@@ -226,7 +226,7 @@ onShareAppMessage(() => ({
 }
 
 .section-link {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -287,4 +287,5 @@ onShareAppMessage(() => ({
 .channel-note {
   margin: 26rpx 28rpx 0;
 }
+.shop-copy { min-width:0; }.shop-name { overflow-wrap:anywhere; }.product-thumb { width:128rpx;height:128rpx; }.product-bottom { flex-direction:column;align-items:flex-start;gap:16rpx; }.cart-button { margin:0;width:100%;min-width:0; }.shop-tags { flex-wrap:wrap; }
 </style>

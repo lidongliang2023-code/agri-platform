@@ -1,28 +1,34 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
 import { serviceApi, statusMeta, type Order } from '../../api'
 
 const orders = ref<Order[]>([])
 const tab = ref('all')
 const loading = ref(false)
-const tabs = [['all', '全部'], ['confirmed', '待服务'], ['in_progress', '服务中'], ['completed', '已完成']]
+const loadError = ref('')
+let loadVersion = 0
+onPullDownRefresh(async () => { await load(); uni.stopPullDownRefresh() })
+const tabs = [['all', '全部'], ['pending_payment', '待确认'], ['confirmed', '待服务'], ['in_progress', '服务中'], ['completed', '已完成'], ['cancelled', '已取消']]
 const visible = computed(() => tab.value === 'all' ? orders.value : orders.value.filter((order) => order.status === tab.value))
 
-onShow(load)
+onShow(() => { const filter = uni.getStorageSync('service_order_filter'); if (filter) { tab.value = filter; uni.removeStorageSync('service_order_filter') }; load() })
 
 async function load() {
+  const version = ++loadVersion
   loading.value = true
+  loadError.value = ''
   try {
-    orders.value = await serviceApi.orders()
+    const result = await serviceApi.orders()
+    if (version === loadVersion) orders.value = result
   } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
+    if (version === loadVersion) loadError.value = error instanceof Error ? error.message : '加载失败'
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
-function openOrder(id: number) {
+function openOrder(id: string | number) {
   uni.navigateTo({ url: `/pages/orders/detail?id=${id}` })
 }
 
@@ -38,6 +44,7 @@ function publish() {
       <button v-for="item in tabs" :key="item[0]" :class="{ on: tab === item[0] }" @click="tab = item[0]">{{ item[1] }}</button>
     </scroll-view>
     <view v-if="loading" class="loading">正在加载订单…</view>
+    <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @click="load">重试</button></view>
     <view v-else-if="visible.length === 0" class="empty"><text class="empty-icon">📋</text><text>当前没有订单</text></view>
     <view v-else class="order-list">
       <view class="order-card" v-for="order in visible" :key="order.id" @click="openOrder(order.id)">
@@ -58,12 +65,17 @@ function publish() {
 .page-top > view { display: flex; flex-direction: column; gap: 5rpx; }
 .page-title { font-size: 38rpx; font-weight: 750; }
 .tabs { white-space: nowrap; }
-.tabs button { display: inline-flex; padding: 12rpx 22rpx; margin: 8rpx 10rpx 18rpx 0; border-radius: 28rpx; background: #e9f0ec; color: #718277; font-size: 24rpx; }
+.tabs button { display: inline-flex; padding: 12rpx 22rpx; margin: 8rpx 10rpx 18rpx 0; border-radius: 28rpx; background: #e9f0ec; color: #52665a; font-size: 13px; }
 .tabs button.on { background: #12764a; color: #fff; }
 .order-list { display: flex; flex-direction: column; gap: 16rpx; }
 .order-card { display: flex; flex-direction: column; gap: 9rpx; padding: 24rpx; border: 1rpx solid #e1e9e3; border-radius: 22rpx; background: #fff; }
-.order-title { margin-top: 5rpx; font-size: 28rpx; font-weight: 650; }
-.order-meta { display: flex; flex-direction: column; gap: 4rpx; color: #94a198; font-size: 24rpx; }
+.order-title { margin-top: 5rpx; font-size: 15px; font-weight: 650; }
+.order-meta { display: flex; flex-direction: column; gap: 4rpx; color: #52665a; font-size: 13px; }
 .order-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4rpx; padding-top: 16rpx; border-top: 1rpx solid #edf2ee; }
-.link { color: #12764a; font-size: 24rpx; font-weight: 600; }
+.link { color: #12764a; font-size: 13px; font-weight: 600; }
+
+.orders-page { padding-bottom: calc(24rpx + env(safe-area-inset-bottom)); }
+.tabs button { min-height: 44px; align-items: center; }
+.order-foot { gap: 10px; flex-wrap: wrap; }
+
 </style>

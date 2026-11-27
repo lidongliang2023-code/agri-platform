@@ -8,7 +8,7 @@ import { useNativePage, useFavorite } from '../../useNativePage'
 const id=ref(0), item=ref<Report|null>(null), subscribing=ref(false)
 const {saved,saving,refresh,toggle}=useFavorite('report',()=>item.value)
 const {loading,error,load}=useNativePage(async()=>{item.value=await infoApi.report(id.value);await refresh()})
-onLoad(o=>{id.value=Number(o?.id);load()})
+onLoad(o=>{id.value=Number(o?.id);if(!Number.isSafeInteger(id.value)||id.value<=0){error.value='缺少报告编号，请从列表进入';return}load()})
 async function subscribe(){if(!item.value||subscribing.value)return;subscribing.value=true;try{const name=item.value.category;const records=await infoApi.subscriptions();const existing=records.find(r=>r.targetType==='报告'&&r.targetName===name);if(existing){if(!existing.enabled)await infoApi.toggleSubscription(existing.id,true)}else await infoApi.createSubscription({targetType:'报告',targetName:name,channel:'站内消息',frequency:'每月'});toast('已订阅该报告分类')}catch(e){toast(e instanceof Error?e.message:'订阅失败')}finally{subscribing.value=false}}
 function open(id:number){uni.navigateTo({url:`/pages/report/detail?id=${id}`})}
 function attest(id:number){uni.navigateTo({url:`/pages/attest/detail?id=${id}`})}

@@ -9,7 +9,7 @@ onLaunch(() => {
 <style lang="scss">
 page {
   min-height: 100%;
-  background: #f4f7f5;
+  background: #f5f6fa;
   color: #0b1a12;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 28rpx;
@@ -61,12 +61,12 @@ button::after {
 }
 
 .muted {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
 .tiny {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -101,7 +101,7 @@ button::after {
 }
 
 .card-sub {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -135,7 +135,7 @@ button::after {
 .btn-danger {
   border-color: #efcccc;
   background: #fff2f2;
-  color: #c54b4b;
+  color: #b71c1c;
 }
 
 .btn-sm {
@@ -151,7 +151,7 @@ button::after {
 }
 
 .price {
-  color: #d45b32;
+  color: #e53935;
   font-weight: 800;
 }
 
@@ -171,7 +171,7 @@ button::after {
 
 .tag-orange {
   background: #fff3dd;
-  color: #a96a08;
+  color: #8f4500;
 }
 
 .tag-blue {
@@ -181,12 +181,12 @@ button::after {
 
 .tag-red {
   background: #feebeb;
-  color: #c54b4b;
+  color: #b71c1c;
 }
 
 .tag-gray {
   background: #eef2ef;
-  color: #718277;
+  color: #666666;
 }
 
 .empty {
@@ -196,7 +196,7 @@ button::after {
   justify-content: center;
   flex-direction: column;
   gap: 10rpx;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -226,7 +226,7 @@ button::after {
 
 .field-label {
   width: 160rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -328,7 +328,9 @@ button::after {
   }
 
   .page {
-    background: #f4f7f5;
+    background: #f5f6fa;
   }
 }
+@import '../../frontend-shared/styles/mobile-touch.scss';
+@import '../../../shared/mobile-ui-v1.scss';
 </style>

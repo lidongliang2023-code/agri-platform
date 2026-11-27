@@ -121,7 +121,7 @@ function goBack() {
             :focus="true"
             @confirm="doSearch()"
           />
-          <text v-if="keyword" class="clear" @click="keyword = ''">✕</text>
+          <text v-if="keyword" class="ui-action-target clear" @click="keyword = ''">✕</text>
         </view>
         <text class="submit" @click="doSearch()">搜索</text>
       </view>
@@ -131,7 +131,7 @@ function goBack() {
       <view v-if="history.length" class="block">
         <view class="block-head">
           <text class="block-title">搜索历史</text>
-          <text class="card-sub" @click="clearHistory">🗑 清空</text>
+          <text class="ui-action-target card-sub" @click="clearHistory">🗑 清空</text>
         </view>
         <view class="chip-wrap">
           <text v-for="item in history" :key="item" class="chip" @click="doSearch(item)">{{ item }}</text>
@@ -248,7 +248,7 @@ function goBack() {
 
 <style lang="scss" scoped>
 .search-page {
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .nav {
@@ -282,7 +282,7 @@ function goBack() {
 }
 
 .search-icon {
-  color: #94a198;
+  color: #666666;
   font-size: 28rpx;
 }
 
@@ -293,11 +293,11 @@ function goBack() {
 }
 
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .clear {
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -361,7 +361,7 @@ function goBack() {
   padding: 2rpx 10rpx;
   border-radius: 8rpx;
   background: #feebeb;
-  color: #c54b4b;
+  color: #b71c1c;
   font-size: 24rpx;
 }
 
@@ -432,4 +432,7 @@ function goBack() {
   color: #6b418d;
   font-size: 24rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.back, .submit { display:inline-flex; align-items:center; justify-content:center; min-width:48px; min-height:48px; }
 </style>

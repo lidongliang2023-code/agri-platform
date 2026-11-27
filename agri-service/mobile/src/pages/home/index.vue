@@ -1,197 +1,118 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onPullDownRefresh } from '@dcloudio/uni-app'
 import { serviceApi, type Overview } from '../../api'
-import { getServiceUser } from '../../auth'
+import { getServiceUser, hasServicePermission } from '../../auth'
 
 const overview = ref<Overview | null>(null)
-const search = ref('')
-const statusBarHeight = ref(0)
-const userName = getServiceUser()?.nickname || getServiceUser()?.username || '平台用户'
-
+const keyword = ref('')
+const loading = ref(false)
+const error = ref('')
+const consumer = ref(false)
+const provider = ref(false)
+const userName = ref('平台用户')
 onShow(() => {
-  const info = uni.getSystemInfoSync()
-  statusBarHeight.value = Number(info.statusBarHeight || 0)
+  consumer.value = hasServicePermission('service:consumer')
+  provider.value = hasServicePermission('service:provider')
+  userName.value = getServiceUser()?.nickname || getServiceUser()?.username || '平台用户'
   load()
 })
-
+onPullDownRefresh(async () => { await load(); uni.stopPullDownRefresh() })
 async function load() {
-  try {
-    overview.value = await serviceApi.overview()
-  } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
-  }
+  if (!consumer.value || loading.value) return
+  loading.value = true
+  error.value = ''
+  try { overview.value = await serviceApi.overview() }
+  catch (reason) { error.value = reason instanceof Error ? reason.message : '服务数据暂不可用' }
+  finally { loading.value = false }
 }
-
-function findService(keyword = '', category = '') {
-  const query = [keyword ? `keyword=${encodeURIComponent(keyword)}` : '', category ? `category=${encodeURIComponent(category)}` : ''].filter(Boolean).join('&')
+function nav(url: string) { uni.navigateTo({ url }) }
+function orders() { uni.switchTab({ url: '/pages/orders/index' }) }
+function findService(category = '') {
+  uni.setStorageSync('service_search', { keyword: keyword.value.trim(), category })
   uni.switchTab({ url: '/pages/services/index' })
-  uni.setStorageSync('service_search', { keyword, category })
-  if (query) uni.setStorageSync('service_search_url', query)
 }
-
-function handleCategory(name: string) {
-  if (name === '农险服务') return uni.navigateTo({ url: '/pages/insurance/index' })
-  if (name === '培训服务') return findService('', '培训服务')
-  findService('', name)
+function categoryNav(name: string) {
+  if (name === '农险服务') return nav('/pages/insurance/index')
+  findService(name)
 }
-
-function toMessages() {
-  uni.navigateTo({ url: '/pages/messages/index' })
-}
-
-function toAi() {
-  uni.navigateTo({ url: '/pages/ai/index' })
-}
-
-function toOrders() {
+function todoNav(link: string) {
+  if (link.startsWith('order:')) return nav(`/pages/orders/detail?id=${encodeURIComponent(link.slice(6))}`)
+  if (link === 'policy') return nav('/pages/policies/index')
+  if (link === 'claim') return nav('/pages/insurance/index')
+  if (link === 'complaint') return nav('/pages/feedback/index')
   uni.switchTab({ url: '/pages/orders/index' })
-}
-
-/** 待办跳转按后端下发的 link 走（order:12 / policy / claim / complaint），不再写死某张订单。 */
-function toTodo(todo?: { link?: string }) {
-  const link = todo?.link ?? ''
-  if (link.startsWith('order:')) {
-    uni.navigateTo({ url: `/pages/orders/detail?id=${link.slice(6)}` })
-    return
-  }
-  if (link === 'policy') {
-    uni.navigateTo({ url: '/pages/policies/index' })
-    return
-  }
-  if (link === 'claim' || link === 'complaint') {
-    uni.navigateTo({ url: link === 'claim' ? '/pages/insurance/index' : '/pages/messages/index' })
-    return
-  }
-  uni.switchTab({ url: '/pages/orders/index' })
-}
-
-function toPolicies() {
-  uni.navigateTo({ url: '/pages/policies/index' })
-}
-
-function toProvider(id: number) {
-  uni.navigateTo({ url: `/pages/provider/detail?id=${id}` })
 }
 </script>
 
 <template>
   <view class="page home-page">
-    <view class="home-hero" :style="{ paddingTop: `${statusBarHeight + 18}px` }">
-      <view class="home-nav">
-        <text class="home-title">综合服务</text>
-        <view class="bell" @click="toMessages">🔔<text v-if="Number(overview?.stats?.unreadMessages || 0) > 0">{{ overview?.stats?.unreadMessages }}</text></view>
-      </view>
-      <view class="home-greeting">
-        <text class="small">您好，{{ userName }}</text>
-        <text class="title">今天需要什么服务？</text>
-      </view>
-      <view class="search-box">
-        <text>⌕</text>
-        <input v-model="search" placeholder="搜农机、农技、保险、政策" confirm-type="search" @confirm="findService(search)" />
-      </view>
-      <view class="weather">
-        <text class="temp">{{ overview?.stats?.myOrders ?? 0 }}</text>
-        <view>
-          <text class="weather-title">累计服务订单 · 已完成 {{ overview?.stats?.completedOrders ?? 0 }} 单</text>
-          <text class="weather-sub">未读消息 {{ overview?.stats?.unreadMessages ?? 0 }} 条 · 保障金额 ¥{{ overview?.stats?.protectedAmount ?? 0 }}</text>
-        </view>
-        <text @click="toOrders">›</text>
-      </view>
+    <view class="welcome">
+      <view class="between"><text class="greeting">您好，{{ userName }}</text><button class="message-button" @click="nav('/pages/messages/index')">消息{{ overview?.stats.unreadMessages ? ` · ${overview.stats.unreadMessages}` : '' }}</button></view>
+      <text class="headline">农事服务，一站办理</text>
+      <text class="welcome-copy">找服务、跟进作业、验收评价</text>
+      <view v-if="consumer" class="search-row"><input v-model="keyword" confirm-type="search" placeholder="搜索服务项目或服务商" @confirm="findService()" /><button @click="findService()">搜索</button></view>
     </view>
-
-    <view class="page-body">
-      <view class="ai-entry" @click="toAi">
-        <view class="ai-icon">🤖</view>
-        <view class="ai-copy"><text>AI 服务管家</text><text>说不清需求？直接告诉我</text><text>支持语音、拍照识别，自动匹配附近服务</text></view>
-        <text class="arrow">›</text>
-      </view>
-
-      <view v-if="!overview" class="loading">正在加载服务数据…</view>
-      <template v-else>
-        <view class="card quick-card">
-          <view class="quick-item" v-for="category in overview.categories.slice(0, 8)" :key="category.name" @click="handleCategory(category.name)">
-            <view class="quick-icon">{{ category.icon }}</view>
-            <text>{{ category.name.replace('服务', '') }}</text>
-          </view>
+    <view class="page-pad">
+      <view v-if="provider" class="card provider-entry" @click="nav('/pages/workbench/index')"><view><text class="card-title">服务商接单台</text><text class="muted">查看同类目需求、填写履约进度</text></view><text class="arrow">›</text></view>
+      <template v-if="consumer">
+        <view class="primary-actions">
+          <button class="primary-action" @click="findService()"><text class="action-title">找服务</text><text>按项目选择服务商 ›</text></button>
+          <button class="primary-action light" @click="nav('/pages/demand/publish')"><text class="action-title">发布需求</text><text>填写要求，等待接单 ›</text></button>
         </view>
-
-        <view class="card todo-card">
-          <view class="card-head"><text class="card-title">我的服务待办</text><text class="card-sub" @click="toOrders">全部 ›</text></view>
-          <view class="todo" v-if="overview.todos?.length" @click="toTodo(overview.todos[0])">
-            <view class="todo-icon">⚡</view>
-            <view class="todo-copy"><text class="strong">{{ overview.todos[0]?.title }}</text><text class="muted">{{ overview.todos[0]?.content }}</text><view class="progress"><view :style="{ width: overview.todos[0]?.progress }" /></view></view>
-            <text class="todo-percent">{{ overview.todos[0]?.progress }}</text>
-          </view>
-          <view v-else class="empty">当前没有在途的服务，去服务中心下一单试试</view>
+        <view class="entry-grid">
+          <button @click="nav('/pages/demand/index')"><text class="entry-symbol">需</text><text>我的需求</text></button>
+          <button @click="nav('/pages/policies/index')"><text class="entry-symbol">政</text><text>政策申报</text></button>
+          <button @click="nav('/pages/insurance/index')"><text class="entry-symbol">保</text><text>农业保险</text></button>
+          <button @click="nav('/pages/feedback/index')"><text class="entry-symbol">问</text><text>投诉反馈</text></button>
+          <button @click="nav('/pages/consult/index')"><text class="entry-symbol">诊</text><text>专家问诊</text></button>
+          <button @click="nav('/pages/resources/index')"><text class="entry-symbol">资</text><text>产业资源</text></button>
+          <button @click="nav('/pages/training/index')"><text class="entry-symbol">学</text><text>培训课堂</text></button>
+          <button @click="nav('/pages/join/index')"><text class="entry-symbol">入</text><text>服务商入驻</text></button>
         </view>
-
-        <view class="section-head"><text class="section-title">政策补贴</text><text class="card-sub" @click="toPolicies">更多 ›</text></view>
-        <scroll-view scroll-x class="policy-scroll" :show-scrollbar="false">
-          <view class="policy-banner" v-for="(policy, index) in overview.policies" :key="policy.id" :class="`tone-${index}`" @click="toPolicies">
-            <text class="tiny">{{ policy.level }} · {{ policy.deadline }} 截止</text>
-            <text class="policy-title">{{ policy.title }}</text>
-            <text class="policy-amount">{{ policy.amountText }} ›</text>
+        <view v-if="error" class="card error-state"><text>{{ error }}</text><button class="btn btn-ghost" @click="load">重新加载</button></view>
+        <view v-else-if="loading && !overview" class="loading">正在加载服务数据…</view>
+        <template v-if="overview && !error">
+          <view class="card">
+            <view class="card-head"><text class="card-title">待我处理</text><button class="text-action" @click="orders">全部订单 ›</button></view>
+            <view v-for="todo in overview.todos" :key="todo.link + todo.title" class="todo-row" @click="todoNav(todo.link)"><view><text class="strong">{{ todo.title }}</text><text class="muted">{{ todo.content }}</text></view><text class="arrow">›</text></view>
+            <text v-if="!overview.todos.length" class="muted">暂无待办，服务进度会在这里和消息中同步。</text>
           </view>
-        </scroll-view>
-
-        <view class="section-head"><text class="section-title">附近优质服务</text><text class="card-sub" @click="findService()">全部 ›</text></view>
-        <scroll-view scroll-x class="provider-scroll" :show-scrollbar="false">
-          <view class="near-card" v-for="provider in overview.featuredProviders" :key="provider.id" @click="toProvider(provider.id)">
-            <view class="near-icon">{{ provider.categoryIcon }}</view>
-            <text class="near-name">{{ provider.name }}</text>
-            <text class="tiny gold">★ {{ provider.rating }} · {{ provider.distanceKm }}km</text>
-            <text class="muted near-tags">{{ provider.tags.join(' · ') }}</text>
-            <text class="near-price">¥{{ provider.price }}<text>{{ provider.unit }}</text></text>
-          </view>
-        </scroll-view>
+          <view v-if="overview.categories.length" class="card"><view class="card-head"><text class="card-title">按服务类型查找</text></view><view class="category-grid"><button v-for="item in overview.categories" :key="item.key" @click="categoryNav(item.name)"><text class="strong">{{ item.name }}</text><text class="tiny">{{ item.count }} 家服务商 ›</text></button></view></view>
+          <view v-if="overview.featuredProviders.length" class="card"><view class="card-head"><text class="card-title">服务商推荐</text><button class="text-action" @click="findService()">查看全部 ›</button></view><view v-for="item in overview.featuredProviders.slice(0, 3)" :key="item.id" class="provider-row" @click="nav(`/pages/provider/detail?id=${item.id}`)"><view><text class="strong">{{ item.name }}</text><text class="muted">{{ item.category }} · {{ item.region }}</text></view><view class="provider-price"><text>¥{{ item.price }}起</text><text class="tiny">{{ item.unit }}</text></view></view></view>
+        </template>
+        <view class="assistant-entry" @click="nav('/pages/ai/index')"><text class="strong">农事问题初判</text><text class="muted">文字描述症状，获取初步建议 ›</text></view>
       </template>
+      <view v-else-if="!provider" class="card"><text class="card-title">当前账号尚无移动业务角色</text><text class="muted">请联系平台开通综合服务消费者或服务商权限。</text></view>
     </view>
   </view>
 </template>
 
-<style lang="scss" scoped>
-.home-page { background: #f4f7f5; }
-.home-hero { padding: 0 28rpx 38rpx; border-radius: 0 0 40rpx 40rpx; background: radial-gradient(circle at 90% 10%, rgba(83,213,138,.28), transparent 430rpx), linear-gradient(145deg, #073821, #0d5d3b); color: #fff; }
-.home-nav { display: flex; align-items: center; justify-content: space-between; height: 70rpx; }
-.home-title { font-size: 31rpx; font-weight: 700; }
-.bell { position: relative; display: flex; width: 68rpx; height: 68rpx; align-items: center; justify-content: center; border: 1rpx solid rgba(255,255,255,.14); border-radius: 20rpx; background: rgba(255,255,255,.08); }
-.bell text { position: absolute; top: -4rpx; right: -2rpx; min-width: 30rpx; height: 30rpx; border: 3rpx solid #0d4e32; border-radius: 16rpx; background: #e44949; font-size: 24rpx; line-height: 27rpx; text-align: center; }
-.home-greeting { display: flex; flex-direction: column; gap: 7rpx; margin-top: 24rpx; }
-.home-greeting .small { color: rgba(255,255,255,.55); font-size: 24rpx; }
-.home-greeting .title { font-size: 43rpx; font-weight: 750; }
-.search-box { display: flex; height: 82rpx; align-items: center; gap: 12rpx; margin-top: 24rpx; padding: 0 22rpx; border-radius: 20rpx; background: rgba(255,255,255,.95); color: #94a198; }
-.search-box input { flex: 1; color: #0b1a12; font-size: 24rpx; }
-.weather { display: flex; align-items: center; gap: 18rpx; margin-top: 20rpx; padding: 18rpx; border: 1rpx solid rgba(255,255,255,.1); border-radius: 18rpx; background: rgba(1,28,15,.17); }
-.weather .temp { color: #8be1af; font-family: monospace; font-size: 45rpx; }
-.weather view { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
-.weather-title { font-size: 24rpx; }
-.weather-sub { overflow: hidden; color: rgba(255,255,255,.45); font-size: 24rpx; text-overflow: ellipsis; white-space: nowrap; }
-.page-body { padding: 20rpx 24rpx 30rpx; }
-.ai-entry { display: flex; align-items: center; gap: 16rpx; margin-top: -54rpx; padding: 20rpx; border: 1rpx solid #e2d4ec; border-radius: 22rpx; background: linear-gradient(135deg, #fbf8fd, #f1e9f7); box-shadow: 0 12rpx 30rpx rgba(63,34,82,.08); }
-.arrow { color: #a395ab; font-size: 34rpx; }
-.quick-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24rpx 4rpx; padding: 28rpx 12rpx; }
-.quick-item { display: flex; align-items: center; flex-direction: column; gap: 9rpx; font-size: 24rpx; }
-.quick-icon { display: flex; width: 82rpx; height: 82rpx; align-items: center; justify-content: center; border-radius: 23rpx; background: #e5f5eb; font-size: 38rpx; }
-.todo { display: flex; align-items: center; gap: 16rpx; padding: 17rpx; border-radius: 18rpx; background: #f2fbf5; }
-.todo-icon { display: flex; width: 66rpx; height: 66rpx; flex: 0 0 66rpx; align-items: center; justify-content: center; border-radius: 17rpx; background: #e5f5eb; font-size: 29rpx; }
-.todo-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 4rpx; }
-.todo-copy .progress { margin-top: 5rpx; }
-.todo-percent { color: #0e5233; font-family: monospace; font-size: 24rpx; }
-.section-head { display: flex; align-items: center; justify-content: space-between; margin: 26rpx 2rpx 14rpx; }
-.section-title { font-size: 30rpx; font-weight: 700; }
-.policy-scroll, .provider-scroll { width: 100%; white-space: nowrap; }
-.policy-banner { display: inline-flex; width: 460rpx; min-height: 170rpx; box-sizing: border-box; flex-direction: column; gap: 8rpx; margin-right: 16rpx; padding: 22rpx; border-radius: 22rpx; background: linear-gradient(135deg, #176b93, #0f5475); color: #fff; white-space: normal; }
-.policy-banner.tone-1 { background: linear-gradient(135deg, #16805a, #0e573c); }
-.policy-banner.tone-2 { background: linear-gradient(135deg, #78509a, #543174); }
-.policy-banner .tiny { color: rgba(255,255,255,.55); }
-.policy-title { min-height: 62rpx; font-size: 26rpx; font-weight: 650; line-height: 1.4; }
-.policy-amount { color: #d2f2df; font-size: 24rpx; }
-.near-card { display: inline-flex; width: 340rpx; box-sizing: border-box; flex-direction: column; gap: 7rpx; margin-right: 16rpx; padding: 20rpx; border: 1rpx solid #e1e9e3; border-radius: 20rpx; background: #fff; white-space: normal; }
-.near-icon { display: flex; width: 70rpx; height: 70rpx; align-items: center; justify-content: center; border-radius: 18rpx; background: #e5f5eb; font-size: 34rpx; }
-.near-name { font-size: 24rpx; font-weight: 650; }
-.gold { color: #d88b1f; }
-.near-tags { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.near-price { color: #0e5233; font-size: 28rpx; font-weight: 700; }
-.near-price text { color: #94a198; font-size: 24rpx; font-weight: 400; }
+<style scoped lang="scss">
+.welcome { padding: 24rpx 28rpx 32rpx; background: #0d5036; color: white; }
+.greeting { font-size: 14px; color: #d3e8dc; }
+.message-button { min-height: 44px; padding: 16rpx; color: white; font-size: 14px; }
+.headline { display: block; margin-top: 12rpx; font-size: 44rpx; font-weight: 700; }
+.welcome-copy { display: block; margin-top: 8rpx; color: #d3e8dc; font-size: 14px; }
+.search-row { display: flex; align-items: center; margin-top: 24rpx; padding-left: 24rpx; background: white; color: #183a29; border-radius: 18rpx; }
+.search-row input { flex: 1; min-width: 0; height: 96rpx; font-size: 15px; }
+.search-row button { min-width: 112rpx; min-height: 96rpx; line-height: 96rpx; font-size: 15px; }
+.primary-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18rpx; }
+.primary-action { padding: 28rpx 22rpx; background: #12764a; border-radius: 20rpx; color: white; text-align: left; }
+.primary-action text { display: block; font-size: 13px; }
+.primary-action .action-title { font-size: 34rpx; font-weight: 700; margin-bottom: 8rpx; }
+.primary-action.light { background: #e7efdf; color: #315127; }
+.entry-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12rpx; padding: 28rpx 0; }
+.entry-grid button { display: flex; flex-direction: column; align-items: center; gap: 10rpx; font-size: 14px; }
+.entry-symbol { display: flex; align-items: center; justify-content: center; width: 76rpx; height: 76rpx; border-radius: 22rpx; background: white; border: 1rpx solid #dce7df; color: #12764a; font-size: 32rpx; font-weight: 700; }
+.todo-row,.provider-row,.provider-entry { display: flex; gap: 20rpx; align-items: center; justify-content: space-between; }
+.todo-row,.provider-row { padding: 22rpx 0; border-top: 1rpx solid #edf2ee; }
+.todo-row > view,.provider-row > view:first-child,.provider-entry > view { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 6rpx; }
+.arrow { color: #666666; font-size: 40rpx; }
+.text-action { min-height: 44px; display: flex; align-items: center; color: #12764a; font-size: 13px; }
+.category-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12rpx; }
+.category-grid button { display: flex; flex-direction: column; gap: 8rpx; padding: 20rpx; background: #f4f7f2; border-radius: 14rpx; text-align: left; }
+.provider-price { display: flex; flex-direction: column; align-items: flex-end; color: #12764a; font-weight: 650; }
+.assistant-entry { display: flex; flex-direction: column; gap: 8rpx; padding: 24rpx; border-left: 6rpx solid #b5c68c; background: #eef2e7; }
+.error-state { display: flex; flex-direction: column; gap: 20rpx; }
 </style>

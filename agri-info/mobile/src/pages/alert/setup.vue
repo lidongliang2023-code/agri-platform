@@ -323,7 +323,7 @@ function metricLabel(rule: AlertRule) {
 }
 
 .link {
-  color: #c54b4b;
+  color: #b71c1c;
   font-size: 24rpx;
 }
 

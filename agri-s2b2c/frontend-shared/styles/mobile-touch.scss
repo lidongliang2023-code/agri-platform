@@ -1,0 +1,27 @@
+/* 两套 uni-app 的触控与安全区规范，不用于 PC 页面。 */
+page { --touch-size: 44px; }
+.page { min-height: calc(100vh - var(--window-top, 0px) - var(--window-bottom, 0px)); }
+.page .btn { min-height: 44px; font-size: 28rpx; border-radius: 16rpx; }
+.page .btn[disabled] { opacity: .5; }
+.page .btn-primary { background: #12764a; box-shadow: none; }
+.page .input { min-height: 48px; height: auto; font-size: 30rpx; }
+.page textarea { font-size: 30rpx; line-height: 1.6; }
+.page .filter-chip, .page .status-chip, .page .category-chip, .page .segment-item { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; box-sizing: border-box; }
+.page .search-clear, .page .clear, .page .search-button { display: flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
+.page .hero-kicker, .page .section-kicker, .page .kicker, .page .result-kicker, .page .cart-kicker, .page .order-kicker { display: none; }
+.page .card-sub, .page .sub { font-size: 24rpx; }
+.page .hero { padding: 24rpx; border-radius: 20rpx; }
+.page .hero-title { font-size: 36rpx; overflow-wrap: anywhere; }
+.page .hero-desc { font-size: 26rpx; }
+.page .card { border: none; box-shadow: none; }
+.page .sticky-head, .page .top-bar { top: var(--window-top, 0px); }
+.page .list-feedback { padding: 24rpx; text-align: center; color: #666666; font-size: 26rpx; }
+.page .load-more { width: calc(100% - 48rpx); margin: 16rpx 24rpx; }
+.page .fixed-bottom { min-height: 64px; box-shadow: none; }
+.page .form-footer { position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #edf2ee; }
+.page .form-footer .btn { width: 100%; }
+/* #ifdef H5 */
+@media (min-width: 768px) { .page, .fixed-bottom, .page .form-footer { width: 480px; max-width: 100%; margin-left: auto; margin-right: auto; } }
+/* #endif */
+
+.strong-copy { font-weight:700; }.small-copy { font-size:24rpx; }

@@ -52,7 +52,7 @@ function remove(item: AutomationRule) {
   uni.showModal({
     title: '删除自动化规则',
     content: `确定删除「${item.ruleName}」吗？`,
-    confirmColor: '#c54b4b',
+    confirmColor: '#b71c1c',
     success: async (result) => {
       if (!result.confirm) return
       try {
@@ -93,5 +93,5 @@ function remove(item: AutomationRule) {
 </template>
 
 <style scoped lang="scss">
-.condition{display:grid;grid-template-columns:64rpx 1fr;gap:8rpx;padding:14rpx 16rpx;border-radius:14rpx;background:#f5faf7;font-size:26rpx}.condition text{color:#718277}.condition b{font-weight:600}.rule-meta{display:flex;flex-wrap:wrap;gap:16rpx;color:#94a198;font-size:24rpx}
+.condition{display:grid;grid-template-columns:64rpx 1fr;gap:8rpx;padding:14rpx 16rpx;border-radius:14rpx;background:#f5faf7;font-size:26rpx}.condition text{color:#666666}.condition b{font-weight:600}.rule-meta{display:flex;flex-wrap:wrap;gap:16rpx;color:#666666;font-size:24rpx}
 </style>

@@ -56,6 +56,7 @@ const nextLesson = computed(() => {
 onLoad((options) => {
   courseId.value = Number(options?.courseId || 0)
   lessonId.value = Number(options?.lessonId || 0)
+  if (!Number.isSafeInteger(courseId.value) || courseId.value <= 0 || !Number.isSafeInteger(lessonId.value) || lessonId.value <= 0) { loading.value = false; errorText.value = '缺少课程或课时编号，请从课程详情进入'; return }
   void boot()
 })
 
@@ -169,7 +170,7 @@ function goBack() {
 <template>
   <view class="page">
     <view class="custom-nav">
-      <text class="nav-back" @click="goBack">‹ 返回</text>
+      <text class="ui-action-target nav-back" @click="goBack">‹ 返回</text>
       <text class="nav-title">{{ lesson ? lesson.title : '课程播放' }}</text>
       <text class="nav-back" />
     </view>

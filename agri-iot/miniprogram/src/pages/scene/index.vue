@@ -48,7 +48,7 @@ function remove(item: Scene) {
   uni.showModal({
     title: '删除场景',
     content: `确定删除「${item.sceneName}」吗？`,
-    confirmColor: '#c54b4b',
+    confirmColor: '#b71c1c',
     success: async (result) => {
       if (!result.confirm) return
       try {

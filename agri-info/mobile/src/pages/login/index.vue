@@ -1,243 +1,295 @@
 <template>
-  <view class="login" :style="{ paddingTop: statusBar + 'px' }">
-    <view class="topbar">
-      <view class="brand-mark"><image src="/static/fengchain.svg" mode="aspectFit" /></view>
-      <view class="brand-copy">
-        <text class="brand-name">丰链云</text>
-        <text class="brand-subtitle">FENGCHAIN · INFORMATION</text>
+  <!-- #ifdef MP-WEIXIN -->
+  <view v-if="state.view === 'home'" class="mp-entry" :class="{ 'mp-entry-shake': state.shaking }" :style="{ paddingTop: `${mpEntryNavigationBottom}px` }">
+    <view class="mp-entry-brand">
+      <image class="mp-entry-logo" src="/static/fengchain.svg" mode="aspectFit" />
+      <text class="mp-entry-name">丰链云 · 信息资讯</text>
+      <text class="mp-entry-sub">统一账号 · 行情供需与农技知识</text>
+    </view>
+    <view class="mp-entry-space" />
+    <view class="mp-entry-actions">
+      <button class="mp-entry-primary" :disabled="state.busy" @tap="mpQuickLogin()">
+        <image class="mp-entry-wechat" src="/static/login/wechat-white.svg" mode="aspectFit" />
+        <text>微信手机号快捷登录</text>
+      </button>
+      <button class="mp-entry-other" :disabled="state.busy" @tap="openView('sms')">其他手机号登录</button>
+      <view class="mp-entry-consent" :class="{ 'mp-entry-error': state.agreeError }">
+        <button class="mp-entry-toggle" role="checkbox" aria-label="我已阅读并同意用户协议和隐私政策" :disabled="state.busy" @tap="toggleAgree">
+          <view class="mp-entry-circle" :class="{ 'mp-entry-checked': state.agreed }"><text v-if="state.agreed">✓</text></view>
+        </button>
+        <view class="mp-entry-copy">
+          <text class="mp-entry-copy-toggle" @tap="toggleAgree">我已阅读并同意</text><text class="mp-entry-policy" @tap="showAgreement('用户协议')">《用户协议》</text><text>和</text><text class="mp-entry-policy" @tap="showAgreement('隐私政策')">《隐私政策》</text>
+        </view>
       </view>
+      <text class="mp-entry-footer">丰链云 · 信息资讯 提供</text>
+    </view>
+    <view v-if="state.toastText" class="mp-entry-toast" role="alert">{{ state.toastText }}</view>
+  </view>
+  <!-- #endif -->
+  <view v-if="platform !== 'mp' || state.view !== 'home'" class="login h5-login-aligned is-card" :class="`is-${platform}`">
+    <view class="screen" :class="{ 'is-shake': state.shaking }">
+      <!-- #ifdef MP-WEIXIN -->
+      <button class="mp-sms-back" :disabled="state.busy" @tap="openView('home')">‹ 返回登录方式</button>
+      <!-- #endif -->
+      <view class="hero" :style="{ paddingTop: `${statusBarHeight + 24}px` }">
+        <image class="hero-logo" src="/static/fengchain.svg" mode="aspectFit" aria-hidden="true" />
+        <text class="hero-name">丰链云 · 信息资讯</text>
+        <text class="hero-sub">统一账号 · 行情供需与农技知识</text>
+      </view>
+
+      <view class="card">
+        <view class="title-block">
+          <text class="title">{{ title }}</text>
+          <text class="sub">{{ subtitle }}</text>
+        </view>
+
+        <view v-if="state.view === 'mfa'" class="field" :class="{ 'is-focus': state.focused === 'mfa' }">
+          <input v-model="state.mfaCode" class="field-input" :disabled="state.busy" :focus="true" :maxlength="20"
+            placeholder="动态验证码或恢复码" confirm-type="done"
+            @focus="state.focused = 'mfa'" @blur="state.focused = ''" @confirm="submit" />
+        </view>
+
+        <template v-else-if="state.view === 'sms'">
+          <view class="field" :class="{ 'is-focus': state.focused === 'phone' }">
+            <text class="field-prefix">+86</text>
+            <input v-model="state.phoneInput" class="field-input" type="text" inputmode="numeric" :maxlength="13"
+              :disabled="state.busy" placeholder="请输入手机号" confirm-type="next"
+              @focus="state.focused = 'phone'" @blur="state.focused = ''" />
+          </view>
+          <view class="field" :class="{ 'is-focus': state.focused === 'code' }">
+            <input v-model="state.smsCode" class="field-input" type="number" :maxlength="6" :disabled="state.busy"
+              placeholder="请输入 6 位验证码" confirm-type="done"
+              @focus="state.focused = 'code'" @blur="state.focused = ''" @confirm="submit" />
+            <button class="field-btn" :disabled="state.busy || state.countdown > 0" @tap="requestCode">
+              {{ state.sending ? '发送中…' : state.countdown ? `${state.countdown}s 后重发` : '获取验证码' }}
+            </button>
+          </view>
+        </template>
+
+        <template v-else>
+          <view class="field" :class="{ 'is-focus': state.focused === 'user' }">
+            <input v-model="state.username" class="field-input" :maxlength="64" :disabled="state.busy"
+              placeholder="统一账号 / 手机号" confirm-type="next"
+              @focus="state.focused = 'user'" @blur="state.focused = ''" />
+          </view>
+          <view class="field" :class="{ 'is-focus': state.focused === 'pwd' }">
+            <input v-model="state.password" class="field-input" :password="!state.showPassword" :maxlength="128"
+              :disabled="state.busy" placeholder="请输入登录密码" confirm-type="done"
+              @focus="state.focused = 'pwd'" @blur="state.focused = ''" @confirm="submit" />
+            <button class="eye" :aria-label="state.showPassword ? '隐藏密码' : '显示密码'" :disabled="state.busy"
+              @tap="state.showPassword = !state.showPassword">
+              <image v-if="state.showPassword" class="eye-icon" src="/static/login/eye.svg" mode="aspectFit" aria-hidden="true" />
+              <image v-else class="eye-icon" src="/static/login/eye-off.svg" mode="aspectFit" aria-hidden="true" />
+            </button>
+          </view>
+          <view v-if="state.rememberAvailable" class="row-between">
+            <view class="check" role="checkbox" :aria-checked="state.rememberPassword" @tap="state.rememberPassword = !state.rememberPassword">
+              <view class="box" :class="{ on: state.rememberPassword }" /><text>7 天内免登录</text>
+            </view>
+            <button class="link muted" @tap="passwordHelp">忘记密码</button>
+          </view>
+        </template>
+
+        <view v-if="state.view === 'sms' && state.rememberAvailable" class="row-between">
+          <view class="check" role="checkbox" :aria-checked="state.rememberPassword" @tap="state.rememberPassword = !state.rememberPassword">
+            <view class="box" :class="{ on: state.rememberPassword }" /><text>7 天内免登录</text>
+          </view>
+        </view>
+
+        <text v-if="state.message" aria-live="polite" class="feedback" :class="{ 'is-notice': state.messageType === 'notice' }">{{ state.message }}</text>
+
+        <button class="btn btn-primary" :disabled="state.busy" @tap="submit">
+          {{ state.submitting ? '验证中…' : state.view === 'mfa' ? '验证并登录' : '登录' }}
+        </button>
+        <button v-if="sessionName && state.view !== 'mfa'" class="btn btn-outline btn-gap" :disabled="state.busy" @tap="continueSession">
+          以「{{ sessionName }}」继续
+        </button>
+
+        <view v-if="state.view === 'mfa'" class="row-between after">
+          <button class="link muted" :disabled="state.busy" @tap="returnToLogin">返回登录方式</button>
+        </view>
+        <view v-else-if="state.view === 'sms'" class="row-between after">
+          <button v-if="platform !== 'mp'" class="link" :disabled="state.busy" @tap="openView('password')">密码登录</button>
+          <!-- #ifdef H5 -->
+          <button class="link muted" :disabled="state.busy" @tap="passwordHelp">忘记密码</button>
+          <!-- #endif -->
+          <!-- #ifndef H5 -->
+          <button class="link muted" @tap="showCodeHelp">收不到验证码</button>
+          <!-- #endif -->
+        </view>
+        <view v-else class="row-between after">
+          <button class="link" :disabled="state.busy" @tap="openView('sms')">验证码登录</button>
+          <button v-if="!state.rememberAvailable" class="link muted" @tap="passwordHelp">忘记密码</button>
+        </view>
+
+<!-- #ifndef H5 -->
+        <!-- #ifndef MP-WEIXIN -->
+        <view v-if="platform !== 'mp' && state.view !== 'mfa'" class="thirds-block">
+          <view class="divider-text"><text>其他登录方式</text></view>
+          <view class="thirds">
+            <view class="third-item" role="button" aria-label="微信登录（待开通）" @tap="channelPending('微信')">
+              <view class="third"><image src="/static/login/wechat.svg" mode="aspectFit" aria-hidden="true" /></view><text>微信</text>
+            </view>
+            <view class="third-item" role="button" aria-label="支付宝登录（待开通）" @tap="channelPending('支付宝')">
+              <view class="third"><image src="/static/login/alipay.svg" mode="aspectFit" aria-hidden="true" /></view><text>支付宝</text>
+            </view>
+            <view class="third-item" role="button" aria-label="国家政务服务平台登录（待开通）" @tap="channelPending('国家政务服务平台')">
+              <view class="third"><image src="/static/login/gov.svg" mode="aspectFit" aria-hidden="true" /></view><text>政务服务</text>
+            </view>
+          </view>
+          <text class="alt-note">第三方登录待开通，暂请使用验证码或密码登录</text>
+        </view>
+        <!-- #endif -->
+        <!-- #endif -->
+
+        <!-- #ifdef H5 -->
+        <view v-if="state.view !== 'mfa'" class="h5-thirds-block">
+          <view class="h5-divider"><text>其他登录方式</text></view>
+          <view class="h5-thirds">
+            <button class="h5-third-button" :disabled="state.busy" aria-label="微信登录，暂未开通，查看说明" @tap="channelPending('微信')"><view class="h5-third-icon"><image src="/static/login/wechat.svg" mode="aspectFit" aria-hidden="true" /></view><text class="h5-third-label">微信登录</text><text class="h5-third-status">暂未开通</text></button>
+            <button class="h5-third-button" :disabled="state.busy" aria-label="支付宝，暂未开通，查看说明" @tap="channelPending('支付宝')"><view class="h5-third-icon"><image src="/static/login/alipay.svg" mode="aspectFit" aria-hidden="true" /></view><text class="h5-third-label">支付宝</text><text class="h5-third-status">暂未开通</text></button>
+            <button class="h5-third-button" :disabled="state.busy" aria-label="政务服务平台，暂未开通，查看说明" @tap="channelPending('国家政务服务平台')"><view class="h5-third-icon"><image src="/static/login/gov.svg" mode="aspectFit" aria-hidden="true" /></view><text class="h5-third-label">政务服务平台</text><text class="h5-third-status">暂未开通</text></button>
+          </view>
+        </view>
+        <!-- #endif -->
+
+        <!-- #ifdef H5 -->
+        <view class="h5-consent" :class="{ 'is-error': state.agreeError }">
+          <button class="h5-consent-toggle" role="checkbox" aria-label="我已阅读并同意用户协议与隐私政策" :aria-checked="state.agreed" :disabled="state.busy" @tap="toggleAgree"><view class="h5-dot" :class="{ 'is-checked': state.agreed }"><text v-if="state.agreed">✓</text></view></button>
+          <view class="h5-consent-copy"><button class="h5-consent-text" :disabled="state.busy" @tap="toggleAgree">我已阅读并同意</button><button class="h5-policy" :disabled="state.busy" @tap="showAgreement('用户协议')">《用户协议》</button><text class="h5-joiner">和</text><button class="h5-policy" :disabled="state.busy" @tap="showAgreement('隐私政策')">《隐私政策》</button></view>
+        </view>
+        <text v-if="state.agreeError" class="h5-consent-error" role="alert">请先阅读并同意用户协议与隐私政策</text>
+        <view v-if="state.view === 'sms'" class="h5-help"><text>验证码登录遇到问题？</text><button class="link" :disabled="state.busy" @tap="showCodeHelp">收不到验证码</button></view>
+              <view class="extra">
+        <text>没有资讯访问权限？</text>
+        <button class="link strong" @tap="accountHelp">查看开通方式</button>
+      </view>
+        <!-- #endif -->
+
+      </view>
+
+      <!-- #ifndef H5 -->
+      <view class="extra">
+        <text>没有资讯访问权限？</text>
+        <button class="link strong" @tap="accountHelp">查看开通方式</button>
+      </view>
+      <!-- #endif -->
+
+      <view class="push" />
+      <!-- #ifdef MP-WEIXIN -->
+      <view class="mp-sms-consent" :class="{ 'mp-entry-error': state.agreeError }">
+        <button class="mp-sms-toggle" role="checkbox" aria-label="我已阅读并同意用户协议与隐私政策" :disabled="state.busy" @tap="toggleAgree"><view class="mp-entry-circle" :class="{ 'mp-entry-checked': state.agreed }"><text v-if="state.agreed">✓</text></view></button>
+        <view class="mp-sms-copy"><text @tap="toggleAgree">我已阅读并同意</text><text class="mp-entry-policy" @tap="showAgreement('用户协议')">《用户协议》</text><text>和</text><text class="mp-entry-policy" @tap="showAgreement('隐私政策')">《隐私政策》</text></view>
+      </view>
+      <!-- #endif -->
+      <!-- #ifndef H5 -->
+      <!-- #ifndef MP-WEIXIN -->
+      <view class="agree" :class="{ 'is-error': state.agreeError }">
+        <view class="agree-box" role="checkbox" :aria-checked="state.agreed" :class="{ on: state.agreed }" @tap="toggleAgree" />
+        <text class="agree-text">
+          <text class="agree-toggle" @tap="toggleAgree">我已阅读并同意</text>
+          <text class="agree-link" @tap="showAgreement('用户协议')">《用户协议》</text>
+          <text class="agree-toggle" @tap="toggleAgree">和</text>
+          <text class="agree-link" @tap="showAgreement('隐私政策')">《隐私政策》</text>
+        </text>
+      </view>
+      <!-- #endif -->
+      <!-- #endif -->
+      <text class="foot">丰链云农业产业互联网平台 · 统一认证</text>
     </view>
 
-    <view class="hero-copy">
-      <text class="eyebrow">信息资讯服务</text>
-      <text class="title">欢迎回来</text>
-      <text class="lead">掌握行情、供需与农技知识，让每一次经营决策更有依据。</text>
-    </view>
-
-    <view class="panel">
-      <view class="panel-heading">
-        <text class="heading">登录信息资讯</text>
-        <text class="heading-hint">使用丰链云统一账号，无需重复注册</text>
-      </view>
-
-      <view v-if="!challenge" class="tabs">
-        <button v-for="item in modes" :key="item.key" :disabled="busy" :aria-pressed="mode === item.key" :class="{ active: mode === item.key }" @tap="switchMode(item.key)">{{ item.label }}</button>
-      </view>
-
-      <template v-if="challenge">
-        <text class="label">动态验证码</text>
-        <text class="field-hint">请输入验证器中的 6 位动态码，完成登录。</text>
-        <view class="field">
-          <input v-model="totp" type="number" :maxlength="6" placeholder="请输入 6 位动态码" :disabled="busy" confirm-type="done" @confirm="submit()" />
-        </view>
-        <button class="text-button back-login" :disabled="busy" @tap="changeChallenge">返回登录方式选择</button>
-      </template>
-
-      <template v-else-if="mode === 'sms'">
-        <text class="label">绑定手机号</text>
-        <view class="field">
-          <input v-model="phone" type="number" :maxlength="11" :disabled="busy" placeholder="请输入 11 位手机号" />
-        </view>
-        <text class="label">短信验证码</text>
-        <view class="field">
-          <input v-model="code" type="number" :maxlength="6" :disabled="busy" placeholder="请输入 6 位验证码" confirm-type="done" @confirm="submit()" />
-          <button class="field-action" :disabled="busy || remaining > 0" @tap="sendCode">{{ sending ? '发送中' : remaining ? `${remaining} 秒后重发` : '获取验证码' }}</button>
-        </view>
-      </template>
-
-      <template v-else>
-        <text class="label">统一账号</text>
-        <view class="field">
-          <input v-model="username" :disabled="busy" placeholder="请输入统一账号用户名" />
-        </view>
-        <text class="label">登录密码</text>
-        <view class="field">
-          <input v-model="password" :password="!visible" :disabled="busy" placeholder="请输入登录密码" confirm-type="done" @confirm="submit()" />
-          <button class="field-action" :disabled="busy" @tap="visible = !visible">{{ visible ? '隐藏' : '显示' }}</button>
-        </view>
-      </template>
-
-      <view v-if="!challenge" class="meta">
-        <checkbox-group @change="remember = $event.detail.value.includes('remember')">
-          <label><checkbox value="remember" :checked="remember" :disabled="busy" color="#147a4b" />保持登录</label>
-        </checkbox-group>
-        <button v-if="mode === 'password'" class="text-button" :disabled="busy" @tap="passwordHelp">忘记密码？</button>
-      </view>
-
-      <text v-if="message" :class="['feedback', { error: failed }]">{{ message }}</text>
-      <button class="primary" :disabled="busy" @tap="submit()">{{ submitting ? '正在验证…' : challenge ? '验证并登录' : '进入信息资讯' }}</button>
-
-      <view v-if="!challenge" class="alternatives">
-        <view class="section-title">
-          <text>其他登录方式</text>
-          <text class="section-note">更多方式陆续开通</text>
-        </view>
-        <button v-if="sessionName" class="session" :disabled="busy" @tap="submit(true)">以「{{ sessionName }}」继续</button>
-        <view class="other-methods">
-          <button v-for="item in otherMethods" :key="item.key" class="other-method" disabled>
-            <text class="method-icon" :class="item.tone">{{ item.icon }}</text>
-            <text class="method-copy">
-              <text class="method-name">{{ item.name }}</text>
-              <text class="method-state">暂未开通</text>
-            </text>
-          </button>
+    <view class="toast" :class="{ 'is-on': state.toastText }">{{ state.toastText }}</view>
+    <view v-if="state.privacyVisible" class="mask">
+      <view class="dialog">
+        <text class="dialog-title">用户隐私保护提示</text>
+        <text class="dialog-text">登录时将使用你主动填写的账号、手机号及验证信息完成统一身份核验，并保存登录会话。业务所需的定位、相机和相册权限将在使用对应功能时单独申请。</text>
+        <text class="dialog-text">请阅读<text class="agree-link" @tap="showAgreement('用户协议')">《用户协议》</text>及<text class="agree-link" @tap="showAgreement('隐私政策')">《隐私政策》</text>。若无法获取正式全文，可暂不同意并联系平台运营。</text>
+        <view class="dialog-actions">
+          <button class="btn btn-outline" @tap="login.refusePrivacy">不同意</button>
+          <button class="btn btn-primary" @tap="login.acceptPrivacy">同意并继续</button>
         </view>
       </view>
     </view>
-
-    <button class="help" @tap="accountHelp">没有资讯访问权限？查看开通方式</button>
-    <text class="footer">丰链云 · 农业产业互联网平台</text>
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+let mpEntryNavigationBottom = 64
+// #ifdef MP-WEIXIN
+mpEntryNavigationBottom = Number(uni.getSystemInfoSync().statusBarHeight || 20) + 44
+try { const rect = uni.getMenuButtonBoundingClientRect(); if (rect?.bottom) mpEntryNavigationBottom = rect.bottom + 8 } catch { /* 保留状态栏回退值 */ }
+// #endif
+import { computed, reactive, ref } from 'vue'
 import { onShow, onUnload } from '@dcloudio/uni-app'
 import { completeInfoMfaLogin, continueInfoSession, currentOwner, getInfoToken, isInfoMfaChallenge, loginWithInfoSms, loginWithUnifiedAccount, requestInfoLoginCode } from '../../auth'
+import {
+  createLoginState, createMobileLogin, showAgreement, showCodeHelp, showPasswordHelp,
+  type LoginOutcome, type LoginPlatform, type MobileLoginOptions,
+} from '../../../../../packages/agri-shared/src/auth/mobileLogin'
 
-const statusBar = Number(uni.getSystemInfoSync().statusBarHeight || 0)
-const modes = [{ key: 'sms', label: '手机验证码登录' }, { key: 'password', label: '账号密码登录' }] as const
-const otherMethods = [
-  { key: 'wechat', icon: '微', name: '微信', tone: 'wechat' },
-  { key: 'alipay', icon: '支', name: '支付宝', tone: 'alipay' },
-  { key: 'government', icon: '政', name: '政务服务', tone: 'government' },
-]
-type Mode = typeof modes[number]['key']
-const mode = ref<Mode>('password')
-const phone = ref(''), code = ref(''), username = ref(''), password = ref('')
-const challenge = ref(''), totp = ref(''), sessionName = ref('')
-const visible = ref(false), remember = ref(true)
-const message = ref(''), failed = ref(false), submitting = ref(false), sending = ref(false)
-const busy = computed(() => sending.value || submitting.value)
-const remaining = ref(0)
-let timer: ReturnType<typeof setInterval> | undefined
-let deadline = 0
-let disposed = false
+function detectPlatform(): LoginPlatform {
+  let value: LoginPlatform = 'h5'
+  // #ifdef MP-WEIXIN
+  value = 'mp'
+  // #endif
+  // #ifdef APP-PLUS
+  value = 'app'
+  // #endif
+  return value
+}
 
-function show(text: string, error = false) {
-  message.value = text
-  failed.value = error
-}
-function switchMode(next: Mode) {
-  if (busy.value || mode.value === next) return
-  mode.value = next
-  code.value = password.value = ''
-  visible.value = false
-  show('')
-}
-function changeChallenge() {
-  challenge.value = totp.value = ''
-  show('')
-}
-function tick() {
-  remaining.value = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
-  if (!remaining.value && timer) { clearInterval(timer); timer = undefined }
-}
-onShow(() => { sessionName.value = getInfoToken() ? currentOwner() : ''; tick() })
-onUnload(() => { disposed = true; clearInterval(timer) })
+const platform = detectPlatform()
+const statusBarHeight = Number(uni.getSystemInfoSync().statusBarHeight || 0)
+const sessionName = ref('')
 
-async function sendCode() {
-  if (busy.value || remaining.value) return
-  if (!/^1[3-9]\d{9}$/.test(phone.value)) return show('请输入有效的 11 位手机号', true)
-  sending.value = true
-  show('')
-  try {
-    const hint = await requestInfoLoginCode(phone.value)
-    if (disposed) return
-    show(hint)
-    deadline = Date.now() + 60000
-    tick()
-    timer = setInterval(tick, 1000)
-  } catch (error) {
-    show(error instanceof Error ? error.message : '验证码发送失败，请重试', true)
-  } finally { sending.value = false }
+function outcome(result: unknown): LoginOutcome {
+  return isInfoMfaChallenge(result) ? { mfa: true, challengeToken: result.challengeToken } : { mfa: false }
 }
-async function submit(useSession = false) {
-  if (busy.value) return
-  if (!useSession) {
-    if (challenge.value) {
-      if (!/^\d{6}$/.test(totp.value)) return show('请输入 6 位动态码', true)
-    } else if (mode.value === 'sms') {
-      if (!/^1[3-9]\d{9}$/.test(phone.value)) return show('请输入有效的 11 位手机号', true)
-      if (!/^\d{6}$/.test(code.value)) return show('请输入短信中的 6 位验证码', true)
-    } else if (!username.value.trim() || !password.value) return show('请输入统一账号和密码', true)
-  }
-  submitting.value = true
-  show('')
-  try {
-    if (useSession) await continueInfoSession()
-    else if (challenge.value) await completeInfoMfaLogin(challenge.value, totp.value, remember.value)
-    else {
-      const result = mode.value === 'sms' ? await loginWithInfoSms(phone.value, code.value, remember.value) : await loginWithUnifiedAccount(username.value.trim(), password.value, remember.value)
-      password.value = code.value = ''
-      visible.value = false
-      if (isInfoMfaChallenge(result)) { challenge.value = result.challengeToken; return }
-    }
-    if (!disposed) uni.switchTab({ url: '/pages/news/index' })
-  } catch (error) {
-    if (challenge.value) changeChallenge()
-    show(error instanceof Error ? error.message : '登录失败，请稍后重试', true)
-  } finally { submitting.value = false }
+
+const options: MobileLoginOptions = { platform, privacyKey: 'agri_info_mobile_privacy_notice_v2' }
+// #ifdef MP-WEIXIN
+options.entryView = 'home'
+// #endif
+const state = reactive(createLoginState(options))
+const login = createMobileLogin(state, {
+  sendSmsCode: (phone) => requestInfoLoginCode(phone),
+  loginBySms: async (phone, code, remember) => outcome(await loginWithInfoSms(phone, code, remember)),
+  loginByPassword: async (name, secret, remember) => outcome(await loginWithUnifiedAccount(name, secret, remember)),
+  completeMfa: async (challenge, code, remember) => outcome(await completeInfoMfaLogin(challenge, code, remember)),
+  onSuccess: () => { uni.switchTab({ url: '/pages/news/index' }) },
+}, options)
+const { toggleAgree, openView, returnToLogin, requestCode, submit, channelPending } = login
+
+const title = computed(() => state.view === 'mfa' ? '二次验证' : state.view === 'sms' ? '手机号登录' : '密码登录')
+const subtitle = computed(() => state.view === 'mfa'
+  ? '请输入身份验证器中的动态验证码或恢复码'
+  : '使用丰链云统一账号，无需重复注册')
+
+onShow(() => { sessionName.value = getInfoToken() ? currentOwner() : '' })
+onUnload(login.dispose)
+
+function continueSession() {
+  void login.run(() => continueInfoSession())
 }
 function passwordHelp() {
-  uni.showModal({ title: '找回密码', content: '可用已绑定的手机验证码登录，或联系平台管理员重置密码。', showCancel: false })
+  showPasswordHelp('可用已绑定的手机验证码登录，或联系平台管理员重置密码。')
 }
 function accountHelp() {
   uni.showModal({ title: '开通资讯访问权限', content: '请联系平台管理员，为你的统一账号开通资讯用户或资讯运营权限。', showCancel: false })
 }
+// 小程序快捷入口先校验协议；服务端尚未提供手机号授权兑换接口。
+function mpQuickLogin() {
+  if (state.busy || !login.ensureAgreed()) return
+  login.toast('微信手机号快捷登录暂未开通，请使用其他手机号登录')
+}
 </script>
 
+<style scoped src="../../../../../packages/agri-shared/src/styles/mobile-login.css"></style>
+
 <style scoped>
-.login { min-height: 100vh; padding: 0 32rpx calc(34rpx + env(safe-area-inset-bottom)); background: linear-gradient(180deg, #f3f9f4 0, #f6f7f2 46%, #f6f7f2 100%); color: #12291d; }
-.topbar { display: flex; align-items: center; gap: 16rpx; max-width: 490px; min-height: 112rpx; margin: 0 auto; }
-.brand-mark { display: flex; width: 68rpx; height: 68rpx; align-items: center; justify-content: center; border-radius: 20rpx; background: #ffffff; box-shadow: 0 10rpx 28rpx rgba(21, 92, 57, 0.12); }
-.brand-mark image { width: 48rpx; height: 48rpx; }
-.brand-copy { display: flex; flex-direction: column; gap: 2rpx; }
-.brand-name { color: #165a3b; font-size: 30rpx; font-weight: 750; letter-spacing: 1rpx; }
-.brand-subtitle { color: #71907d; font-size: 17rpx; letter-spacing: 2rpx; }
-.hero-copy { max-width: 490px; margin: 0 auto; padding: 62rpx 4rpx 36rpx; }
-.eyebrow { display: block; margin-bottom: 14rpx; color: #27845a; font-size: 23rpx; font-weight: 700; letter-spacing: 2rpx; }
-.title { display: block; color: #102d1e; font-size: 62rpx; font-weight: 800; letter-spacing: -2rpx; }
-.lead { display: block; max-width: 620rpx; margin-top: 16rpx; color: #65796c; font-size: 26rpx; line-height: 1.7; }
-.panel { max-width: 490px; margin: 0 auto; padding: 34rpx 30rpx 30rpx; border: 1rpx solid #e0ebe2; border-radius: 28rpx; background: rgba(255, 255, 255, 0.97); box-shadow: 0 18rpx 48rpx rgba(23, 76, 48, 0.08); }
-.panel-heading { display: flex; flex-direction: column; gap: 8rpx; margin-bottom: 24rpx; }
-.heading { display: block; color: #153c28; font-size: 34rpx; font-weight: 750; }
-.heading-hint, .field-hint { display: block; color: #8a9a90; font-size: 23rpx; line-height: 1.5; }
-.tabs { display: flex; gap: 28rpx; margin: 0 -2rpx 26rpx; border-bottom: 1rpx solid #e4ece5; }
-.tabs button { position: relative; min-height: 74rpx; padding: 0 4rpx; color: #87968d; font-size: 27rpx; }
-.tabs button.active { color: #147447; font-weight: 750; }
-.tabs button.active::after { position: absolute; right: 0; bottom: -1rpx; left: 0; height: 5rpx; border-radius: 5rpx 5rpx 0 0; background: #168052; content: ''; }
-.label { display: block; margin: 20rpx 0 10rpx; color: #405a4b; font-size: 25rpx; font-weight: 650; }
-.field-hint { margin: -2rpx 0 12rpx; }
-.field { display: flex; min-height: 86rpx; align-items: center; overflow: hidden; border: 1rpx solid #d8e4db; border-radius: 16rpx; background: #fbfdfb; transition: border-color 0.2s; }
-.field:focus-within { border-color: #238659; background: #ffffff; }
-.field input { flex: 1; min-width: 0; height: 84rpx; padding: 0 22rpx; color: #172d20; font-size: 27rpx; }
-.field-action { flex: 0 0 auto; min-height: 84rpx; padding: 0 22rpx; color: #16774b; font-size: 24rpx; font-weight: 650; }
-.field-action[disabled] { color: #9aa89f; }
-.text-button { padding: 0; color: #19784d; font-size: 24rpx; }
-.back-login { display: block; margin: 18rpx 0 2rpx; }
-.meta { display: flex; min-height: 86rpx; align-items: center; justify-content: space-between; color: #75867b; font-size: 24rpx; }
-.meta label { display: flex; align-items: center; }
-.meta checkbox { transform: scale(.78); }
-.feedback { display: block; margin: 10rpx 0 16rpx; padding: 16rpx 18rpx; border-radius: 12rpx; background: #edf8f0; color: #246344; font-size: 24rpx; line-height: 1.5; }
-.feedback.error { background: #fff1ed; color: #a13d29; }
-.primary { width: 100%; min-height: 88rpx; border-radius: 16rpx; background: linear-gradient(135deg, #18935b, #126d44); box-shadow: 0 12rpx 28rpx rgba(18, 109, 68, 0.2); color: #ffffff; font-size: 28rpx; font-weight: 750; }
-.primary[disabled] { opacity: 0.66; }
-.alternatives { margin-top: 32rpx; padding-top: 28rpx; border-top: 1rpx solid #e8efe9; }
-.section-title { display: flex; align-items: center; justify-content: space-between; color: #486252; font-size: 25rpx; font-weight: 650; }
-.section-note { color: #a1aea5; font-size: 22rpx; font-weight: 400; }
-.session { width: 100%; min-height: 72rpx; margin: 18rpx 0 12rpx; border: 1rpx solid #b9ddc4; border-radius: 14rpx; background: #f0faf2; color: #176b44; font-size: 24rpx; font-weight: 650; }
-.other-methods { display: flex; gap: 12rpx; margin-top: 18rpx; }
-.other-method { display: flex; min-width: 0; flex: 1; align-items: center; justify-content: center; gap: 10rpx; min-height: 76rpx; padding: 0 8rpx; border: 1rpx solid #e6ece7; border-radius: 14rpx; background: #fafcf9; color: #718077; }
-.other-method[disabled] { opacity: 1; }
-.method-icon { display: flex; width: 38rpx; height: 38rpx; align-items: center; justify-content: center; border-radius: 10rpx; font-size: 21rpx; font-weight: 750; }
-.method-icon.wechat { background: #e3f6e8; color: #28a358; }
-.method-icon.alipay { background: #e5f4fc; color: #278cc2; }
-.method-icon.government { background: #fceaea; color: #bf5252; }
-.method-copy { display: flex; flex-direction: column; gap: 2rpx; align-items: flex-start; }
-.method-name { color: #596b60; font-size: 22rpx; }
-.method-state { color: #a3aea7; font-size: 18rpx; }
-.help { display: block; max-width: 490px; margin: 20rpx auto 0; padding: 16rpx 0; color: #3e7355; font-size: 23rpx; }
-.footer { display: block; margin-top: 18rpx; color: #a0ada4; font-size: 21rpx; text-align: center; }
-button[disabled] { color: #9aa89f; }
+/* #ifdef MP-WEIXIN */
+.mp-sms-back { display: flex; align-items: center; min-height: 48px; margin-top: 52px; color: #2d8f4e; font-size: 14px; background: transparent; }
+/* #endif */
 </style>
+
+<style scoped src="../../../../../packages/agri-shared/src/styles/mp-login-entry.css"></style>

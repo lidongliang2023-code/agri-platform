@@ -1,0 +1,46 @@
+/* #ifdef MP-WEIXIN */
+
+.mp-entry { box-sizing: border-box; display: flex; flex-direction: column; min-height: 100vh; padding: 0 24px calc(18px + env(safe-area-inset-bottom)); background: #fff; color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+.mp-entry-brand { display: flex; flex-direction: column; align-items: center; padding-top: 62px; text-align: center; flex-shrink: 0; }
+.mp-entry-logo { width: 62px; height: 62px; border-radius: 16px; margin-bottom: 18px; }
+.mp-entry-name { font-size: 20px; font-weight: 700; line-height: 30px; }
+.mp-entry-sub { margin-top: 8px; font-size: 12px; line-height: 20px; color: #888; letter-spacing: 1px; }
+.mp-entry-space { flex: 1; min-height: 160px; }
+.mp-entry-actions { flex-shrink: 0; width: 100%; }
+.mp-entry button { box-sizing: border-box; margin: 0; border: 0; padding: 0; font-family: inherit; }
+.mp-entry button::after { border: 0; }
+.mp-entry-primary { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 48px; border-radius: 10px; background: #07c160; color: #fff; font-size: 16px; font-weight: 600; line-height: 24px; }
+.mp-entry-primary[disabled] { opacity: .6; }
+.mp-entry-wechat { width: 22px; height: 22px; }
+.mp-entry-other { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin-top: 8px !important; background: transparent; color: #2d8f4e; font-size: 14px; line-height: 20px; }
+.mp-entry-consent { display: flex; align-items: center; justify-content: center; margin: 15px -6px 0; color: #888; }
+.mp-entry-toggle { display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 48px; background: transparent; }
+.mp-entry-circle { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 15px; height: 15px; border: 1.5px solid #c8ccd2; border-radius: 50%; font-size: 11px; line-height: 15px; color: #fff; }
+.mp-entry-checked { background: #2d8f4e; border-color: #2d8f4e; }
+.mp-entry-copy { flex: 0 1 auto; min-width: 0; font-size: 11px; line-height: 20px; white-space: normal; word-break: keep-all; }
+/* 协议文字使用普通内联流，避免链接自身的点击高度造成第二行间距异常。 */
+.mp-entry-copy text { display: inline; line-height: inherit; vertical-align: baseline; }
+.mp-entry-policy { color: #2d8f4e; }
+.mp-entry-error, .mp-entry-error .mp-entry-policy { color: #e53935; }
+.mp-entry-error .mp-entry-circle { border-color: #e53935; }
+.mp-entry-footer { display: block; margin-top: 4px; color: #aaa; font-size: 10px; line-height: 18px; text-align: center; }
+.mp-entry-toast { position: fixed; z-index: 100; left: 50%; bottom: calc(142px + env(safe-area-inset-bottom)); transform: translateX(-50%); box-sizing: border-box; width: max-content; max-width: calc(100vw - 64px); border-radius: 9px; padding: 12px 16px; background: rgba(25,25,25,.88); color: #fff; font-size: 13px; line-height: 21px; text-align: center; }
+.mp-entry-shake { animation: mp-entry-shake .38s ease; }
+@keyframes mp-entry-shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-4px); } 40%,80% { transform: translateX(4px); } }
+@media (max-height: 680px) { .mp-entry-brand { padding-top: 32px; } .mp-entry-space { min-height: 80px; } }
+
+/* 短信页协议行：小程序专用布局，避免旧 .agree 的 48px 内联按钮规则撑开换行。 */
+.mp-sms-consent { display: flex; align-items: flex-start; justify-content: center; color: #666; font-size: 12px; line-height: 20px; }
+.mp-sms-toggle { display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 48px; min-height: 48px; padding: 0; margin: 0; background: transparent; }
+.mp-sms-copy { display: block; flex: 0 1 auto; min-width: 0; box-sizing: border-box; padding: 14px 0; line-height: 20px; }
+.mp-sms-copy text { display: inline; min-height: 0; padding: 0; font-size: 12px; line-height: 20px; vertical-align: baseline; }
+.mp-sms-consent.mp-entry-error { color: #e53935; }
+
+/* 短信表单：48px 勾选区中心为 24px，首行文字中心为 14px + 10px。
+   文字继续使用内联流，换行后保持 20px 行距，不给每段文字增加触控高度。 */
+.login.is-mp .agree { align-items: flex-start; line-height: 20px; }
+.login.is-mp .agree-text { display: block; box-sizing: border-box; min-width: 0; min-height: 48px; padding-top: 14px; padding-bottom: 14px; line-height: 20px; }
+.login.is-mp .agree-text text { line-height: inherit; vertical-align: baseline; }
+.prod-login.is-mp .pl-consent-line { box-sizing: border-box; min-height: 48px; padding-top: 14px; padding-bottom: 14px; line-height: 20px; }
+
+/* #endif */

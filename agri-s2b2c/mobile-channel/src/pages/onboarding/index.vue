@@ -1,0 +1,18 @@
+<template><view class="native-page"><text class="title">商家入驻</text><view v-if="error" class="panel error"><text>{{error}}</text><button :disabled="loading" @tap="reload">重新加载</button></view><view v-if="loading" class="sub">正在同步…</view><template v-if="!loading"><view class="panel"><text>审核状态：{{statusLabel}}</text><text v-if="profile.auditOpinion" class="sub">审核意见：{{profile.auditOpinion}}</text><button @tap="reload">刷新审核进度</button><button v-if="profile.auditStatus==='APPROVED'" class="primary" @tap="enter">进入商家工作台</button></view><view v-if="editable" class="panel"><text>主体类型</text><picker :range="types" range-key="label" @change="form.registerType=types[Number($event.detail.value)].value"><view class="picker">{{form.registerType==='COMPANY'?'企业':'个人'}}</view></picker><input v-model="form.shopName" placeholder="店铺名称" maxlength="60"/><input v-model="form.companyName" placeholder="企业 / 主体名称" maxlength="100"/><input v-model="form.contactName" placeholder="联系人" maxlength="30"/><input v-model="form.contactPhone" type="number" maxlength="11" placeholder="联系电话"/><input v-model="form.province" placeholder="省份"/><input v-model="form.city" placeholder="城市"/><input v-model="form.district" placeholder="区县"/><textarea v-model="form.address" placeholder="详细地址" maxlength="250"/><textarea v-model="form.shopDesc" placeholder="店铺简介" maxlength="500"/><input v-model="form.inviteCode" placeholder="邀请码（选填）"/><button class="primary" :disabled="busy" @tap="submit">{{profile.applied?'重新提交申请':'提交入驻申请'}}</button></view><view v-else-if="profile.auditStatus!=='APPROVED'" class="panel sub">申请正在审核中，通过后可进入经营页面。</view></template></view></template>
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { request, channelApi } from '../../api'
+import { channelSession, saveChannelSession } from '../../session'
+import { useNativePage, go, confirmAction } from '../../useNativePage'
+import { money } from '../../utils'
+import { getUnifiedToken, getUnifiedAccount } from '../../../../frontend-shared/mobile-unified-auth'
+const profile=ref<any>({}),form=reactive({registerType:'PERSONAL',shopName:'',companyName:'',contactName:'',contactPhone:'',province:'',city:'',district:'',address:'',shopDesc:'',inviteCode:''})
+const types=[{label:'个人',value:'PERSONAL'},{label:'企业',value:'COMPANY'}]
+const editable=computed(()=>!profile.value.applied || profile.value.auditStatus==='REJECTED')
+const statusLabel=computed(()=>({APPROVED:'已通过',PENDING:'审核中',REJECTED:'已驳回'} as Record<string,string>)[profile.value.auditStatus]||'尚未申请')
+function access(){if(getUnifiedToken())return true;uni.redirectTo({url:'/pages/login/index'});return false}
+const {loading,error,busy,reload,act}=useNativePage(async()=>{profile.value=await channelApi.getProfile();for(const k of Object.keys(form) as (keyof typeof form)[]){if(profile.value[k]!=null)form[k]=String(profile.value[k])}},access)
+async function submit(){if(!editable.value)return;if(!form.shopName.trim()||!form.contactName.trim()||!/^1\d{10}$/.test(form.contactPhone)){error.value='请填写店铺名称、联系人及正确的手机号';return}await act(()=>request('/channel/apply','POST',{...form}))}
+function enter(){if(profile.value.auditStatus!=='APPROVED'||!profile.value.id)return;const user=getUnifiedAccount();saveChannelSession({id:profile.value.id,phone:profile.value.contactPhone || '',shopName:profile.value.shopName,username:user?.username,nickname:user?.nickname,unifiedUserId:user?.id});uni.switchTab({url:'/pages/home/index'})}
+</script><style src="../../native-page.scss" lang="scss"></style>

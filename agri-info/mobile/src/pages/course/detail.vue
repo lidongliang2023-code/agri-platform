@@ -11,6 +11,7 @@ import { infoApi, toast, type CourseDetail, type CourseLesson } from '../../api'
  */
 const courseId = ref(0)
 const detail = ref<CourseDetail | null>(null)
+const loadError = ref('')
 const loading = ref(true)
 const enrolling = ref(false)
 const firstShow = ref(true)
@@ -18,6 +19,7 @@ const firstShow = ref(true)
 onLoad((options) => {
   courseId.value = Number(options?.id || 0)
   firstShow.value = true
+  if (!Number.isSafeInteger(courseId.value) || courseId.value <= 0) { loading.value = false; loadError.value = '缺少课程编号，请从课程列表进入'; return }
   load()
 })
 
@@ -31,11 +33,13 @@ onShow(() => {
 })
 
 async function load(silent = false) {
+  if (!Number.isSafeInteger(courseId.value) || courseId.value <= 0) { loading.value = false; loadError.value = '链接缺少有效编号，请返回列表'; return }
+  loadError.value = ''
   if (!silent) loading.value = true
   try {
     detail.value = await infoApi.courseDetail(courseId.value)
   } catch (error) {
-    toast(error instanceof Error ? error.message : '加载失败')
+    loadError.value = error instanceof Error ? error.message : '加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -93,17 +97,19 @@ const totalLabel = computed(() => {
   if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} 分钟`
   return `${(seconds / 3600).toFixed(1)} 小时`
 })
+function backToList() { uni.reLaunch({ url: '/pages/course/index' }) }
 </script>
 
 <template>
   <view class="page">
     <view class="custom-nav">
-      <text class="nav-back" @click="goBack">‹ 返回</text>
+      <text class="ui-action-target nav-back" @click="goBack">‹ 返回</text>
       <text class="nav-title">培训课程</text>
       <text class="nav-back" />
     </view>
 
     <view v-if="loading" class="loading">正在加载课程…</view>
+    <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @click="load()">重新加载</button><button class="btn" @click="backToList">返回列表</button></view>
 
     <view v-else-if="!detail" class="empty">
       <text class="empty-icon">🎓</text>

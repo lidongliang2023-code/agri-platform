@@ -124,8 +124,8 @@ async function submit() {
 .kv.tap .kv-value { color: var(--c-primary); }
 .qty-row { display: flex; align-items: center; justify-content: space-between; padding: 20rpx 0 4rpx; font-size: 26rpx; }
 .stepper { display: flex; align-items: center; overflow: hidden; border: 1rpx solid #e0e8e3; border-radius: 16rpx; }
-.step { display: flex; width: 80rpx; height: 80rpx; align-items: center; justify-content: center; background: #f5f8f6; color: var(--c-primary); font-size: 34rpx; }
-.qty-input { width: 160rpx; height: 80rpx; font-size: 30rpx; text-align: center; }
+.step { display: flex; width: 88rpx; height: 88rpx; align-items: center; justify-content: center; background: #f5f8f6; color: var(--c-primary); font-size: 34rpx; }
+.qty-input { width: 160rpx; height: 88rpx; font-size: 30rpx; text-align: center; }
 .total { display: block; font-size: 36rpx; }
 .bottom-bar .submit { flex: 0 0 260rpx; }
 </style>

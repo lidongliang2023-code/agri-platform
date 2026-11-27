@@ -109,7 +109,7 @@ function switchAddType(type: '品种' | '频道') {
       <template v-else>
         <view class="section-head">
           <text class="section-title">品种行情订阅</text>
-          <text role="button" tabindex="0" class="card-sub" @click="openAdd">＋ 添加</text>
+          <text role="button" tabindex="0" class="ui-action-target card-sub" @click="openAdd">＋ 添加</text>
         </view>
         <view class="card">
           <view v-if="!quoteSubs.length" class="empty" style="min-height: 180rpx">
@@ -181,7 +181,7 @@ function switchAddType(type: '品种' | '频道') {
       <view role="button" tabindex="0" class="sheet" @click.stop>
         <view class="sheet-head">
           <text class="card-title">添加订阅</text>
-          <text role="button" tabindex="0" class="card-sub" @click="addOpen = false">关闭</text>
+          <text role="button" tabindex="0" class="ui-action-target card-sub" @click="addOpen = false">关闭</text>
         </view>
 
         <view class="seg" style="margin-bottom: 18rpx">

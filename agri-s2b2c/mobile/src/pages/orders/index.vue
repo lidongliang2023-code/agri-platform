@@ -15,6 +15,7 @@
     </scroll-view>
 
     <view v-if="loading" class="loading">正在加载订单…</view>
+    <view v-else-if="loadError && !orders.length" class="empty"><text>{{ loadError }}</text><button class="btn" @tap="loadOrders()">重新加载</button></view>
     <view v-else-if="orders.length" class="order-list">
       <view v-for="order in orders" :key="order.id" class="order-card" @tap="openDetail(order.id)">
         <view class="order-head">
@@ -37,9 +38,10 @@
           <view class="order-total">合计 <text class="price">{{ money(order.payAmount) }}</text></view>
         </view>
         <view class="order-actions">
-          <button class="btn btn-sm order-action" @tap.stop="openDetail(order.id)">查看详情</button>
-          <button v-if="order.status === 'PENDING_PAY'" class="btn btn-sm btn-primary order-action" @tap.stop="pay(order)">立即支付</button>
-          <button v-if="order.status === 'SHIPPED'" class="btn btn-sm btn-primary order-action" @tap.stop="receive(order)">确认收货</button>
+          <button class="btn btn-sm order-action" :disabled="actionBusy" @tap.stop="openDetail(order.id)">查看详情</button>
+          <button v-if="order.status === 'PENDING_PAY'" class="btn btn-sm order-action" :disabled="actionBusy" @tap.stop="cancel(order)">取消订单</button>
+          <button v-if="order.status === 'PENDING_PAY'" class="btn btn-sm btn-primary order-action" :disabled="actionBusy" @tap.stop="pay(order)">立即支付</button>
+          <button v-if="isReceivable(order.status)" class="btn btn-sm btn-primary order-action" :disabled="actionBusy" @tap.stop="receive(order)">确认收货</button>
         </view>
       </view>
     </view>
@@ -48,12 +50,17 @@
       <text>暂无相关订单</text>
       <button class="btn btn-ghost empty-button" @tap="goShopping">去选购</button>
     </view>
+    <view v-if="orders.length && !loading" class="list-feedback">
+      <text v-if="loadError">{{ loadError }}</text>
+      <button v-if="orders.length < total" class="btn load-more" :disabled="loadingMore" @tap="loadMore">{{ loadingMore ? '加载中…' : loadError ? '重试加载' : '加载更多' }}</button>
+      <text v-else>已显示全部 {{ total }} 条</text>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onPullDownRefresh, onReachBottom, onShow } from '@dcloudio/uni-app'
 import { mallApi, type Order } from '../../api'
 import { session } from '../../session'
 import { money, statusMeta, toast } from '../../utils'
@@ -62,36 +69,60 @@ const tabs = [
   { label: '全部', value: '' },
   { label: '待付款', value: 'PENDING_PAY' },
   { label: '待发货', value: 'PENDING_SHIP' },
-  { label: '已发货', value: 'SHIPPED' },
+  { label: '待收货', value: 'SHIPPED' },
   { label: '已完成', value: 'COMPLETED' },
 ]
 
+const actionBusy = ref(false)
 const activeStatus = ref('')
 const orders = ref<Order[]>([])
+const total = ref(0)
 const loading = ref(false)
+const loadingMore = ref(false)
+const loadError = ref('')
+const currentPage = ref(0)
+let requestSeq = 0
 
-onShow(loadOrders)
+onLoad((options) => {
+  const status = String(options?.status || '')
+  if (tabs.some((tab) => tab.value === status)) activeStatus.value = status
+})
+onShow(() => loadOrders())
+onPullDownRefresh(() => loadOrders())
 
-async function loadOrders() {
-  if (!session.user) {
-    uni.redirectTo({ url: '/pages/login/index?redirect=%2Fpages%2Forders%2Findex' })
-    return
-  }
-  loading.value = true
+function isReceivable(status: string) {
+  return status === 'SHIPPED' || status === 'PENDING_RECEIVE'
+}
+
+function confirmAction(title: string, content: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({ title, content, success: (result) => resolve(!!result.confirm), fail: () => resolve(false) })
+  })
+}
+
+async function loadOrders(append = false) {
+  if (!session.user) { uni.redirectTo({ url: '/pages/login/index?redirect=%2Fpages%2Forders%2Findex' }); return }
+  if (append && (loading.value || loadingMore.value || orders.value.length >= total.value)) return
+  const seq = ++requestSeq
+  const nextPage = append ? currentPage.value + 1 : 1
+  if (append) loadingMore.value = true
+  else { loading.value = true; loadingMore.value = false }
+  loadError.value = ''
   try {
-    const result = await mallApi.getOrders({
-      consumerId: session.user.id,
-      page: 1,
-      size: 30,
-      status: activeStatus.value,
-    })
-    orders.value = result.records || []
+    const result = await mallApi.getOrders({ page: nextPage, size: 20, consumerId: session.user!.id, status: activeStatus.value, })
+    if (seq !== requestSeq) return
+    const rows = result.records || []
+    orders.value = append ? [...orders.value, ...rows] : rows
+    total.value = Number(result.total || 0)
+    currentPage.value = nextPage
   } catch (error) {
-    toast((error as Error).message)
+    if (seq === requestSeq) loadError.value = (error as Error).message
   } finally {
-    loading.value = false
+    if (seq === requestSeq) { loading.value = false; loadingMore.value = false; uni.stopPullDownRefresh() }
   }
 }
+function loadMore() { return loadOrders(true) }
+onReachBottom(loadMore)
 
 function changeStatus(status: string) {
   activeStatus.value = status
@@ -102,26 +133,34 @@ function openDetail(id: number) {
   uni.navigateTo({ url: `/pages/orders/detail?id=${id}` })
 }
 
-async function pay(order: Order) {
+function pay(order: Order) { uni.navigateTo({url: '/pages/pay/index?id='+order.id}) }
+
+async function cancel(order: Order) {
+  if (actionBusy.value) return
+  actionBusy.value = true
+  if (!await confirmAction('取消订单', '取消后订单不可恢复，确定取消吗？')) { actionBusy.value = false; return }
   try {
-    const result = await mallApi.payOrder(order.id)
-    if (!result.success) throw new Error(result.message || '支付失败')
-    toast('支付成功', 'success')
-    loadOrders()
+    const result = await mallApi.cancelOrder(order.id)
+    if (!result.success) throw new Error(result.message || '取消失败')
+    toast('订单已取消', 'success')
+    await loadOrders()
   } catch (error) {
     toast((error as Error).message)
-  }
+  } finally { actionBusy.value = false }
 }
 
 async function receive(order: Order) {
+  if (actionBusy.value) return
+  actionBusy.value = true
+  if (!await confirmAction('确认收货', '请确认已收到商品，确认后订单将完成。')) { actionBusy.value = false; return }
   try {
     const result = await mallApi.receiveOrder(order.id)
     if (!result.success) throw new Error(result.message || '收货失败')
     toast('已确认收货', 'success')
-    loadOrders()
+    await loadOrders()
   } catch (error) {
     toast((error as Error).message)
-  }
+  } finally { actionBusy.value = false }
 }
 
 function goShopping() {
@@ -161,7 +200,7 @@ function goShopping() {
 
 .loading {
   padding: 100rpx 0;
-  color: #84938a;
+  color: #666666;
   text-align: center;
 }
 
@@ -251,7 +290,7 @@ function goShopping() {
 
 .item-spec {
   margin-top: 6rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -270,7 +309,7 @@ function goShopping() {
 }
 
 .order-time {
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -297,4 +336,5 @@ function goShopping() {
   min-width: 220rpx;
   margin-top: 15rpx;
 }
+.status-scroller { position:sticky;top:var(--window-top,0px);z-index:12;background:#f5f6fa; }.status-chip { height:auto;line-height:1.4; }.order-actions { flex-wrap:wrap; }.order-action { flex:1;min-width:150rpx; }.order-foot { flex-wrap:wrap;gap:12rpx; }.order-no { overflow-wrap:anywhere; }
 </style>

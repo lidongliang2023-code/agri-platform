@@ -1,0 +1,81 @@
+// 农业产业互联网平台 · 移动端 UI 规范 V1.0
+page {
+  --ui-canvas: #f5f6fa;
+  --ui-ink: #1a1a1a;
+  --ui-secondary: #666;
+  --ui-link: #1e6b38;
+  --ui-brand: #2d8f4e;
+  --ui-border: #eaeaea;
+  background-color: var(--ui-canvas);
+  color: var(--ui-ink);
+  font-size: 15px;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.card, .panel {
+  border-radius: 14px;
+  border: 1px solid var(--ui-border);
+  padding: 14px;
+  box-shadow: none;
+}
+.card-title { font-size: 17px; font-weight: 600; line-height: 1.4; }
+.field-label, .form-label { font-size: 14px; }
+.tiny, .small-copy { font-size: 12.5px; line-height: 1.5; }
+.tag { font-size: 12px; min-height: 22px; border-radius: 4px; }
+.link { color: var(--ui-link); }
+.btn, .btn-primary, .btn-ghost, .btn-sm {
+  min-height: 48px;
+  min-width: 48px;
+  border-radius: 10px;
+}
+.btn-primary { background: var(--ui-link); color: #fff; font-size: 16px; font-weight: 600; }
+.btn-primary:active { background: #14512a; }
+.btn[disabled], .btn-primary[disabled] { background: #eaeaea; color: #666; opacity: 1; }
+.input, .textarea { border-radius: 10px; min-height: 44px; }
+.input:focus-within, .textarea:focus-within { outline: 2px solid var(--ui-brand); }
+.menu-row { min-height: 56px; }
+/* #ifdef H5 */
+@supports (min-height: 100dvh) {
+  .page, .native-page { min-height: calc(100dvh - var(--window-top, 0px) - var(--window-bottom, 0px)); }
+}
+/* 自带导航栏返回键：默认 26 × 26，点击区放大到 48 × 48，图标位置不变。 */
+.uni-page-head-btn { display: flex; align-items: center; justify-content: center; min-width: 48px; min-height: 48px; margin: -11px -11px -11px 0; }
+/* #endif */
+
+/* 第11章：真实布局热区至少48px，避免透明扩展区盖住相邻控件。 */
+button, .btn, .btn-sm, .link, .section-link, .panel-link, .search-action,
+.chip, .seg-item, .op, .hero-btn, .quick, .hot-q, .tab, .tab-item,
+.notice-refresh, .notice-toggle, .filter-chip, .category-chip, .status-chip,
+.head-btn, .index-entry, .connection-link, .mine-link, .segment-item {
+  box-sizing: border-box;
+  min-width: 48px !important;
+  min-height: 48px !important;
+}
+.link, .section-link, .panel-link, .search-action, .mine-link, .quick,
+.chip, .op, .hot-q, .filter-chip, .category-chip, .status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+picker { display: block; min-height: 48px; }
+switch { display: inline-flex; min-height: 48px; align-items: center; }
+.custom-nav > .nav-back { display: inline-flex; align-items: center; min-width: 48px; min-height: 48px; }
+/* 内容文本保持正常换行，不用热区样式覆盖普通图标、箭头和分类容器。 */
+.empty, .empty-sub, .load-error, .error { font-size: 12.5px; }
+/* #ifdef H5 */
+.tdt-control-zoom a { min-width: 48px; min-height: 48px; line-height: 48px; }
+/* #endif */
+
+/* 价格红只用于金额数字本身，需 ≥ 16px / 600（规范第 03 章）。 */
+.price { font-weight: 600; }
+
+/* 系统开启「减少动态效果」时禁用过渡和动画（规范第 10 章）。 */
+@media (prefers-reduced-motion: reduce) {
+  page, view, text, button, image, scroll-view, input, textarea {
+    animation-duration: .001s !important;
+    transition-duration: .001s !important;
+  }
+}
+
+/* 仅标记自行响应点击的控件。 */
+.ui-action-target { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 48px !important; min-height: 48px !important; }

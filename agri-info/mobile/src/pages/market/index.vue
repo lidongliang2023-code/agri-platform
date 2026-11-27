@@ -203,7 +203,7 @@ function toSearch() {
 
 <style lang="scss" scoped>
 .market-page {
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .hero-block {
@@ -252,7 +252,7 @@ function toSearch() {
 }
 
 .search-icon {
-  color: #94a198;
+  color: #666666;
   font-size: 28rpx;
 }
 
@@ -264,7 +264,7 @@ function toSearch() {
 }
 
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .hero-stats {
@@ -406,7 +406,7 @@ function toSearch() {
 
 .quote-sub {
   overflow: hidden;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -421,7 +421,7 @@ function toSearch() {
 
 .foot-note {
   padding: 24rpx 0 0;
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }

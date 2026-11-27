@@ -13,7 +13,7 @@ interface Envelope<T>{code:number;message:string;data:T}
 function request<T>(url:string,method:'GET'|'POST'='GET',data?:Record<string,unknown>):Promise<T>{
   const token=getGovToken()
   if(!token){handleGovUnauthorized();return Promise.reject(new Error('请先使用统一账号登录'))}
-  return new Promise((resolve,reject)=>uni.request({url:`${governmentBase('api')}/api/v1/government${url}`,method,data,timeout:15000,header:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},success(res:any){const body=res.data as Envelope<T>;if(res.statusCode===401){handleGovUnauthorized();return reject(new Error('登录已失效，请重新使用统一账号登录'))}if(res.statusCode>=400||![0,200].includes(body?.code))return reject(new Error(body?.message||'请求失败'));resolve(body.data)},fail(err:any){reject(new Error(err?.errMsg||'网络异常'))}}))
+  return new Promise((resolve,reject)=>uni.request({url:`${governmentBase('api')}/api/v1/government${url}`,method,data,timeout:15000,header:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},success(res:any){if(getGovToken()!==token)return reject(new Error('登录会话已变化，请重新加载'));const body=res.data as Envelope<T>;if(res.statusCode===401||body?.code===401){handleGovUnauthorized();return reject(new Error('登录已失效，请重新使用统一账号登录'))}if(res.statusCode>=400||![0,200].includes(body?.code))return reject(new Error(body?.message||'请求失败'));resolve(body.data)},fail(err:any){reject(new Error(err?.errMsg||'网络异常'))}}))
 }
 export interface AuthorizationStatus {serverDate:string;bound:boolean;personnelName:string;grants:Array<{id:string;organizationName:string;validFrom:string;validUntil:string;effective:boolean;reason:string;regions:Array<{code:string;name:string;includeChildren:boolean;duties:string[]}>}>}
 export const api={

@@ -135,7 +135,7 @@ function useHistory(item: VerifyItem) {
 
       <view v-if="history.length" class="section-head">
         <text class="section-title">验证历史</text>
-        <text class="card-sub" @click="clearHistory">清空</text>
+        <text class="ui-action-target card-sub" @click="clearHistory">清空</text>
       </view>
       <view v-if="history.length" class="card">
         <view v-for="item in history" :key="item.attestNo" class="list-item" @click="useHistory(item)">
@@ -160,7 +160,7 @@ function useHistory(item: VerifyItem) {
 
 <style lang="scss" scoped>
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .result {

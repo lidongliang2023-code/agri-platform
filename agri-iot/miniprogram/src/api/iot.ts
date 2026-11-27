@@ -1,3 +1,4 @@
+import { readSessionToken, sessionDeadline } from '../../../../packages/agri-shared/src/auth/mobileSession'
 import { logoutMobile } from '../../../../packages/agri-shared/src/auth/logoutMobile'
 export interface Device{id:number;plotId:number;gatewayId:number;groupId:number;deviceCode:string;deviceName:string;typeName:string;protocol:string;onlineStatus:string;status:string;lastReport:string;rssi:number|null;battery:number;firmwareVersion:string;controlCapable:boolean;config:string;telemetry?:Telemetry[];controls?:ControlLog[]}
 export interface Telemetry{key:string;name:string;value:number;unit:string;recordedAt:string}
@@ -57,7 +58,7 @@ async function raw<T>(origin:string,url:string,method:'GET'|'POST'|'PUT'|'DELETE
  const authentication=AUTH_ENDPOINTS.includes(url)
  const storedToken=String(uni.getStorageSync('token')||'')
  const expires=Number(uni.getStorageSync('iot_session_expires')||0)
- if(!authentication&&token&&token===storedToken&&expires&&expires<=Date.now()){
+ if(!authentication&&token&&token===storedToken&&(!Number.isFinite(expires)||expires<=Date.now())){
   loginRequired();throw new Error('登录已失效，请重新登录')
  }
  const version=generation
@@ -79,9 +80,7 @@ async function raw<T>(origin:string,url:string,method:'GET'|'POST'|'PUT'|'DELETE
 function granted(list:string[],code:string){return list.includes('*')||list.includes('iot:*')||list.includes(code)}
 export function canWrite(){return granted(permissions,'iot:write')}
 export function hasIotSession(){
- const expires=Number(uni.getStorageSync('iot_session_expires')||0)
- if(expires&&expires<=Date.now()){clearIotSession();return false}
- return Boolean(uni.getStorageSync('token'))
+ return Boolean(readSessionToken('token','iot_session_expires',clearIotSession))
 }
 export function ensureIotSession(){if(hasIotSession())return true;loginRequired();return false}
 export type Workspace = 'user' | 'ops'
@@ -152,7 +151,11 @@ export async function activateSubject(id:string){
  uni.$emit('iot:session-reset')
  uni.reLaunch({url:'/pages/index/index'})
 }
-export async function logoutIotSession(){await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`,String(uni.getStorageSync('token')||''),()=>{clearIotSession();uni.reLaunch({url:'/pages/login/index'})})}
+export async function logoutIotSession(){
+ const token=String(uni.getStorageSync('token')||'')
+ const end=()=>{clearIotSession();uni.reLaunch({url:'/pages/login/index'})}
+ await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`,token,end,end,()=>String(uni.getStorageSync('token')||'')===token)
+}
 export interface UnifiedLoginResult{accessToken?:string;user?:Row;expiresIn?:number;mfaRequired?:boolean;challengeToken?:string}
 async function acceptLogin(result:UnifiedLoginResult){
  if(result?.mfaRequired){
@@ -162,8 +165,9 @@ async function acceptLogin(result:UnifiedLoginResult){
  if(!result?.accessToken||!result.user)throw new Error('登录结果缺少有效凭证，请重新登录')
  const check=await raw<{permissions:string[]}>(AUTH_BASE,'/api/v1/platform/permissions/mine','GET',undefined,result.accessToken)
  if(!granted(check.permissions||[],'iot:read')&&!granted(check.permissions||[],'iot:admin'))throw new Error('当前账号未开通物联网访问权限，请联系平台运营')
+ const expires=sessionDeadline(result.expiresIn)
  clearIotSession();permissions=check.permissions;uni.setStorageSync('token',result.accessToken);uni.setStorageSync('user',result.user)
- uni.setStorageSync('iot_session_expires',Date.now()+Number(result.expiresIn||7200)*1000)
+ uni.setStorageSync('iot_session_expires',expires)
  uni.setStorageSync('iot_workspace',canUseUser()?'user':'ops')
  return result
 }

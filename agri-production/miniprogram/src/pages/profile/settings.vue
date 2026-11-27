@@ -15,7 +15,7 @@
         <switch :checked="prefs.message" color="#13a05a" @change="onToggle('message', $event)" />
       </view>
       <view class="muted" style="margin-top: 12rpx">
-        推送注册接口（POST /api/v1/mobile/push/register）后端未提供，这里只保存本机偏好，不会假装已订阅。
+        通知偏好仅保存在本机，当前尚未开通系统推送。
       </view>
     </view>
 
@@ -66,12 +66,11 @@ function onToggle(key: 'task' | 'alert' | 'message', event: any): void {
 function clearCache(): void {
   uni.showModal({
     title: '清除缓存',
-    content: '将清理本机缓存的农场上下文与偏好（保留登录态）。清除后请回「我的」重新选择农场。',
+    content: '仅清理业务缓存和通知偏好，保留账号、经营主体、农场和服务地址。',
     success: (res) => {
       if (!res.confirm) return
-      const token = uni.getStorageSync(TOKEN_KEY)
-      uni.clearStorageSync()
-      if (token) uni.setStorageSync(TOKEN_KEY, token)
+      const keep = [TOKEN_KEY, "agri_user", "agri_current_subject", "agri_current_farm", "agri_session_expires", "agri_service_origin"]
+      uni.getStorageInfoSync().keys.filter(key => !keep.includes(key) && !key.startsWith("agri_workspace_mode:")).forEach(key => uni.removeStorageSync(key))
       uni.showToast({ title: '缓存已清除', icon: 'success' })
     },
   })

@@ -227,7 +227,7 @@ async function submit(test = false) {
 .section-label{display:flex;align-items:center;gap:10rpx;margin-bottom:16rpx;font-size:24rpx;font-weight:700}
 .if-badge,.then-badge{display:inline-flex;padding:4rpx 9rpx;border-radius:6rpx;font-size:24rpx;font-weight:800}
 .if-badge{background:#e7f3fa;color:#176c93}.then-badge{background:#e5f5eb;color:#0e5233}
-.form-tip,.rule-hint{display:block;margin-top:-7rpx;color:#718277;font-size:24rpx;line-height:1.6}
+.form-tip,.rule-hint{display:block;margin-top:-7rpx;color:#666666;font-size:24rpx;line-height:1.6}
 .rule-hint{padding:14rpx;border-radius:11rpx;background:#f2fbf5;color:#53665a}
 .footer-bar .save-test{flex:1.5}
 .select{display:flex;align-items:center;height:76rpx;padding-top:0;padding-bottom:0}

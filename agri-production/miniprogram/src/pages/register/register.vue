@@ -167,7 +167,7 @@
 
     <view class="bottom-link">
       <text>已有账号？</text>
-      <text @tap="backToLogin">返回登录 →</text>
+      <text class="ui-action-target" @tap="backToLogin">返回登录 →</text>
     </view>
   </view>
 </template>
@@ -691,7 +691,7 @@ onUnmounted(() => {
 
 .section-head > text:last-child,
 .section-head > uni-text:last-child {
-  color: #8a9a90;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -743,7 +743,7 @@ onUnmounted(() => {
   border: 1rpx solid #dcece3;
   border-radius: 12rpx;
   background: #f5fbf7;
-  color: #6f8377;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.65;
 }
@@ -824,7 +824,7 @@ onUnmounted(() => {
 }
 
 .identity-desc {
-  color: #7e9084;
+  color: #52665a;
   font-size: 24rpx;
   line-height: 1.5;
 }
@@ -833,7 +833,7 @@ onUnmounted(() => {
   padding: 5rpx 12rpx;
   border-radius: 999rpx;
   background: #edf3ef;
-  color: #667a6e !important;
+  color: #52665a !important;
 }
 
 .status-pill.pending {
@@ -860,7 +860,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: 20rpx;
-  color: #7b8d82;
+  color: #52665a;
   font-size: 24rpx;
 }
 
@@ -903,7 +903,7 @@ onUnmounted(() => {
 .verify-actions uni-button small,
 .upload-grid button small,
 .upload-grid uni-button small {
-  color: #829389;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -954,7 +954,7 @@ onUnmounted(() => {
   align-items: flex-start;
   gap: 8rpx;
   margin-top: 22rpx;
-  color: #75877c;
+  color: #34473b;
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -1000,7 +1000,7 @@ onUnmounted(() => {
 }
 
 .state-desc {
-  color: #75887c;
+  color: #34473b;
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -1010,7 +1010,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: 10rpx;
   padding: 28rpx 0 0;
-  color: #809087;
+  color: #52665a;
   font-size: 24rpx;
 }
 

@@ -21,6 +21,48 @@ const priceText = computed(() => {
   return money(p.priceMin ?? p.priceMax)
 })
 
+const detailLabels: Record<string, string> = {
+  categoryName: '品类', variety: '品种', specification: '规格', specLevel: '规格等级', specSize: '规格描述',
+  originProvince: '产地省份', originCity: '产地城市', originDistrict: '产地区县', originAddress: '详细产地',
+  qualityLevel: '质量等级', harvestBatchNo: '采收批次', publishStatus: '上架状态', certifications: '认证资料',
+  qualityReportUrl: '质检报告', videoUrl: '商品视频', barcode: '商品条码', description: '商品说明',
+}
+const enumLabels: Record<string, string> = {
+  published: '已上架', draft: '草稿', active: '生效', inactive: '已停用', enabled: '已启用', disabled: '已停用',
+  ONLINE: '已上架', OFFLINE: '已下架', true: '是', false: '否',
+}
+
+function readable(value: unknown, key = ''): string {
+  if (value == null || value === '') return ''
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if ((text.startsWith('{') && text.endsWith('}')) || (text.startsWith('[') && text.endsWith(']'))) {
+      try { return readable(JSON.parse(text), key) } catch { return text }
+    }
+    if (/Url$/i.test(key) && /^https?:\/\//i.test(text)) return '已配置'
+    return enumLabels[text] || text
+  }
+  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (Array.isArray(value)) return value.length ? value.map(item => readable(item, key)).filter(Boolean).join('、') : '暂无'
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item != null && item !== '')
+      .map(([itemKey, item]) => `${detailLabels[itemKey] || '其他信息'}：${readable(item, itemKey)}`)
+      .join('；')
+  }
+  return String(value)
+}
+
+const descriptionText = computed(() => readable((product.value as any)?.description) || '品质农产品，支持交易撮合询价与订单履约。')
+const detailRows = computed(() => {
+  const p = product.value as any
+  if (!p) return []
+  return Object.keys(detailLabels)
+    .filter(key => p[key] != null && p[key] !== '' && key !== 'description')
+    .map(key => ({ label: detailLabels[key], value: readable(p[key], key) }))
+    .filter(row => row.value)
+})
+
 onLoad((options?: Record<string, string>) => { productId = Number(options?.id); void load() })
 
 async function load() {
@@ -88,9 +130,17 @@ async function interact(type: 'favorite' | 'follow' | 'chat') {
         <view v-for="sku in skus" :key="sku.id" class="kv"><text class="kv-label">{{ sku.skuName }}</text><text class="kv-value">{{ money(sku.price) }}/{{ sku.unit }} · 库存 {{ sku.stockQuantity }}</text></view>
       </view>
 
+      <view v-if="detailRows.length" class="card">
+        <text class="card-title">商品信息</text>
+        <view v-for="row in detailRows" :key="row.label" class="kv">
+          <text class="kv-label">{{ row.label }}</text>
+          <text class="kv-value">{{ row.value }}</text>
+        </view>
+      </view>
+
       <view class="card">
         <text class="card-title">商品说明</text>
-        <text class="description">{{ product.description || '品质农产品，支持交易撮合询价与订单履约。' }}</text>
+        <text class="description">{{ descriptionText }}</text>
       </view>
 
       <view v-if="role === 'buyer'" class="bottom-bar">
@@ -121,4 +171,7 @@ async function interact(type: 'favorite' | 'follow' | 'chat') {
 .mini-action { display: flex; flex-shrink: 0; align-items: center; flex-direction: column; justify-content: center; width: 88rpx; min-height: 88rpx; color: var(--c-text-2); font-size: 24rpx; }
 .mini-icon { font-size: 30rpx; font-weight: 700; color: var(--c-primary); }
 .bottom-bar .btn { flex: 1; }
+
+/* 收尾复验发现的布局与详情控件修正。 */
+.mini-action { min-width:48px; min-height:48px; }
 </style>

@@ -9,6 +9,7 @@ const detail = ref<SupplyDemandDetail | null>(null)
 const messages = ref<SdMessage[]>([])
 const text = ref('')
 const sending = ref(false)
+const loadError = ref('')
 const loading = ref(true)
 const scrollInto = ref('')
 const statusBarHeight = ref(0)
@@ -30,6 +31,7 @@ const priceHint = computed(() => {
 onLoad((options) => {
   id.value = Number(options?.id || 0)
   sdType.value = options?.type === 'demand' ? 'demand' : 'supply'
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '缺少供需编号，请从供需列表进入'; return }
   load()
 })
 let refreshTimer: ReturnType<typeof setInterval> | undefined
@@ -47,6 +49,8 @@ async function refreshMessages() {
 }
 
 async function load() {
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '链接缺少有效编号，请返回列表'; return }
+  loadError.value = ''
   loading.value = true
   try {
     const data = await infoApi.supplyDemand(id.value, sdType.value)
@@ -54,7 +58,7 @@ async function load() {
     messages.value = data.messages || []
     scrollToEnd()
   } catch (error) {
-    toast(error instanceof Error ? error.message : '加载失败')
+    loadError.value = error instanceof Error ? error.message : '加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -96,6 +100,7 @@ function goBack() {
 function openDetail() {
   uni.navigateTo({ url: `/pages/sd/detail?id=${id.value}&type=${sdType.value}` })
 }
+function backToList() { uni.reLaunch({ url: '/pages/sd/index' }) }
 </script>
 
 <template>
@@ -120,6 +125,7 @@ function openDetail() {
     <scroll-view scroll-y class="chat" :scroll-into-view="scrollInto" :scroll-with-animation="true">
       <view class="chat-inner">
         <view v-if="loading" class="loading">正在加载会话…</view>
+    <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @click="load">重新加载</button><button class="btn" @click="backToList">返回列表</button></view>
         <view v-else-if="!messages.length" class="empty" style="min-height: 320rpx">
           <text class="empty-icon">💬</text>
           <text>还没有对话，打个招呼开始议价</text>
@@ -171,7 +177,7 @@ function openDetail() {
   height: 100vh;
   flex-direction: column;
   overflow: hidden;
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .nav-holder {
@@ -273,7 +279,7 @@ function openDetail() {
 }
 
 .time {
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -339,7 +345,7 @@ function openDetail() {
 }
 
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .send-btn {
@@ -354,4 +360,7 @@ function openDetail() {
   font-size: 24rpx;
   font-weight: 650;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.back, .right { min-width:48px; min-height:48px; }
 </style>

@@ -7,7 +7,7 @@ import { useNativePage, useFavorite } from '../../useNativePage'
 
 const id=ref(0), item=ref<Attestation|null>(null), verifying=ref(false), result=ref<{valid:boolean;message:string}|null>(null)
 const {loading,error,load}=useNativePage(async()=>{result.value=null;item.value=await infoApi.attestation(id.value)})
-onLoad(o=>{id.value=Number(o?.id);load()})
+onLoad(o=>{id.value=Number(o?.id);if(!Number.isSafeInteger(id.value)||id.value<=0){error.value='缺少存证编号，请从列表进入';return}load()})
 async function verify(){if(!item.value||verifying.value)return;verifying.value=true;result.value=null;try{result.value=await infoApi.verifyAttestation(item.value.attestNo)}catch(e){toast(e instanceof Error?e.message:'验证失败')}finally{verifying.value=false}}
 function copy(){if(item.value)uni.setClipboardData({data:item.value.attestNo})}
 

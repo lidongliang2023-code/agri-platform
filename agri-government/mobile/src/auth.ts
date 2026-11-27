@@ -1,3 +1,4 @@
+import { readSessionToken, sessionDeadline } from '../../../packages/agri-shared/src/auth/mobileSession'
 import { logoutMobile } from '../../../packages/agri-shared/src/auth/logoutMobile'
 import { governmentBase } from './endpoints'
 declare const uni: any
@@ -10,6 +11,7 @@ export interface UnifiedAccount {
 }
 
 interface LoginData {
+  expiresIn?: number | string
   accessToken?: string
   user?: UnifiedAccount
   mfaRequired?: boolean
@@ -55,7 +57,7 @@ function request<T>(
 }
 
 export function getGovToken(): string {
-  return uni.getStorageSync(TOKEN_KEY) || ''
+  return readSessionToken(TOKEN_KEY, 'gov_session_expires', clearGovSession)
 }
 export function getGovUser(): UnifiedAccount | null {
   return (uni.getStorageSync(USER_KEY) as UnifiedAccount | null) || null
@@ -86,7 +88,9 @@ async function acceptLogin(login: LoginData): Promise<{
   if (!permissions.some((code) => code === '*' || code === 'gov:inspector' || code === 'gov:*')) {
     throw new Error('当前统一账号没有政府监管执法权限，请联系平台运营开通')
   }
+  const expires = sessionDeadline(login.expiresIn)
   try {
+    uni.setStorageSync('gov_session_expires', expires)
     uni.setStorageSync(USER_KEY, user)
     uni.setStorageSync(PERMISSION_KEY, permissions)
     uni.setStorageSync(TOKEN_KEY, token)
@@ -106,6 +110,43 @@ export async function loginWithUnifiedAccount(username: string, password: string
   }))
 }
 
+export async function sendGovLoginCode(phone: string) {
+  governmentBase('api')
+  const result = await request<{ sent: boolean; devMode: boolean; hint?: string }>('/api/v1/sso/sms/code', 'POST', {
+    phone: phone.trim(), scene: 'login',
+  })
+  if (!result.sent) throw new Error('未能发送验证码，请稍后重试')
+  return result
+}
+
+export async function loginWithGovSms(phone: string, code: string, remember = true) {
+  clearGovSession()
+  governmentBase('api')
+  return acceptLogin(await request<LoginData>('/api/v1/sso/login-standalone-by-sms', 'POST', {
+    phone: phone.trim(), code: code.trim(), marketId: 1, remember,
+  }))
+}
+
+// #ifdef H5
+export function canContinueGovBrowserSession(): boolean {
+  try {
+    const base = governmentBase('auth')
+    return !base || new URL(base).origin === window.location.origin
+  } catch {
+    return false
+  }
+}
+
+export async function continueGovBrowserSession() {
+  if (!canContinueGovBrowserSession()) {
+    throw new Error('当前认证地址不支持浏览器会话续登，请使用短信或密码登录')
+  }
+  governmentBase('api')
+  clearGovSession()
+  return acceptLogin(await request<LoginData>('/api/v1/auth/refresh', 'POST', {}))
+}
+// #endif
+
 export async function completeGovMfa(challengeToken: string, code: string, remember = true) {
   clearGovSession()
   governmentBase('api')
@@ -115,6 +156,7 @@ export async function completeGovMfa(challengeToken: string, code: string, remem
 }
 
 export function clearGovSession() {
+  uni.removeStorageSync('gov_session_expires')
   uni.removeStorageSync(TOKEN_KEY)
   uni.removeStorageSync(USER_KEY)
   uni.removeStorageSync(PERMISSION_KEY)
@@ -122,12 +164,12 @@ export function clearGovSession() {
 
 export async function logoutGov() {
   try {
-    const token = getGovToken()
+    const token = String(uni.getStorageSync(TOKEN_KEY) || '')
     const endCurrentSession = () => {
-      if (getGovToken() === token) handleGovUnauthorized()
+      if (String(uni.getStorageSync(TOKEN_KEY) || '') === token) handleGovUnauthorized()
     }
     return await logoutMobile(`${governmentBase('auth')}/api/v1/auth/logout`, token,
-      endCurrentSession, endCurrentSession)
+      endCurrentSession, endCurrentSession, () => String(uni.getStorageSync(TOKEN_KEY) || '') === token)
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '退出失败，请重试', icon: 'none' })
     return false

@@ -69,15 +69,11 @@ export function createPlot(payload: Record<string, any>): Promise<string> {
 /**
  * 地块最新土壤记录。
  *
- * <p>没有记录时后端返回 404，这里**吞掉成 null**：页面对"没测过土壤"显示「—」，
- * 而不是把整页打成错误态。</p>
+ * <p>没有记录时后端成功返回 null；网络、鉴权和服务异常继续抛出，
+ * 由详情页展示错误和重试入口，不能误报为没有检测记录。</p>
  */
-export async function latestSoil(plotId: string): Promise<any | null> {
-  try {
-    return await request<any>({ url: `/api/v1/production/plots/${plotId}/soil/latest` })
-  } catch {
-    return null
-  }
+export function latestSoil(plotId: string): Promise<any | null> {
+  return request<any | null>({ url: `/api/v1/production/plots/${plotId}/soil/latest` })
 }
 
 /* ==================== 农事任务 ==================== */
@@ -136,7 +132,16 @@ export function submitTask(taskId: string, payload?: Record<string, any>): Promi
   return request<any>({
     url: `/api/v1/production/tasks/${taskId}/submit`,
     method: 'POST',
-    data: payload ?? {},
+    params: { resultDesc: payload?.resultDesc, resultPhotoUrls: payload?.resultPhotoUrls },
+  })
+}
+
+/** 任务验收：通过或驳回，后端接受查询参数以兼容 H5、小程序和 APP。 */
+export function acceptTask(taskId: string, pass: boolean, remark?: string): Promise<any> {
+  return request<any>({
+    url: `/api/v1/production/tasks/${taskId}/acceptance`,
+    method: 'POST',
+    params: { pass, remark: remark?.trim() || undefined },
   })
 }
 
@@ -266,8 +271,35 @@ export function inboundHarvest(batchId: string, payload: Record<string, any>): P
   })
 }
 
+/** 以累计入库流水计算剩余量；出库、损耗和调拨不恢复采收入库额度。 */
+export async function harvestInboundProgress(batch: { batchId?: string | number; id?: string | number; quantity?: any }): Promise<{ entered: number; remaining: number }> {
+  const batchId = String(batch.batchId ?? batch.id ?? '')
+  const quantity = Number(batch.quantity)
+  if (!batchId || !Number.isFinite(quantity) || quantity < 0) throw new Error('采收数量或批次编号无效')
+  let entered = 0
+  let loaded = 0
+  for (let pageNum = 1; pageNum <= 1000; pageNum++) {
+    const raw = await request<any>({
+      url: `/api/v1/production/harvests/${encodeURIComponent(batchId)}/flows`,
+      params: { flowType: 1, pageNum, pageSize: 100 },
+    })
+    const page = normalizePage<any>(raw, pageNum, 100)
+    if (!Array.isArray(page.list) || !Number.isFinite(page.total) || page.total < 0) throw new Error('入库流水数据无效，请重试')
+    for (const row of page.list) {
+      const amount = Number(row.quantity)
+      if (Number(row.flowType) !== 1 || !Number.isFinite(amount) || amount <= 0) throw new Error('入库流水数据无效，请重试')
+      entered += amount
+    }
+    loaded += page.list.length
+    if (loaded >= page.total) return { entered, remaining: Math.max(0, Number((quantity - entered).toFixed(6))) }
+    if (!page.list.length) throw new Error('入库流水未加载完整，请重试')
+  }
+  throw new Error('入库流水过多，请在完整业务中处理')
+}
+
 /** 分页查询成品库存 */
 export async function listInventory(params: {
+  healthStatus?: string
   keyword?: string
   pageNum?: number
   pageSize?: number
@@ -276,7 +308,7 @@ export async function listInventory(params: {
   const pageSize = params.pageSize ?? 20
   const raw = await request<any>({
     url: '/api/v1/production/harvests/inventory',
-    params: { keyword: params.keyword, pageNum, pageSize },
+    params: { keyword: params.keyword, healthStatus: params.healthStatus, pageNum, pageSize },
   })
   return normalizePage<any>(raw, pageNum, pageSize)
 }
@@ -319,6 +351,15 @@ export function getAlert(alertId: string): Promise<any> {
   return request<any>({ url: `/api/v1/production/alerts/${alertId}` })
 }
 
+/** 用户端告警处置：状态 2 处理中、3 已处理、4 已忽略。 */
+export function handleAlert(alertId: string, status: number, handleRemark: string): Promise<any> {
+  return request<any>({
+    url: `/api/v1/production/alerts/${alertId}/handle`,
+    method: 'PUT',
+    data: { status, handleRemark },
+  })
+}
+
 /** 分页查询消息 */
 export async function listMessages(params: {
   pageNum?: number
@@ -329,7 +370,7 @@ export async function listMessages(params: {
   const pageSize = params.pageSize ?? 20
   const raw = await request<any>({
     url: '/api/v1/production/messages',
-    params: { pageNum, pageSize, readFlag: params.readFlag },
+    params: { pageNum, pageSize, isRead: params.readFlag === undefined ? undefined : params.readFlag === 1 },
   })
   return normalizePage<any>(raw, pageNum, pageSize)
 }
@@ -348,6 +389,15 @@ export function unreadMessageCount(): Promise<number> {
  */
 export function markAllMessagesRead(): Promise<boolean> {
   return request<boolean>({ url: '/api/v1/production/messages/read-all', method: 'PUT' })
+}
+
+/** 单条消息已读和删除，移动端列表直接使用。 */
+export function markMessageRead(messageId: string): Promise<any> {
+  return request<any>({ url: `/api/v1/production/messages/${messageId}/read`, method: 'POST' })
+}
+
+export function deleteMessage(messageId: string): Promise<boolean> {
+  return request<boolean>({ url: `/api/v1/production/messages/${messageId}`, method: 'DELETE' })
 }
 
 /* ==================== 食品安全校验（服务端口径，PC 与移动端共用同一份规则） ==================== */

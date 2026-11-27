@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { localDate } from '../../utils'
 import { onLoad } from '@dcloudio/uni-app'
 import { serviceApi, type Provider } from '../../api'
 
 interface CatalogItem {
-  id: number
+  id: string | number
   name: string
   price: number
   unit: string
@@ -17,12 +18,13 @@ const catalog = ref<CatalogItem[]>([])
 const submitting = ref(false)
 const loadError = ref('')
 /** 日期默认值必须是"今天+N"，不能写死某个历史日子，否则下单就是一条过期的预约。 */
-const minDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+const minDate = localDate(1)
 
 const form = reactive({
-  providerId: 0,
+  providerId: '',
+  serviceItemId: '' as string | number,
   serviceName: '',
-  quantity: 20,
+  quantity: 1,
   appointmentDate: minDate,
   appointmentSlot: '',
   location: '',
@@ -31,7 +33,7 @@ const form = reactive({
   notes: '',
 })
 
-const selected = computed(() => catalog.value.find((item) => item.name === form.serviceName) ?? null)
+const selected = computed(() => catalog.value.find((item) => String(item.id) === String(form.serviceItemId)) ?? null)
 const estimate = computed(() => {
   const price = selected.value ? Number(selected.value.price) : Number(provider.value?.price ?? 0)
   const total = price * Number(form.quantity || 0)
@@ -39,12 +41,16 @@ const estimate = computed(() => {
 })
 
 onLoad(async (options) => {
-  form.providerId = Number(options?.providerId || 0)
+  form.providerId = String(options?.providerId || '')
+  if (!/^\d+$/.test(form.providerId)) { loadError.value = '缺少服务商编号，请从服务商详情进入预约'; return }
   try {
     const data = await serviceApi.provider(form.providerId)
     provider.value = data
     catalog.value = data.items ?? []
-    form.serviceName = decodeURIComponent(options?.serviceName || '') || catalog.value[0]?.name || ''
+    const initial = catalog.value.find(item => String(item.id) === String(options?.serviceItemId)) || catalog.value[0]
+    if (!initial) throw new Error('该服务商暂无可预约项目，请返回服务中心选择其他服务商')
+    form.serviceItemId = initial.id
+    form.serviceName = initial.name
     form.appointmentSlot = data.availableSlots?.[0] ?? ''
     // 联系人默认填经营主体名，来自后端解析的令牌身份，不是写死的演示人物
     const identity = await serviceApi.identity().catch(() => null)
@@ -56,7 +62,7 @@ onLoad(async (options) => {
 
 function onServiceChange(event: { detail: { value: string } }) {
   const item = catalog.value[Number(event.detail.value)]
-  if (item) form.serviceName = item.name
+  if (item) { form.serviceName = item.name; form.serviceItemId = item.id }
 }
 
 function onSlotChange(event: { detail: { value: string } }) {
@@ -69,6 +75,10 @@ function onDateChange(event: { detail: { value: string } }) {
 }
 
 async function submit() {
+  if (submitting.value) return
+  if (!selected.value || !Number.isFinite(Number(form.quantity)) || Number(form.quantity) <= 0 || !form.appointmentSlot || form.appointmentDate < minDate) {
+    uni.showToast({ title: '请选择有效项目、数量、日期和时段', icon: 'none' }); return
+  }
   if (!provider.value) {
     uni.showToast({ title: loadError.value || '服务商档案未加载', icon: 'none' })
     return
@@ -86,6 +96,7 @@ async function submit() {
     // 单价与金额由服务端按目录价实算，这里只提交选择项
     const order = await serviceApi.createOrder({
       providerId: form.providerId,
+      serviceItemId: form.serviceItemId,
       serviceName: form.serviceName,
       quantity: form.quantity,
       appointmentDate: form.appointmentDate,
@@ -116,7 +127,7 @@ async function submit() {
         <view class="summary-icon">{{ provider.categoryIcon }}</view>
         <view>
           <text class="strong">{{ provider.name }}</text>
-          <text class="muted">{{ provider.region }} · 平台担保</text>
+          <text class="muted">{{ provider.region }} · 预约服务</text>
         </view>
       </view>
       <view class="card">
@@ -128,7 +139,7 @@ async function submit() {
           <input v-else class="input" v-model="form.serviceName" placeholder="请填写服务内容" />
         </view>
         <view class="grid-2">
-          <view class="form-item"><text class="form-label">数量（亩/次）</text><input class="input" type="digit" v-model="form.quantity" /></view>
+          <view class="form-item"><text class="form-label">数量（{{ selected?.unit?.replace('元/', '') || '次' }}）</text><input class="input" type="digit" v-model="form.quantity" /></view>
           <view class="form-item"><text class="form-label">上门日期</text>
             <picker mode="date" :start="minDate" @change="onDateChange">
               <view class="picker">{{ form.appointmentDate }}</view>
@@ -136,10 +147,11 @@ async function submit() {
           </view>
         </view>
         <view class="form-item">
-          <text class="form-label">服务时段</text>
+          <text class="form-label">服务商公布时段</text>
           <picker mode="selector" :range="provider?.availableSlots ?? []" @change="onSlotChange">
-            <view class="picker">{{ form.appointmentSlot || '请选择档期' }}</view>
+            <view class="picker">{{ form.appointmentSlot || '请选择参考时段' }}</view>
           </picker>
+          <text class="muted">以上为服务商档案中的时段说明，不代表所选日期仍有余量；上门时间以服务商确认结果为准。</text>
         </view>
         <view class="form-item"><text class="form-label">服务地址</text><input class="input" v-model="form.location" placeholder="村镇 + 地块，例：望城区乔口镇 3 号田" /></view>
         <view class="grid-2">
@@ -152,8 +164,8 @@ async function submit() {
           <text class="quote-total">预估总额 ¥{{ estimate.total }}　定金 ¥{{ estimate.deposit }}</text>
           <text class="tiny">金额与定金由服务端按服务商目录价实算，改报价需要服务商重新上架。</text>
         </view>
-        <view class="notice">提交后锁定档期，服务商确认后支付定金，验收通过后结算尾款。</view>
-        <button class="btn btn-primary btn-block" :loading="submitting" @click="submit">确认预约</button>
+        <view class="notice">提交后请确认预约信息，由服务商安排作业。此处不执行扣款或自动锁档，费用请双方另行确认。</view>
+        <button class="btn btn-primary btn-block" :loading="submitting" :disabled="submitting || !selected" @click="submit">确认预约</button>
       </view>
     </template>
   </view>
@@ -163,8 +175,13 @@ async function submit() {
 .summary { display: flex; align-items: center; gap: 16rpx; margin-bottom: 20rpx; padding: 22rpx; border-radius: 22rpx; background: #edf8f2; }
 .summary-icon { display: flex; width: 82rpx; height: 82rpx; align-items: center; justify-content: center; border-radius: 20rpx; background: #12764a; font-size: 40rpx; }
 .summary > view:last-child { display: flex; flex-direction: column; gap: 5rpx; }
-.notice { margin-bottom: 20rpx; padding: 16rpx; border-radius: 13rpx; background: #fff3dd; color: #8f661b; font-size: 24rpx; line-height: 1.6; }
-.picker { min-height: 68rpx; padding: 18rpx 20rpx; border: 1rpx solid #dfe7e1; border-radius: 14rpx; background: #fbfdfb; font-size: 24rpx; color: #1f2a23; }
-.quote { display: flex; flex-direction: column; gap: 6rpx; margin: 16rpx 0; padding: 18rpx; border-radius: 14rpx; background: #f2f7f3; font-size: 24rpx; color: #4c5a51; }
-.quote-total { font-size: 25rpx; font-weight: 650; color: #0e5233; }
+.notice { margin-bottom: 20rpx; padding: 16rpx; border-radius: 13rpx; background: #fff3dd; color: #704000; font-size: 13px; line-height: 1.6; }
+.picker { min-height: 44px; padding: 18rpx 20rpx; border: 1rpx solid #dfe7e1; border-radius: 14rpx; background: #fbfdfb; font-size: 13px; color: #1f2a23; }
+.quote { display: flex; flex-direction: column; gap: 6rpx; margin: 16rpx 0; padding: 18rpx; border-radius: 14rpx; background: #f2f7f3; font-size: 13px; color: #4c5a51; }
+.quote-total { font-size: 14px; font-weight: 650; color: #0e5233; }
+
+.summary-icon { flex-shrink: 0; }
+.summary > view:last-child { min-width: 0; }
+.picker { font-size: 15px; }
+
 </style>

@@ -17,8 +17,8 @@
  * 改成运行时判断：小程序/App 里没有 `window`（必须绝对地址，开发者工具要勾"不校验合法域名"），
  * H5 用同源地址（开发期由 vite proxy 反代到网关）。</p>
  */
-const configuredBase = String(import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
-export const BASE_URL = configuredBase || (typeof window === 'undefined' ? 'http://localhost' : '')
+import { apiBase } from './runtime'
+export const BASE_URL = apiBase()
 
 /** 后端统一响应体 */
 export interface ApiResponse<T> {
@@ -42,6 +42,7 @@ export interface RequestOptions {
   data?: Record<string, any>
   params?: Record<string, any>
   /** 是否携带令牌，默认 true（登录接口自身传 false） */
+  timeout?: number
   auth?: boolean
 }
 
@@ -49,8 +50,14 @@ export interface RequestOptions {
 export const TOKEN_KEY = 'agri_token'
 export const SUBJECT_KEY = 'agri_current_subject'
 let contextVersion = 0
+let subjectContextVersion = 0
+let subjectSwitching = false
+export function productionContextVersion(): number { return contextVersion }
+export function isProductionSubjectSwitching(): boolean { return subjectSwitching }
+export function invalidateProductionRequests(): void { contextVersion++ }
 export function clearProductionContext(): void {
   contextVersion++
+  subjectContextVersion++
   uni.removeStorageSync(SUBJECT_KEY)
   uni.removeStorageSync('agri_current_farm')
 }
@@ -69,9 +76,19 @@ export async function productionAdmission(subject?: string): Promise<Admission> 
   return result
 }
 export async function activateProductionSubject(id: string): Promise<void> {
-  await request({ url: `/api/v1/sso/account/businesses/${encodeURIComponent(id)}/activate`, method: 'POST' })
-  clearProductionContext()
-  uni.setStorageSync(SUBJECT_KEY, id)
+  if (subjectSwitching) throw new Error('正在切换经营主体，请稍候')
+  if (!id.trim()) throw new Error('请选择经营主体')
+  subjectSwitching = true
+  // 从切换开始就作废旧业务请求；激活失败时仍保留原主体与农场。
+  invalidateProductionRequests()
+  try {
+    // 农场选择只影响业务请求，不得丢弃已经在服务端生效的主体激活结果。
+    await executeRequest({ url: `/api/v1/sso/account/businesses/${encodeURIComponent(id)}/activate`, method: 'POST' }, true)
+    clearProductionContext()
+    uni.setStorageSync(SUBJECT_KEY, id)
+  } finally {
+    subjectSwitching = false
+  }
 }
 
 
@@ -81,6 +98,7 @@ function handleUnauthorized(): void {
   clearProductionContext()
   uni.removeStorageSync(TOKEN_KEY)
   uni.removeStorageSync('agri_user')
+  uni.removeStorageSync('agri_session_expires')
   if (redirecting) return
   redirecting = true
   uni.reLaunch({
@@ -111,11 +129,21 @@ function toQuery(params?: Record<string, any>): string {
  * @param options 见 RequestOptions
  * @returns 业务数据
  */
-export async function request<T = any>(options: RequestOptions): Promise<T> {
+export function request<T = any>(options: RequestOptions): Promise<T> {
+  return executeRequest<T>(options)
+}
+
+async function executeRequest<T = any>(options: RequestOptions, activatingSubject = false): Promise<T> {
   const tokenAtStart = uni.getStorageSync(TOKEN_KEY)
+  const expires = Number(uni.getStorageSync('agri_session_expires'))
+  if (options.auth !== false && (!tokenAtStart || !Number.isFinite(expires) || expires <= Date.now())) {
+    handleUnauthorized(); throw new Error('登录已失效，请重新登录')
+  }
   const versionAtStart = contextVersion
+  const subjectVersionAtStart = subjectContextVersion
   const production = options.auth !== false && /^\/api\/v1\/production(?:\/|$)/.test(options.url)
-    && !/^\/api\/v1\/production\/admin(?:\/|$)/.test(options.url)
+    && !/^\/api\/v1\/production\/(admin|mobile-session)(?:\/|$)/.test(options.url)
+  if (production && subjectSwitching) throw new Error('正在切换经营主体，请稍候再试')
   let subject = String(uni.getStorageSync(SUBJECT_KEY) || '')
   if (production && !subject) {
     const summary = await subjectSummary()
@@ -131,7 +159,8 @@ export async function request<T = any>(options: RequestOptions): Promise<T> {
   if (production && (tokenAtStart !== uni.getStorageSync(TOKEN_KEY) || versionAtStart !== contextVersion
       || subject !== String(uni.getStorageSync(SUBJECT_KEY) || ''))) throw new Error('账号或主体已切换，请刷新后重试')
 
-  const url = `${BASE_URL}${options.url}${toQuery(options.params)}`
+  if (!apiBase() && typeof window === "undefined") throw new Error("请先设置生产服务地址")
+  const url = `${apiBase()}${options.url}${toQuery(options.params)}`
   const header: Record<string, string> = { 'Content-Type': 'application/json' }
   if (production && subject) header['X-Merchant-Id'] = subject
   if (options.auth !== false) {
@@ -141,13 +170,17 @@ export async function request<T = any>(options: RequestOptions): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     uni.request({
       url,
-      timeout: 15000,
+      timeout: options.timeout ?? 15000,
       // uni 的类型定义里没有 PATCH（微信小程序的 wx.request 也不支持 PATCH），
       // 这里强转一次；实际只有 /messages/read-all 会用到，且后端已同时开放 PUT（见 UserMessageController）。
       method: (options.method || 'GET') as any,
       data: options.data,
       header,
       success: (res) => {
+        if (options.auth !== false && (tokenAtStart !== uni.getStorageSync(TOKEN_KEY)
+            || (activatingSubject ? subjectVersionAtStart !== subjectContextVersion : versionAtStart !== contextVersion))) {
+          reject(new Error('账号或主体已切换，请重新打开页面')); return
+        }
         const body = res.data as ApiResponse<T>
         if (res.statusCode === 401 || body?.code === 401) {
           // 免令牌的登录类接口（密码登录、验证码登录、二次验证）返回 401 是凭据不对，

@@ -116,7 +116,7 @@ function feedback() {
 }
 
 .search-icon {
-  color: #94a198;
+  color: #666666;
   font-size: 28rpx;
 }
 
@@ -127,7 +127,7 @@ function feedback() {
 }
 
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .faq-card {
@@ -157,7 +157,7 @@ function feedback() {
 }
 
 .q-caret {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -189,4 +189,7 @@ function feedback() {
   display: flex;
   gap: 14rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.faq-q { min-height:48px; align-items:center; }
 </style>

@@ -97,7 +97,7 @@ function logout() {
 <style lang="scss" scoped>
 .group-label {
   margin: 14rpx 2rpx 10rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   font-weight: 650;
 }
@@ -126,7 +126,7 @@ function logout() {
 }
 
 .row-value {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -137,4 +137,7 @@ function logout() {
   gap: 6rpx;
   padding: 30rpx 0 10rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.row-item { min-height:48px; }
 </style>

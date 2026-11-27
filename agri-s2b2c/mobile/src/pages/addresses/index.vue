@@ -16,8 +16,8 @@
           <text class="address-detail">{{ fullAddress(address) }}</text>
         </view>
         <view class="address-actions">
-          <text @tap.stop="edit(address.id)">编辑</text>
-          <text class="delete" @tap.stop="remove(address.id)">删除</text>
+          <text class="ui-action-target" @tap.stop="edit(address.id)">编辑</text>
+          <text class="delete ui-action-target" @tap.stop="remove(address.id)">删除</text>
         </view>
       </view>
     </view>
@@ -133,7 +133,7 @@ defineExpose({ loadAddresses })
 }
 
 .head-count {
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -170,7 +170,7 @@ defineExpose({ loadAddresses })
 }
 
 .address-phone {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -191,7 +191,7 @@ defineExpose({ loadAddresses })
 }
 
 .address-actions .delete {
-  color: #c54b4b;
+  color: #b71c1c;
 }
 
 .add-bar {

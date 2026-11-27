@@ -31,6 +31,7 @@ async function open(row: TradeLogistics) {
   finally { if (token === traceSerial) traceLoading.value = false }
 }
 function close() { traceSerial++; selected.value = null }
+function toOrders() { uni.switchTab({ url: '/pages/orders/index' }) }
 function tone(status: string) { return status === 'delivered' ? '' : status === 'pending' ? 'amber' : 'blue' }
 </script>
 
@@ -54,7 +55,7 @@ function tone(status: string) { return status === 'delivered' ? '' : status === 
         </view>
         <view class="foot"><text class="tiny ellipsis grow">{{ item.currentLocation ? `当前：${item.currentLocation}` : '暂无最新位置' }}</text><text class="tiny">查看轨迹 ›</text></view>
       </view>
-      <view v-if="!rows.length" class="empty">暂无物流单</view>
+      <view v-if="!rows.length" class="empty-state"><text class="empty-title">还没有物流单</text><text class="empty-desc">卖家发货后，物流轨迹会显示在这里</text><button class="btn btn-ghost btn-sm" @tap="toOrders">查看我的订单</button></view>
     </template>
 
     <view v-if="selected" class="sheet-mask" @tap="close">

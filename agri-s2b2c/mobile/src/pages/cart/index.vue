@@ -16,11 +16,11 @@
         <text class="cart-count">{{ items.length }} 件</text>
       </view>
 
-      <view v-if="items.length" class="cart-list">
+      <view v-if="loading" class="list-feedback">正在同步购物车…</view>
+      <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @tap="loadCart">重新加载</button></view>
+      <view v-else-if="items.length" class="cart-list">
         <view v-for="item in items" :key="item.id" class="cart-item">
-          <view class="check" :class="{ checked: item.selected }" @tap="toggleItem(item)">
-            <text v-if="item.selected">✓</text>
-          </view>
+          <button class="check-hit" :disabled="syncing" :aria-label="item.selected ? '取消选择商品' : '选择商品'" @tap="toggleItem(item)"><view class="check" :class="{ checked: item.selected }"><text v-if="item.selected">✓</text></view></button>
           <image v-if="item.image" class="item-image" :src="item.image" mode="aspectFill" @tap="openProduct(item.productId)" />
           <view v-else class="item-image item-placeholder" @tap="openProduct(item.productId)">丰</view>
           <view class="item-body">
@@ -29,13 +29,13 @@
             <view class="item-bottom">
               <text class="price">{{ money(item.price) }}</text>
               <view class="stepper">
-                <view class="stepper-btn" @tap="changeQuantity(item, -1)">−</view>
+                <button class="stepper-btn" :disabled="syncing || item.quantity <= 1" aria-label="减少数量" @tap="changeQuantity(item, -1)">−</button>
                 <text class="stepper-value">{{ item.quantity }}</text>
-                <view class="stepper-btn" @tap="changeQuantity(item, 1)">+</view>
+                <button class="stepper-btn" :disabled="syncing || item.quantity >= item.stock" aria-label="增加数量" @tap="changeQuantity(item, 1)">+</button>
               </view>
             </view>
           </view>
-          <text class="delete" @tap="removeItem(item.id)">×</text>
+          <button class="delete" :disabled="syncing" aria-label="移除商品" @tap="removeItem(item.id)">移除</button>
         </view>
       </view>
 
@@ -54,7 +54,7 @@
           <text>合计</text>
           <text class="total-price">{{ money(total) }}</text>
         </view>
-        <button class="btn btn-primary checkout" :disabled="selectedCount === 0" @tap="checkout">
+        <button class="btn btn-primary checkout" :disabled="selectedCount === 0 || syncing || loading || !!loadError" @tap="checkout">
           结算 ({{ selectedCount }})
         </button>
       </view>
@@ -71,6 +71,8 @@ import { money, toast } from '../../utils'
 
 const items = ref<CartItem[]>([])
 const loading = ref(false)
+const syncing = ref(false)
+const loadError = ref('')
 
 const selectedItems = computed(() => items.value.filter((item) => item.selected))
 const selectedCount = computed(() => selectedItems.value.reduce((sum, item) => sum + item.quantity, 0))
@@ -84,11 +86,12 @@ onShow(() => {
 async function loadCart() {
   if (!session.user) return
   loading.value = true
+  loadError.value = ''
   try {
     const result = await mallApi.getCart(session.user.id)
-    items.value = result.map((item) => ({ ...item, selected: true }))
+    items.value = result.map((item) => ({ ...item, selected: Boolean(item.selected) }))
   } catch (error) {
-    toast((error as Error).message)
+    loadError.value = (error as Error).message
   } finally {
     loading.value = false
   }
@@ -98,46 +101,46 @@ function login() {
   uni.navigateTo({ url: '/pages/login/index?redirect=%2Fpages%2Fcart%2Findex' })
 }
 
+async function sync(action: () => Promise<{ success: boolean; message?: string }>, done: () => void) {
+  if (syncing.value || loading.value) return
+  syncing.value = true
+  try {
+    const result = await action()
+    if (!result.success) throw new Error(result.message || '同步失败，请重试')
+    done()
+    await loadCart()
+  } catch (error) { toast((error as Error).message) }
+  finally { syncing.value = false }
+}
 function toggleItem(item: CartItem) {
-  item.selected = !item.selected
+  const selected = !item.selected
+  return sync(() => mallApi.selectCart(item.id, selected), () => { item.selected = selected })
 }
-
 function toggleAll() {
-  const next = !allSelected.value
-  items.value.forEach((item) => { item.selected = next })
+  if (!session.user) return
+  const selected = !allSelected.value
+  return sync(() => mallApi.selectAllCart(session.user!.id, selected), () => { items.value.forEach(item => { item.selected = selected }) })
 }
-
-async function changeQuantity(item: CartItem, delta: number) {
+function changeQuantity(item: CartItem, delta: number) {
   const next = item.quantity + delta
   if (next < 1 || next > item.stock) return
-  item.quantity = next
-  try {
-    await mallApi.updateCart(item.id, next)
-  } catch (error) {
-    toast((error as Error).message)
-    await loadCart()
-  }
+  return sync(() => mallApi.updateCart(item.id, next), () => { item.quantity = next })
 }
 
 function removeItem(id: number) {
+  if (syncing.value || loading.value) return
   uni.showModal({
     title: '移除商品',
     content: '确定将这件商品移出购物车吗？',
     success: async (result) => {
       if (!result.confirm) return
-      try {
-        const response = await mallApi.deleteCart(id)
-        if (response.success) {
-          items.value = items.value.filter((item) => item.id !== id)
-        }
-      } catch (error) {
-        toast((error as Error).message)
-      }
+      await sync(() => mallApi.deleteCart(id), () => { items.value = items.value.filter(item => item.id !== id) })
     },
   })
 }
 
 function checkout() {
+  if (syncing.value || loading.value || loadError.value) return
   const ids = selectedItems.value.map((item) => item.id)
   if (!ids.length) return toast('请选择商品')
   uni.setStorageSync('s2b2c_checkout_item_ids', ids)
@@ -212,7 +215,7 @@ function openProduct(id: number) {
 }
 
 .cart-count {
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -293,7 +296,7 @@ function openProduct(id: number) {
 
 .item-spec {
   margin-top: 7rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -326,7 +329,7 @@ function openProduct(id: number) {
 }
 
 .stepper-btn {
-  background: #f4f7f5;
+  background: #f5f6fa;
   color: #12764a;
   font-size: 27rpx;
 }
@@ -340,7 +343,7 @@ function openProduct(id: number) {
   position: absolute;
   top: 10rpx;
   right: 14rpx;
-  color: #a8b1ab;
+  color: #666666;
   font-size: 32rpx;
 }
 
@@ -372,14 +375,14 @@ function openProduct(id: number) {
   margin-left: auto;
   align-items: flex-end;
   flex-direction: column;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
 .total-price {
   margin-top: 3rpx;
-  color: #d45b32;
-  font-size: 31rpx;
+  color: #e53935;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -392,4 +395,10 @@ function openProduct(id: number) {
 .checkout[disabled] {
   opacity: 0.5;
 }
+
+.cart-item { display:grid; grid-template-columns:44px 112rpx minmax(0,1fr); align-items:start; gap:12rpx; padding:20rpx 16rpx; }.check-hit { display:flex; width:44px; min-height:44px; align-items:center; justify-content:center; }.check { width:24px;height:24px;flex-basis:24px; }.item-image,.item-placeholder { width:112rpx;height:112rpx; }.item-body { min-width:0; }.item-name { white-space:normal; padding-right:0; font-size:28rpx; line-height:1.45; }.item-bottom { flex-wrap:wrap; gap:16rpx; align-items:flex-start; }.stepper { height:44px; margin-left:auto; }.stepper-btn { width:44px; height:44px; display:flex; align-items:center;justify-content:center; }.stepper-value { min-width:32px; }.delete { position:static;grid-column:3;justify-self:end;min-height:44px;padding:0 12rpx;font-size:24rpx;line-height:44px;color:#666666; }.cart-bottom { gap:12rpx; }.select-all { min-height:44px; }.checkout { padding:0 20rpx; }.cart-head { padding:20rpx 24rpx; }.cart-title { font-size:30rpx; }
+/* #ifdef H5 */
+.cart-bottom { bottom:var(--window-bottom, 50px);padding-bottom:14rpx; }
+/* #endif */
+
 </style>

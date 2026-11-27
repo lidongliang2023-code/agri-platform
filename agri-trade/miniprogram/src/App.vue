@@ -15,10 +15,10 @@ page {
   --c-card: #ffffff;
   --c-text: #17271e;
   --c-text-2: #53665a;
-  --c-text-3: #8a998f;
+  --c-text-3: #666666;
   --c-line: #e8eeea;
-  --c-price: #e0592a;
-  --c-danger: #d4483b;
+  --c-price: #e53935;
+  --c-danger: #b71c1c;
   min-height: 100%;
   background: var(--c-bg);
   color: var(--c-text);
@@ -69,7 +69,7 @@ button[disabled] { opacity: .5; }
 /* ---------- 文字 ---------- */
 .muted { color: var(--c-text-2); font-size: 24rpx; line-height: 1.6; }
 .tiny { color: var(--c-text-3); font-size: 24rpx; }
-.price { color: var(--c-price); font-size: 30rpx; font-weight: 700; font-family: "DIN Alternate", "Helvetica Neue", Arial, sans-serif; }
+.price { color: var(--c-danger); font-size: 32rpx; font-weight: 700; font-family: "DIN Alternate", "Helvetica Neue", Arial, sans-serif; }
 .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .between { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
@@ -87,7 +87,7 @@ button[disabled] { opacity: .5; }
 
 /* ---------- 标签 ---------- */
 .tag { display: inline-flex; flex-shrink: 0; align-items: center; padding: 4rpx 14rpx; border-radius: 8rpx; background: var(--c-primary-soft); color: var(--c-primary); font-size: 24rpx; line-height: 1.5; }
-.tag.amber { background: #fff4e0; color: #a3640c; }
+.tag.amber { background: #fff4e0; color: #8f4500; }
 .tag.red { background: #fdeceb; color: var(--c-danger); }
 .tag.blue { background: #e9f1fd; color: #2f64b7; }
 .tag.gray { background: #f0f2f1; color: var(--c-text-3); }
@@ -123,10 +123,10 @@ button[disabled] { opacity: .5; }
 .entry-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 28rpx; }
 .entry { display: flex; min-width: 0; align-items: center; flex-direction: column; gap: 12rpx; color: var(--c-text); font-size: 24rpx; text-align: center; }
 .entry-icon { display: flex; width: 84rpx; height: 84rpx; align-items: center; justify-content: center; border-radius: 26rpx; background: var(--c-primary-soft); color: var(--c-primary); font-size: 32rpx; font-weight: 700; }
-.entry-icon.amber { background: #fff4e0; color: #b7701a; }
+.entry-icon.amber { background: #fff4e0; color: #8f4500; }
 .entry-icon.blue { background: #e9f1fd; color: #2f64b7; }
 .entry-icon.violet { background: #f1ecfd; color: #6b4bc4; }
-.entry-icon.red { background: #fdeceb; color: #c4473b; }
+.entry-icon.red { background: #fdeceb; color: #b71c1c; }
 .entry-label { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- 列表菜单 ---------- */
@@ -196,4 +196,21 @@ button[disabled] { opacity: .5; }
   .uni-page-head, .uni-tabbar, .bottom-bar, .sheet-mask { left: 50% !important; right: auto !important; width: 100% !important; max-width: 480px; transform: translateX(-50%); }
 }
 /* #endif */
+@import '../../../shared/mobile-ui-v1.scss';
+
+/* ---------- UI 规范 V1.0 逐页验收（2026-11-20）：触控目标不小于 44 × 44px ---------- */
+.chip { min-height: 88rpx; border-radius: 44rpx; }
+.card-more { min-height: 88rpx; }
+.search-bar { height: 96rpx; border-radius: 48rpx; }
+.search-bar input { height: 96rpx; }
+.search-bar button { height: 88rpx; line-height: 88rpx; border-radius: 44rpx; }
+.page-head .link, .notice .link { display: inline-flex; align-items: center; min-height: 88rpx; vertical-align: middle; }
+/* 空状态：第一行说明为什么空，第二行说明能做什么，再给一个操作 */
+.empty-state { display: flex; flex-direction: column; align-items: center; gap: 12rpx; padding: 64rpx 24rpx; text-align: center; }
+.empty-state .empty-title { color: var(--c-text-2); font-size: 28rpx; font-weight: 600; }
+.empty-state .empty-desc { color: var(--c-text-3); font-size: 25rpx; line-height: 1.5; }
+.empty-state .btn { margin-top: 12rpx; min-width: 240rpx; }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.card-more, .child.tap-row { min-width:48px; min-height:48px; }
 </style>

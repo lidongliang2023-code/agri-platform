@@ -23,7 +23,7 @@
     <view v-for="item in candidates" :key="item.inputId" class="card" @click="pick(item)">
       <view class="row">
         <text class="strong">{{ item.inputName }}</text>
-        <text class="tag" style="color: #13a05a">{{ categoryLabel(item.inputType) }}</text>
+        <text class="tag" style="color: #1e6b38">{{ categoryLabel(item.inputType) }}</text>
       </view>
       <view class="muted" style="margin-top: 8rpx">
         库存 {{ fmtNumber(item.stockQty, item.unit) }} · 安全间隔期 {{ item.safetyInterval ?? '—' }} 天 ·
@@ -95,7 +95,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { complianceCheck, createInputUsage, listInputs, listPlots } from '@/api/production'
-import { currentFarm, currentUser } from '@/utils/auth-helper'
+import { currentFarm, currentUser, resolveCurrentFarm } from '@/utils/auth-helper'
 import { fmtNumber, today } from '@/utils/format'
 
 /** 投入品分类字典（与 PC 端 INPUT_CATEGORIES 同值域） */
@@ -149,10 +149,10 @@ const plotLabel = computed(
 
 /** 结论 → 文案与颜色（UNKNOWN 必须显式画出来，不能当成通过） */
 const RESULT_META: Record<string, { label: string; color: string }> = {
-  PASS: { label: '✅ 通过', color: '#13a05a' },
-  WARNING: { label: '⚠️ 预警', color: '#fa8c16' },
+  PASS: { label: '✅ 通过', color: '#1e6b38' },
+  WARNING: { label: '⚠️ 预警', color: '#8f4500' },
   BLOCK: { label: '❌ 拦截', color: '#cf1322' },
-  UNKNOWN: { label: '⬜ 未校验', color: '#8c8c8c' },
+  UNKNOWN: { label: '⬜ 未校验', color: '#666666' },
 }
 
 const resultMeta = (result: any) => RESULT_META[String(result)] ?? RESULT_META.UNKNOWN
@@ -331,11 +331,8 @@ async function submit(): Promise<void> {
 }
 
 onMounted(async () => {
-  const farm = currentFarm()
-  if (!farm) {
-    error.value = '当前账号未关联农场，请到「我的」页选择农场'
-    return
-  }
+  const farm = await resolveCurrentFarm().catch((e: any) => { error.value = e?.message || '农场加载失败，请稍后重试'; return null })
+  if (!farm) return
   try {
     const plotPage = await listPlots({ farmId: farm.farmId, pageSize: 100 })
     plots.value = plotPage.list.map((plot: any) => ({

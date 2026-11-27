@@ -23,6 +23,6 @@ function select(field:Field,event:any){update(field.key,field.options?.[Number(e
   </view>
 </template>
 <style scoped>
-.required{color:#c54b4b}.select{display:flex;align-items:center;justify-content:space-between;height:76rpx;padding-top:0;padding-bottom:0}.select.placeholder{color:#94a198}.hint{display:block;margin-top:8rpx}
+.required{color:#b71c1c}.select{display:flex;align-items:center;justify-content:space-between;height:76rpx;padding-top:0;padding-bottom:0}.select.placeholder{color:#666666}.hint{display:block;margin-top:8rpx}
 .switch-item{display:flex;align-items:center;justify-content:space-between}.switch-item .form-label{margin-bottom:0}
 </style>

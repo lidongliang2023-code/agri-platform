@@ -1,6 +1,8 @@
 <template>
   <view class="page">
-    <view v-if="error" class="error-box">{{ error }}</view>
+<view v-if="loading" class="empty">正在加载地块…</view>
+    <view v-else-if="error" class="error-box">{{ error }}<button class="btn-ghost" @click="load">重新加载</button></view>
+    <template v-else-if="ready">
 
     <view class="card">
       <view class="card-title"><text>🍅 基本信息</text></view>
@@ -19,7 +21,7 @@
 
     <view class="card">
       <view class="card-title"><text>🌡️ 最近土壤记录</text></view>
-      <view v-if="!soil" class="muted">该地块暂无土壤检测记录（接口未返回则显示为空，不补默认值）</view>
+      <view v-if="!soil" class="muted">暂无可用土壤检测记录</view>
       <view v-else class="grid">
         <view class="grid-cell"><text class="strong">{{ fmtNumber(soil.soilPh) }}</text><text class="muted">pH</text></view>
         <view class="grid-cell"><text class="strong">{{ fmtNumber(soil.organicMatter) }}</text><text class="muted">有机质</text></view>
@@ -40,14 +42,15 @@
     </view>
 
     <view class="card">
-      <view class="card-title"><text>💊 本季投入品使用（按真实记录汇总）</text></view>
+      <view class="card-title"><text>💊 最近投入品使用</text></view>
       <view v-if="usageStats.length === 0" class="muted">该地块暂无投入品使用记录</view>
-      <view v-for="item in usageStats" :key="item.name" class="field">
+      <view v-for="item in usageStats" :key="item.name + item.unit" class="field">
         <text class="field-label">{{ item.name }}</text>
         <text class="field-value">{{ fmtNumber(item.qty, item.unit) }} · {{ item.count }} 次</text>
       </view>
-      <view class="muted" style="margin-top: 12rpx">投入成本后端未提供该口径的汇总接口，故不展示金额。</view>
+      <view class="muted" style="margin-top: 12rpx">按最近加载的 50 条记录分品名与单位汇总，不代表本季累计。</view>
     </view>
+    </template>
   </view>
 </template>
 
@@ -63,6 +66,8 @@ const soil = ref<any | null>(null)
 const tasks = ref<any[]>([])
 const usages = ref<any[]>([])
 const error = ref('')
+const loading = ref(false)
+const ready = ref(false)
 
 const taskStatusLabel = (status: any): string => TASK_STATUS_LABEL[String(status)] ?? String(status ?? '—')
 
@@ -71,16 +76,19 @@ const usageStats = computed(() => {
   const map = new Map<string, { name: string; qty: number; unit: string; count: number }>()
   usages.value.forEach((usage) => {
     const name = usage.inputName ?? '未命名投入品'
-    const current = map.get(name) ?? { name, qty: 0, unit: usage.unit ?? '', count: 0 }
+    const key = name + '|' + String(usage.unit || '')
+    const current = map.get(key) ?? { name, qty: 0, unit: usage.unit ?? '', count: 0 }
     current.qty += Number(usage.dosage ?? 0)
     current.count += 1
     if (!current.unit && usage.unit) current.unit = usage.unit
-    map.set(name, current)
+    map.set(key, current)
   })
   return [...map.values()]
 })
 
 async function load(): Promise<void> {
+  if (!plotId.value) { error.value = '缺少地块编号，请返回列表重新打开'; return }
+  loading.value = true; ready.value = false
   error.value = ''
   try {
     const [plotDetail, soilRecord, taskPage, usagePage] = await Promise.all([
@@ -93,12 +101,15 @@ async function load(): Promise<void> {
     soil.value = soilRecord
     tasks.value = taskPage.list
     usages.value = usagePage.list
+    ready.value = Boolean(plot.value.plotId || plot.value.id)
+    if (!ready.value) throw new Error('地块不存在或无权访问')
   } catch (err: any) {
     error.value = err?.message ?? '地块详情加载失败'
-  }
+  } finally { loading.value = false }
 }
 
 function goTasks(): void {
+  uni.setStorageSync('agri_task_plot_filter', { id: plotId.value, name: plot.value.plotName || '当前地块' })
   uni.switchTab({ url: '/pages/tasks/tasks' })
 }
 

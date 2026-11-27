@@ -152,7 +152,7 @@ function askPestToChat() {
           <text class="robot">🤖</text>
           <text class="title">农技 AI 助手</text>
         </view>
-        <text role="button" tabindex="0" class="history" @click="openHistory">历史</text>
+        <text role="button" tabindex="0" class="ui-action-target history" @click="openHistory">历史</text>
       </view>
       <view class="ai-note">
         <text class="tag purple">✦ AI</text>
@@ -213,7 +213,7 @@ function askPestToChat() {
     </scroll-view>
 
     <view class="input-bar">
-      <text role="button" tabindex="0" class="icon" @click="openPest">🌿</text>
+      <text role="button" tabindex="0" class="ui-action-target icon" @click="openPest">🌿</text>
       <input
         v-model="question"
         class="chat-input"
@@ -229,7 +229,7 @@ function askPestToChat() {
       <view role="button" tabindex="0" class="sheet" @click.stop>
         <view class="sheet-head">
           <text class="card-title">病虫害症状分析</text>
-          <text role="button" tabindex="0" class="card-sub" @click="pestOpen = false">关闭</text>
+          <text role="button" tabindex="0" class="ui-action-target card-sub" @click="pestOpen = false">关闭</text>
         </view>
 
         <view class="form-item">
@@ -284,7 +284,7 @@ function askPestToChat() {
   height: 100vh;
   flex-direction: column;
   overflow: hidden;
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .ai-head {
@@ -430,11 +430,11 @@ function askPestToChat() {
 }
 
 .typing {
-  color: #94a198;
+  color: #666666;
 }
 
 .time {
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -447,7 +447,7 @@ function askPestToChat() {
 .src-title {
   display: block;
   margin-bottom: 8rpx;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -522,7 +522,7 @@ function askPestToChat() {
 }
 
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .send-btn {

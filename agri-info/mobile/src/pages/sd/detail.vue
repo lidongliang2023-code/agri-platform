@@ -244,7 +244,7 @@ function goBack() {
         <view v-if="topMatch" class="card match-card">
           <view class="card-head">
             <text class="card-title">✦ AI 匹配度 {{ topMatch.score }}%</text>
-            <text class="card-sub" @click="openMatch">全部匹配 ›</text>
+            <text class="ui-action-target card-sub" @click="openMatch">全部匹配 ›</text>
           </view>
           <view class="progress">
             <view :style="{ width: `${topMatch.score}%` }" />
@@ -299,7 +299,7 @@ function goBack() {
 
         <view v-if="detail.matches?.length > 1" class="section-head">
           <text class="section-title">相似货源</text>
-          <text class="card-sub" @click="openMatch">更多 ›</text>
+          <text class="ui-action-target card-sub" @click="openMatch">更多 ›</text>
         </view>
         <view v-if="detail.matches?.length > 1" class="card">
           <view
@@ -333,7 +333,7 @@ function goBack() {
 <style lang="scss" scoped>
 .sd-detail {
   padding-bottom: 180rpx;
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .nav-holder {
@@ -479,4 +479,7 @@ function goBack() {
   color: #6b418d;
   font-size: 24rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.back, .right { min-width:48px; min-height:48px; }
 </style>

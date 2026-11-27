@@ -64,11 +64,7 @@
     },
     {
       "path": "pages/login/index",
-      "style": {
-        "navigationBarTitleText": "登录",
-        "navigationBarBackgroundColor": "#ffffff",
-        "navigationBarTextStyle": "black"
-      }
+      "style": { "navigationStyle": "custom" }
     },
     {
       "path": "pages/account/index",
@@ -305,7 +301,7 @@
   },
   "tabBar": {
     "fontSize": "12px",
-    "color": "#718277",
+    "color": "#666666",
     "selectedColor": "#12764a",
     "borderStyle": "white",
     "backgroundColor": "#ffffff",

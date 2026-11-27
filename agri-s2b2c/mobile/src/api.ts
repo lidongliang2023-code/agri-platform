@@ -30,6 +30,7 @@ export interface Product {
 }
 
 export interface CartItem {
+  channelId?: IdParam | null
   id: number
   productId: number
   name: string
@@ -142,6 +143,7 @@ export interface Coupon {
 }
 
 export interface FlashSale {
+  productId: IdParam
   id: number
   productName: string
   salePrice: number
@@ -243,10 +245,16 @@ export interface TraceView {
 export interface AfterSale {
   id: number
   orderId: number
+  orderItemId?: number | null
   type: string
   amount: number
   reason: string
   status: string
+  handleOpinion?: string | null
+  returnCompany?: string | null
+  returnLogisticsNo?: string | null
+  returnShippedAt?: string | null
+  returnReceivedAt?: string | null
   createTime: string
 }
 
@@ -272,6 +280,7 @@ export function request<T>(
   params?: Record<string, string | number | boolean | null | undefined>,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
+    const token = getUnifiedToken()
     uni.request({
       url: `${API_BASE}${path}${query(params)}`,
       method,
@@ -279,11 +288,12 @@ export function request<T>(
       timeout: 15000,
       header: {
         'Content-Type': 'application/json',
-        ...(getUnifiedToken() ? { Authorization: `Bearer ${getUnifiedToken()}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success(response: { statusCode: number; data: unknown }) {
+        if (getUnifiedToken() !== token) { reject(new Error('登录会话已变化，请重新加载')); return }
         const body = response.data as Record<string, unknown>
-        if (response.statusCode === 401) {
+        if (response.statusCode === 401 || (response.data as { code?: number })?.code === 401) {
           handleUnauthorized(PUBLIC_PAGES)
           reject(new Error('登录已失效，请重新使用统一账号登录'))
           return
@@ -303,15 +313,16 @@ export function request<T>(
         resolve(response.data as T)
       },
       fail(error: { errMsg?: string }) {
-        reject(new Error(error?.errMsg || '网络异常，请检查接口地址和网络连接'))
+        reject(new Error(error?.errMsg?.includes('timeout') ? '请求超时，请稍后重试' : '网络连接失败，请检查网络后重试'))
       },
     })
   })
 }
 
+export interface Category {id:number;name:string;icon?:string;children?:Category[]}
 export const mallApi = {
+  getCategories: () => request<Category[]>('/consumer/categories'),
   getProfile: () => request<Consumer>('/consumer/profile'),
-  login: (phone: string) => request<LoginResult>('/consumer/login', 'GET', undefined, { phone }),
   getProducts: (params: { page?: number; size?: number; keyword?: string; categoryId?: number | null }) =>
     request<PageResult<Product>>('/consumer/products', 'GET', undefined, params),
   getProduct: (id: IdParam) => request<Product>(`/consumer/product/detail/${id}`),
@@ -322,6 +333,8 @@ export const mallApi = {
   getCart: (consumerId: IdParam) => request<CartItem[]>('/consumer/cart', 'GET', undefined, { consumerId }),
   addCart: (consumerId: IdParam, productId: IdParam, quantity: number, channelId?: IdParam) =>
     request<ActionResult>('/consumer/cart/add', 'POST', undefined, { consumerId, productId, quantity, channelId }),
+  selectCart: (id: IdParam, selected: boolean) => request<ActionResult>('/consumer/cart/update', 'PUT', undefined, { id, selected }),
+  selectAllCart: (consumerId: IdParam, selected: boolean) => request<ActionResult>('/consumer/cart/select-all', 'PUT', undefined, { consumerId, selected }),
   updateCart: (id: IdParam, quantity: number) =>
     request<ActionResult>('/consumer/cart/update', 'PUT', undefined, { id, quantity }),
   deleteCart: (id: IdParam) => request<ActionResult>(`/consumer/cart/delete/${id}`, 'DELETE'),
@@ -332,9 +345,15 @@ export const mallApi = {
   getOrder: (id: IdParam) => request<Order>(`/consumer/order/detail/${id}`),
   payOrder: (id: IdParam) => request<ActionResult>(`/consumer/order/pay/${id}`, 'PUT'),
   receiveOrder: (id: IdParam) => request<ActionResult>(`/consumer/order/receive/${id}`, 'PUT'),
+  cancelOrder: (id: IdParam) => request<ActionResult>(`/consumer/order/cancel/${id}`, 'PUT'),
   getAddresses: (consumerId: IdParam) =>
     request<Address[]>('/consumer/addresses', 'GET', undefined, { consumerId }),
-  addAddress: (data: Address) => request<ActionResult>('/consumer/address/add', 'POST', data as unknown as Record<string, unknown>),
+  addAddress: (data: Omit<Address, 'id'>) => {
+    const { consumerId, name, phone, province, city, district, address, isDefault } = data
+    return request<ActionResult>('/consumer/address/add', 'POST', {
+      consumerId, name, phone, province, city, district, address, isDefault, status: 'ACTIVE',
+    })
+  },
   updateAddress: (data: Address) => request<ActionResult>('/consumer/address/update', 'PUT', data as unknown as Record<string, unknown>),
   deleteAddress: (id: IdParam) => request<ActionResult>(`/consumer/address/delete/${id}`, 'DELETE'),
   getMarketing: () => request<MarketingData>('/consumer/marketing'),
@@ -344,8 +363,10 @@ export const mallApi = {
     request<ActionResult>('/consumer/coupon/receive', 'POST', undefined, { consumerId, couponId }),
   getTrace: (productId: IdParam) => request<TraceView>(`/public/trace/product/${productId}`),
   getTraceByCode: (code: string) => request<TraceView>(`/public/trace/code/${encodeURIComponent(code)}`),
-  getAfterSales: (consumerId: IdParam) =>
-    request<AfterSale[]>('/consumer/after-sales', 'GET', undefined, { consumerId }),
-  createAfterSale: (data: Record<string, unknown>) =>
-    request<ActionResult>('/consumer/after-sales', 'POST', data),
+  getAfterSales: () => request<AfterSale[]>('/consumer/after-sales'),
+  // 售后申请人由后端按令牌认定，请求体只带订单、类型、金额和原因
+  createAfterSale: (data: { orderId: IdParam; type: string; amount: number; reason: string }) =>
+    request<ActionResult>('/consumer/after-sales', 'POST', data as unknown as Record<string, unknown>),
+  submitReturn: (id: IdParam, company: string, logisticsNo: string) =>
+    request<ActionResult>(`/consumer/after-sales/${id}/return`, 'PUT', undefined, { company, logisticsNo }),
 }

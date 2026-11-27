@@ -71,7 +71,7 @@ function toSetup() {
   <view class="page">
     <view class="bar">
       <view class="seg">
-        <view
+        <view class="ui-measured-touch"
           v-for="item in tabs"
           :key="item.key"
           :class="{ active: tab === item.key }"
@@ -80,7 +80,7 @@ function toSetup() {
           {{ item.label }}
         </view>
       </view>
-      <text class="read-all" @click="readAll">{{ unreadLabel }}</text>
+      <text class="ui-measured-touch read-all" @click="readAll">{{ unreadLabel }}</text>
     </view>
 
     <view class="page-pad">
@@ -101,7 +101,7 @@ function toSetup() {
           <text class="msg-content">{{ item.content }}</text>
           <view class="msg-foot">
             <text class="tiny">触发值 {{ item.triggerValue }} · {{ item.quoteName }}</text>
-            <text class="link" @click="openMarket">查看行情 ›</text>
+            <text class="ui-measured-touch link" @click="openMarket">查看行情 ›</text>
           </view>
         </view>
       </view>
@@ -189,4 +189,8 @@ function toSetup() {
   color: #12764a;
   font-size: 24rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.ui-measured-touch { min-width:48px; min-height:48px; box-sizing:border-box; }
+text.ui-measured-touch { display:inline-flex; align-items:center; justify-content:center; }
 </style>

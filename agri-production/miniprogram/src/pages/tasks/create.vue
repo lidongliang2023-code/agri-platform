@@ -6,15 +6,15 @@
       <view class="card-title"><text>🌾 地块与类型</text></view>
       <view class="field">
         <text class="field-label">任务名称</text>
-        <input v-model="form.taskName" class="input" placeholder="如：1 号田晚疫病防治" />
+        <input :disabled="submitting || saved" v-model="form.taskName" class="input" placeholder="如：1 号田晚疫病防治" />
       </view>
-      <picker mode="selector" :range="plotNames" @change="onPlotChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="plotNames" @change="onPlotChange">
         <view class="field">
           <text class="field-label">关联地块</text>
           <text class="field-value">{{ plotLabel || '请选择' }}</text>
         </view>
       </picker>
-      <picker mode="selector" :range="taskTypes" @change="onTypeChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="taskTypes" @change="onTypeChange">
         <view class="field">
           <text class="field-label">任务类型</text>
           <text class="field-value">{{ form.taskType || '请选择' }}</text>
@@ -24,25 +24,25 @@
 
     <view class="card">
       <view class="card-title"><text>⏰ 时间与人员</text></view>
-      <picker mode="date" :value="form.planStartDate" @change="onStartDateChange">
+      <picker :disabled="submitting || saved" mode="date" :value="form.planStartDate" @change="onStartDateChange">
         <view class="field">
           <text class="field-label">计划开始</text>
           <text class="field-value">{{ form.planStartDate }}</text>
         </view>
       </picker>
-      <picker mode="date" :value="form.planEndDate" @change="onEndDateChange">
+      <picker :disabled="submitting || saved" mode="date" :start="form.planStartDate" :value="form.planEndDate" @change="onEndDateChange">
         <view class="field">
           <text class="field-label">计划截止</text>
           <text class="field-value">{{ form.planEndDate }}</text>
         </view>
       </picker>
-      <picker mode="selector" :range="memberNames" @change="onMemberChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="memberNames" @change="onMemberChange">
         <view class="field">
           <text class="field-label">执行人</text>
           <text class="field-value">{{ memberLabel || '请选择' }}</text>
         </view>
       </picker>
-      <picker mode="selector" :range="priorityNames" @change="onPriorityChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="priorityNames" @change="onPriorityChange">
         <view class="field" style="border-bottom: none">
           <text class="field-label">优先级</text>
           <text class="field-value">{{ priorityLabelOf(form.priority) }}</text>
@@ -52,15 +52,16 @@
 
     <view class="card">
       <view class="card-title"><text>📝 作业说明</text></view>
-      <textarea v-model="form.description" class="textarea" placeholder="执行要求 / 注意事项" />
+      <textarea :disabled="submitting || saved" v-model="form.description" class="textarea" placeholder="执行要求 / 注意事项" />
     </view>
 
-    <view style="margin: 24rpx">
-      <view class="btn-primary" @click="submit">{{ submitting ? '提交中…' : '创建任务' }}</view>
+    <view class="form-actions">
+      <button class="btn-primary" :disabled="submitting || saved" :loading="submitting" @click="submit">{{ saved ? '已创建' : '创建任务' }}</button>
+      <text class="muted">创建后可在任务详情中开始执行和回填结果</text>
     </view>
 
-    <view class="muted" style="text-align: center; padding: 0 48rpx">
-      提交走 POST /api/v1/production/tasks（与 PC 端同一端点、同一字段口径）。
+    <view class="muted form-source-note">
+      创建后可在任务详情中开始执行、提交完成并查看操作记录。
     </view>
   </view>
 </template>
@@ -69,7 +70,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { createTask, listMembers, listPlots } from '@/api/production'
-import { currentFarm, currentUser } from '@/utils/auth-helper'
+import { currentUser, resolveCurrentFarm } from '@/utils/auth-helper'
 import { addDays, today } from '@/utils/format'
 
 /** 任务类型候选（与 PC 端任务页的分类口径一致，值是后端 task_type 文本） */
@@ -87,6 +88,7 @@ const plots = ref<any[]>([])
 const members = ref<any[]>([])
 const error = ref('')
 const submitting = ref(false)
+const saved = ref(false)
 
 const form = ref({
   taskName: '',
@@ -153,12 +155,13 @@ function onPriorityChange(event: any): void {
 
 /** 提交：字段口径与 PC 端新建任务一致（farmId 必带，否则任务不归农场） */
 async function submit(): Promise<void> {
+  if (submitting.value || saved.value) return
+  submitting.value = true
+  try {
   error.value = ''
-  const farm = currentFarm()
-  if (!farm) {
-    error.value = '当前账号未关联农场，请到「我的」页选择农场'
-    return
-  }
+  const farm = await resolveCurrentFarm().catch((e: any) => { error.value = e?.message || '农场加载失败，请稍后重试'; return null })
+  if (!farm) return
+  if (form.value.planEndDate < form.value.planStartDate) { error.value = '截止日期不能早于开始日期'; return }
   if (!form.value.taskName.trim()) {
     error.value = '请填写任务名称'
     return
@@ -171,7 +174,6 @@ async function submit(): Promise<void> {
     error.value = '请选择关联地块'
     return
   }
-  submitting.value = true
   try {
     const payload: Record<string, any> = {
       taskName: form.value.taskName.trim(),
@@ -196,23 +198,20 @@ async function submit(): Promise<void> {
       payload.executorName = form.value.assigneeName
     }
     const taskId = await createTask(payload)
+    saved.value = true
     uni.showToast({ title: '任务已创建', icon: 'success' })
     setTimeout(() => {
       uni.redirectTo({ url: `/pages/tasks/detail?id=${taskId}` })
     }, 600)
   } catch (err: any) {
     error.value = err?.message ?? '创建失败，请稍后重试'
-  } finally {
-    submitting.value = false
   }
+  } finally { submitting.value = false }
 }
 
 onMounted(async () => {
-  const farm = currentFarm()
-  if (!farm) {
-    error.value = '当前账号未关联农场，请到「我的」页选择农场'
-    return
-  }
+  const farm = await resolveCurrentFarm().catch((e: any) => { error.value = e?.message || '农场加载失败，请稍后重试'; return null })
+  if (!farm) return
   try {
     const [plotPage, memberList] = await Promise.all([
       listPlots({ farmId: farm.farmId, pageSize: 100 }),
@@ -233,9 +232,7 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-.textarea {
-  width: 100%;
-  min-height: 160rpx;
-  font-size: 28rpx;
-}
+.textarea { width: 100%; min-height: 180rpx; padding: 12rpx 0; font-size: 28rpx; line-height: 1.6; }
+.form-actions { position: sticky; bottom: 0; z-index: 8; display: flex; flex-direction: column; gap: 10rpx; margin-top: 22rpx; padding: 18rpx 24rpx calc(18rpx + env(safe-area-inset-bottom)); background: rgba(245,247,245,.96); backdrop-filter: blur(14rpx); }
+.form-source-note { display: block; text-align: center; padding: 0 48rpx 24rpx; }
 </style>

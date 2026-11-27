@@ -21,6 +21,7 @@ async function load() {
   finally { loading.value = false }
 }
 function detail(id: number) { uni.navigateTo({ url: `/pages/contract-detail/index?id=${id}` }) }
+function toOrders() { uni.switchTab({ url: '/pages/orders/index' }) }
 function pending(item: TradeContract) { return item.contractStatus !== 'cancelled' && (role.value === 'buyer' ? item.buyerSignStatus !== 'signed' : item.sellerSignStatus !== 'signed') }
 </script>
 
@@ -49,7 +50,7 @@ function pending(item: TradeContract) { return item.contractStatus !== 'cancelle
           <text v-else class="tiny">{{ pending(item) ? '去签署 ›' : '查看 ›' }}</text>
         </view>
       </view>
-      <view v-if="!rows.length" class="empty">暂无合同，订单创建后会自动生成待签合同</view>
+      <view v-if="!rows.length" class="empty-state"><text class="empty-title">还没有{{ role === 'seller' ? '销售' : '采购' }}合同</text><text class="empty-desc">订单创建后会自动生成待签合同</text><button class="btn btn-ghost btn-sm" @tap="toOrders">查看我的订单</button></view>
     </template>
   </view>
 </template>

@@ -535,8 +535,9 @@ export function request<T>(
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success(response) {
+        if (getInfoToken() !== token) { reject(new Error('登录会话已变化，请重新加载')); return }
         const body = response.data as Envelope<T>
-        if (response.statusCode === 401) {
+        if (response.statusCode === 401 || body?.code === 401) {
           if (getInfoToken() === token) handleInfoUnauthorized()
           reject(new Error('登录已失效，请重新使用统一账号登录'))
           return

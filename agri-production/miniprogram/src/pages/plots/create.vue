@@ -17,19 +17,19 @@
       <view class="card-title"><text>🌾 Step1 · 基础信息</text></view>
       <view class="field">
         <text class="field-label">地块名称</text>
-        <input v-model="form.plotName" class="input" placeholder="如：F区试验田" />
+        <input :disabled="submitting || saved" v-model="form.plotName" class="input" placeholder="如：F区试验田" />
       </view>
       <view class="field">
         <text class="field-label">面积(亩)</text>
-        <input v-model="form.area" class="input" type="digit" placeholder="如 12.5" />
+        <input :disabled="submitting || saved" v-model="form.area" class="input" type="digit" placeholder="如 12.5" />
       </view>
-      <picker mode="selector" :range="soilTypes" @change="onSoilTypeChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="soilTypes" @change="onSoilTypeChange">
         <view class="field">
           <text class="field-label">土壤类型</text>
           <text class="field-value">{{ form.soilType || '请选择' }}</text>
         </view>
       </picker>
-      <picker mode="selector" :range="irrigationTypes" @change="onIrrigationChange">
+      <picker :disabled="submitting || saved" mode="selector" :range="irrigationTypes" @change="onIrrigationChange">
         <view class="field" style="border-bottom: none">
           <text class="field-label">灌溉方式</text>
           <text class="field-value">{{ form.irrigationType || '请选择' }}</text>
@@ -46,15 +46,15 @@
       </view>
       <view class="field">
         <text class="field-label">经度</text>
-        <input v-model="form.centerLongitude" class="input" type="digit" placeholder="如 113.61" />
+        <input :disabled="submitting || saved" v-model="form.centerLongitude" class="input" type="digit" placeholder="如 113.61" />
       </view>
       <view class="field">
         <text class="field-label">纬度</text>
-        <input v-model="form.centerLatitude" class="input" type="digit" placeholder="如 23.52" />
+        <input :disabled="submitting || saved" v-model="form.centerLatitude" class="input" type="digit" placeholder="如 23.52" />
       </view>
       <view class="field" style="border-bottom: none">
         <text class="field-label">备注</text>
-        <input v-model="form.remark" class="input" placeholder="选填" />
+        <input :disabled="submitting || saved" v-model="form.remark" class="input" placeholder="选填" />
       </view>
     </view>
 
@@ -63,19 +63,19 @@
       <view class="card-title"><text>🍅 Step3 · 作物信息</text></view>
       <view class="field">
         <text class="field-label">当前作物</text>
-        <input v-model="form.currentCrop" class="input" placeholder="如：番茄" />
+        <input :disabled="submitting || saved" v-model="form.currentCrop" class="input" placeholder="如：番茄" />
       </view>
       <view class="field">
         <text class="field-label">作物品种</text>
-        <input v-model="form.cropVariety" class="input" placeholder="如：中杂9号" />
+        <input :disabled="submitting || saved" v-model="form.cropVariety" class="input" placeholder="如：中杂9号" />
       </view>
-      <picker mode="date" :value="form.plantingDate" @change="onPlantingDateChange">
+      <picker :disabled="submitting || saved" mode="date" :value="form.plantingDate" @change="onPlantingDateChange">
         <view class="field">
           <text class="field-label">种植日期</text>
           <text class="field-value">{{ form.plantingDate || '请选择' }}</text>
         </view>
       </picker>
-      <picker mode="date" :value="form.expectedHarvestDate" @change="onHarvestDateChange">
+      <picker :disabled="submitting || saved" mode="date" :value="form.expectedHarvestDate" @change="onHarvestDateChange">
         <view class="field" style="border-bottom: none">
           <text class="field-label">预计采收</text>
           <text class="field-value">{{ form.expectedHarvestDate || '请选择' }}</text>
@@ -112,7 +112,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { createPlot, getPlot } from '@/api/production'
-import { currentFarm } from '@/utils/auth-helper'
+import { resolveCurrentFarm } from '@/utils/auth-helper'
 
 /** 步骤标题（与 PRD §4.2.3 的三步一致） */
 const stepLabels = ['基础信息', '位置定位', '作物信息']
@@ -125,6 +125,7 @@ const irrigationTypes = ['滴灌', '喷灌', '漫灌', '沟灌', '其他']
 const step = ref(1)
 const error = ref('')
 const submitting = ref(false)
+const saved = ref(false)
 /** 提交后回查到的地块编号（创建接口只返回主键，编号要再查一次） */
 const createdPlotCode = ref('')
 const createdPlotId = ref('')
@@ -196,6 +197,7 @@ function validateStep(): string {
 }
 
 function next(): void {
+  if (submitting.value || saved.value) return
   error.value = ''
   const message = validateStep()
   if (message) {
@@ -210,12 +212,11 @@ function next(): void {
 }
 
 async function submit(): Promise<void> {
-  const farm = currentFarm()
-  if (!farm) {
-    error.value = '当前账号未关联农场，请到「我的」页选择农场'
-    return
-  }
+  if (submitting.value || saved.value) return
   submitting.value = true
+  try {
+  const farm = await resolveCurrentFarm().catch((e: any) => { error.value = e?.message || '农场加载失败，请稍后重试'; return null })
+  if (!farm) return
   try {
     const plotId = await createPlot({
       farmId: farm.farmId,
@@ -231,6 +232,7 @@ async function submit(): Promise<void> {
       expectedHarvestDate: form.value.expectedHarvestDate || undefined,
       remark: form.value.remark || undefined,
     })
+    saved.value = true
     createdPlotId.value = plotId
     step.value = 4
     // 编号回查：创建接口只返回主键，编号（DEMO-PLOT-xxx）得再查一次；查不到就如实留空
@@ -242,9 +244,8 @@ async function submit(): Promise<void> {
     }
   } catch (err: any) {
     error.value = err?.message ?? '创建失败，请稍后重试'
-  } finally {
-    submitting.value = false
   }
+  } finally { submitting.value = false }
 }
 
 function goDetail(): void {
@@ -253,6 +254,7 @@ function goDetail(): void {
 
 /** 继续添加：清空表单回到第一步（农场上下文不变） */
 function resetForAnother(): void {
+  saved.value = false
   form.value = {
     plotName: '',
     area: '',
@@ -291,7 +293,7 @@ function resetForAnother(): void {
   height: 48rpx;
   border-radius: 50%;
   background-color: #e5e7eb;
-  color: #6b7280;
+  color: #535b68;
   font-size: 24rpx;
   display: flex;
   align-items: center;
@@ -299,23 +301,23 @@ function resetForAnother(): void {
 }
 
 .step-dot.done {
-  background-color: #13a05a;
+  background-color: #1e6b38;
   color: #ffffff;
 }
 
 .step-dot.current {
-  background-color: #13a05a;
+  background-color: #1e6b38;
   color: #ffffff;
 }
 
 .step-label {
   margin-top: 10rpx;
   font-size: 24rpx;
-  color: #8c8c8c;
+  color: #666666;
 }
 
 .step-label.current {
-  color: #13a05a;
+  color: #1e6b38;
   font-weight: 600;
 }
 </style>

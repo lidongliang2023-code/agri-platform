@@ -26,4 +26,4 @@ async function exportCsv(){if(!data.value||exporting.value)return;exporting.valu
     <view v-else-if="!error" class="loading">正在加载分析数据…</view>
   </view>
 </template>
-<style scoped>.rank{display:inline-flex;width:40rpx;height:40rpx;margin-right:12rpx;align-items:center;justify-content:center;border-radius:10rpx;background:#eef2ef;color:#718277;font-size:24rpx}.rank.top{background:#e5f5eb;color:#12764a;font-weight:700}</style>
+<style scoped>.rank{display:inline-flex;width:40rpx;height:40rpx;margin-right:12rpx;align-items:center;justify-content:center;border-radius:10rpx;background:#eef2ef;color:#666666;font-size:24rpx}.rank.top{background:#e5f5eb;color:#12764a;font-weight:700}</style>

@@ -165,7 +165,7 @@ function toSearch() {
 
 <style lang="scss" scoped>
 .profile-page {
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .profile-hero {
@@ -281,12 +281,12 @@ function toSearch() {
 }
 
 .search-icon {
-  color: #94a198;
+  color: #666666;
   font-size: 28rpx;
 }
 
 .search-ph {
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -333,7 +333,7 @@ function toSearch() {
 
 .menu-desc {
   overflow: hidden;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -369,4 +369,7 @@ function toSearch() {
   flex-direction: column;
   gap: 4rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.settings, .stat-cell, .search-box { min-width:48px; min-height:48px; }
 </style>

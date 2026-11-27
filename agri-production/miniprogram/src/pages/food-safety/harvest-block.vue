@@ -48,7 +48,7 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { listPlots, preHarvestCheck } from '@/api/production'
-import { currentFarm, ensureLogin } from '@/utils/auth-helper'
+import { ensureLogin, resolveCurrentFarm } from '@/utils/auth-helper'
 import { today } from '@/utils/format'
 
 const plannedDate = ref(today())
@@ -69,9 +69,9 @@ const counts = computed(() => ({
 }))
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  pass: { label: '✅ 可采收', color: '#13a05a' },
+  pass: { label: '✅ 可采收', color: '#1e6b38' },
   block: { label: '❌ 休药期内', color: '#cf1322' },
-  unknown: { label: '⚠️ 无用药记录', color: '#8c8c8c' },
+  unknown: { label: '⚠️ 无用药记录', color: '#666666' },
 }
 
 function statusMeta(row: any): { label: string; color: string } {
@@ -83,11 +83,8 @@ function statusMeta(row: any): { label: string; color: string } {
 /** 拉本农场地块 → 一次查多块地的休药期（服务端支持 plotIds） */
 async function load(): Promise<void> {
   error.value = ''
-  const farm = currentFarm()
-  if (!farm) {
-    error.value = '当前账号未关联农场，请到「我的」页选择农场'
-    return
-  }
+  const farm = await resolveCurrentFarm().catch((e: any) => { error.value = e?.message || '农场加载失败，请稍后重试'; return null })
+  if (!farm) return
   loading.value = true
   try {
     const page = await listPlots({ farmId: farm.farmId, pageSize: 100 })

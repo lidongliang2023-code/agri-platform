@@ -177,6 +177,7 @@ export function networkErrorText(errMsg?: string, fallback = '网络连接失败
 function rawRequest<T>(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', data?: Record<string, unknown>): Promise<T> {
   if (!isTradeServiceConfigured()) return Promise.reject(new Error('交易服务尚未配置，暂时无法加载业务数据'))
   return new Promise((resolve, reject) => {
+    const token = getTradeToken()
     uni.request({
       url: `${API_ORIGIN}/api/trade${path}`,
       method,
@@ -184,9 +185,10 @@ function rawRequest<T>(path: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' =
       timeout: 15000,
       header: {
         'Content-Type': 'application/json',
-        ...(getTradeToken() ? { Authorization: `Bearer ${getTradeToken()}` } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success(response: any) {
+        if (getTradeToken() !== token) { reject(new Error('登录会话已变化，请重新加载')); return }
         if (response.statusCode === 401 || response.data?.code === 401) {
           handleTradeUnauthorized()
           reject(new Error('登录已失效，请重新使用统一账号登录'))
@@ -306,14 +308,17 @@ export const tradeApi = {
 export async function uploadContractEvidence(contractId: number, filePath: string): Promise<string> {
   if (!isTradeServiceConfigured()) throw new Error('交易服务尚未配置，暂时无法上传凭证')
   return new Promise((resolve, reject) => {
+    const token = getTradeToken()
+    if (!token) { handleTradeUnauthorized(); reject(new Error('请先登录')); return }
     uni.uploadFile({
       timeout: 20000,
       url: `${API_ORIGIN}/api/trade/contract/${contractId}/evidence?signMode=online`,
       filePath,
       name: 'file',
-      header: getTradeToken() ? { Authorization: `Bearer ${getTradeToken()}` } : {},
+      header: { Authorization: `Bearer ${token}` },
       success(response: any) {
         try {
+          if (getTradeToken() !== token) throw new Error('登录会话已变化，请重新上传')
           const body = JSON.parse(response.data)
           if (response.statusCode === 401 || body.code === 401) handleTradeUnauthorized()
           if (response.statusCode >= 400 || body.code !== 200 || !body.data?.url) throw new Error(body.message || '签署凭证上传失败')

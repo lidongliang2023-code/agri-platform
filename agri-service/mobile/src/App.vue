@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app'
+import { restoreServiceSession, serviceLandingPage, getServiceToken } from './auth'
 
-onLaunch(() => {
-  // 多端统一入口：H5、微信小程序和 App 共用统一账号会话。
-  if (!uni.getStorageSync('service_unified_token')) {
-    setTimeout(() => uni.reLaunch({ url: '/pages/login/index' }), 0)
+onLaunch(async () => {
+  const token = getServiceToken()
+  const ready = await restoreServiceSession()
+  if (getServiceToken() && getServiceToken() !== token) return
+  if (!ready) uni.reLaunch({ url: '/pages/login/index' })
+  else if (getCurrentPages().slice(-1)[0]?.route === 'pages/login/index') {
+    uni.reLaunch({ url: serviceLandingPage() })
   }
 })
 </script>
@@ -12,10 +16,10 @@ onLaunch(() => {
 <style lang="scss">
 page {
   min-height: 100%;
-  background: #f4f7f5;
+  background: #f5f6fa;
   color: #0b1a12;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
-  font-size: 28rpx;
+  font-size: 15px;
 }
 
 view,
@@ -63,13 +67,13 @@ button::after {
 }
 
 .muted {
-  color: #718277;
-  font-size: 24rpx;
+  color: #52665a;
+  font-size: 13px;
 }
 
 .tiny {
-  color: #94a198;
-  font-size: 24rpx;
+  color: #52665a;
+  font-size: 13px;
 }
 
 .strong {
@@ -94,18 +98,18 @@ button::after {
 }
 
 .card-title {
-  font-size: 30rpx;
+  font-size: 15px;
   font-weight: 700;
 }
 
 .card-sub {
-  color: #94a198;
-  font-size: 24rpx;
+  color: #52665a;
+  font-size: 13px;
 }
 
 .btn {
   display: flex;
-  min-height: 82rpx;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   padding: 0 28rpx;
@@ -113,7 +117,7 @@ button::after {
   border-radius: 18rpx;
   background: #ffffff;
   color: #34473b;
-  font-size: 26rpx;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -133,15 +137,15 @@ button::after {
 .btn-danger {
   border-color: #efcccc;
   background: #fff2f2;
-  color: #c54b4b;
+  color: #b71c1c;
 }
 
 .btn-sm {
   display: inline-flex;
-  min-height: 58rpx;
+  min-height: 44px;
   padding: 0 20rpx;
   border-radius: 12rpx;
-  font-size: 24rpx;
+  font-size: 13px;
 }
 
 .btn-block {
@@ -153,7 +157,7 @@ button::after {
   align-items: center;
   padding: 4rpx 12rpx;
   border-radius: 8rpx;
-  font-size: 24rpx;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -169,22 +173,22 @@ button::after {
 
 .tag.orange {
   background: #fff3dd;
-  color: #a96a08;
+  color: #8f4500;
 }
 
 .tag.red {
   background: #feebeb;
-  color: #c54b4b;
+  color: #b71c1c;
 }
 
 .tag.gray {
   background: #eef2ef;
-  color: #718277;
+  color: #52665a;
 }
 
 .field {
   display: flex;
-  min-height: 82rpx;
+  min-height: 44px;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1rpx solid #edf2ee;
@@ -195,14 +199,14 @@ button::after {
 }
 
 .field-label {
-  color: #718277;
-  font-size: 24rpx;
+  color: #52665a;
+  font-size: 13px;
 }
 
 .field-value {
   max-width: 62%;
   color: #34473b;
-  font-size: 24rpx;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -215,7 +219,7 @@ button::after {
   border-radius: 16rpx;
   background: #ffffff;
   color: #0b1a12;
-  font-size: 26rpx;
+  font-size: 14px;
 }
 
 .textarea {
@@ -230,7 +234,7 @@ button::after {
   display: block;
   margin-bottom: 9rpx;
   color: #53665a;
-  font-size: 24rpx;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -260,8 +264,8 @@ button::after {
   justify-content: center;
   flex-direction: column;
   gap: 12rpx;
-  color: #94a198;
-  font-size: 24rpx;
+  color: #52665a;
+  font-size: 13px;
 }
 
 .empty-icon {
@@ -270,7 +274,7 @@ button::after {
 
 .loading {
   padding: 30rpx;
-  color: #718277;
+  color: #52665a;
   text-align: center;
 }
 
@@ -292,8 +296,8 @@ button::after {
 
 .hero-desc {
   margin-top: 10rpx;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 24rpx;
+  color: rgba(255,255,255,.82);
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -330,18 +334,18 @@ button::after {
 
 .ai-copy text:first-child {
   color: #6b418d;
-  font-size: 24rpx;
+  font-size: 13px;
   font-weight: 700;
 }
 
 .ai-copy text:nth-child(2) {
-  font-size: 28rpx;
+  font-size: 15px;
   font-weight: 650;
 }
 
 .ai-copy text:last-child {
-  color: #718277;
-  font-size: 24rpx;
+  color: #52665a;
+  font-size: 13px;
 }
 
 .custom-nav {
@@ -368,7 +372,7 @@ button::after {
 .custom-nav .right {
   min-width: 96rpx;
   color: #12764a;
-  font-size: 24rpx;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -386,7 +390,49 @@ button::after {
     max-width: 750px;
     margin: 0 auto;
     min-height: 100vh;
-    background: #f4f7f5;
+    background: #f5f6fa;
   }
 }
+
+/* Shared touch targets, safe areas and wrapping for all uni-app targets. */
+page { line-height: 1.55; }
+.page { padding-bottom: calc(36rpx + env(safe-area-inset-bottom)); }
+.input { height: 96rpx; min-height: 96rpx; line-height: 1.5; }
+.textarea { min-height: 180rpx; }
+.card, .form-item, .grid-2 > view, .between > view { min-width: 0; }
+.card-title, .strong, .field-value, .muted, .tiny { overflow-wrap: anywhere; }
+.btn[disabled] { opacity: .55; }
+.btn-primary { background: #12764a; box-shadow: none; }
+.tag { flex-shrink: 0; }
+.sheet-mask { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; background: rgba(5,25,15,.45); }
+.mobile-sheet { width: 100%; max-height: 85vh; overflow-y: auto; padding: 28rpx 24rpx calc(28rpx + env(safe-area-inset-bottom)); border-radius: 28rpx 28rpx 0 0; background: white; }
+.mobile-sheet .btn-block { margin-top: 24rpx; }
+/* #ifdef H5 */
+@media (min-width: 600px) {
+  .page { width: 100%; max-width: 600px; }
+  .bottom-actions, .chat-input, .mobile-sheet { max-width: 600px; margin-left: auto; margin-right: auto; }
+}
+/* #endif */
+@media (max-width: 360px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* 移动端统一可读字号、触控下限及长内容约束，三端共用。 */
+button { min-width: 44px; min-height: 44px; }
+.btn { padding-top: 8px; padding-bottom: 8px; line-height: 1.45; white-space: normal; }
+.input { height: 48px; min-height: 48px; font-size: 15px; }
+.textarea { font-size: 15px; line-height: 1.6; }
+.input-placeholder, .textarea-placeholder { color: #52665a; }
+.picker, .select { min-height: 44px; }
+.page text { overflow-wrap: anywhere; word-break: break-word; }
+.between, .card-head { gap: 10px; }
+.between > text, .card-head > text, .field-value { min-width: 0; }
+.card-head > .btn { flex-shrink: 0; }
+.tag { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.field { gap: 12px; }
+.field-label { flex-shrink: 0; }
+.sheet-close, .close { display: inline-flex; width: 44px; min-width: 44px; height: 44px; flex-shrink: 0; align-items: center; justify-content: center; line-height: 1; }
+.page.page-pad { padding-bottom: calc(24rpx + env(safe-area-inset-bottom)); }
+.bottom-actions .btn { min-width: 0; }
+.custom-nav .back, .custom-nav .right { display: flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
+
+@import '../../../shared/mobile-ui-v1.scss';
 </style>

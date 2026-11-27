@@ -6,8 +6,9 @@ import {opsApi as api} from '../../api/ops'
 import {showError} from '../../utils/ui'
 const id=ref(0),config=ref<Row|null>(null),busy=ref(false),error=ref('')
 const defaultEnabled=ref(false)
-onLoad(o=>{id.value=Number(o?.id);void load()})
-async function load(){if(busy.value)return;busy.value=true;try{config.value=await api.sampling(id.value);defaultEnabled.value=config.value.intervalSeconds!=null;error.value=''}catch(e){error.value=e instanceof Error?e.message:'采样配置加载失败'}finally{busy.value=false}}
+onLoad(o=>{id.value=Number(o?.id || 0);void load()})
+function backToDevices(){uni.redirectTo({url:'/pages/ops/devices'})}
+async function load(){if(busy.value)return;if(!Number.isSafeInteger(id.value)||id.value<=0){config.value=null;error.value='缺少有效设备编号，请从运营设备列表进入';return}busy.value=true;try{config.value=await api.sampling(id.value);defaultEnabled.value=config.value.intervalSeconds!=null;error.value=''}catch(e){error.value=e instanceof Error?e.message:'采样配置加载失败'}finally{busy.value=false}}
 type SamplingField='intervalSeconds'|'toleranceSeconds'
 // 开关与草稿分离；关闭再开启不会丢失用户已填的周期和容差。
 function setDefault(event:any){
@@ -42,7 +43,7 @@ async function save(){if(busy.value||!config.value)return;try{
 </script>
 <template>
   <view class="page pad has-footer">
-    <view v-if="error" class="error" @tap="load">{{error}}<text class="retry">点击重试</text></view>
+    <view v-if="error" class="error"><text>{{error}}</text><button v-if="Number.isSafeInteger(id)&&id>0" class="btn" @tap="load">重新加载</button><button class="btn" @tap="backToDevices">返回设备列表</button></view>
     <view v-if="!config&&!error" class="loading">正在加载采样配置…</view>
     <template v-if="config">
       <view class="card">

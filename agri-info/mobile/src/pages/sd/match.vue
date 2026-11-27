@@ -7,6 +7,7 @@ const id = ref(0)
 const sdType = ref('supply')
 const matches = ref<SdMatch[]>([])
 const detail = ref<SupplyDemandDetail | null>(null)
+const loadError = ref('')
 const loading = ref(true)
 const onlyHigh = ref(false)
 
@@ -24,17 +25,20 @@ const visible = computed(() =>
 onLoad((options) => {
   id.value = Number(options?.id || 0)
   sdType.value = options?.type === 'demand' ? 'demand' : 'supply'
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '缺少供需编号，请从供需列表进入'; return }
   load()
 })
 
 async function load() {
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '链接缺少有效编号，请返回列表'; return }
+  loadError.value = ''
   loading.value = true
   try {
     const [list, data] = await Promise.all([infoApi.sdMatches(id.value, sdType.value), infoApi.supplyDemand(id.value, sdType.value)])
     matches.value = [...list].sort((a, b) => b.score - a.score)
     detail.value = data
   } catch (error) {
-    toast(error instanceof Error ? error.message : '加载失败')
+    loadError.value = error instanceof Error ? error.message : '加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -63,11 +67,13 @@ function toPreference() {
     showCancel: false,
   })
 }
+function backToList() { uni.reLaunch({ url: '/pages/sd/index' }) }
 </script>
 
 <template>
   <view class="page">
     <view v-if="loading" class="loading">正在计算匹配度…</view>
+    <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @click="load">重新加载</button><button class="btn" @click="backToList">返回列表</button></view>
 
     <template v-else>
       <view class="head">
@@ -208,7 +214,7 @@ function toPreference() {
 }
 
 .filter {
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -243,7 +249,7 @@ function toPreference() {
 .match-reason {
   display: block;
   margin-top: 10rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.6;
 }

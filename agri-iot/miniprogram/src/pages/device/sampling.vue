@@ -5,7 +5,7 @@ import {api,type Row} from '../../api/iot'
 import {showError} from '../../utils/ui'
 const id=ref(0),config=ref<Row|null>(null),busy=ref(false),error=ref('')
 const defaultEnabled=ref(false)
-onLoad(o=>{id.value=Number(o?.id);void load()})
+onLoad(o=>{id.value=Number(o?.id);if(!Number.isSafeInteger(id.value)||id.value<=0){error.value='缺少设备编号，请从设备列表进入';return}void load()})
 async function load(){if(busy.value)return;busy.value=true;try{config.value=await api.sampling(id.value);defaultEnabled.value=config.value.intervalSeconds!=null;error.value=''}catch(e){error.value=e instanceof Error?e.message:'采样配置加载失败'}finally{busy.value=false}}
 type SamplingField='intervalSeconds'|'toleranceSeconds'
 // 开关与草稿分离；关闭再开启不会丢失用户已填的周期和容差。
@@ -63,4 +63,7 @@ async function save(){if(busy.value||!config.value)return;try{
     </template>
   </view>
 </template>
-<style scoped>.gap{margin-top:18rpx;margin-bottom:12rpx}</style>
+<style scoped>.gap{margin-top:18rpx;margin-bottom:12rpx}
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.error { min-height:48px; }
+</style>

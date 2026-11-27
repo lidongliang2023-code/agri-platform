@@ -193,7 +193,7 @@ function openVariety(id: number) {
 
       <view class="section-head">
         <text class="section-title">今日要闻</text>
-        <text class="card-sub" @click="openChannel(activeChannel)">更多 ›</text>
+        <text class="ui-action-target card-sub" @click="openChannel(activeChannel)">更多 ›</text>
       </view>
 
       <view v-if="loading" class="loading">正在加载资讯…</view>
@@ -226,7 +226,7 @@ function openVariety(id: number) {
 
       <view class="section-head">
         <text class="section-title">热门行情</text>
-        <text class="card-sub" @click="go('/pages/market/index', true)">全部 ›</text>
+        <text class="ui-action-target card-sub" @click="go('/pages/market/index', true)">全部 ›</text>
       </view>
       <view class="card hot-card">
         <view
@@ -254,7 +254,7 @@ function openVariety(id: number) {
 
 <style lang="scss" scoped>
 .news-home {
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .home-hero {
@@ -344,7 +344,7 @@ function openVariety(id: number) {
 }
 
 .search-icon {
-  color: #94a198;
+  color: #666666;
   font-size: 30rpx;
 }
 
@@ -356,7 +356,7 @@ function openVariety(id: number) {
 }
 
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .ticker {
@@ -514,7 +514,7 @@ function openVariety(id: number) {
 
 .feed-summary {
   overflow: hidden;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.5;
   text-overflow: ellipsis;
@@ -532,7 +532,7 @@ function openVariety(id: number) {
 
 .feed-end {
   padding: 20rpx 0 24rpx;
-  color: #b3c0b7;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }
@@ -579,16 +579,19 @@ function openVariety(id: number) {
 }
 /* 阅读优先：浅色栏目、紧凑头部、频道置顶。 */
 .home-hero { background: #fff; color: #173b29; border-radius: 0; padding-bottom: 22rpx; border-bottom: 1rpx solid #e1e9e3; }
-.home-hero .small, .home-hero .city-name { color: #53665a; }
+.home-hero .small, .home-hero .city-name { color: #1a1a1a; }
 .home-hero .title { font-size: 42rpx; }
 .home-hero .search-box { background: #f1f5f2; color: #173b29; border: 1rpx solid #dce7df; }
 .home-hero .search-box input { color: #173b29; }
-.home-hero .ticker, .home-hero .ticker-line { color: #53665a; }
+.home-hero .ticker, .home-hero .ticker-line { color: #1a1a1a; }
 .quick-card { grid-template-columns: repeat(4, minmax(0, 1fr)); box-shadow: none; }
-.channel-chips { position: sticky; top: 0; z-index: 8; background: #f4f7f5; padding-top: 12rpx; padding-bottom: 12rpx; }
+.channel-chips { position: sticky; top: 0; z-index: 8; background: #f5f6fa; padding-top: 12rpx; padding-bottom: 12rpx; }
 .feed-item { align-items: flex-start; padding: 26rpx 0; }
 .feed-body { min-width: 0; }
 .feed-summary { line-height: 1.65; }
 .feed-meta { flex-wrap: wrap; row-gap: 8rpx; }
 .feed-end { width: 100%; min-height: 88rpx; }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.bell { min-width:48px; min-height:48px; }
 </style>

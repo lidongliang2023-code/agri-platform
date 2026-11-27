@@ -1,3 +1,4 @@
+import { readSessionToken, sessionDeadline } from '../../../packages/agri-shared/src/auth/mobileSession'
 import { logoutMobile } from '../../../packages/agri-shared/src/auth/logoutMobile'
 declare const uni: any
 
@@ -80,9 +81,7 @@ function request<T>(url: string, method: 'GET' | 'POST', data?: Record<string, u
 }
 
 export function getTradeToken() {
-  const expires = Number(uni.getStorageSync('trade_token_expires'))
-  if (expires && Date.now() >= expires) { clearTradeSession(); return '' }
-  return uni.getStorageSync(TOKEN_KEY) || ''
+  return readSessionToken(TOKEN_KEY, 'trade_token_expires', clearTradeSession)
 }
 
 export function getTradeUser() {
@@ -127,7 +126,7 @@ async function completeTradeLogin(data: StandaloneLogin | undefined): Promise<Tr
     void request(`${AUTH_BASE}/api/v1/auth/logout`, 'POST', {}, token).catch(() => undefined)
     throw new Error('当前统一账号没有交易撮合访问权限，请联系平台运营开通')
   }
-  uni.setStorageSync('trade_token_expires', Date.now() + Number(data.expiresIn || 7200) * 1000)
+  uni.setStorageSync('trade_token_expires', sessionDeadline(data.expiresIn))
   uni.setStorageSync(TOKEN_KEY, token)
   uni.setStorageSync(USER_KEY, data.user || {})
   uni.setStorageSync(PERMISSION_KEY, permissions)
@@ -180,10 +179,10 @@ export function clearTradeSession() {
 }
 
 export async function logoutTrade() {
-  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, getTradeToken(), () => {
-    clearTradeSession()
-    uni.reLaunch({ url: '/pages/login/index' })
-  })
+  const token = String(uni.getStorageSync(TOKEN_KEY) || '')
+  const end = () => { clearTradeSession(); uni.reLaunch({ url: '/pages/login/index' }) }
+  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, token, end, end,
+    () => String(uni.getStorageSync(TOKEN_KEY) || '') === token)
 }
 
 export function handleTradeUnauthorized() {

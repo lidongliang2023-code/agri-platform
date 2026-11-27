@@ -1,3 +1,4 @@
+import { readSessionToken, sessionDeadline } from '../../../packages/agri-shared/src/auth/mobileSession'
 import { logoutMobile } from '../../../packages/agri-shared/src/auth/logoutMobile'
 declare const uni: any
 
@@ -91,7 +92,7 @@ function permissionGranted(permissions: string[], required: string) {
 }
 
 export function getInfoToken(): string {
-  return uni.getStorageSync(TOKEN_KEY) || ''
+  return readSessionToken(TOKEN_KEY, 'info_session_expires', clearUnifiedInfoSession)
 }
 
 export function getInfoUser(): UnifiedAccount | null {
@@ -119,7 +120,7 @@ export function accountStorageKey(key: string): string {
 
 export function clearInfoCache(): void {
   const keys = uni.getStorageInfoSync().keys as string[]
-  keys.filter((key) => key.startsWith('info_') && ![TOKEN_KEY, USER_KEY, PERMISSION_KEY].includes(key))
+  keys.filter((key) => key.startsWith('info_') && ![TOKEN_KEY, USER_KEY, PERMISSION_KEY, 'info_session_expires'].includes(key))
     .forEach((key) => uni.removeStorageSync(key))
 }
 
@@ -144,9 +145,11 @@ export function isInfoMfaChallenge(value: unknown): value is InfoMfaChallenge {
     && Boolean((value as InfoMfaChallenge).challengeToken)
 }
 
-function persistInfoSession(token: string, user: UnifiedAccount, permissions: string[]) {
+function persistInfoSession(token: string, user: UnifiedAccount, permissions: string[], expiresIn?: number | string) {
+  const expires = sessionDeadline(expiresIn)
   // 登录账号变化时清理上一账号的临时草稿，内容缓存仍通过 accountStorageKey 隔离。
   clearInfoCache()
+  uni.setStorageSync('info_session_expires', expires)
   uni.setStorageSync(TOKEN_KEY, token)
   uni.setStorageSync(USER_KEY, user)
   uni.setStorageSync(PERMISSION_KEY, permissions)
@@ -204,7 +207,8 @@ async function standaloneLogin(endpoint: 'login-standalone' | 'login-standalone-
     code: number
     message?: string
     data?: {
-      accessToken?: string
+      expiresIn?: number | string
+  accessToken?: string
       user?: UnifiedAccount
       mfaRequired?: boolean
       challengeToken?: string
@@ -223,7 +227,7 @@ async function standaloneLogin(endpoint: 'login-standalone' | 'login-standalone-
     throw new Error('统一认证中心未返回有效登录结果')
   }
   const permissions = await resolveInfoPermissions(data.accessToken)
-  persistInfoSession(data.accessToken, data.user, permissions)
+  persistInfoSession(data.accessToken, data.user, permissions, data.expiresIn)
   return { token: data.accessToken, user: data.user, permissions }
 }
 
@@ -236,7 +240,7 @@ export async function completeInfoMfaLogin(
   const result = await apiRequest<{
     code: number
     message?: string
-    data?: { accessToken?: string; user?: UnifiedAccount }
+    data?: { accessToken?: string; expiresIn?: number | string; user?: UnifiedAccount }
   }>(
     `${AUTH_BASE}/api/v1/sso/login-standalone-mfa`,
     'POST',
@@ -246,11 +250,12 @@ export async function completeInfoMfaLogin(
     throw new Error(result.body.message || '二次验证码校验失败，请重新登录')
   }
   const permissions = await resolveInfoPermissions(result.body.data.accessToken)
-  persistInfoSession(result.body.data.accessToken, result.body.data.user, permissions)
+  persistInfoSession(result.body.data.accessToken, result.body.data.user, permissions, result.body.data.expiresIn)
   return { token: result.body.data.accessToken, user: result.body.data.user, permissions }
 }
 
 export function clearUnifiedInfoSession() {
+  uni.removeStorageSync('info_session_expires')
   uni.removeStorageSync(accountStorageKey('info_sd_draft:supply'))
   uni.removeStorageSync(accountStorageKey('info_sd_draft:demand'))
   uni.removeStorageSync('info_sd_draft')
@@ -262,10 +267,10 @@ export function clearUnifiedInfoSession() {
 }
 
 export async function logoutUnifiedInfo() {
-  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, getInfoToken(), () => {
-    clearUnifiedInfoSession()
-    uni.reLaunch({ url: '/pages/login/index' })
-  })
+  const token = String(uni.getStorageSync(TOKEN_KEY) || '')
+  const end = () => { clearUnifiedInfoSession(); uni.reLaunch({ url: '/pages/login/index' }) }
+  await logoutMobile(`${AUTH_BASE}/api/v1/auth/logout`, token, end, end,
+    () => String(uni.getStorageSync(TOKEN_KEY) || '') === token)
 }
 
 let redirecting = false

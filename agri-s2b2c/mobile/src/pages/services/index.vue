@@ -13,17 +13,18 @@
         <text class="hero-desc">领券、秒杀和社区拼团统一查看</text>
       </view>
 
+      <view class="section"><button class="btn" @tap="openNative('/pages/coupons/index')">我的优惠券</button><button class="btn" @tap="openNative('/pages/flash/index')">秒杀商品</button><button class="btn" @tap="openNative('/pages/groups/index')">拼团活动</button></view>
       <view class="section">
         <view class="section-head"><view><text class="kicker">COUPON CENTER</text><text class="title">领券中心</text></view><text class="sub">先领券，再下单</text></view>
         <view v-for="coupon in marketing.coupons || []" :key="coupon.id" class="coupon-card">
           <view class="coupon-value">
-            <b>{{ coupon.type === 'DISCOUNT' ? '折扣' : `¥${coupon.amount}` }}</b>
-            <small>满 {{ coupon.minAmount }} 元可用</small>
+            <text class="strong-copy">{{ coupon.type === 'DISCOUNT' ? '折扣' : `¥${coupon.amount}` }}</text>
+            <text class="small-copy">满 {{ coupon.minAmount }} 元可用</text>
           </view>
           <view class="coupon-copy">
             <text>{{ coupon.name }}</text>
-            <small>有效期至 {{ coupon.validEnd }}</small>
-            <em>仅剩 {{ coupon.remainCount }} 张</em>
+            <text class="small-copy">有效期至 {{ coupon.validEnd }}</text>
+            <text class="small-copy">仅剩 {{ coupon.remainCount }} 张</text>
           </view>
           <button class="btn btn-sm coupon-button" :class="{ received: received.includes(coupon.id) }" @tap="receiveCoupon(coupon.id)">
             {{ received.includes(coupon.id) ? '已领取' : '领取' }}
@@ -35,24 +36,24 @@
 
       <view class="section">
         <view class="section-head"><view><text class="kicker">FLASH SALE</text><text class="title">限时秒杀</text></view><text class="sub">库存有限</text></view>
-        <view v-for="deal in marketing.flashSales || []" :key="deal.id" class="deal-row">
+        <view v-for="deal in marketing.flashSales || []" :key="deal.id" class="deal-row" @tap="openNative('/pages/product/detail?id='+deal.productId)">
           <view class="deal-icon">⚡</view>
-          <view class="deal-copy"><text>{{ deal.productName }}</text><small>{{ deal.remainStock }} / {{ deal.totalStock }} {{ deal.unit }} 可抢</small></view>
-          <view class="deal-price"><b>{{ money(deal.salePrice) }}</b><small>{{ money(deal.originalPrice) }}</small></view>
+          <view class="deal-copy"><text>{{ deal.productName }}</text><text class="small-copy">{{ deal.remainStock }} / {{ deal.totalStock }} {{ deal.unit }} 可抢</text></view>
+          <view class="deal-price"><text class="strong-copy">{{ money(deal.salePrice) }}</text><text class="small-copy">{{ money(deal.originalPrice) }}</text></view>
         </view>
       </view>
 
       <view class="section">
         <view class="section-head"><view><text class="kicker">COMMUNITY GROUP</text><text class="title">社区拼团</text></view><text class="sub">邻里一起买</text></view>
-        <view v-for="group in marketing.groupBuys || []" :key="group.id" class="deal-row">
+        <view v-for="group in marketing.groupBuys || []" :key="group.id" class="deal-row" @tap="openNative('/pages/groups/detail?id='+group.id)">
           <view class="deal-icon group">团</view>
-          <view class="deal-copy"><text>{{ group.name }}</text><small>{{ group.groupSize }} 人成团 · {{ group.validHours }} 小时内有效</small></view>
-          <view class="deal-price"><b>{{ money(group.groupPrice) }}</b><small>{{ money(group.singlePrice) }}</small></view>
+          <view class="deal-copy"><text>{{ group.name }}</text><text class="small-copy">{{ group.groupSize }} 人成团 · {{ group.validHours }} 小时内有效</text></view>
+          <view class="deal-price"><text class="strong-copy">{{ money(group.groupPrice) }}</text><text class="small-copy">{{ money(group.singlePrice) }}</text></view>
         </view>
       </view>
     </template>
 
-    <template v-else-if="activeTab === 1">
+    <template v-else>
       <view class="hero trace-hero">
         <text class="hero-kicker">TRACEABILITY · 全链路溯源</text>
         <text class="hero-title">每一份农产品，都有来处</text>
@@ -85,15 +86,15 @@
           <view class="trace-mark">溯</view>
           <view>
             <text class="batch-code">{{ trace.batchNo }}</text>
-            <small>{{ trace.productName || trace.cropName }} · {{ trace.origin || trace.farmName || '产地未填' }}</small>
+            <text class="small-copy">{{ trace.productName || trace.cropName }} · {{ trace.origin || trace.farmName || '产地未填' }}</text>
           </view>
         </view>
         <view class="timeline">
           <view v-for="n in trace.nodes" :key="n.seq" class="timeline-item">
             <text class="timeline-dot">{{ n.seq }}</text>
             <view>
-              <b>{{ n.stageName }}<text v-if="n.onChain" class="chain-tag">已上链</text></b>
-              <small>{{ n.occurredAt ? String(n.occurredAt).replace('T', ' ').slice(0, 16) : '时间未记录' }} · {{ n.detail }}</small>
+              <text class="strong-copy">{{ n.stageName }}<text v-if="n.onChain" class="chain-tag">已上链</text></text>
+              <text class="small-copy">{{ n.occurredAt ? String(n.occurredAt).replace('T', ' ').slice(0, 16) : '时间未记录' }} · {{ n.detail }}</text>
             </view>
           </view>
         </view>
@@ -103,51 +104,28 @@
           <text v-if="!trace.circulationRecorded" class="circulation-empty">已核验生产事实；暂无商城零售流转绑定记录。</text>
           <view v-for="(c, i) in trace.circulation || []" :key="i" class="circulation-item">
             <text>状态：{{ c.orderStatus }} · 承运：{{ c.logisticsCompany || '直发' }}</text>
-            <small>绑定履约时间：{{ c.boundAt ? String(c.boundAt).replace('T', ' ').slice(0, 16) : '未记录' }}</small>
+            <text class="small-copy">绑定履约时间：{{ c.boundAt ? String(c.boundAt).replace('T', ' ').slice(0, 16) : '未记录' }}</text>
           </view>
         </view>
       </view>
     </template>
 
-    <template v-else>
-      <view class="hero after-hero">
-        <text class="hero-kicker">AFTER SALES · 售后协同</text>
-        <text class="hero-title">售后申请，进度随时可查</text>
-        <text class="hero-desc">平台统一受理退款与售后工单</text>
-      </view>
-
-      <view class="section">
-        <view class="section-head"><view><text class="kicker">MY REQUESTS</text><text class="title">我的售后</text></view><text class="sub">{{ afterSales.length }} 条记录</text></view>
-        <view v-for="item in afterSales" :key="item.id" class="after-row">
-          <view class="after-head">
-            <view><text>{{ item.type === 'REFUND' ? '退款申请' : item.type }}</text><small>订单 {{ item.orderId }}</small></view>
-            <text class="tag" :class="`tag-${statusMeta(item.status).tone}`">{{ statusMeta(item.status).label }}</text>
-          </view>
-          <text class="after-reason">{{ item.reason }}</text>
-          <view class="after-foot"><small>{{ item.createTime?.replace('T', ' ') }}</small><b>{{ money(item.amount) }}</b></view>
-        </view>
-        <view v-if="!afterSales.length" class="empty-mini">暂未提交售后申请</view>
-      </view>
-
-      <view class="section">
-        <view class="section-head"><view><text class="kicker">NEW REQUEST</text><text class="title">申请售后</text></view></view>
-        <view class="form-item"><text class="form-label">订单编号</text><input v-model="afterForm.orderId" class="input" type="number" placeholder="请输入订单 ID" /></view>
-        <view class="form-item"><text class="form-label">申请金额</text><input v-model="afterForm.amount" class="input" type="digit" placeholder="请输入退款金额" /></view>
-        <view class="form-item"><text class="form-label">售后原因</text><textarea v-model="afterForm.reason" class="textarea" placeholder="请描述商品问题与期望处理方式" /></view>
-        <button class="btn btn-primary btn-block" :loading="submitting" @tap="submitAfterSale">提交售后申请</button>
-      </view>
-    </template>
   </view>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+function openNative(url:string) {uni.navigateTo({url})}
+import { onMounted, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { mallApi, type AfterSale, type MarketingData, type TraceView } from '../../api'
+import { mallApi, type MarketingData, type TraceView } from '../../api'
 import { session } from '../../session'
-import { money, statusMeta, toast } from '../../utils'
+import { money, toast } from '../../utils'
 
-const tabs = ['优惠活动', '扫码溯源', '售后服务']
+/*
+ * 售后已拆到「我的售后」（pages/aftersale），从订单详情发起并自动带上订单号与金额。
+ * 本页只管营销（领券/秒杀/拼团）和匿名可用的溯源查询；路径不动，包装上已印的 ?code= 二维码继续有效。
+ */
+const tabs = ['优惠活动', '扫码溯源']
 const activeTab = ref(0)
 const marketing = ref<MarketingData>({ coupons: [], flashSales: [], groupBuys: [] })
 const received = ref<Array<string | number>>([])
@@ -155,11 +133,14 @@ const traceQuery = ref('')
 const trace = ref<TraceView>({ bound: false, matched: false, nodes: [] })
 const traceQueried = ref(false)
 const traceLoading = ref(false)
-const afterSales = ref<AfterSale[]>([])
-const submitting = ref(false)
-const afterForm = reactive({ orderId: '', amount: '', reason: '' })
 
 onLoad((options) => {
+  if (options?.tab === 'after') {
+    // 旧入口兼容：售后已独立成页
+    uni.redirectTo({ url: '/pages/aftersale/index' })
+    return
+  }
+  if (options?.tab === 'trace') activeTab.value = 1
   /*
    * 包装上印的码扫出来就是一个带 code 的链接：落到这一页就要直接停在「扫码溯源」并把链路查出来。
    * 以前只认 productId，扫码的人进来停在「优惠活动」页签，还得自己切页签、再手输那串码 ——
@@ -188,13 +169,12 @@ async function load() {
     return
   }
   try {
-    marketing.value = await mallApi.getMarketing()
-    const [coupons, records] = await Promise.all([
+    const [data, coupons] = await Promise.all([
+      mallApi.getMarketing(),
       mallApi.getCoupons(session.user.id),
-      mallApi.getAfterSales(session.user.id),
     ])
+    marketing.value = data
     received.value = coupons.map((item) => item.couponId)
-    afterSales.value = records || []
   } catch (error) {
     toast((error as Error).message)
   }
@@ -258,38 +238,13 @@ function scanCode() {
   })
 }
 
-async function submitAfterSale() {
-  if (!session.user) {
-    uni.navigateTo({ url: '/pages/login/index?redirect=%2Fpages%2Fservices%2Findex' })
-    return
-  }
-  if (!afterForm.orderId || !afterForm.amount || !afterForm.reason.trim()) return toast('请完整填写售后信息')
-  submitting.value = true
-  try {
-    const result = await mallApi.createAfterSale({
-      consumerId: session.user.id,
-      orderId: Number(afterForm.orderId),
-      amount: Number(afterForm.amount),
-      reason: afterForm.reason,
-      type: 'REFUND',
-    })
-    if (!result.success) throw new Error(result.message || '售后提交失败')
-    toast(result.message || '售后申请已提交', 'success')
-    Object.assign(afterForm, { orderId: '', amount: '', reason: '' })
-    afterSales.value = await mallApi.getAfterSales(session.user.id)
-  } catch (error) {
-    toast((error as Error).message)
-  } finally {
-    submitting.value = false
-  }
-}
 </script>
 
 <style scoped lang="scss">
 .trace-circulation { margin-top: 24rpx; padding-top: 20rpx; border-top: 1rpx dashed #cfe0d5; }
 .circulation-title { display: block; font-size: 26rpx; font-weight: 700; color: #16462e; margin-bottom: 8rpx; }
-.circulation-empty { display: block; font-size: 22rpx; color: #789082; }
-.circulation-item { padding: 8rpx 0; font-size: 23rpx; color: #2d5540; display: flex; flex-direction: column; }
+.circulation-empty { display: block; font-size: 24rpx; color: #789082; }
+.circulation-item { padding: 8rpx 0; font-size: 24rpx; color: #2d5540; display: flex; flex-direction: column; }
 
 .services-page {
   padding-bottom: 34rpx;
@@ -305,7 +260,7 @@ async function submitAfterSale() {
 .tab {
   flex: 1;
   padding: 10rpx 0;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }
@@ -367,12 +322,6 @@ async function submitAfterSale() {
     linear-gradient(135deg, #073821, #0b5e86);
 }
 
-.after-hero {
-  background:
-    radial-gradient(circle at 88% 0, rgba(216, 135, 24, 0.16), transparent 42%),
-    linear-gradient(135deg, #073821, #12764a);
-}
-
 .section {
   margin: 16rpx 22rpx;
   padding: 24rpx;
@@ -408,7 +357,7 @@ async function submitAfterSale() {
 }
 
 .sub {
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -430,20 +379,20 @@ async function submitAfterSale() {
   padding: 15rpx 9rpx;
   border-radius: 16rpx;
   background: #fff4e6;
-  color: #c46616;
+  color: #8f4500;
   text-align: center;
 }
 
-.coupon-value b,
-.coupon-value small {
+.coupon-value .strong-copy,
+.coupon-value .small-copy {
   display: block;
 }
 
-.coupon-value b {
-  font-size: 30rpx;
+.coupon-value .strong-copy {
+  font-size: 32rpx;
 }
 
-.coupon-value small {
+.coupon-value .small-copy {
   margin-top: 5rpx;
   font-size: 24rpx;
 }
@@ -454,7 +403,7 @@ async function submitAfterSale() {
 }
 
 .coupon-copy text,
-.coupon-copy small,
+.coupon-copy .small-copy,
 .coupon-copy em {
   display: block;
 }
@@ -465,15 +414,15 @@ async function submitAfterSale() {
   font-weight: 650;
 }
 
-.coupon-copy small {
+.coupon-copy .small-copy {
   margin-top: 6rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
 }
 
 .coupon-copy em {
   margin-top: 4rpx;
-  color: #c46616;
+  color: #8f4500;
   font-size: 24rpx;
   font-style: normal;
 }
@@ -486,7 +435,7 @@ async function submitAfterSale() {
 .coupon-button.received {
   border-color: #e3eae5;
   background: #f5f7f6;
-  color: #93a29a;
+  color: #666666;
 }
 
 .deal-row {
@@ -525,7 +474,7 @@ async function submitAfterSale() {
 }
 
 .deal-copy text,
-.deal-copy small {
+.deal-copy .small-copy {
   display: block;
 }
 
@@ -535,9 +484,9 @@ async function submitAfterSale() {
   font-weight: 650;
 }
 
-.deal-copy small {
+.deal-copy .small-copy {
   margin-top: 6rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -545,26 +494,26 @@ async function submitAfterSale() {
   text-align: right;
 }
 
-.deal-price b,
-.deal-price small {
+.deal-price .strong-copy,
+.deal-price .small-copy {
   display: block;
 }
 
-.deal-price b {
-  color: #d45b32;
-  font-size: 26rpx;
+.deal-price .strong-copy {
+  color: #e53935;
+  font-size: 32rpx;
 }
 
-.deal-price small {
+.deal-price .small-copy {
   margin-top: 4rpx;
-  color: #a1ada6;
+  color: #666666;
   font-size: 24rpx;
   text-decoration: line-through;
 }
 
 .empty-mini {
   padding: 55rpx 0;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }
@@ -590,7 +539,7 @@ async function submitAfterSale() {
 .trace-conclusion {
   display: block;
   margin-top: 12rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -606,7 +555,7 @@ async function submitAfterSale() {
 .empty-sub {
   display: block;
   margin-top: 8rpx;
-  color: #94a198;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.6;
 }
@@ -646,7 +595,7 @@ async function submitAfterSale() {
 }
 
 .batch-code,
-.trace-batch small {
+.trace-batch .small-copy {
   display: block;
 }
 
@@ -656,9 +605,9 @@ async function submitAfterSale() {
   font-weight: 700;
 }
 
-.trace-batch small {
+.trace-batch .small-copy {
   margin-top: 4rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -686,74 +635,20 @@ async function submitAfterSale() {
   font-weight: 700;
 }
 
-.timeline-item b,
-.timeline-item small {
+.timeline-item .strong-copy,
+.timeline-item .small-copy {
   display: block;
 }
 
-.timeline-item b {
+.timeline-item .strong-copy {
   color: #33453b;
-  font-size: 24rpx;
+  font-size: 32rpx;
 }
 
-.timeline-item small {
+.timeline-item .small-copy {
   margin-top: 5rpx;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.5;
-}
-
-.after-row {
-  padding: 17rpx 0;
-  border-top: 1rpx solid #edf2ee;
-}
-
-.after-row:first-of-type {
-  border-top: 0;
-}
-
-.after-head,
-.after-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.after-head > view text,
-.after-head > view small {
-  display: block;
-}
-
-.after-head > view text {
-  color: #0b1a12;
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-.after-head > view small {
-  margin-top: 5rpx;
-  color: #93a29a;
-  font-size: 24rpx;
-}
-
-.after-reason {
-  display: block;
-  margin-top: 10rpx;
-  color: #52665a;
-  font-size: 24rpx;
-}
-
-.after-foot {
-  margin-top: 10rpx;
-}
-
-.after-foot small {
-  color: #93a29a;
-  font-size: 24rpx;
-}
-
-.after-foot b {
-  color: #d45b32;
-  font-size: 24rpx;
 }
 </style>

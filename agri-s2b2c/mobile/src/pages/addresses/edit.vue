@@ -1,6 +1,8 @@
 <template>
   <view class="page edit-page">
-    <view class="form-card">
+    <view v-if="loading" class="list-feedback">正在读取地址…</view>
+    <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @tap="loadAddress">重试</button></view>
+    <view v-else class="form-card">
       <view class="card-head"><text class="card-title">{{ id ? '编辑地址' : '新增地址' }}</text><text class="card-sub">DELIVERY ADDRESS</text></view>
       <view class="form-item">
         <text class="form-label">收货人</text>
@@ -29,13 +31,13 @@
         <textarea v-model="form.address" class="textarea" placeholder="街道、门牌号、楼栋和房间号" />
       </view>
       <view class="default-row">
-        <view><text>设为默认地址</text><small>下单时优先使用此地址</small></view>
+        <view><text>设为默认地址</text><text class="small-copy">下单时优先使用此地址</text></view>
         <switch :checked="form.isDefault" color="#12764a" @change="onDefaultChange" />
       </view>
     </view>
 
     <view class="fixed-bottom save-bar">
-      <button class="btn btn-primary btn-block" :loading="submitting" @tap="submit">保存地址</button>
+      <button class="btn btn-primary btn-block" :loading="submitting" :disabled="submitting || loading || !!loadError" @tap="submit">保存地址</button>
     </view>
   </view>
 </template>
@@ -49,6 +51,8 @@ import { toast } from '../../utils'
 
 const id = ref('')
 const submitting = ref(false)
+const loading = ref(false)
+const loadError = ref('')
 const form = reactive<Address>({
   id: 0,
   consumerId: session.user?.id || 0,
@@ -69,14 +73,23 @@ onLoad(async (options) => {
     return
   }
   form.consumerId = session.user.id
-  if (id.value) {
-    const list = await mallApi.getAddresses(session.user.id)
-    const current = list.find((item) => String(item.id) === id.value)
-    if (current) Object.assign(form, current)
-  }
+  await loadAddress()
 })
+async function loadAddress() {
+  if (!id.value || !session.user) return
+  loading.value = true
+  loadError.value = ''
+  try {
+    const list = await mallApi.getAddresses(session.user.id)
+    const current = list.find(item => String(item.id) === id.value)
+    if (!current) throw new Error('地址已不存在，请返回地址列表')
+    Object.assign(form, current)
+  } catch (error) { loadError.value = (error as Error).message }
+  finally { loading.value = false }
+}
 
 async function submit() {
+  if (submitting.value || loading.value || loadError.value) return
   if (!form.name.trim()) return toast('请输入收货人')
   if (!/^1\d{10}$/.test(form.phone)) return toast('请输入正确的联系电话')
   if (!form.province.trim() || !form.city.trim() || !form.district.trim()) return toast('请填写完整地区')
@@ -134,7 +147,7 @@ function onDefaultChange(event: any) {
 }
 
 .default-row text,
-.default-row small {
+.default-row .small-copy {
   display: block;
 }
 
@@ -144,9 +157,9 @@ function onDefaultChange(event: any) {
   font-weight: 650;
 }
 
-.default-row small {
+.default-row .small-copy {
   margin-top: 5rpx;
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 

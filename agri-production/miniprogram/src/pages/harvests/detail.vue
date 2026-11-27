@@ -1,6 +1,8 @@
 <template>
-  <view class="page">
-    <view v-if="error" class="error-box">{{ error }}</view>
+  <view class="page detail-page">
+    <view v-if="loading" class="empty">正在加载详情…</view>
+    <view v-else-if="error" class="error-box">{{ error }}<button class="btn-ghost" @click="load">重新加载</button></view>
+    <template v-else-if="ready">
 
     <view class="card">
       <view class="row">
@@ -28,6 +30,8 @@
       <view class="card-title"><text>📦 入库信息</text></view>
       <view class="field"><text class="field-label">仓库</text><text class="field-value">{{ batch.warehouseName || '未入库' }}</text></view>
       <view class="field"><text class="field-label">入库状态</text><text class="field-value">{{ inboundLabel(batch.inboundStatus) }}</text></view>
+      <view class="field"><text class="field-label">累计入库</text><text class="field-value">{{ fmtNumber(entered, batch.unit) }}</text></view>
+      <view class="field"><text class="field-label">剩余可入库</text><text class="field-value">{{ fmtNumber(remaining, batch.unit) }}</text></view>
       <view class="field" style="border-bottom: none">
         <text class="field-label">更新时间</text><text class="field-value">{{ fmtDateTime(batch.updatedAt) }}</text>
       </view>
@@ -42,14 +46,14 @@
       </view>
     </view>
 
-    <view style="margin: 24rpx; display: flex; gap: 20rpx">
+    <view class="mobile-action-bar" :class="{ busy: acting }">
       <view
-        v-if="Number(batch.inboundStatus ?? 0) === 0"
+        v-if="remaining > 0"
         class="btn-primary"
         style="flex: 1"
         @click="confirmInbound"
       >
-        确认入库
+        {{ entered > 0 ? '继续入库' : '确认入库' }}
       </view>
       <view
         v-if="!batch.traceCode"
@@ -60,60 +64,78 @@
         生成溯源码
       </view>
     </view>
+    </template>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { generateHarvestBatch, getHarvest, inboundHarvest } from '@/api/production'
+import { generateHarvestBatch, getHarvest, inboundHarvest, harvestInboundProgress } from '@/api/production'
 import { fmtDate, fmtDateTime, fmtNumber, INBOUND_STATUS_COLOR, INBOUND_STATUS_LABEL } from '@/utils/format'
 
 const batchId = ref('')
 const batch = ref<Record<string, any>>({})
 const error = ref('')
+const loading = ref(false)
+const ready = ref(false)
+const acting = ref(false)
+const entered = ref(0)
+const remaining = ref(0)
 
 const inboundLabel = (status: any): string => INBOUND_STATUS_LABEL[Number(status ?? 0)] ?? '—'
-const inboundColor = (status: any): string => INBOUND_STATUS_COLOR[Number(status ?? 0)] ?? '#8c8c8c'
+const inboundColor = (status: any): string => INBOUND_STATUS_COLOR[Number(status ?? 0)] ?? '#666666'
 
 async function load(): Promise<void> {
+  if (!batchId.value) { error.value = '缺少记录编号，请返回列表重新打开'; return }
+  loading.value = true; ready.value = false
   error.value = ''
   try {
     batch.value = (await getHarvest(batchId.value)) ?? {}
+    const progress = await harvestInboundProgress(batch.value)
+    entered.value = progress.entered
+    remaining.value = progress.remaining
+    ready.value = Boolean(batch.value.batchId || batch.value.id)
+    if (!ready.value) throw new Error('采收记录不存在或无权访问')
   } catch (err: any) {
     error.value = err?.message ?? '采收详情加载失败'
-  }
+  } finally { loading.value = false }
 }
 
 function confirmInbound(): void {
+  if (acting.value || !ready.value || remaining.value <= 0) return
+  acting.value = true
   uni.showModal({
     title: '确认入库',
-    content: `将 ${fmtNumber(batch.value.quantity, batch.value.unit)} 入库到主仓库？`,
+    content: `将剩余 ${fmtNumber(remaining.value, batch.value.unit)} 入库到「${batch.value.warehouseName || '主仓库'}」？`,
     success: async (res) => {
-      if (!res.confirm) return
+      if (!res.confirm) { acting.value = false; return }
       try {
         await inboundHarvest(batchId.value, {
-          quantity: Number(batch.value.quantity ?? 0),
+          quantity: remaining.value,
           unit: batch.value.unit,
           warehouseName: batch.value.warehouseName || '主仓库',
         })
         uni.showToast({ title: '已入库', icon: 'success' })
-        void load()
+        await load()
       } catch (err: any) {
         uni.showToast({ title: err?.message ?? '入库失败', icon: 'none' })
-      }
+      } finally { acting.value = false }
     },
+    fail: () => { acting.value = false },
   })
 }
 
 async function genTrace(): Promise<void> {
+  if (acting.value || !ready.value) return
+  acting.value = true
   try {
     await generateHarvestBatch(batchId.value, {})
     uni.showToast({ title: '溯源码已生成', icon: 'success' })
-    void load()
+    await load()
   } catch (err: any) {
     uni.showToast({ title: err?.message ?? '生成失败', icon: 'none' })
-  }
+  } finally { acting.value = false }
 }
 
 function goPlot(): void {

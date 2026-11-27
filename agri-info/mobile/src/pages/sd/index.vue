@@ -90,7 +90,7 @@ function badgeTone(badge: string) {
             @confirm="load()"
           />
         </view>
-        <text class="mine-link" @click="openMine">我的发布</text>
+        <text class="ui-measured-touch ui-action-target mine-link" @click="openMine">我的发布</text>
       </view>
 
       <view class="stat-grid">
@@ -114,7 +114,7 @@ function badgeTone(badge: string) {
     </view>
 
     <view class="page-body">
-      <view v-if="data?.ai" class="ai-card" @click="openMine">
+      <view v-if="data?.ai" class="ui-measured-touch ai-card" @click="openMine">
         <view class="ai-icon">✦</view>
         <view class="ai-copy">
           <text>AI 智能匹配</text>
@@ -125,12 +125,12 @@ function badgeTone(badge: string) {
       </view>
 
       <view class="seg" style="margin: 18rpx 0 14rpx">
-        <view :class="{ active: type === 'supply' }" @click="switchType('supply')">供应 {{ data?.stats.supplyCount || 0 }}</view>
-        <view :class="{ active: type === 'demand' }" @click="switchType('demand')">需求 {{ data?.stats.demandCount || 0 }}</view>
+        <view class="ui-measured-touch" :class="{ active: type === 'supply' }" @click="switchType('supply')">供应 {{ data?.stats.supplyCount || 0 }}</view>
+        <view class="ui-measured-touch" :class="{ active: type === 'demand' }" @click="switchType('demand')">需求 {{ data?.stats.demandCount || 0 }}</view>
       </view>
 
       <scroll-view scroll-x class="chips" :show-scrollbar="false">
-        <view
+        <view class="ui-measured-touch"
           v-for="name in categories"
           :key="name"
           :class="['chip', { active: (category || '全部') === name }]"
@@ -148,7 +148,7 @@ function badgeTone(badge: string) {
       </view>
 
       <view v-else class="sd-list">
-        <view v-for="item in items" :key="item.id" class="sd-card" @click="openDetail(item)">
+        <view v-for="item in items" :key="item.id" class="ui-measured-touch sd-card" @click="openDetail(item)">
           <view class="sd-head">
             <text class="sd-icon">{{ item.sdType === 'supply' ? '📦' : '🛒' }}</text>
             <view class="sd-title-wrap">
@@ -180,21 +180,21 @@ function badgeTone(badge: string) {
             <view class="sd-actions">
               <text class="tiny">👁 {{ item.viewCount }}</text>
               <text class="tiny">💬 {{ item.chatCount }}</text>
-              <text class="link" @click.stop="openMatch(item)">智能匹配 ›</text>
+              <text class="ui-measured-touch link" @click.stop="openMatch(item)">智能匹配 ›</text>
             </view>
           </view>
         </view>
       </view>
     </view>
 
-    <view class="fab" @click="publish">＋ 发布</view>
+    <view class="ui-measured-touch fab" @click="publish">＋ 发布</view>
   </view>
 </template>
 
 <style lang="scss" scoped>
 .sd-page {
   padding-bottom: 60rpx;
-  background: #f4f7f5;
+  background: #f5f6fa;
 }
 
 .hero-block {
@@ -221,7 +221,7 @@ function badgeTone(badge: string) {
 }
 
 .search-icon {
-  color: #94a198;
+  color: #666666;
   font-size: 28rpx;
 }
 
@@ -233,7 +233,7 @@ function badgeTone(badge: string) {
 }
 
 .ph {
-  color: #b3c0b7;
+  color: #666666;
 }
 
 .mine-link {
@@ -315,7 +315,7 @@ function badgeTone(badge: string) {
 .sd-spec {
   display: block;
   margin-top: 10rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.55;
 }
@@ -377,4 +377,8 @@ function badgeTone(badge: string) {
   font-weight: 650;
   box-shadow: 0 12rpx 28rpx rgba(18, 118, 74, 0.28);
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.ui-measured-touch { min-width:48px; min-height:48px; box-sizing:border-box; }
+text.ui-measured-touch { display:inline-flex; align-items:center; justify-content:center; }
 </style>

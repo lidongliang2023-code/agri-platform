@@ -8,4 +8,6 @@ onLaunch(() => {
 
 <style lang="scss">
 @import '../../frontend-shared/styles/mobile-admin.scss';
+@import '../../frontend-shared/styles/mobile-touch.scss';
+@import '../../../shared/mobile-ui-v1.scss';
 </style>

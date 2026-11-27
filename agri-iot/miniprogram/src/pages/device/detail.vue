@@ -49,4 +49,7 @@ async function reconcile(){if(busy.value)return;busy.value=true;try{await refres
 </template>
 <style scoped>
 .detail-title{font-size:34rpx;white-space:normal}.head-kv{margin-top:18rpx}.action-row.first{margin-top:0}
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.error { min-height:48px; }
 </style>

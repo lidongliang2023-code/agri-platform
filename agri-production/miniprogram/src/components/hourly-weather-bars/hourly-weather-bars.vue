@@ -1,0 +1,14 @@
+<template><view class="weather-chart"><text class="heading">逐小时趋势</text><picker :range="metrics" range-key="label" @change="metricIndex=Number($event.detail.value)"><view class="selector">{{metric.label}} ⌄</view></picker><text class="hint">点击小时查看数值；蓝框为所选班次，橙色为天气风险，灰色为缺测。核验以服务端为准。</text><scroll-view scroll-x class="scroll"><view class="chart"><view v-for="h in points" :key="h.time" :class="['column',{risk:h.usable===false,missing:h.value==null,selected:h.overlap}]" @click="selected=h"><text class="value">{{h.value ?? '—'}}</text><view class="track"><view v-if="h.value!=null" class="bar" :style="{height:height(h.value)+'%'}"/></view><text class="tick">{{h.time.slice(11,16)}}</text></view></view></scroll-view><view v-if="selected" class="detail"><text>{{selected.time}}—{{selected.periodEnd?.slice(11,16) || '时段末'}} · {{selected.value ?? '缺测'}} {{metric.unit}}</text><text>{{selected.note || (selected.usable?'满足天气条件':'待核验或不可作业')}}</text></view></view></template>
+<script setup lang="ts">
+import {ref,computed,watch} from 'vue'
+import {weatherPoints} from '@/utils/harvest-weather-risk'
+import type {Row} from '@/api/native-business'
+const props=defineProps<{hours:Row[];date:string;dispatch?:Row}>(),metricIndex=ref(0),selected=ref<Row>()
+const metrics=[{key:'temperature',label:'气温',unit:'℃'},{key:'rainMm',label:'降水量',unit:'mm'},{key:'precipitationProbability',label:'降水概率',unit:'%'},{key:'windSpeedMs',label:'风速',unit:'m/s'},{key:'windGustMs',label:'阵风',unit:'m/s'}]
+const metric=computed(()=>metrics[metricIndex.value])
+const points=computed<Row[]>(()=>weatherPoints(props.hours,props.date,metric.value.key,props.dispatch))
+const bounds=computed(()=>{const values=points.value.filter(h=>h.value!==null).map(h=>h.value as number);return {min:Math.min(0,...values),max:Math.max(1,...values)}})
+const height=(n:number)=>Math.max(1,(n-bounds.value.min)/(bounds.value.max-bounds.value.min)*100)
+watch(()=>[props.date,metricIndex.value,props.hours],()=>selected.value=undefined)
+</script>
+<style scoped>.heading{font-size:30rpx;font-weight:600;display:block;margin:22rpx 0}.selector{padding:22rpx;background:#eef4eb;font-size:27rpx;border-radius:12rpx}.hint{display:block;font-size:24rpx;color:#6e7d71;line-height:1.6;margin:18rpx 0}.scroll{width:100%;white-space:nowrap}.chart{display:flex;gap:8rpx;padding:16rpx 0;min-width:1600rpx}.column{flex:0 0 64rpx;padding:8rpx 4rpx;border:3rpx solid transparent;border-radius:8rpx;box-sizing:border-box;text-align:center;background:#f5f8f1}.risk{background:#fff0d9}.missing{background:#e8ece7}.selected{border-color:#287aa1}.value,.tick{display:block;font-size:24rpx;line-height:36rpx}.track{height:180rpx;display:flex;align-items:flex-end;justify-content:center}.bar{width:28rpx;background:#248251;border-radius:5rpx 5rpx 0 0}.detail{padding:20rpx;background:#eff5ed;border-radius:12rpx;font-size:25rpx;line-height:1.7;margin-top:18rpx}.detail text{display:block;white-space:normal}</style>

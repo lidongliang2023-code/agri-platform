@@ -468,7 +468,7 @@ const phoneMasked = computed(() => {
 }
 
 .unit-label {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 

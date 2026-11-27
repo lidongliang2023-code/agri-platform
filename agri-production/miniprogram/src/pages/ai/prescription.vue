@@ -1,22 +1,8 @@
-<template>
-  <AiUnavailable
-    title="🧪 AI 种植处方"
-    description="PRD §11.3：按地块给出种植处方，支持查看 / 确认 / 跟踪执行进度。本部署没有处方生成能力。"
-    :loader="loadPrescriptions"
-    :fallbacks="fallbacks"
-  />
-</template>
-
+<template><view class="page"><view class="card"><view class="card-title">完整业务服务</view><text class="muted">进入与电脑端一致的业务流程，数据按当前账号与经营主体保存。</text><button class="btn-primary" @tap="open">进入业务</button></view></view></template>
 <script setup lang="ts">
-import AiUnavailable from '@/components/AiUnavailable.vue'
-import { aiPrescriptions } from '@/api/production'
-
-/** 按 PRD 契约调真接口（后端 501 占位，组件会把原文展示出来） */
-const loadPrescriptions = () => aiPrescriptions()
-
-/** 改走真实数据：处方没接入，但"该做什么、做没做"在农事任务里是有的 */
-const fallbacks = [
-  { label: '农事任务（按地块/状态查看）', path: '/pages/tasks/tasks', tab: true },
-  { label: '地块列表（看当前作物与品种）', path: '/pages/plots/plots', tab: true },
-]
+import { onLoad } from '@dcloudio/uni-app'
+import { openWorkspace } from '@/utils/workspace'
+function open():void { openWorkspace('/production/ai/input-safety') }
+onLoad(open)
 </script>
+<style scoped>.btn-primary{margin-top:24rpx}</style>

@@ -48,11 +48,11 @@ async function open(key: typeof items[number]['key']) {
 </template>
 <style scoped>
 .ops-nav-icon-wrap{position:relative;width:24px;height:24px;overflow:visible}
-.ops-nav-badge{position:absolute;top:-6px;left:16px;min-width:18px;height:18px;box-sizing:border-box;padding:0 4px;border-radius:12px;background:#c93632;color:#fff;border:1px solid #fff;font-size:10px;font-weight:600;line-height:16px;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;pointer-events:none}
+.ops-nav-badge{position:absolute;top:-6px;left:16px;min-width:18px;height:18px;box-sizing:border-box;padding:0 4px;border-radius:12px;background:#c93632;color:#fff;border:1px solid #fff;font-size:12px;font-weight:600;line-height:16px;white-space:nowrap;text-align:center;font-variant-numeric:tabular-nums;pointer-events:none}
 .ops-nav-badge.stale{background:#93600e}
 .ops-nav-space{height:calc(68px + env(safe-area-inset-bottom));flex-shrink:0}
 .ops-nav{position:fixed;left:0;right:0;bottom:0;z-index:50;border-top:1px solid #e1e9e3;background:#fff;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -3px 16px rgba(20,64,40,.04)}
 .ops-nav-inner{display:flex;max-width:750px;margin:0 auto;height:60px}
-.ops-nav-item{flex:1;min-width:0;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:5px 0;margin:0;border:0;border-radius:0;background:transparent;color:#718277;font-size:12px;line-height:18px}
+.ops-nav-item{flex:1;min-width:0;min-height:60px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:5px 0;margin:0;border:0;border-radius:0;background:transparent;color:#666666;font-size:12px;line-height:18px}
 .ops-nav-item::after{border:0}.ops-nav-item.selected{color:#12764a;font-weight:600}.ops-nav-icon{width:24px;height:24px}.ops-nav-item:focus-visible{outline:2px solid #12764a;outline-offset:-3px}.ops-nav-item:active{background:#f2f8f4}
 </style>

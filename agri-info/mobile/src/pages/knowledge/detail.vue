@@ -8,7 +8,7 @@ import { useNativePage, useFavorite } from '../../useNativePage'
 const id=ref(0), item=ref<Knowledge|null>(null)
 const {saved,saving,refresh,toggle}=useFavorite('knowledge',()=>item.value)
 const {loading,error,load}=useNativePage(async()=>{item.value=await infoApi.knowledgeDetail(id.value);await refresh()})
-onLoad(o=>{id.value=Number(o?.id);load()})
+onLoad(o=>{id.value=Number(o?.id);if(!Number.isSafeInteger(id.value)||id.value<=0){error.value='缺少知识编号，请从列表进入';return}load()})
 function open(id:number){uni.navigateTo({url:`/pages/knowledge/detail?id=${id}`})}
 function ask(){uni.setStorageSync('info_ai_question',item.value?.title||'');uni.switchTab({url:'/pages/ai/index'})}
 

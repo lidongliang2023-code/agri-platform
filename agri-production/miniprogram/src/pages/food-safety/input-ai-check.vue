@@ -20,7 +20,7 @@
     <view v-for="item in candidates" :key="item.inputId" class="card" @click="pick(item)">
       <view class="row">
         <text class="strong">{{ item.inputName }}</text>
-        <text class="tag" style="color: #13a05a">{{ categoryLabel(item.inputType) }}</text>
+        <text class="tag" style="color: #1e6b38">{{ categoryLabel(item.inputType) }}</text>
       </view>
       <view class="muted" style="margin-top: 8rpx">
         库存 {{ fmtNumber(item.stockQty, item.unit) }} · 安全间隔期 {{ item.safetyInterval ?? '—' }} 天
@@ -83,10 +83,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 
 const RESULT_META: Record<string, { label: string; color: string }> = {
-  PASS: { label: '✅ 通过', color: '#13a05a' },
-  WARNING: { label: '⚠️ 预警', color: '#fa8c16' },
+  PASS: { label: '✅ 通过', color: '#1e6b38' },
+  WARNING: { label: '⚠️ 预警', color: '#8f4500' },
   BLOCK: { label: '❌ 拦截', color: '#cf1322' },
-  UNKNOWN: { label: '⬜ 未校验', color: '#8c8c8c' },
+  UNKNOWN: { label: '⬜ 未校验', color: '#666666' },
 }
 
 const keyword = ref('')

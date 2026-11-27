@@ -13,7 +13,7 @@
       </view>
 
       <view class="summary-card">
-        <text class="eyebrow">ORIGIN VERIFIED · 产地认证</text>
+        <text class="eyebrow">商品信息</text>
         <text class="product-name">{{ product.name }}</text>
         <text class="selling-point">{{ product.sellingPoint }}</text>
         <view class="price-row">
@@ -27,36 +27,10 @@
         </view>
       </view>
 
-      <view class="assurance-row">
-        <view><b>平台保障</b><text>交易售后留痕</text></view>
-        <view><b>品质溯源</b><text>全流程可查询</text></view>
-        <view><b>产地直供</b><text>认证供应商供货</text></view>
-      </view>
-
-      <view class="card spec-card">
-        <view class="card-head"><text class="card-title">商品详情</text><text class="card-sub">PRODUCT SPEC</text></view>
-        <view class="spec-grid">
-          <view class="spec-item"><text>产地</text><b>{{ product.origin || '-' }}</b></view>
-          <view class="spec-item"><text>规格</text><b>{{ product.spec || '-' }}</b></view>
-          <view class="spec-item"><text>等级</text><b>{{ product.grade || '-' }}</b></view>
-          <view class="spec-item"><text>库存</text><b>{{ product.stock }} {{ product.unit }}</b></view>
-        </view>
-      </view>
-
-      <view class="trace-card" @tap="openTrace">
-        <view class="trace-mark">溯</view>
-        <view class="trace-copy">
-          <text class="trace-kicker">TRACEABILITY</text>
-          <text class="trace-title">全链路溯源信息</text>
-          <text class="trace-desc">查看种植、采收、加工质检与仓储记录</text>
-        </view>
-        <text class="trace-arrow">›</text>
-      </view>
-
       <view class="card quantity-card">
         <view>
           <text class="quantity-title">购买数量</text>
-          <text class="quantity-stock">库存 {{ product.stock }} {{ product.unit }}</text>
+          <text class="quantity-stock">库存 {{ product.stock }} {{ product.unit }} · 同款将合并购物车数量</text>
         </view>
         <view class="stepper">
           <view class="stepper-btn" :class="{ disabled: quantity <= 1 }" @tap="decrease">−</view>
@@ -64,15 +38,45 @@
           <view class="stepper-btn" :class="{ disabled: quantity >= product.stock }" @tap="increase">+</view>
         </view>
       </view>
+
+      <view class="assurance-row">
+        <view><text class="strong-copy">平台保障</text><text>交易售后留痕</text></view>
+        <view><text class="strong-copy">品质溯源</text><text>查看已关联记录</text></view>
+        <view><text class="strong-copy">产地直供</text><text>认证供应商供货</text></view>
+      </view>
+
+      <view class="card"><button class="btn" :disabled="favoriteBusy" @tap="toggleFavorite">{{favorite ? '取消收藏' : '收藏商品'}}</button><button class="btn" @tap="openReviews">查看商品评价</button></view>
+      <view class="card spec-card">
+        <view class="card-head"><text class="card-title">商品详情</text><text class="card-sub">规格信息</text></view>
+        <view class="spec-grid">
+          <view class="spec-item"><text>产地</text><text class="strong-copy">{{ product.origin || '-' }}</text></view>
+          <view class="spec-item"><text>规格</text><text class="strong-copy">{{ product.spec || '-' }}</text></view>
+          <view class="spec-item"><text>等级</text><text class="strong-copy">{{ product.grade || '-' }}</text></view>
+          <view class="spec-item"><text>库存</text><text class="strong-copy">{{ product.stock }} {{ product.unit }}</text></view>
+        </view>
+      </view>
+
+      <view class="trace-card" @tap="openTrace">
+        <view class="trace-mark">溯</view>
+        <view class="trace-copy">
+          <text class="trace-kicker">溯源记录</text>
+          <text class="trace-title">全链路溯源信息</text>
+          <text class="trace-desc">查看种植、采收、加工质检与仓储记录</text>
+        </view>
+        <text class="trace-arrow">›</text>
+      </view>
+
+
     </template>
 
+    <view v-if="!loading && !product" class="empty"><text>商品暂时无法查看</text><button class="btn" @tap="goCart">返回购物车</button></view>
     <view v-if="product" class="fixed-bottom detail-actions">
       <view class="cart-entry" @tap="goCart">
         <text class="cart-icon">袋</text>
         <text>购物车</text>
       </view>
-      <button class="btn btn-ghost action-button" :loading="submitting" @tap="addToCart(false)">加入购物车</button>
-      <button class="btn btn-primary action-button" :loading="submitting" @tap="addToCart(true)">立即购买</button>
+      <button class="btn btn-ghost action-button" :loading="submitting" :disabled="submitting || product.stock < 1" @tap="addToCart(false)">加入购物车</button>
+      <button class="btn btn-primary action-button" :loading="submitting" :disabled="submitting || product.stock < 1" @tap="addToCart(true)">{{ product.stock > 0 ? '立即购买' : '暂时缺货' }}</button>
     </view>
   </view>
 </template>
@@ -80,7 +84,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app'
-import { mallApi, type Product } from '../../api'
+import { mallApi, request, type Product } from '../../api'
 import { ensureLogin, session } from '../../session'
 import { certificationsText, money, toast } from '../../utils'
 
@@ -88,20 +92,33 @@ const product = ref<Product | null>(null)
 const loading = ref(true)
 const submitting = ref(false)
 const quantity = ref(1)
+const favorite = ref(false), favoriteBusy = ref(false)
 
 onLoad((options) => {
-  loadProduct(String(options?.id || '1'))
+  const id = String(options?.id || '')
+  if (!id) {
+    loading.value = false
+    toast('商品不存在')
+    return
+  }
+  loadProduct(id)
 })
 
 onShareAppMessage(() => ({
   title: product.value?.name || '丰链云产地好货',
-  path: `/pages/product/detail?id=${product.value?.id || 1}`,
+  path: product.value ? `/pages/product/detail?id=${product.value.id}` : '/pages/home/index',
 }))
 
 async function loadProduct(id: string) {
   loading.value = true
   try {
     product.value = await mallApi.getProduct(id)
+    if(session.user) {
+      const uid = session.user.id
+      await request('/consumer/footprints','POST',undefined,{consumerId:uid,productId:id}).catch(()=>null)
+      const favorites = await request<{productId:string|number}[]>('/consumer/favorites','GET',undefined,{consumerId:uid}).catch(()=>[])
+      favorite.value = favorites.some(x=>String(x.productId)===id)
+    }
   } catch (error) {
     toast((error as Error).message)
   } finally {
@@ -118,15 +135,24 @@ function increase() {
 }
 
 async function addToCart(buyNow: boolean) {
+  if (submitting.value) return
   if (!ensureLogin() || !product.value || !session.user) return
+  if (product.value.stock < quantity.value) return toast('商品库存不足')
   submitting.value = true
   try {
     const result = await mallApi.addCart(session.user.id, product.value.id, quantity.value)
     if (!result.success) throw new Error(result.message || '加入购物车失败')
     toast(result.message || '已加入购物车', 'success')
     if (buyNow) {
-      uni.removeStorageSync('s2b2c_checkout_item_ids')
-      setTimeout(() => uni.navigateTo({ url: '/pages/checkout/index' }), 350)
+      const cart = await mallApi.getCart(session.user.id)
+      const row = cart.find(item => String(item.productId) === String(product.value?.id) && !item.channelId)
+      if (!row) throw new Error('未找到本次商品，请从购物车结算')
+      const cleared = await mallApi.selectAllCart(session.user.id, false)
+      if (!cleared.success) throw new Error('勾选同步失败，请重试')
+      const selected = await mallApi.selectCart(row.id, true)
+      if (!selected.success) throw new Error('勾选同步失败，请重试')
+      uni.setStorageSync('s2b2c_checkout_item_ids', [row.id])
+      uni.navigateTo({ url: '/pages/checkout/index' })
     }
   } catch (error) {
     toast((error as Error).message)
@@ -135,12 +161,25 @@ async function addToCart(buyNow: boolean) {
   }
 }
 
+async function toggleFavorite() {
+  if(favoriteBusy.value || !ensureLogin() || !product.value || !session.user) return
+  favoriteBusy.value = true
+  try {
+    const result = await request<{success:boolean;message?:string}>('/consumer/favorites',favorite.value?'DELETE':'POST',undefined,{consumerId:session.user.id,productId:product.value.id})
+    if(!result.success) throw new Error(result.message || '收藏操作失败')
+    const rows=await request<{productId:string|number}[]>('/consumer/favorites','GET',undefined,{consumerId:session.user.id})
+    favorite.value=rows.some(x=>String(x.productId)===String(product.value?.id))
+    toast(favorite.value?'已收藏':'已取消收藏')
+  } catch(e) {toast((e as Error).message)} finally {favoriteBusy.value=false}
+}
+function openReviews() {if(product.value)uni.navigateTo({url:'/pages/reviews/index?productId='+product.value.id})}
 function goCart() {
   uni.switchTab({ url: '/pages/cart/index' })
 }
 
 function openTrace() {
-  uni.navigateTo({ url: `/pages/services/index?productId=${product.value?.id || 1}` })
+  if (!product.value) return
+  uni.navigateTo({ url: `/pages/services/index?productId=${product.value.id}` })
 }
 </script>
 
@@ -151,7 +190,7 @@ function openTrace() {
 
 .loading {
   padding: 120rpx 0;
-  color: #84938a;
+  color: #666666;
   font-size: 24rpx;
   text-align: center;
 }
@@ -226,7 +265,7 @@ function openTrace() {
 .selling-point {
   display: block;
   margin-top: 12rpx;
-  color: #6b7c72;
+  color: #666666;
   font-size: 24rpx;
   line-height: 1.65;
 }
@@ -243,14 +282,14 @@ function openTrace() {
 }
 
 .original {
-  color: #a1ada6;
+  color: #666666;
   font-size: 24rpx;
   text-decoration: line-through;
 }
 
 .sales {
   margin-left: auto;
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -280,19 +319,19 @@ function openTrace() {
   border-left: 0;
 }
 
-.assurance-row b,
+.assurance-row .strong-copy,
 .assurance-row text {
   display: block;
 }
 
-.assurance-row b {
+.assurance-row .strong-copy {
   color: #0e5233;
   font-size: 24rpx;
 }
 
 .assurance-row text {
   margin-top: 5rpx;
-  color: #8a9990;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -320,11 +359,11 @@ function openTrace() {
 }
 
 .spec-item text {
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
 }
 
-.spec-item b {
+.spec-item .strong-copy {
   color: #33453b;
   font-size: 24rpx;
   font-weight: 600;
@@ -409,7 +448,7 @@ function openTrace() {
 
 .quantity-stock {
   margin-top: 6rpx;
-  color: #93a29a;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -431,7 +470,7 @@ function openTrace() {
 }
 
 .stepper-btn {
-  background: #f4f7f5;
+  background: #f5f6fa;
   color: #12764a;
   font-size: 32rpx;
 }
@@ -457,7 +496,7 @@ function openTrace() {
   align-items: center;
   flex-direction: column;
   gap: 4rpx;
-  color: #6b7c72;
+  color: #666666;
   font-size: 24rpx;
 }
 
@@ -479,4 +518,12 @@ function openTrace() {
   padding: 0 10rpx;
   font-size: 24rpx;
 }
+.gallery,.gallery-swiper { height:540rpx; }.summary-card { margin-top:0; border-radius:0 0 24rpx 24rpx; }.quantity-card { margin-top:16rpx; }.stepper { height:44px; }.stepper-btn { width:44px; min-height:44px; }.detail-actions { gap:12rpx; }.cart-entry { min-width:44px; min-height:44px; }.action-button { padding:0 14rpx; }.gallery-caption,.eyebrow { display:none; }
+
+.stepper { height:48px; flex-shrink:0; }
+.stepper-btn { width:48px; min-height:48px; }
+.quantity-card { flex-wrap:wrap; gap:16px; }
+.cart-entry { min-width:48px; min-height:48px; flex-basis:48px; }
+.trace-desc { color:#fff; }
+.gallery-caption { color:#1e6b38; }
 </style>

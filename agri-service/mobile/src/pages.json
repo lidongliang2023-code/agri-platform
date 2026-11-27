@@ -1,19 +1,139 @@
 {
   "pages": [
-    { "path": "pages/home/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/services/index", "style": { "navigationBarTitleText": "服务中心" } },
-    { "path": "pages/provider/detail", "style": { "navigationBarTitleText": "服务详情" } },
-    { "path": "pages/booking/index", "style": { "navigationBarTitleText": "预约下单" } },
-    { "path": "pages/orders/index", "style": { "navigationBarTitleText": "我的订单" } },
-    { "path": "pages/orders/detail", "style": { "navigationBarTitleText": "订单详情" } },
-    { "path": "pages/demand/publish", "style": { "navigationBarTitleText": "发布需求" } },
-    { "path": "pages/insurance/index", "style": { "navigationBarTitleText": "农业保险" } },
-    { "path": "pages/policies/index", "style": { "navigationBarTitleText": "政策申报" } },
-    { "path": "pages/ai/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/workbench/index", "style": { "navigationBarTitleText": "服务商接单台" } },
-    { "path": "pages/profile/index", "style": { "navigationStyle": "custom" } },
-    { "path": "pages/messages/index", "style": { "navigationBarTitleText": "消息中心" } }
-    ,{ "path": "pages/login/index", "style": { "navigationStyle": "custom" } }
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "综合服务",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/services/index",
+      "style": {
+        "navigationBarTitleText": "服务中心",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/provider/detail",
+      "style": {
+        "navigationBarTitleText": "服务详情"
+      }
+    },
+    {
+      "path": "pages/booking/index",
+      "style": {
+        "navigationBarTitleText": "预约下单"
+      }
+    },
+    {
+      "path": "pages/orders/index",
+      "style": {
+        "navigationBarTitleText": "我的订单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/orders/detail",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
+      "path": "pages/demand/publish",
+      "style": {
+        "navigationBarTitleText": "发布需求"
+      }
+    },
+    {
+      "path": "pages/insurance/index",
+      "style": {
+        "navigationBarTitleText": "农业保险"
+      }
+    },
+    {
+      "path": "pages/policies/index",
+      "style": {
+        "navigationBarTitleText": "政策申报"
+      }
+    },
+    {
+      "path": "pages/ai/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/workbench/index",
+      "style": {
+        "navigationBarTitleText": "服务商接单台"
+      }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/messages/index",
+      "style": {
+        "navigationBarTitleText": "消息中心"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/demand/index",
+      "style": {
+        "navigationBarTitleText": "我的需求",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/feedback/index",
+      "style": {
+        "navigationBarTitleText": "投诉与反馈",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/consult/index",
+      "style": {
+        "navigationBarTitleText": "专家问诊",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/resources/index",
+      "style": {
+        "navigationBarTitleText": "产业资源"
+      }
+    },
+    {
+      "path": "pages/training/index",
+      "style": {
+        "navigationBarTitleText": "培训课堂",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/join/index",
+      "style": {
+        "navigationBarTitleText": "服务商入驻"
+      }
+    },
+    {
+      "path": "pages/expert/index",
+      "style": {
+        "navigationBarTitleText": "专家工作台",
+        "enablePullDownRefresh": true
+      }
+    }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
@@ -24,15 +144,27 @@
   },
   "tabBar": {
     "fontSize": "12px",
-    "color": "#94a198",
+    "color": "#666666",
     "selectedColor": "#12764a",
     "borderStyle": "white",
     "backgroundColor": "#ffffff",
     "list": [
-      { "pagePath": "pages/home/index", "text": "首页" },
-      { "pagePath": "pages/services/index", "text": "服务" },
-      { "pagePath": "pages/orders/index", "text": "订单" },
-      { "pagePath": "pages/profile/index", "text": "我的" }
+      {
+        "pagePath": "pages/home/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/services/index",
+        "text": "服务"
+      },
+      {
+        "pagePath": "pages/orders/index",
+        "text": "订单"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
     ]
   }
 }

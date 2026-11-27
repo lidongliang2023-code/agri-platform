@@ -1,0 +1,13 @@
+<template><view class="native-page"><text class="title">集采报名</text><view v-if="error" class="panel error"><text>{{error}}</text><button :disabled="loading" @tap="reload">重新加载</button></view><view v-if="loading" class="sub">正在同步…</view><template v-if="!loading"><view class="panel" v-for="b in data.batches || []" :key="b.id"><text>{{b.title}}</text><text class="sub">{{b.productName}} · {{b.supplierName}}</text><text class="amount">{{money(b.purchase_price)}} / 件</text><text class="sub">{{b.start_time}} 至 {{b.end_time}}</text><text v-if="b.myCommitment" class="sub">我的报名 {{b.myCommitment.quantity}} 件 · {{b.myCommitment.status}}</text><input v-model="quantities[b.id]" type="number" placeholder="报名数量（正整数）"/><input v-model="remarks[b.id]" maxlength="200" placeholder="备注（选填）"/><button class="primary" :disabled="busy || b.status!=='OPEN'" @tap="join(b)">{{b.myCommitment?'更新报名':'提交报名'}}</button><button v-if="b.myCommitment?.status==='RESERVED' && b.status==='OPEN'" :disabled="busy" @tap="cancel(b.id)">取消报名</button></view><text v-if="!data.batches?.length" class="sub">暂无开放的集采批次</text><view class="panel"><text>报名历史</text><view class="line" v-for="h in data.history || []" :key="h.id"><text>{{h.title}} · {{h.quantity}} 件</text><text class="sub">{{money(h.amount)}} · {{h.status}} · {{h.createTime}}</text></view><text v-if="!data.history?.length" class="sub">暂无报名记录</text></view></template></view></template>
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { request, channelApi } from '../../api'
+import { channelSession, saveChannelSession } from '../../session'
+import { useNativePage, go, confirmAction } from '../../useNativePage'
+import { money } from '../../utils'
+const data=ref<any>({}),quantities=reactive<Record<string,string>>({}),remarks=reactive<Record<string,string>>({})
+const {loading,error,busy,reload,act}=useNativePage(async()=>{data.value=await request('/channel/group-purchases');for(const b of data.value.batches||[]){quantities[b.id]=String(b.myCommitment?.quantity || '');remarks[b.id]=b.myCommitment?.remark || ''}})
+async function join(b:any){const quantity=Number(quantities[b.id]);if(!Number.isSafeInteger(quantity)||quantity<=0){error.value='报名数量须为正整数';return}if(await confirmAction(`确认报名 ${b.title}，数量 ${quantity} 件？`))await act(()=>request(`/channel/group-purchases/${b.id}/join`,'POST',{quantity,remark:remarks[b.id] || ''}))}
+async function cancel(id:string|number){if(await confirmAction('取消本批次的集采报名？'))await act(()=>request(`/channel/group-purchases/${id}/cancel`,'PUT'))}
+</script><style src="../../native-page.scss" lang="scss"></style>

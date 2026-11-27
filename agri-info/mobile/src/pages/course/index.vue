@@ -67,7 +67,7 @@ function durationText(course: Course): string {
 <template>
   <view class="page">
     <view class="custom-nav">
-      <text class="nav-back" @click="goBack">‹ 返回</text>
+      <text class="ui-action-target nav-back" @click="goBack">‹ 返回</text>
       <text class="nav-title">培训课堂</text>
       <text class="nav-back" />
     </view>

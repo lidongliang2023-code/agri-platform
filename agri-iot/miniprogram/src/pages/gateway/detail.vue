@@ -6,7 +6,7 @@ import {showError,confirmAction,go} from '../../utils/ui'
 import CommandReceipts from '../../components/CommandReceipts.vue'
 import SegTabs from '../../components/SegTabs.vue'
 const id=ref(0),row=ref<Row|null>(null),tab=ref('commands'),busy=ref(false),error=ref('')
-onLoad(o=>{id.value=Number(o?.id);void load()});onShow(()=>{if(id.value)void load()})
+onLoad(o=>{id.value=Number(o?.id);if(!Number.isSafeInteger(id.value)||id.value<=0){error.value='缺少网关编号，请从网关列表进入';return}void load()});onShow(()=>{if(Number.isSafeInteger(id.value)&&id.value>0)void load()})
 async function load(){try{row.value=await api.gateway(id.value);error.value=''}catch(e){error.value=e instanceof Error?e.message:'网关读取失败'}}
 async function action(kind:string){if(busy.value||!row.value||!(await confirmAction(kind==='restart'?'重启网关':'删除网关',`${row.value.gatewayName}：${kind==='restart'?'重启申请将发送至接入端，结果以回执为准':'仅无挂载设备的网关可删除'}。`)))return;busy.value=true;try{if(kind==='restart'){await api.restartGateway(id.value);uni.showToast({title:'重启申请已登记',icon:'none'});tab.value='commands';void load()}else{await api.deleteGateway(id.value);uni.navigateBack()}}catch(e){showError(e)}finally{busy.value=false}}
 </script>
@@ -31,4 +31,7 @@ async function action(kind:string){if(busy.value||!row.value||!(await confirmAct
     </template>
   </view>
 </template>
-<style scoped>.detail-title{font-size:34rpx;white-space:normal}.seg-wrap{margin-bottom:16rpx}</style>
+<style scoped>.detail-title{font-size:34rpx;white-space:normal}.seg-wrap{margin-bottom:16rpx}
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.error { min-height:48px; }
+</style>

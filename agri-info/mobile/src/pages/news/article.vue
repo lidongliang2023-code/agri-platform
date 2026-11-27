@@ -12,6 +12,7 @@ import {
 
 const id = ref(0)
 const detail = ref<ArticleDetail | null>(null)
+const loadError = ref('')
 const loading = ref(true)
 const liked = ref(false)
 const favorited = ref(false)
@@ -29,10 +30,13 @@ try {
 
 onLoad((options) => {
   id.value = Number(options?.id || 0)
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '缺少资讯编号，请从资讯列表进入'; return }
   load()
 })
 
 async function load() {
+  if (!Number.isSafeInteger(id.value) || id.value <= 0) { loading.value = false; loadError.value = '链接缺少有效编号，请返回列表'; return }
+  loadError.value = ''
   loading.value = true
   try {
     const data = await infoApi.article(id.value)
@@ -46,7 +50,7 @@ async function load() {
       icon: data.coverIcon,
     })
   } catch (error) {
-    uni.showToast({ title: error instanceof Error ? error.message : '加载失败', icon: 'none' })
+    loadError.value = error instanceof Error ? error.message : '加载失败，请重试'
   } finally {
     loading.value = false
   }
@@ -124,6 +128,7 @@ function openArticle(articleId: number) {
 function goBack() {
   uni.navigateBack({ delta: 1 })
 }
+function backToList() { uni.reLaunch({ url: '/pages/news/index' }) }
 </script>
 
 <template>
@@ -137,6 +142,7 @@ function goBack() {
     </view>
 
     <view v-if="loading" class="loading">正在加载…</view>
+    <view v-else-if="loadError" class="empty"><text>{{ loadError }}</text><button class="btn" @click="load">重新加载</button><button class="btn" @click="backToList">返回列表</button></view>
 
     <template v-else-if="detail">
       <view class="head">
@@ -185,7 +191,7 @@ function goBack() {
 
         <view class="section-head">
           <text class="section-title">评论 {{ detail.commentCount }}</text>
-          <text class="card-sub" @click="commenting = true">写评论 ›</text>
+          <text class="ui-action-target card-sub" @click="commenting = true">写评论 ›</text>
         </view>
 
         <view v-if="!detail.comments?.length" class="empty" style="min-height: 200rpx">
@@ -424,4 +430,10 @@ function goBack() {
 .comment-sheet .btn {
   margin-top: 16rpx;
 }
+
+/* 2026-11-20：逐页实测控件的48px触控区。 */
+.back, .right { min-width:48px; min-height:48px; }
+
+/* 收尾复验发现的布局与详情控件修正。 */
+.icon-btn { min-width:48px; min-height:48px; }
 </style>

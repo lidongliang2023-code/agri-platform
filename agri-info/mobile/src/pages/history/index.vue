@@ -57,7 +57,7 @@ function clear() {
   <view class="page">
     <view class="bar">
       <text class="tiny">共 {{ records.length }} 条浏览记录</text>
-      <text class="clear" @click="clear">清空</text>
+      <text class="ui-action-target clear" @click="clear">清空</text>
     </view>
 
     <view class="page-pad">
@@ -96,7 +96,7 @@ function clear() {
 }
 
 .clear {
-  color: #c54b4b;
+  color: #b71c1c;
   font-size: 24rpx;
 }
 
@@ -107,7 +107,7 @@ function clear() {
 .group-label {
   display: block;
   margin: 14rpx 2rpx 10rpx;
-  color: #718277;
+  color: #666666;
   font-size: 24rpx;
   font-weight: 650;
 }

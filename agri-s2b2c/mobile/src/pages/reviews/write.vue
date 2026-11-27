@@ -1,0 +1,14 @@
+<template><view class="native-page"><text class="title">发表评价</text><view v-if="error" class="panel error"><text>{{error}}</text><button :disabled="loading" @tap="reload">重新加载</button></view><view v-if="loading" class="sub">正在同步…</view><template v-if="!loading"><view v-if="done" class="panel"><text>评价已提交</text><button @tap="go('/pages/reviews/index')">查看我的评价</button></view><view v-else class="panel"><text>{{productName}}</text><picker :range="ratings" @change="rating=Number($event.detail.value)+1"><view class="picker">评分：{{rating}} 星</view></picker><textarea v-model="content" maxlength="1000" placeholder="分享商品口感、包装和配送体验"/><view class="row"><text>匿名评价</text><switch :checked="anonymous" @change="toggleAnonymous"/></view><button class="primary" :disabled="busy || !eligible" @tap="submit">提交评价</button><text class="sub">{{eligible?'评价发布后将展示在商品评价中':'订单未完成或商品已评价'}}</text></view></template></view></template>
+<script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
+import { request, mallApi } from '../../api'
+import { session, saveSession } from '../../session'
+import { useNativePage, go, confirmAction } from '../../useNativePage'
+import { money } from '../../utils'
+const orderId=ref(''),productId=ref(''),orderItemId=ref(''),productName=ref(''),rating=ref(5),content=ref(''),anonymous=ref(false),eligible=ref(false),done=ref(false);const ratings=['1 星','2 星','3 星','4 星','5 星']
+onLoad(o=>{orderId.value=String(o?.orderId||'');productId.value=String(o?.productId||'');orderItemId.value=String(o?.orderItemId||'')})
+const {loading,error,busy,reload,act}=useNativePage(async()=>{if(!orderId.value||!productId.value)throw new Error('缺少订单或商品信息');const order=await mallApi.getOrder(orderId.value);const item=order.items.find(x=>String(x.productId)===productId.value);if(!item)throw new Error('订单中没有该商品');productName.value=item.name;orderItemId.value=String(item.id);const mine=await request<any[]>('/consumer/reviews/mine','GET',undefined,{consumerId:session.user!.id});eligible.value=order.status==='COMPLETED'&&!mine.some(x=>String(x.orderId)===orderId.value&&String(x.productId)===productId.value)})
+function toggleAnonymous(event:Event){anonymous.value=Boolean((event as unknown as {detail:{value:boolean}}).detail.value)}
+async function submit(){if(!eligible.value||done.value)return;const ok=await act(()=>request('/consumer/reviews','POST',{consumerId:session.user!.id,orderId:orderId.value,orderItemId:orderItemId.value,productId:productId.value,rating:rating.value,content:content.value.trim(),anonymous:anonymous.value}),false);if(ok)done.value=true}
+</script><style src="../../native-page.scss" lang="scss"></style>

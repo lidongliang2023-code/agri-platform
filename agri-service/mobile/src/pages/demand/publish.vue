@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { localDate } from '../../utils'
 import { onShow } from '@dcloudio/uni-app'
 import { serviceApi } from '../../api'
 
 const natural = ref('')
 const submitting = ref(false)
 const categories = ref<string[]>(['农机作业', '植保防疫', '粮食烘干', '检测认证', '农技问诊'])
-const minDate = new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+const minDate = localDate(1)
 const form = reactive({
   category: '农机作业',
   serviceName: '',
@@ -60,6 +61,13 @@ function parseByAi() {
 }
 
 async function submit() {
+  if (submitting.value) return
+  if (!/^[0-9]+(?:\.[0-9]{1,2})?\s*(亩|次|吨|公斤|人|天|小时|份|台|人\/天)$/.test(form.area) || parseFloat(form.area) <= 0) {
+    return uni.showToast({ title: '请填写明确数量，如50亩或2吨', icon: 'none' })
+  }
+  if (Number(form.budgetMin) < 0 || Number(form.budgetMax) < Number(form.budgetMin) || form.preferredDate < minDate) {
+    return uni.showToast({ title: '请核对预算范围和期望日期', icon: 'none' })
+  }
   if (!form.serviceName || !form.location || !form.area) {
     uni.showToast({ title: '请补全需求标题、服务地点和面积', icon: 'none' })
     return
@@ -73,9 +81,9 @@ async function submit() {
     const result = await serviceApi.createDemand(form) as { demandNo?: string; matchCount?: number }
     uni.showModal({
       title: '需求已发布',
-      content: `需求号 ${result?.demandNo ?? ''}，同类目在营服务商 ${result?.matchCount ?? 0} 家已进入匹配池。`,
+      content: `需求号 ${result?.demandNo ?? ''}，同类目在营服务商 ${result?.matchCount ?? 0} 家可供匹配，请在我的需求查看接单进度。`,
       showCancel: false,
-      success: () => uni.switchTab({ url: '/pages/services/index' }),
+      success: () => uni.redirectTo({ url: '/pages/demand/index' }),
     })
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '发布失败', icon: 'none' })
@@ -118,14 +126,14 @@ async function submit() {
         </view>
       </view>
       <view class="grid-2">
-        <view class="form-item"><text class="form-label">最低预算</text><input class="input" type="digit" v-model="form.budgetMin" /></view>
-        <view class="form-item"><text class="form-label">最高预算</text><input class="input" type="digit" v-model="form.budgetMax" /></view>
+        <view class="form-item"><text class="form-label">最低单价预算（元/单位）</text><input class="input" type="digit" v-model="form.budgetMin" /></view>
+        <view class="form-item"><text class="form-label">最高单价预算（元/单位）</text><input class="input" type="digit" v-model="form.budgetMax" /></view>
       </view>
       <view class="grid-2">
         <view class="form-item"><text class="form-label">联系人</text><input class="input" v-model="form.contactName" /></view>
         <view class="form-item"><text class="form-label">联系电话</text><input class="input" type="number" v-model="form.contactPhone" placeholder="11 位手机号" /></view>
       </view>
-      <button class="btn btn-primary btn-block" :loading="submitting" @click="submit">发布需求并智能匹配</button>
+      <button class="btn btn-primary btn-block" :loading="submitting" :disabled="submitting" @click="submit">发布需求</button>
     </view>
   </view>
 </template>
@@ -135,6 +143,9 @@ async function submit() {
 .ai-box { margin-bottom: 20rpx; padding: 24rpx; border: 1rpx solid #dfd1e9; border-radius: 24rpx; background: linear-gradient(145deg, #fbf8fd, #f2eaf8); }
 .ai-title { display: flex; align-items: center; gap: 14rpx; margin-bottom: 16rpx; }
 .ai-title > view:last-child { display: flex; flex-direction: column; gap: 4rpx; }
-.ai-title .ai-icon { width: 64rpx; height: 64rpx; border-radius: 17rpx; background: #6b458b; color: #fff; font-size: 29rpx; }
+.ai-title .ai-icon { width: 64rpx; height: 64rpx; border-radius: 17rpx; background: #6b458b; color: #fff; font-size: 15px; }
 .ai-box .btn { margin-top: 16rpx; }
+
+.demand-page { padding-bottom: calc(24rpx + env(safe-area-inset-bottom)); }
+
 </style>

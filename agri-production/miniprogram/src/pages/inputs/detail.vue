@@ -1,6 +1,6 @@
 <template>
   <view class="page">
-    <view v-if="error" class="error-box">{{ error }}</view>
+    <view v-if="error" class="error-box"><text>{{ error }}</text><button v-if="inputId" @click="load">重新加载</button><button @click="goScan">返回投入品登记</button></view>
 
     <view class="card">
       <view class="card-title"><text>💊 {{ item.inputName || '投入品详情' }}</text></view>
@@ -100,9 +100,9 @@ const withdrawalText = computed(() => {
 })
 
 const withdrawalColor = computed(() => {
-  if (!earliestHarvest.value) return '#fa8c16'
+  if (!earliestHarvest.value) return '#8f4500'
   const remain = daysBetween(today(), earliestHarvest.value)
-  return remain !== null && remain > 0 ? '#cf1322' : '#13a05a'
+  return remain !== null && remain > 0 ? '#cf1322' : '#1e6b38'
 })
 
 function goScan(): void {
@@ -111,6 +111,7 @@ function goScan(): void {
 
 async function load(): Promise<void> {
   error.value = ''
+  if (!inputId.value.trim()) { error.value = '缺少投入品编号，请从投入品登记页面选择记录后查看'; return }
   try {
     const [detail, usagePage, flowPage] = await Promise.all([
       getInput(inputId.value),
