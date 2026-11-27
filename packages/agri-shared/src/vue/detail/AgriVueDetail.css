@@ -1,0 +1,668 @@
+/* 跨子系统通用详情页规范（结构：吸顶页头[单号+状态+操作+嵌入页签] → 左侧信息分组/子表 + 右侧340px状态进度与关联单据） */
+.agri-detail-page {
+  --detail-brand: #2d8f4e;
+  --detail-brand-hover: #247840;
+  --detail-brand-soft: #eaf5ee;
+  --detail-border: #e8ecea;
+  --detail-border-light: #f0f2f1;
+  --detail-text: #141c17;
+  --detail-text-secondary: #68776e;
+  --detail-text-muted: #8c9a92;
+  --detail-bg: #f5f6fa;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  color: var(--detail-text);
+  font-size: 13px;
+}
+
+/* 吸顶外框：滚动时用页面底色遮盖顶栏下方 16px 缝隙，保证页头固定不消失且下方内容不透出。 */
+.agri-detail-header-sticky {
+  position: sticky;
+  top: -16px;
+  z-index: 15;
+  margin-top: -16px;
+  padding-top: 16px;
+  background: var(--detail-bg);
+}
+
+.agri-detail-header-card {
+  background: #fff;
+  border: 1px solid var(--detail-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(16, 24, 20, 0.03);
+  overflow: hidden;
+}
+
+.agri-detail-header-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px 16px;
+}
+
+.agri-detail-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.agri-detail-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agri-detail-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--detail-border);
+  border-radius: 6px;
+  background: #fff;
+  color: #46544c;
+  cursor: pointer;
+  flex: none;
+  transition: border-color 0.16s, color 0.16s, background-color 0.16s;
+}
+
+.agri-detail-back-btn:hover {
+  border-color: var(--detail-brand);
+  color: var(--detail-brand);
+  background: #f6fbf8;
+}
+
+.agri-detail-code {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  letter-spacing: 0.01em;
+  color: var(--detail-text);
+  word-break: break-all;
+}
+
+.agri-detail-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+  color: #2f3e36;
+  overflow-wrap: anywhere;
+}
+
+.agri-detail-name.is-primary-title {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 28px;
+  color: var(--detail-text);
+}
+
+.agri-detail-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.agri-detail-status-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.agri-detail-status-pill.is-green {
+  background: #e8f5e9;
+  color: #23744c;
+}
+
+.agri-detail-status-pill.is-orange {
+  background: #fff7e6;
+  color: #d46b08;
+}
+
+.agri-detail-status-pill.is-red {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.agri-detail-status-pill.is-blue {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
+.agri-detail-status-pill.is-gray {
+  background: #f2f4f3;
+  color: #5a6860;
+}
+
+.agri-detail-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--detail-text-secondary);
+}
+
+.agri-detail-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agri-detail-meta-sep {
+  color: #c5cec9;
+  user-select: none;
+}
+
+.agri-detail-meta-value {
+  color: #36453d;
+  font-weight: 500;
+}
+
+/* 页头右侧操作区：次要 → 危险 → 主要 */
+.agri-detail-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+}
+
+.agri-detail-header-actions .ant-btn {
+  height: 34px;
+  padding-inline: 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.agri-detail-header-actions .ant-btn-primary:not(:disabled) {
+  background: var(--detail-brand);
+  border-color: var(--detail-brand);
+}
+
+.agri-detail-header-actions .ant-btn-primary:not(:disabled):hover {
+  background: var(--detail-brand-hover);
+  border-color: var(--detail-brand-hover);
+}
+
+.agri-detail-header-actions .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled) {
+  color: #cf1322;
+  border-color: #ffa39e;
+  background: #fff;
+}
+
+.agri-detail-header-actions .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled):hover {
+  color: #a8071a;
+  border-color: #ff4d4f;
+  background: #fff1f0;
+}
+
+/* 嵌入页头卡片底部的页签导航栏 */
+.agri-detail-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  border-top: 1px solid var(--detail-border-light);
+  background: #fff;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.agri-detail-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.agri-detail-tab-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #5b6a61;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.16s;
+}
+
+.agri-detail-tab-btn:hover:not(:disabled) {
+  color: var(--detail-brand);
+}
+
+.agri-detail-tab-btn:disabled {
+  color: #b8c2bc;
+  cursor: not-allowed;
+}
+
+.agri-detail-tab-btn.is-active {
+  color: var(--detail-brand);
+  font-weight: 600;
+}
+
+.agri-detail-tab-btn.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--detail-brand);
+}
+
+.agri-detail-tab-count {
+  color: var(--detail-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.agri-detail-tab-btn.is-active .agri-detail-tab-count {
+  color: var(--detail-brand);
+}
+
+.agri-detail-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 主体两栏布局：左侧信息分组/子表 + 右侧 340px 状态与关联栏 */
+.agri-detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.agri-detail-body.is-single-column {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.agri-detail-main,
+.agri-detail-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* 详情分区卡片（信息分组 / 明细子表 / 进度 / 关联单据） */
+.agri-detail-section {
+  background: #fff;
+  border: 1px solid var(--detail-border);
+  border-radius: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.agri-detail-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--detail-border-light);
+}
+
+.agri-detail-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--detail-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agri-detail-section-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  font-size: 13px;
+}
+
+.agri-detail-section-body {
+  padding: 16px 20px;
+  min-width: 0;
+}
+
+.agri-detail-section-body.is-flush {
+  padding: 0;
+}
+
+.agri-detail-section-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--detail-border-light);
+  background: #fafcfb;
+  font-size: 13px;
+}
+
+/* 详情页内信息分组两列网格覆盖：同行紧凑排布，清晰易读 */
+.agri-detail-page .detail-info-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--detail-info-columns, 2), minmax(0, 1fr));
+  gap: 12px 28px;
+}
+
+.agri-detail-page .detail-info-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.agri-detail-page .detail-info-label {
+  flex: 0 0 96px;
+  color: var(--detail-text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+.agri-detail-page .detail-info-label::after {
+  content: '';
+}
+
+.agri-detail-page .detail-info-value {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-top: 0;
+  color: var(--detail-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+.agri-detail-page .detail-info-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 详情页内子表样式统一 */
+.agri-detail-page .ant-table-thead > tr > th {
+  background: #fafafa;
+  color: #5a6860;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px !important;
+}
+
+.agri-detail-page .ant-table-tbody > tr > td {
+  font-size: 13px;
+  padding: 10px 14px !important;
+  color: var(--detail-text);
+}
+
+/* 右侧 340px 栏：进度时间线 */
+.agri-detail-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.agri-detail-timeline-item {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 18px;
+}
+
+.agri-detail-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.agri-detail-timeline-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 14px;
+  flex: none;
+  padding-top: 5px;
+}
+
+.agri-detail-timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  z-index: 1;
+}
+
+.agri-detail-timeline-item.is-done .agri-detail-timeline-dot {
+  background: #2d8f4e;
+}
+
+.agri-detail-timeline-item.is-current .agri-detail-timeline-dot {
+  background: #fa8c16;
+  box-shadow: 0 0 0 4px rgba(250, 140, 22, 0.18);
+}
+
+.agri-detail-timeline-item.is-pending .agri-detail-timeline-dot {
+  background: #d9dfe0;
+}
+
+.agri-detail-timeline-item.is-error .agri-detail-timeline-dot {
+  background: #ff4d4f;
+  box-shadow: 0 0 0 4px rgba(255, 77, 79, 0.16);
+}
+
+.agri-detail-timeline-line {
+  position: absolute;
+  top: 17px;
+  bottom: -5px;
+  width: 2px;
+  background: #e8ecea;
+}
+
+.agri-detail-timeline-item.is-done .agri-detail-timeline-line {
+  background: #b7dfc4;
+}
+
+.agri-detail-timeline-item:last-child .agri-detail-timeline-line {
+  display: none;
+}
+
+.agri-detail-timeline-content {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.agri-detail-timeline-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--detail-text);
+}
+
+.agri-detail-timeline-item.is-pending .agri-detail-timeline-title {
+  color: var(--detail-text-muted);
+  font-weight: 500;
+}
+
+.agri-detail-timeline-item.is-current .agri-detail-timeline-title {
+  color: #d46b08;
+}
+
+.agri-detail-timeline-item.is-error .agri-detail-timeline-title {
+  color: #cf1322;
+}
+
+.agri-detail-timeline-sub {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--detail-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.agri-detail-timeline-item.is-pending .agri-detail-timeline-sub {
+  color: var(--detail-text-muted);
+}
+
+/* 右侧 340px 栏：关联单据列表 */
+.agri-detail-related-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.agri-detail-related-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--detail-border-light);
+}
+
+.agri-detail-related-row:first-child {
+  padding-top: 2px;
+}
+
+.agri-detail-related-row:last-child {
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+
+.agri-detail-related-label {
+  color: var(--detail-text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  flex: none;
+}
+
+.agri-detail-related-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  text-align: right;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.agri-detail-related-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--detail-brand);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.agri-detail-related-link:hover {
+  color: var(--detail-brand-hover);
+  text-decoration: underline;
+}
+
+.agri-detail-related-link.is-mono,
+.agri-detail-related-text.is-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+
+.agri-detail-related-text {
+  color: var(--detail-text);
+  font-weight: 500;
+}
+
+.agri-detail-related-empty {
+  color: var(--detail-text-muted);
+  font-weight: 400;
+}
+
+@media (max-width: 1120px) {
+  .agri-detail-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .agri-detail-header-sticky {
+    top: -10px;
+    margin-top: -10px;
+    padding-top: 10px;
+  }
+
+  .agri-detail-header-main {
+    flex-direction: column;
+    padding: 14px 16px;
+  }
+
+  .agri-detail-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .agri-detail-tabs-bar {
+    padding: 0 16px;
+    gap: 18px;
+  }
+
+  .agri-detail-section-head {
+    padding: 10px 14px;
+  }
+
+  .agri-detail-section-body {
+    padding: 12px 14px;
+  }
+
+  .agri-detail-page .detail-info-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .agri-detail-page .detail-info-label {
+    flex-basis: 88px;
+  }
+}

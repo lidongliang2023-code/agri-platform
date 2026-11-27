@@ -26,6 +26,8 @@ export interface DetailInfoItem {
   value: VNodeChild;
   /** 是否独占一行（长地址、资质标签等） */
   fullWidth?: boolean;
+  /** 是否等宽显示（单号、编码、哈希等） */
+  mono?: boolean;
 }
 
 /** 信息栅格入参 */
@@ -85,7 +87,7 @@ const DetailInfoGrid = defineComponent({
       } as CSSProperties}>
       {__props.items.map((item, index) => <div key={item.key ?? index} class={`detail-info-item${item.fullWidth ? ' detail-info-item-full' : ''}`}>
           <div class="detail-info-label">{item.label}</div>
-          <div class="detail-info-value">
+          <div class={`detail-info-value${item.mono ? ' detail-info-mono' : ''}`}>
             {item.value === undefined || item.value === null || item.value === '' ? '—' : item.value}
           </div>
         </div>)}

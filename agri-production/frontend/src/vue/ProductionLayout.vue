@@ -72,7 +72,17 @@ const matched = computed(() => {
   for (const group of groups.value) for (const leaf of group.children) if ((route.path === leaf.key || route.path.startsWith(`${leaf.key}/`)) && (!best || leaf.key.length > best.leaf.key.length)) best = { group, leaf }
   return best
 })
-const breadcrumb = computed(() => ['首页', ...(matched.value ? [matched.value.group.label, matched.value.leaf.label] : [String(route.meta.name ?? props.title)])])
+const breadcrumb = computed(() => {
+  const pageName = String(route.meta.name ?? '').trim()
+  if (matched.value) {
+    const items = ['首页', matched.value.group.label, matched.value.leaf.label]
+    if (route.path !== matched.value.leaf.key && pageName && pageName !== matched.value.leaf.label) {
+      items.push(pageName)
+    }
+    return items
+  }
+  return ['首页', pageName || props.title]
+})
 watch(() => route.fullPath, () => { navigationOpen.value = false })
 watch(() => [matched.value?.group.key, collapsed.value, mobile.value], () => { const key = matched.value?.group.key; if (key && (mobile.value || !collapsed.value)) openKeys.value = props.admin ? Array.from(new Set([...openKeys.value, key])) : [key] }, { immediate: true })
 const subjectsQuery = useQuery(computed(() => ({ queryKey: ['operating-subjects', props.user?.userId, props.marketId, props.tokenExpireAt], enabled: !props.admin && props.tokenReady && Boolean(props.user?.userId), queryFn: ({ signal }: { signal: AbortSignal }) => props.services.getSubjects(signal), retry: false, refetchOnWindowFocus: true })))

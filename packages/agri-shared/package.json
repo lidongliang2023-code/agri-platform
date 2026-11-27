@@ -15,6 +15,8 @@
     "./vue/list/*": "./src/vue/list/*",
     "./vue/workspace": "./src/vue/workspace/index.ts",
     "./vue/workspace/*": "./src/vue/workspace/*",
+    "./vue/detail": "./src/vue/detail/index.ts",
+    "./vue/detail/*": "./src/vue/detail/*",
     "./vue/antdv": "./src/vue/antdv/index.ts",
     "./vue/antdv/*": "./src/vue/antdv/*",
     "./vue/http": "./src/vue/http/index.ts",
