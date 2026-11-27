@@ -170,7 +170,7 @@ const pickSelectOption = async (text) => {
 /**
  * 打开一个 Select 下拉。
  *
- * ⚠️ 必须用**真实鼠标点击**：antd Select 展开挂在 React 的合成事件上，
+ * ⚠️ 必须用**真实鼠标点击**：组件库 Select 展开依赖真实交互事件，
  * 手工 `dispatchEvent(new MouseEvent('mousedown'))` 打不开（临时探针实测：
  * 派发之后下拉数量仍是 0，真点一下就有 7 个选项）。
  *
@@ -218,7 +218,7 @@ const waitForOptions = async (timeoutMs = 15000) => {
  * 往列表搜索表单的某个字段里写值。
  *
  * <p>走原生 value setter + input 事件，而不是 page.type：这些输入框是受控组件，
- * 直接赋 value 不会触发 React 的 onChange，条件就带不出去（看着填了、其实没生效）。</p>
+ * 直接赋 value 不会触发组件的变更事件，条件就带不出去（看着填了、其实没生效）。</p>
  *
  * @param label 搜索项的标签文案（计划名称 / 计划编号 / 作物）
  * @param value 要写入的值

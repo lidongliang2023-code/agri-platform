@@ -86,7 +86,7 @@ const USER_INFO_KEY = 'agri_user_info'
 const DEMO_BANNER_KEYWORDS = ['演示数据', '【演示】', '示例数据', '演示环境', 'mock 数据', 'Mock数据']
 
 /**
- * 视为「框架噪声」的 console error 特征（antd/React 弃用告警等）。
+ * 视为「框架噪声」的 console error 特征（组件库弃用告警等）。
  *
  * 这些文本会污染错误计数，但并非被测页面的缺陷，因此单独统计一栏 `consoleErrorsReal`，
  * 原始 `consoleErrors` 仍保留，两栏都进报告，不做任何隐藏。
@@ -94,7 +94,6 @@ const DEMO_BANNER_KEYWORDS = ['演示数据', '【演示】', '示例数据', '�
 const CONSOLE_NOISE_PATTERNS = [
   /\[antd[^\]]*\][\s\S]*deprecated/i,
   /\bdeprecated\b/i,
-  /Download the React DevTools/i,
   /favicon/i,
 ]
 
@@ -610,7 +609,7 @@ async function patrolOne(ctx, route, deep) {
   } catch (err) {
     record.note = `goto 失败：${err && err.message ? err.message : String(err)}`
   }
-  // 网络空闲后再给 React 一帧时间完成懒加载组件的渲染
+  // 网络空闲后再给 Vue 一帧时间完成懒加载组件的渲染
   await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
   await new Promise((r) => setTimeout(r, 800))
 

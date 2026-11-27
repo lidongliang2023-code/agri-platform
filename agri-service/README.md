@@ -6,7 +6,7 @@
 ## 本地地址
 
 - 用户端：http://127.0.0.1:8105/
-- 移动端 H5：http://127.0.0.1:8106/
+- uni-app 移动端 H5（同源构建，非独立 H5 工程）：http://127.0.0.1:8106/
 - 运营端：http://127.0.0.1:8107/
 - 后端：http://127.0.0.1:8094
 
@@ -38,6 +38,15 @@ PC 端采用 OAuth2 授权码 + PKCE，移动端使用统一账号密码并校�
 建表与演示数据位于 `src/main/resources/schema.sql` 和 `data.sql`。
 
 ## 移动端
+
+唯一移动源码是 `mobile`，统一构建 H5、微信小程序和 App；不存在需要删除的独立移动 H5 源码。
+`frontend` 是 PC 用户端，`ops` 是 PC 运营端，均保留。`service-mobile` 网关入口仍指向 uni-app H5 产物。
+
+移动端按职责分为：首页办理入口、服务目录、我的订单、个人中心；服务商接单与进度上报在独立工作台。
+“我的需求”和“投诉与反馈”复用现有需求与投诉接口，不新增重复数据源。
+预约项目必须是当前上架目录项目；需求数量与报价单位一致才可接单。服务商上报100%后仍是履约中，
+需求方验收后才完成，再允许评价。历史状态码 `pending_payment` 暂保留兼容，界面统一显示“待确认预约”，
+确认仅改变预约状态，不代表支付成功、不自动锁档。
 
 ```powershell
 cd agri-service/mobile
@@ -79,8 +88,8 @@ node ops/gateway/scripts/publish.mjs --app service-ops --version 20261101-servic
 
 ```powershell
 node scripts/provision-service-access.mjs   # 服务商账号、档案绑定与"未绑定即拒绝"的自检
-node scripts/e2e-service-flow.mjs           # 接口级主链路（身份、金额、状态机、越权、清理）
-node scripts/check-service-ui.mjs           # 三端浏览器点检（真实登录点击 + CSV 下载 + 残留归零）
+node scripts/e2e-service-flow.mjs           # 历史用例；需同步为服务商上报100%后消费者验收，再用于验收本版
+node scripts/check-service-ui.mjs           # 历史界面点检；选择器与预约文案需同步本版后使用
 ```
 
 三个脚本都要在 core-platform :8093、agri-service :8094、gateway 8105/8106/8107 都在跑的前提下执行，

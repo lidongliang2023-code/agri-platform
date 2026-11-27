@@ -6,7 +6,9 @@
   "scripts": {
     "modules:status": "node ops/modules/status.mjs",
     "modules:list": "node ops/modules/status.mjs --json",
-    "modules:mobile": "node ops/modules/audit-mobile.mjs"
+    "modules:mobile": "node ops/modules/audit-mobile.mjs",
+    "check:pc-framework": "node ops/modules/audit-pc-framework.mjs",
+    "build:pc": "pnpm -r --no-bail --workspace-concurrency=3 --filter './agri-*/frontend' --filter './agri-*/web' --filter './agri-*/ops' --filter './agri-s2b2c/frontend-*' run build"
   },
   "engines": {
     "node": ">=18",

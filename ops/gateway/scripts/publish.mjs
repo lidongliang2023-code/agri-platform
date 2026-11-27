@@ -36,7 +36,7 @@ const BUCKET_DIR = path.join(GATEWAY_DIR, 'bucket')
 /** 已登记子系统 → 前端工程目录（相对仓库根）。新增子系统时在这里加一行。 */
 const APPS = {
   prod: { frontendDir: path.join('agri-production', 'frontend'), title: '生产管理系统' },
-  mdm: { frontendDir: path.join('agri-master-data', 'web'), title: '主数据管理平台' },
+  mdm: { frontendDir: path.join('agri-master-data', 'web'), title: '主数据管理平台', accessUrl: 'http://localhost:8080/' },
   trade: { frontendDir: path.join('agri-trade', 'frontend'), title: '交易撮合平台' },
   'trade-mobile': {
     frontendDir: path.join('agri-trade', 'miniprogram'),
@@ -46,7 +46,7 @@ const APPS = {
     distDir: path.join('dist', 'build', 'h5'),
   },
   // 生产管理移动端只保留 uni-app 一套源码：H5 在这里发布，微信小程序与 App 由同一工程
-  // 构建 dist/build/mp-weixin、dist/build/app；React 独立移动 H5 已下线。
+  // 构建 dist/build/mp-weixin、dist/build/app；旧版独立移动 H5 已下线。
   'prod-mobile': {
     frontendDir: path.join('agri-production', 'miniprogram'),
     title: '生产管理移动端（H5 / 微信小程序 / App）',
@@ -70,7 +70,7 @@ const APPS = {
     accessUrl: 'http://localhost:8102/',
   },
   // 物联网移动端只保留 uni-app 一套源码：H5 在这里发布，微信小程序与 App 由同一工程
-  // 构建 dist/build/mp-weixin、dist/build/app，不再另设 React 独立 H5。
+  // 构建 dist/build/mp-weixin、dist/build/app，不再另设 旧版独立 H5。
   'iot-mobile': {
     frontendDir: path.join('agri-iot', 'miniprogram'),
     title: '物联网管理移动端（H5 / 微信小程序 / App）',
@@ -377,7 +377,8 @@ if (args.build) {
   } else {
   // 类型检查只在工程真的装了 TypeScript 时才跑：Vue 系的工程没有 TS，
   // 无条件调用会因找不到 tsc 而把发布直接中止（不是类型错误，却报成失败）。
-  const tscBin = resolveBin(frontendDir, 'typescript', path.join('bin', 'tsc'))
+  const tscBin = resolveBin(frontendDir, 'vue-tsc', path.join('bin', 'vue-tsc.js'))
+    ?? resolveBin(frontendDir, 'typescript', path.join('bin', 'tsc'))
   if (tscBin) {
     const tsc = spawnSync(process.execPath, [tscBin, '--noEmit'], { cwd: frontendDir, stdio: 'inherit' })
     if (tsc.status !== 0) fail('类型检查未通过，发布中止')

@@ -67,7 +67,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   else if (token === '--help' || token === '-h') {
     console.log(
       '用法：node ops/ci/verify.mjs [--build] [--mobile-e2e] ' +
-        '[--only workspace,shared,gateway,bucket,apps,mobile,mobile-e2e,schema,scripts,font] [--skip shared]',
+        '[--only workspace,shared,gateway,bucket,apps,mobile,order-navigation,mobile-e2e,schema,scripts,font] [--skip shared]',
     )
     process.exit(0)
   } else {
@@ -263,7 +263,7 @@ async function checkApps() {
     .map((m) => m[1])
   // 独立移动端与物联网前端使用自己的 npm 依赖树，不进入 pnpm workspace，
   // 但仍必须参与构建门禁。
-  for (const extra of ['agri-trade/mobile', 'agri-iot/web', 'agri-iot/admin']) {
+  for (const extra of ['agri-iot/web', 'agri-iot/admin']) {
     if (!entries.includes(extra)) entries.push(extra)
   }
   for (const entry of entries) {
@@ -442,8 +442,8 @@ async function checkE2eHarness() {
  * 而这正是"看起来一切正常、真机读不清"的成因。</p>
  *
  * <p>端清单取自 publish.mjs 的注册表（真正发版的东西），不在这里维护第二份名单 ——
- * 顺带避开一个真实陷阱：`agri-trade/mobile` 是不发版的旧目录，
- * 注册表里 trade-mobile 的源码其实是 `agri-trade/miniprogram`。</p>
+ * 交易撮合移动端只保留 uni-app 一套源码：注册表里 trade-mobile 对应 `agri-trade/miniprogram`
+ * （原 旧版独立 H5 `agri-trade/mobile` 已删除）。</p>
  *
  * <p>两类"grep 源码看不见"的漏点也一起兜住，都是本轮实测抓到的：
  * uni-app 的 tabBar 文字由 pages.json 配置生成（缺省 10px），
@@ -650,13 +650,23 @@ async function checkMobile() {
   const offenders = []
   const mobileOnly = []
   if (existsSync(apiDir)) {
+    // 原生业务目录保存相对路径，由 native-business.call 统一加生产域前缀。
+    // 只为已核对的目录文件启用解析，并校验封装仍保持此前缀契约。
+    const nativePath = path.join(apiDir, 'native-business.ts')
+    const nativeText = existsSync(nativePath) ? await readFile(nativePath, 'utf8') : ''
+    const nativePrefixValid = /export\s+const\s+base\s*=\s*['"]\/api\/v1\/production['"]/.test(nativeText)
+      && /return\s+request\(\{\s*url:\s*base\s*\+\s*url\s*,/.test(nativeText)
+    const catalogs = new Set(['native-business-catalog.ts', 'native-business-ai.ts', 'business-import.ts'])
     for (const entry of await readdir(apiDir, { withFileTypes: true })) {
       if (!entry.name.endsWith('.ts')) continue
       const text = await readFile(path.join(apiDir, entry.name), 'utf8')
       for (const match of text.matchAll(/url:\s*[`'"]([^`'"]+)[`'"]/g)) {
-        const url = match[1]
-        if (url.includes('/api/v1/mobile/')) mobileOnly.push(url)
-        else if (!/^\/api\/v1\/(production|auth)\b/.test(url)) offenders.push(url)
+        const rawUrl = match[1]
+        const isCatalog = catalogs.has(entry.name)
+        const relative = /^\/(?!\/|api\/)/.test(rawUrl) && !rawUrl.includes('..')
+        const url = isCatalog && nativePrefixValid && relative ? `/api/v1/production${rawUrl}` : rawUrl
+        if (rawUrl.includes('/api/v1/mobile/')) mobileOnly.push(rawUrl)
+        else if ((isCatalog && !nativePrefixValid) || !/^\/api\/v1\/(production|auth)(?:\/|$)/.test(url)) offenders.push(`${entry.name}: ${rawUrl}`)
       }
     }
   }
@@ -789,11 +799,25 @@ async function checkMobileE2E() {
 }
 
 // ---------------- 执行 ----------------
-if (enabled('workspace')) await checkWorkspace()
+if (enabled('workspace')) {
+  await checkWorkspace()
+  const audit = run(process.execPath, ['ops/modules/audit-pc-framework.mjs'])
+  process.stdout.write(audit.stdout ?? '')
+  process.stderr.write(audit.stderr ?? '')
+  record('workspace', 'PC Vue 3 框架检查', audit.status === 0 ? 'pass' : 'fail')
+}
 if (enabled('shared')) checkShared()
 if (enabled('gateway')) await checkGateway()
 if (enabled('bucket')) await checkBucket()
 if (enabled('mobile')) await checkMobile()
+if (enabled('order-navigation')) {
+  const result = run(process.execPath, ['--test', '--test-reporter=tap', 'tests/order-navigation.test.cjs'], {
+    cwd: path.join(REPO_ROOT, 'agri-s2b2c', 'mobile-channel'),
+  })
+  process.stdout.write(result.stdout ?? '')
+  process.stderr.write(result.stderr ?? '')
+  record('order-navigation', '商家订单详情跳转', result.status === 0 ? 'pass' : 'fail', result.error?.message)
+}
 if (enabled('mobile-e2e')) {
   if (args.mobileE2e) await checkMobileE2E()
   else record('mobile-e2e', '移动端端到端（真浏览器）', 'skip', '加 --mobile-e2e 打开（需要生产栈与 H5 dev server 在跑）')

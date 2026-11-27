@@ -410,23 +410,12 @@ async function main() {
   const appsB = await api(other, 'GET', '/api/v1/service/policies/applications')
   check(!(appsB.data ?? []).some((item) => item.applicationNo === apply.data?.applicationNo),
     'B 的申报列表里没有 A 的申报')
-  const badFlow = await api(admin, 'POST', `/api/v1/service/ops/policy-applications/${applicationId}/review`,
-    { status: 'paid', note: '一步拨付' })
-  check(badFlow.code === 409, '跳过乡镇与区县直接拨付被拒', badFlow.message)
-  const noNote = await api(admin, 'POST', `/api/v1/service/ops/policy-applications/${applicationId}/review`, { status: 'town_review' })
-  check(noNote.code === 400, '审核不写意见被拒', noNote.message)
-  let step = await api(admin, 'POST', `/api/v1/service/ops/policy-applications/${applicationId}/review`,
-    { status: 'town_review', note: '乡镇材料齐全' })
-  check(step.code === 200 && Number(step.data?.progress) === 45, '乡镇审核通过', String(step.data?.progress))
-  await api(admin, 'POST', `/api/v1/service/ops/policy-applications/${applicationId}/review`, { status: 'county_review', note: '区县复核通过' })
-  step = await api(admin, 'POST', `/api/v1/service/ops/policy-applications/${applicationId}/review`, { status: 'paid', note: '已拨付' })
-  check(step.code === 200 && step.data?.status === 'paid', '走完三级审核并拨付')
-  const afterPaid = await api(admin, 'POST', `/api/v1/service/ops/policy-applications/${applicationId}/review`, { status: 'town_review', note: '退回' })
-  check(afterPaid.code === 409, '已拨付不能退回', afterPaid.message)
-  const applyNotices = Number(scalar(`SELECT COUNT(*) FROM agri_service.service_message
-    WHERE merchant_id=${MERCHANT_A} AND content LIKE '%乡镇审核%'`))
-  check(applyNotices >= 1, '每一步审核都通知了申报主体', `rows=${applyNotices}`)
-
+  const ledger = await api(admin, 'GET', '/api/v1/service/ops/policy-applications')
+  const pending = ledger.data?.find(item => Number(item.id) === applicationId)
+  check(pending?.allowedStatuses?.length === 0, '仅有管理员通配权限时申报台账只读')
+  const denied = await api(admin, 'POST', `/api/v1/service/ops/policy-applications/${applicationId}/review`,
+    { expectedStatus: 'submitted', status: 'town_review', note: '隔离联调：管理员无审核岗位' })
+  check(denied.code === 403 || denied.status === 403, '管理员未获乡镇岗时不能代审', denied.message)
   /* ---------- 9. 保险：费率实算与报案归属 ---------- */
   const products = await api(farmer, 'GET', '/api/v1/service/insurance/products')
   const product = (products.data ?? []).find((item) => Number(item.premiumRate) > 0)

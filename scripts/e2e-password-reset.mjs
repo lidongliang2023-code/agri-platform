@@ -107,7 +107,7 @@ async function waitFor(expression, timeoutMs = 20000, label = expression) {
   throw new Error(`等待超时：${label}`)
 }
 
-/** React 受控输入必须走原生 setter + input 事件，直接改 value 不会触发 onChange */
+/** 组件受控输入必须走原生 setter + input 事件，直接改 value 不会触发 onChange */
 const setInput = (selector, value, index = 0) => evaluate(`(() => {
   const input = document.querySelectorAll(${JSON.stringify(selector)})[${index}]
   if (!input) return false

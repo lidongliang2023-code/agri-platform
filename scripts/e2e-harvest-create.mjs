@@ -190,7 +190,7 @@ const waitForOptions = async (timeoutMs = 15000) => {
 /**
  * 打开一个 Select 下拉。
  *
- * ⚠️ 必须用真实鼠标点击：antd Select 展开挂在 React 合成事件上，手工 dispatchEvent 打不开。
+ * ⚠️ 必须用真实鼠标点击：组件库 Select 展开依赖真实交互事件，手工 dispatchEvent 打不开。
  */
 const openSelect = async (fieldSelector) => {
   await page.click(fieldSelector)

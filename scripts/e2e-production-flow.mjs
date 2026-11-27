@@ -322,7 +322,9 @@ try {
     divergence || `${verifyNodes.length} 个节点`)
   const selfAttest = verifyBody?.data?.selfAttestation
   check(Number(verifyBody?.data?.onChainCount) === 1 && Number(verifyBody?.data?.attestedCount) === 3
-    && String(selfAttest?.recordNo) === failedNo && String(verifyBody?.data?.chainConclusion ?? '').includes('存证未成功'),
+    && String(selfAttest?.recordNo) === failedNo
+    && String(verifyBody?.data?.chainConclusion ?? '').includes('处理中 1，失败 1，')
+    && String(verifyBody?.data?.chainConclusion ?? '').includes('失败节点请谨慎采信'),
     '核验汇总：1 条已上链、3 条有存证，码自身取到 FAILED 记录且结论提示谨慎采信',
     `onChain=${verifyBody?.data?.onChainCount} attested=${verifyBody?.data?.attestedCount} self=${selfAttest?.recordNo ?? ''}`)
 

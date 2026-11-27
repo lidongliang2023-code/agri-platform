@@ -56,7 +56,7 @@ page.on('response', (response) => {
 })
 
 try {
-  // 先停在一个不启动 React 路由的同源资源上建立登录 Cookie，避免未登录跳 SSO 时执行上下文被销毁。
+  // 先停在一个不启动 业务路由的同源资源上建立登录 Cookie，避免未登录跳 SSO 时执行上下文被销毁。
   const bootstrapPath = BASE.includes(':5173') ? '/@vite/client' : '/prod/manifest.json'
   await page.goto(`${BASE}${bootstrapPath}`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   const login = await page.evaluate(async () => {

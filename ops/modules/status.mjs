@@ -45,7 +45,7 @@ for (const module of modules) {
     units.push({
       ...unit,
       sourceExists: existsSync(path.join(path.dirname(HERE), '..', unit.source)),
-      status: await portOpen(unit.port) ? 'up' : 'down',
+      status: Number.isInteger(unit.port) ? (await portOpen(unit.port) ? 'up' : 'down') : 'artifact',
     })
   }
   result.push({ ...module, deploymentUnits: units })

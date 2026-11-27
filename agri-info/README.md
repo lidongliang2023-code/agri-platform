@@ -107,7 +107,7 @@ node ops/gateway/scripts/publish.mjs --app info-mobile --version <版本号> --b
 
 ## 移动端收敛与资料边界
 
-- 移动端唯一源码为 `agri-info/mobile`（uni-app），分别构建 H5、微信小程序和 App；React frontend 仅保留桌面功能，原手机抽屉与底栏已删除。
+- 移动端唯一源码为 `agri-info/mobile`（uni-app），分别构建 H5、微信小程序和 App；Vue 3 frontend 提供桌面功能，原手机抽屉与底栏已删除。
 - 资讯地区、主营品种、规模及简介经 GET/PUT `/api/v1/info/profile` 写入 `info_user_profile`；统一昵称、头像及认证仍属于用户中心。
 - 订阅支持 PUT（必须携带布尔 enabled）及既有 PATCH；收藏取消使用收藏记录 ID，供需收藏区分 supply/demand。
 - 浏览、搜索和验证历史为按账号 ID 隔离的本机记录；清理缓存会删除这些本机记录，不删除服务端资料及业务数据。

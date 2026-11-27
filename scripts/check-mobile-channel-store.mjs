@@ -25,10 +25,14 @@ const sql = (q) => {
     return `ERR:${String(e?.message ?? e).slice(0, 80)}`
   }
 }
+const nativeFetch = globalThis.fetch
+const fetch = (url, options = {}) => nativeFetch(url, { ...options, signal: options.signal || AbortSignal.timeout(20000) })
+
 const CORE = 'http://localhost:8093'
 const S2B2C = 'http://localhost:8088'
-const MOBILE = 'http://localhost:8182/mall-mobile/versions/20261030-channel-discovery-r3'
-const OUT = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'outputs', 'mobile-channel-store-20261030')
+const MOBILE = process.env.E2E_MOBILE_URL || 'http://localhost:8182/mall-mobile'
+const OUT = process.env.E2E_OUTPUT_DIR || process.env.FEIBO_TMP
+if (!OUT) throw new Error('请通过 E2E_OUTPUT_DIR 指定测试输出目录')
 mkdirSync(OUT, { recursive: true })
 
 const failures = []
@@ -59,39 +63,18 @@ let consumerId = ''
 const created = { supplier: false, channel: false, product: false }
 
 try {
-  // 1) 造渠道店铺数据（与 PC 点检同一套）
-  const identityCount = sql(`SELECT COUNT(*) FROM agri_core.platform_identity_application WHERE user_id = '${adminId}' AND identity_type = 'wholesaler' AND status = 'approved'`)
-  if (identityCount === '0' || identityCount === '') {
-    const applied = await (await fetch(`${CORE}/api/v1/sso/account/identity-applications`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie },
-      body: JSON.stringify({ identityType: 'wholesaler', subjectName: '移动渠道店铺点检主体' }),
-    })).json()
-    identityId = applied?.data?.id ?? ''
-    await fetch(`${CORE}/api/v1/admin/identity-applications/${identityId}/review`, {
-      method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved: true, remark: 'mobile channel store check' }),
-    })
-  }
-
-  const supplierProfile = await (await fetch(`${S2B2C}/api/supplier/profile`, { headers: auth })).json()
-  if (supplierProfile?.applied) {
-    supplierId = String(supplierProfile.id)
-  } else {
-    await fetch(`${S2B2C}/api/supplier/apply`, {
-      method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyName: '移动渠道点检供应商', creditCode: '91320100MSHOP01X', contactPhone: '13800000000' }),
-    })
-    supplierId = sql(`SELECT id FROM agri_s2b2c.s2b2c_supplier WHERE user_id = '${adminId}' ORDER BY id DESC LIMIT 1`)
-    created.supplier = true
-  }
-
+  // 商品主数据归平台供货域，使用现有货源；渠道只选品和维护零售价。
+  supplierId = sql("SELECT id FROM agri_s2b2c.s2b2c_supplier WHERE credit_code = '91440300MA5XXXXX0X' ORDER BY id LIMIT 1")
+  if (!/^\d+$/.test(supplierId)) throw new Error('没有可用测试货源')
   const productName = `移动渠道点检商品${Date.now() % 10000}`
-  await fetch(`${S2B2C}/api/supplier/product/create`, {
-    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ categoryId: 1, name: productName, price: 12.8, stock: 30, commissionRate: 6 }),
+  const productResponse = await fetch(`${S2B2C}/api/platform/supply/product/create`, {
+    method: 'POST', headers: { ...auth, 'Content-Type': 'application/json', 'X-Supply-Source-Id': supplierId },
+    body: JSON.stringify({ categoryId: 11, name: productName, price: 12.8, stock: 30, commissionRate: 6 }),
   })
   productId = sql(`SELECT id FROM agri_s2b2c.s2b2c_product WHERE supplier_id = '${supplierId}' AND name = '${productName}' ORDER BY id DESC LIMIT 1`)
-  created.product = true
+  created.product = /^\d+$/.test(productId)
+  const productResult = await productResponse.json()
+  if (!productResponse.ok || !productResult.success || !created.product) throw new Error(`商品前置创建失败 HTTP ${productResponse.status}: ${productResult.message || ''}`)
   await fetch(`${S2B2C}/api/platform/product/audit?id=${productId}&status=APPROVED&opinion=ui`, { method: 'PUT', headers: auth })
 
   const channelProfile = await (await fetch(`${S2B2C}/api/channel/profile`, { headers: auth })).json()
@@ -111,6 +94,7 @@ try {
   }
   await fetch(`${S2B2C}/api/channel/select-product?channelId=${channelId}&productId=${productId}`, { method: 'POST', headers: auth })
   relationId = sql(`SELECT id FROM agri_s2b2c.s2b2c_channel_product WHERE channel_id = '${channelId}' AND product_id = '${productId}' LIMIT 1`)
+  if (!/^\d+$/.test(relationId)) throw new Error('渠道选品前置失败')
   const shopName = sql(`SELECT shop_name FROM agri_s2b2c.s2b2c_channel_partner WHERE id = '${channelId}'`)
   check(Boolean(channelId && productId && relationId), '造好移动渠道店铺数据', `channel=${channelId} product=${productId}`)
 
@@ -119,6 +103,7 @@ try {
   check(Boolean(consumerId), '统一账号有消费者档案', `consumer=${consumerId}`)
 
   // 2) 移动 H5 点检（uni-app H5 用 hash 路由）
+  if (failures.length) throw new Error('测试数据准备失败，停止页面操作')
   const browser = await chromium.launch({ headless: true, executablePath: BROWSER, args: ['--no-sandbox'] })
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },

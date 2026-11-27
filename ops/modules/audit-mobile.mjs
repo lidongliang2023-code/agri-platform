@@ -55,9 +55,10 @@ for (const mobile of MOBILES) {
   if (checks.package) {
     const pkg = JSON.parse(await readFile(packagePath, 'utf8'))
     const scripts = pkg.scripts || {}
-    checks.h5Script = Boolean(scripts['build:h5'])
-    checks.mpWeixinScript = Boolean(scripts['build:mp-weixin'])
-    checks.appScript = Boolean(scripts['build:app'])
+    const targets = mobile.targets || ['h5', 'mp-weixin', 'app']
+    checks.h5Script = !targets.includes('h5') || Boolean(scripts['build:h5'])
+    checks.mpWeixinScript = !targets.includes('mp-weixin') || Boolean(scripts['build:mp-weixin'])
+    checks.appScript = !targets.includes('app') || Boolean(scripts['build:app'])
     checks.appPlusDependency = Boolean(pkg.dependencies?.['@dcloudio/uni-app-plus'])
   }
   if (checks.manifest) {

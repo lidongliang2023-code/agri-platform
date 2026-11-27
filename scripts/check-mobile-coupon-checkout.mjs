@@ -25,10 +25,14 @@ const sql = (q) => {
     return `ERR:${String(e?.message ?? e).slice(0, 80)}`
   }
 }
+const nativeFetch = globalThis.fetch
+const fetch = (url, options = {}) => nativeFetch(url, { ...options, signal: options.signal || AbortSignal.timeout(20000) })
+
 const CORE = 'http://localhost:8093'
 const S2B2C = 'http://localhost:8088'
-const MOBILE = 'http://localhost:8182/mall-mobile/versions/20261030-coupon-checkout-r5'
-const OUT = path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'), 'outputs', 'mobile-coupon-checkout-20261030')
+const MOBILE = process.env.E2E_MOBILE_URL || 'http://localhost:8182/mall-mobile'
+const OUT = process.env.E2E_OUTPUT_DIR || process.env.FEIBO_TMP
+if (!OUT) throw new Error('请通过 E2E_OUTPUT_DIR 指定测试输出目录')
 mkdirSync(OUT, { recursive: true })
 
 const failures = []

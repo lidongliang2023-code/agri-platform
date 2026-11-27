@@ -163,11 +163,15 @@ async function openMobile(page, hashPath, marker) {
 async function uniLogin(page, username) {
   await page.goto(`${MOBILE}#/pages/login/index`, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {})
   await page.waitForTimeout(1600)
-  const boxes = page.locator('.input-box input')
+  // 统一登录页默认手机验证码：先切到「密码登录」；协议默认不勾选，提交前要勾选。
+  await page.locator('uni-button, button').filter({ hasText: /^密码登录$/ }).first().click().catch(() => {})
+  await page.waitForTimeout(300)
+  const boxes = page.locator('.field input')
   if (await boxes.count() >= 2) {
     await boxes.nth(0).fill(username)
     await boxes.nth(1).fill(PASSWORD)
-    await page.locator('uni-button, button').filter({ hasText: /^登录$/ }).first().click()
+    await page.locator('.agree-box').first().click()
+    await page.locator('.btn-primary').first().click()
     await page.waitForFunction(() => !location.hash.includes('login'), null, { timeout: 20000 }).catch(() => {})
     await page.waitForTimeout(2200)
   }

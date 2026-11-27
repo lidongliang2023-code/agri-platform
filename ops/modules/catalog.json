@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-10-26",
+  "updatedAt": "2026-11-26",
   "modules": [
     {
       "id": "platform",
@@ -60,7 +60,7 @@
           "id": "production-pc",
           "kind": "frontend",
           "port": 80,
-          "url": "http://localhost/production/login",
+          "url": "http://localhost/",
           "publishApp": "prod",
           "source": "agri-production/frontend"
         },
@@ -76,11 +76,18 @@
           "id": "production-mobile",
           "kind": "mobile-frontend",
           "port": 8180,
-          "url": "http://localhost:8180/",
+          "url": "http://localhost:8180/prod-mobile/",
           "publishApp": "prod-mobile",
           "source": "agri-production/miniprogram",
           "targets": [
-            "h5",
+            "h5"
+          ]
+        },
+        {
+          "id": "production-native",
+          "kind": "native-artifacts",
+          "source": "agri-production/miniprogram",
+          "targets": [
             "mp-weixin",
             "app"
           ]
@@ -415,6 +422,27 @@
           "url": "http://localhost:8115/user-center-ops/",
           "publishApp": "user-center-ops",
           "source": "agri-sso/ops"
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "name": "AI 中台",
+      "deploymentUnits": [
+        {
+          "id": "ai-ops",
+          "kind": "frontend",
+          "port": 8116,
+          "url": "http://localhost:8116/ai-ops/",
+          "source": "agri-ai/frontend",
+          "note": "Vue 3 页面由 AI 后端同源托管；Maven generate-resources 自动构建。"
+        },
+        {
+          "id": "ai-api",
+          "kind": "backend",
+          "port": 8201,
+          "url": "http://localhost:8201",
+          "source": "agri-ai"
         }
       ]
     }

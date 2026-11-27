@@ -271,6 +271,7 @@ try {
             if ($name -eq 'agri-ai') {
                 # 场景与渠道配置由 AI 中台数据库管理；不再指定旧场景 JSON 台账。
                 $environment.AI_MYSQL_URL=Get-StartupEnvironment 'AI_MYSQL_URL' 'jdbc:mysql://localhost:3306/agri_ai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true'
+                $environment.SPRING_DATASOURCE_URL=$environment.AI_MYSQL_URL
                 # 沿用原有加密密钥，绝不在启动脚本中生成或轮换，以免历史渠道配置无法解密。
                 foreach ($key in @('AI_ADMIN_ENCRYPTION_KEY','AI_ADMIN_PROVIDER_FILE')) {
                     $value=Get-StartupEnvironment $key

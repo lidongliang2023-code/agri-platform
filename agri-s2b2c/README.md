@@ -228,7 +228,6 @@ node ops/gateway/scripts/publish.mjs --app mall-supplier --version 20261026-s2b2
 node ops/gateway/scripts/publish.mjs --app mall-channel --version 20261026-s2b2c-sso-r1 --build
 node ops/gateway/scripts/publish.mjs --app s2b2c-platform --version 20261026-s2b2c-sso-r1 --build
 node ops/gateway/scripts/publish.mjs --app mall-mobile --version 20261026-s2b2c-sso-r2 --build
-node ops/gateway/scripts/publish.mjs --app mall-supplier-mobile --version 20261026-s2b2c-sso-r1 --build
 node ops/gateway/scripts/publish.mjs --app mall-channel-mobile --version 20261026-s2b2c-sso-r1 --build
 ```
 
@@ -254,8 +253,8 @@ pnpm build:app
 认证与权限接口通过 `VITE_S2B2C_AUTH_BASE` 指向统一认证所在域名。示例见各移动端
 目录的 `.env.example`。
 
-供应商、商家的移动工程分别位于 `mobile-supplier/` 和 `mobile-channel/`，
-三者使用相同的 uni-app 工具链，但登录态、菜单和业务接口按角色隔离。
+移动工程位于 `mobile/`（消费者端）和 `mobile-channel/`（商家端），
+两者使用相同的 uni-app 工具链，分别编译为 H5、微信小程序和 App；供应商供货功能统一收敛到平台运营端，不再提供独立供应商移动端。
 
 ## 消费者端（PC 商城，frontend-consumer）
 
