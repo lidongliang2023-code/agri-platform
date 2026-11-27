@@ -179,7 +179,7 @@
 .btn-outline { border: 1px solid var(--border) !important; background: #ffffff !important; color: var(--ink) !important; font-weight: 500; }
 .btn + .btn-outline, .btn-gap { margin-top: 12px !important; }
 .btn-icon { width: 20px; height: 20px; }
-.soon { margin-left: 6px; padding: 0 6px; border-radius: 4px; background: rgba(255, 255, 255, .24); font-size: 11px; font-weight: 500; }
+.soon { margin-left: 6px; padding: 0 6px; border-radius: 4px; background: rgba(255, 255, 255, .24); font-size: 12px; font-weight: 500; }
 
 /* 辅助行 */
 .row-between, .row-center { display: flex; align-items: center; justify-content: space-between; margin: -2px 0 18px; font-size: 12px; }
@@ -336,7 +336,7 @@
 .h5-login-aligned.is-h5 .h5-third-icon { display:flex; align-items:center; justify-content:center; width:48px; height:48px; border:1px solid #e6ebe7; border-radius:50%; background:#fff; }
 .h5-login-aligned.is-h5 .h5-third-icon image { width:30px; height:30px; }
 .h5-login-aligned.is-h5 .h5-third-label { font-size:12px; white-space:nowrap; }
-.h5-login-aligned.is-h5 .h5-third-status { color:#666; font-size:11px; line-height:16px; }
+.h5-login-aligned.is-h5 .h5-third-status { color:#666; font-size:12px; line-height:16px; }
 .h5-login-aligned.is-h5 .h5-consent { display:flex; align-items:flex-start; justify-content:center; color:#666; font-size:12px; line-height:20px; }
 .h5-login-aligned.is-h5 .h5-consent-toggle { display:flex; align-items:center; justify-content:center; flex:none; width:48px; height:48px; }
 .h5-login-aligned.is-h5 .h5-dot { display:flex; align-items:center; justify-content:center; width:18px; height:18px; border:1.5px solid #888; border-radius:50%; background:#fff; }

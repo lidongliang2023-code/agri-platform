@@ -491,9 +491,16 @@ async function publishedFrontends() {
 async function checkFontFloor() {
   const bad = []
   let scanned = 0
-  for (const app of await publishedFrontends()) {
-    const srcDir = path.join(app.dir, 'src')
-    const files = await collectFontFiles(srcDir)
+  const targets = [
+    ...(await publishedFrontends()).map((app) => ({ ...app, scanDir: path.join(app.dir, 'src') })),
+    { slug: 'agri-shared', dir: path.join(REPO_ROOT, 'packages', 'agri-shared'), scanDir: path.join(REPO_ROOT, 'packages', 'agri-shared', 'src'), uni: false },
+    { slug: 's2b2c-shared', dir: path.join(REPO_ROOT, 'agri-s2b2c', 'frontend-shared'), scanDir: path.join(REPO_ROOT, 'agri-s2b2c', 'frontend-shared'), uni: false },
+    { slug: 'info-shared', dir: path.join(REPO_ROOT, 'agri-info', 'shared-ui'), scanDir: path.join(REPO_ROOT, 'agri-info', 'shared-ui'), uni: false },
+    { slug: 'root-shared', dir: path.join(REPO_ROOT, 'shared'), scanDir: path.join(REPO_ROOT, 'shared'), uni: false },
+  ]
+  for (const app of targets) {
+    if (!existsSync(app.scanDir)) continue
+    const files = await collectFontFiles(app.scanDir)
     scanned += files.length
     for (const f of files) {
       const source = await readFile(f, 'utf8')

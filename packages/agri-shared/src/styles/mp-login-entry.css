@@ -15,15 +15,15 @@
 .mp-entry-other { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin-top: 8px !important; background: transparent; color: #2d8f4e; font-size: 14px; line-height: 20px; }
 .mp-entry-consent { display: flex; align-items: center; justify-content: center; margin: 15px -6px 0; color: #888; }
 .mp-entry-toggle { display: flex; align-items: center; justify-content: center; flex: none; width: 36px; height: 48px; background: transparent; }
-.mp-entry-circle { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 15px; height: 15px; border: 1.5px solid #c8ccd2; border-radius: 50%; font-size: 11px; line-height: 15px; color: #fff; }
+.mp-entry-circle { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 15px; height: 15px; border: 1.5px solid #c8ccd2; border-radius: 50%; font-size: 12px; line-height: 15px; color: #fff; }
 .mp-entry-checked { background: #2d8f4e; border-color: #2d8f4e; }
-.mp-entry-copy { flex: 0 1 auto; min-width: 0; font-size: 11px; line-height: 20px; white-space: normal; word-break: keep-all; }
+.mp-entry-copy { flex: 0 1 auto; min-width: 0; font-size: 12px; line-height: 20px; white-space: normal; word-break: keep-all; }
 /* 协议文字使用普通内联流，避免链接自身的点击高度造成第二行间距异常。 */
 .mp-entry-copy text { display: inline; line-height: inherit; vertical-align: baseline; }
 .mp-entry-policy { color: #2d8f4e; }
 .mp-entry-error, .mp-entry-error .mp-entry-policy { color: #e53935; }
 .mp-entry-error .mp-entry-circle { border-color: #e53935; }
-.mp-entry-footer { display: block; margin-top: 4px; color: #aaa; font-size: 10px; line-height: 18px; text-align: center; }
+.mp-entry-footer { display: block; margin-top: 4px; color: #aaa; font-size: 12px; line-height: 18px; text-align: center; }
 .mp-entry-toast { position: fixed; z-index: 100; left: 50%; bottom: calc(142px + env(safe-area-inset-bottom)); transform: translateX(-50%); box-sizing: border-box; width: max-content; max-width: calc(100vw - 64px); border-radius: 9px; padding: 12px 16px; background: rgba(25,25,25,.88); color: #fff; font-size: 13px; line-height: 21px; text-align: center; }
 .mp-entry-shake { animation: mp-entry-shake .38s ease; }
 @keyframes mp-entry-shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-4px); } 40%,80% { transform: translateX(4px); } }
